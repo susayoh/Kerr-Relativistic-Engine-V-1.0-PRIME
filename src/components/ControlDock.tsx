@@ -22,6 +22,7 @@ import {
   Zap,
   Waves,
   Eye,
+  EyeOff,
   Radio,
 } from 'lucide-react';
 import {
@@ -40,6 +41,7 @@ interface ControlDockProps {
   activePresetId: string;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  onToggleCleanMode?: () => void;
   onChangeParams: (updater: (prev: BlackHoleParams) => BlackHoleParams) => void;
   onSelectPreset: (presetId: string) => void;
   onResetParams: () => void;
@@ -62,6 +64,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   activePresetId,
   isCollapsed,
   onToggleCollapse,
+  onToggleCleanMode,
   onChangeParams,
   onSelectPreset,
   onResetParams,
@@ -111,12 +114,12 @@ export const ControlDock: React.FC<ControlDockProps> = ({
           : 'translate(-50%, 0)',
       }}
     >
-      {/* Top Collapse / Expand Handle */}
-      <div className="flex justify-center">
+      {/* Top Collapse / Expand & Clean UI Handle Bar */}
+      <div className="flex justify-center items-center gap-1.5">
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="flex items-center gap-1.5 px-3.5 py-1 text-[11px] font-mono text-neutral-400 bg-neutral-950 border border-b-0 border-neutral-800 rounded-t-md hover:text-amber-300 hover:bg-neutral-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer shadow-lg"
+          className="flex items-center gap-1.5 px-3.5 py-1 text-[11px] font-mono text-neutral-300 bg-neutral-950 border border-b-0 border-neutral-800 rounded-t-md hover:text-amber-300 hover:bg-neutral-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer shadow-lg"
           title="Toggle Control Dock (Shortcut: H)"
         >
           {isCollapsed ? (
@@ -131,10 +134,22 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             </>
           )}
         </button>
+
+        {onToggleCleanMode && (
+          <button
+            type="button"
+            onClick={onToggleCleanMode}
+            className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono text-amber-300 bg-neutral-950 border border-b-0 border-neutral-800 rounded-t-md hover:text-white hover:bg-neutral-900 hover:border-amber-500/40 transition-colors whitespace-nowrap shrink-0 cursor-pointer shadow-lg"
+            title="Hide all UI elements for a completely clean viewport (Shortcut: C)"
+          >
+            <EyeOff className="w-3 h-3 text-amber-400" />
+            <span>Hide UI (C)</span>
+          </button>
+        )}
       </div>
 
       {/* Main Grid Chassis */}
-      <div className="bg-black/95 backdrop-blur-md border border-neutral-800/90 rounded-xl shadow-2xl p-2.5 sm:p-3 flex flex-col gap-2 max-h-[46vh] sm:max-h-[50vh] overflow-y-auto">
+      <div className="bg-[#060911]/95 border border-neutral-800/90 rounded-xl shadow-2xl p-2.5 sm:p-3 flex flex-col gap-2 max-h-[46vh] sm:max-h-[50vh] overflow-y-auto">
         {/* ROW 1: Unified Modular Command Bar (Tabs + Target Preset Picker + Actions) */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center pb-2 border-b border-neutral-800/80">
           {/* Section A: Segmented Mode Tabs (Cols 1-5) */}

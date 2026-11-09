@@ -1,4 +1,4 @@
-# Kerr-Relativistic-Engine-V-1.0-PRIME
+# Kerr-Relativistic-Engine-V-1.1-PRIME
 
 An interactive real-time astrophysics simulation and WebGL raymarching engine modeling gravitational lensing, relativistic Doppler beaming, and spacetime geometry around supermassive black holes and compact celestial bodies.
 

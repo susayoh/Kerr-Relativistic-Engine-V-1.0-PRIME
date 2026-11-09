@@ -127,6 +127,84 @@ const GLSL_SIMPLEX_NOISE = `
   }
 `;
 
+// Shared NASA / Schnittman Relativistic Accretion Streamline & Blackbody Color Function
+const GLSL_NASA_DISK_COLOR = `
+  // ACES filmic tone mapping
+  vec3 acesFilm(vec3 x) {
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+  }
+
+  // Maps normalized thermal/Doppler intensity [0..1.6] to the authentic NASA Goddard / Schnittman
+  // fiery crimson -> blazing orange -> golden amber -> incandescent yellow-white palette
+  vec3 nasaBlackbodyPalette(float intensity, int spectralMode, float approachCos) {
+    float x = clamp(intensity, 0.0, 1.65);
+    if (spectralMode == 1) {
+      // EHT 230 GHz millimeter radio palette
+      vec3 c0 = vec3(0.0);
+      vec3 c1 = vec3(0.32, 0.03, 0.0);
+      vec3 c2 = vec3(0.88, 0.28, 0.02);
+      vec3 c3 = vec3(1.0, 0.78, 0.22);
+      vec3 c4 = vec3(1.0, 0.96, 0.75);
+      if (x < 0.25) return mix(c0, c1, x / 0.25);
+      if (x < 0.55) return mix(c1, c2, (x - 0.25) / 0.30);
+      if (x < 0.95) return mix(c2, c3, (x - 0.55) / 0.40);
+      return mix(c3, c4, clamp((x - 0.95) / 0.55, 0.0, 1.0));
+    } else if (spectralMode == 2) {
+      // Chandra X-Ray palette
+      return mix(vec3(0.02, 0.08, 0.26), vec3(0.85, 0.96, 1.0), clamp(x * 0.75, 0.0, 1.0));
+    } else if (spectralMode == 3) {
+      // Relativistic Doppler velocity map (approaching blue-cyan vs receding red-orange)
+      return mix(vec3(0.95, 0.22, 0.04), vec3(0.20, 0.88, 1.0), clamp(approachCos * 0.5 + 0.5, 0.0, 1.0)) * clamp(x, 0.0, 1.2);
+    }
+
+    // Standard NASA Goddard / Schnittman Relativistic Blackbody Palette (BH_labeled-scaled_fb8356c7.jpeg)
+    vec3 blackVoid   = vec3(0.00, 0.00, 0.00);
+    vec3 deepMaroon  = vec3(0.24, 0.015, 0.00);
+    vec3 crimsonRed  = vec3(0.68, 0.07, 0.005);
+    vec3 fieryOrange = vec3(0.96, 0.30, 0.01);
+    vec3 amberGold   = vec3(1.00, 0.62, 0.06);
+    vec3 brightGold  = vec3(1.00, 0.86, 0.32);
+    vec3 whiteHot    = vec3(1.00, 0.97, 0.82);
+
+    if (x < 0.14) return mix(blackVoid, deepMaroon, x / 0.14);
+    if (x < 0.34) return mix(deepMaroon, crimsonRed, (x - 0.14) / 0.20);
+    if (x < 0.62) return mix(crimsonRed, fieryOrange, (x - 0.34) / 0.28);
+    if (x < 0.92) return mix(fieryOrange, amberGold, (x - 0.62) / 0.30);
+    if (x < 1.25) return mix(amberGold, brightGold, (x - 0.92) / 0.33);
+    return mix(brightGold, whiteHot, clamp((x - 1.25) / 0.40, 0.0, 1.0));
+  }
+
+  // Computes laminar, concentrically sheared orbital plasma streamlines matching NASA's visualization
+  float computeNasaStreamlines(float r, float angle, float simTime, float spin) {
+    // Differential Keplerian angular velocity
+    float omega = 2.6 / (pow(max(1.2, r), 1.38) + 0.15 * spin);
+    float phase = angle + simTime * omega;
+
+    // Cyclic coordinates so there is zero seam at +-PI
+    vec2 cyc1 = vec2(cos(phase) * 0.55 + r * 3.6, sin(phase) * 0.55 + r * 1.8);
+    vec2 cyc2 = vec2(cos(phase * 2.0) * 0.42 + r * 7.5, sin(phase * 2.0) * 0.42 - r * 2.4);
+
+    // Azimuthally stretched laminar streamlines (high radial frequency, low azimuthal frequency)
+    float noiseLow = snoise(cyc1) * 0.5 + 0.5;
+    float noiseHigh = snoise(cyc2) * 0.5 + 0.5;
+
+    // Sharp concentric orbital tracks & dark MHD gaps between glowing plasma filaments
+    float band1 = sin(r * 13.5 + noiseLow * 2.6 - simTime * 0.9) * 0.5 + 0.5;
+    float band2 = sin(r * 28.0 - noiseHigh * 2.1 + cos(phase) * 0.45) * 0.5 + 0.5;
+    float band3 = cos(r * 52.0 + noiseLow * 1.8 + sin(phase * 2.0) * 0.35) * 0.5 + 0.5;
+
+    // Carve distinct dark concentric grooves like the NASA ray-traced disk
+    float grooveMask = smoothstep(0.14, 0.78, band1) * (0.55 + 0.45 * smoothstep(0.18, 0.85, band2));
+    float fineFilaments = mix(band2, band3, 0.42);
+    return clamp(grooveMask * (0.62 + 0.52 * fineFilaments) * (0.72 + 0.38 * noiseLow), 0.04, 1.35);
+  }
+`;
+
 // 1. High-Fidelity 3D Relativistic Accretion Disk (Equatorial Ring Shader)
 const ACCRETION_VERTEX_SHADER = `
   varying vec2 vUv;
@@ -143,17 +221,10 @@ const ACCRETION_VERTEX_SHADER = `
 `;
 
 const ACCRETION_FRAGMENT_SHADER = `
-  // Pre-calculated Doppler Shift & Relativistic Kinematics Coefficients:
-  // uDopplerCoeffs: (uDopplerStrength, betaScale, gammaClamp, dopplerExponent)
   uniform vec4 uDopplerCoeffs;
-  // uDiskParams: (spin, accretionRate, spectralMode, isStar)
   uniform vec4 uDiskParams;
-  // Uniform-Buffer Orbital Turbulence & Shear State (pre-computed each frame)
-  // uTurbulenceBuffer: (basePhase, ringPhase, shearRate, timeScale)
   uniform vec4 uTurbulenceBuffer;
-  // uTurbulenceHarmonics: (freq1, freq2, harmonicAmp, filamentBlend)
   uniform vec4 uTurbulenceHarmonics;
-
   uniform sampler2D uSpectrumLut;
   uniform float uPulseRadius;
   uniform float uPulseStrength;
@@ -162,132 +233,189 @@ const ACCRETION_FRAGMENT_SHADER = `
   varying vec3 vWorldPos;
   varying vec3 vLocalPos;
 
-  // ACES filmic tone mapping to preserve dynamic range under strong Doppler beaming
-  vec3 acesFilm(vec3 x) {
-    float a = 2.51;
-    float b = 0.03;
-    float c = 2.43;
-    float d = 0.59;
-    float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-  }
+` + GLSL_SIMPLEX_NOISE + GLSL_NASA_DISK_COLOR + `
 
   void main() {
     float r = length(vLocalPos.xy);
     float spin = clamp(uDiskParams.x, 0.0, 0.998);
     float accretionRate = uDiskParams.y;
     int spectralMode = int(uDiskParams.z);
+    float isCorona = uDiskParams.w;
 
-    // Dynamic Kerr Event Horizon Causal Boundary
-    float r_horizon = mix(1.75, 1.08, spin * 0.72);
-    // Dynamic Kerr ISCO (Innermost Stable Circular Orbit)
-    // Schwarzschild (spin 0) -> ISCO ≈ 2.55; Extremal Kerr (spin 0.98) -> ISCO ≈ 1.25
-    float rIn = mix(2.55, 1.25, spin);
-    float rOut = 12.0;
+    // Inner boundary matches the Black Hole Shadow radius so the shadow interior stays pitch black
+    float rIn = 2.46;
+    float rOut = 12.6;
 
-    // 1. Horizon Ray Termination: Hard-clamp any ray inside event horizon to pure black
-    if (r <= r_horizon) {
-      gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-      return;
-    }
-
-    if (r > rOut) {
+    if (r <= rIn * 0.96 || r > rOut) {
       discard;
     }
 
     float angle = atan(vLocalPos.y, vLocalPos.x);
+    float simTime = uTurbulenceBuffer.x;
 
-    // Optimized Relativistic Keplerian differential shear using uniform-buffer constants
-    float rInv = 1.0 / (r * sqrt(r) + 0.12 * spin);
-    float omega = 3.6 * rInv;
-    float spiralPhase = angle + uTurbulenceBuffer.x * omega * 2.2;
+    float streamlines = computeNasaStreamlines(r, angle, simTime, spin);
 
-    // Dual-armed logarithmic spiral density waves (theta - b * ln(r/rIn))
-    float logSpiral = angle - 1.85 * log(max(0.1, r / rIn));
-    float spiralWave = sin(logSpiral * 2.0 + uTurbulenceBuffer.x * 2.5);
-
-    // Fast multi-frequency trigonometric orbital turbulence & density wave harmonics
-    float waveA = sin(r * uTurbulenceHarmonics.x + spiralPhase * uTurbulenceHarmonics.y + uTurbulenceBuffer.y);
-    float waveB = cos(r * 9.5 - uTurbulenceBuffer.z + waveA * 1.8 + spiralWave * 0.9);
-    float waveC = sin(r * 4.2 + spiralPhase * 1.5 - uTurbulenceBuffer.w);
-    float diskTurb = waveA * 0.5 + 0.5;
-    float diskRings = waveB * 0.5 + 0.5;
-    float diskFilaments = mix(diskTurb, diskRings, uTurbulenceHarmonics.w) + waveC * 0.14 + spiralWave * 0.12;
-
-    // Relativistic Kinematics & Tangential Velocity:
-    vec3 tangentDir = normalize(vec3(-vWorldPos.z, 0.0, vWorldPos.x));
+    // Relativistic Tangential Velocity & Doppler Beaming (Left side approaching = bright yellow-gold, Right side receding = dim crimson)
+    vec3 localOffset = vWorldPos;
+    vec3 tangentDir = normalize(vec3(-localOffset.z, 0.0, localOffset.x));
     vec3 viewDir = normalize(cameraPosition - vWorldPos);
     float approachCos = dot(tangentDir, viewDir);
 
-    // Optimized Doppler factor using pre-calculated uniform coefficients
-    float beta = clamp(uDopplerCoeffs.y * inversesqrt(max(1.0, r - 0.7)), 0.05, 0.78);
-    float gamma = inversesqrt(max(0.1, 1.0 - beta * beta));
+    float beta = clamp(0.68 * inversesqrt(max(0.9, r - 1.1)), 0.08, 0.78);
+    float gamma = inversesqrt(max(0.15, 1.0 - beta * beta));
     float dopplerFactor = 1.0 / (gamma * (1.0 - beta * approachCos * uDopplerCoeffs.x));
-    float dopplerBoost = mix(1.0, pow(clamp(dopplerFactor, 0.35, 2.8), uDopplerCoeffs.w), uDopplerCoeffs.x);
+    // Strong asymmetric beaming matching NASA's Doppler beaming label
+    float dopplerBoost = mix(1.0, pow(clamp(dopplerFactor, 0.36, 2.85), 2.15), uDopplerCoeffs.x);
 
-    // Physical Novikov-Thorne Relativistic Thermal Profile:
-    // Stable circular accretion disk (r >= rIn)
-    // Plunging Region (r_horizon < r < rIn): Matter in dynamical inward free-fall
-    float flux = 0.0;
-    if (r >= rIn) {
-      float normR = clamp((r - rIn) / (rOut - rIn), 0.0, 1.0);
-      float thermalProfile = pow(rIn / r, 0.75) * pow(clamp(1.0 - sqrt(rIn / r), 0.0, 1.0), 0.25);
-      flux = (thermalProfile * 2.2 + pow(1.0 - normR, 1.35) * 0.55) * smoothstep(rIn, rIn + 0.22, r) * (1.0 - smoothstep(rOut - 2.2, rOut, r));
-    } else {
-      // Violent plunging stream: matter accelerates towards c before crossing event horizon
-      float plungeT = clamp((r - r_horizon) / (rIn - r_horizon), 0.0, 1.0);
-      float spiralStream = sin(angle * 3.0 - (1.0 - plungeT) * 7.5 + uTurbulenceBuffer.x * 3.0) * 0.5 + 0.5;
-      flux = pow(plungeT, 0.75) * (0.8 + 0.6 * spiralStream) * 0.95;
-    }
+    // Radial brightness profile: brightest near the inner accretion rim (r = 2.6..4.8), tapering smoothly to pure black at rOut
+    float normR = clamp((r - rIn) / (rOut - rIn), 0.0, 1.0);
+    float innerRise = smoothstep(rIn * 0.97, rIn + 0.32, r);
+    float radialFalloff = pow(max(0.0, 1.0 - normR), 1.55) * (0.45 + 0.85 * exp(-normR * 2.6));
 
-    flux *= (0.65 + 0.75 * diskFilaments) * dopplerBoost * (0.7 + 0.55 * accretionRate);
+    float intensity = innerRise * radialFalloff * streamlines * dopplerBoost * (0.68 + 0.42 * accretionRate);
 
-    // Event Horizon Multi-Stage Pulse & Accretion Disturbance Shockwave
+    // Event Horizon Pulse shockwave
     if (uPulseStrength > 0.001) {
-      float primaryDist = abs(r - uPulseRadius);
-      float primaryCrest = exp(-pow(primaryDist / 0.55, 2.0));
-      float echoDist1 = abs(r - (uPulseRadius * 0.72));
-      float echoCrest1 = exp(-pow(echoDist1 / 0.75, 2.0)) * 0.65;
-      float echoDist2 = abs(r - (uPulseRadius * 0.48));
-      float echoCrest2 = exp(-pow(echoDist2 / 0.95, 2.0)) * 0.40;
-      float totalShock = (primaryCrest + echoCrest1 + echoCrest2) * uPulseStrength;
-      flux += totalShock * 2.8;
+      float primaryCrest = exp(-pow((r - uPulseRadius) / 0.55, 2.0));
+      float echoCrest = exp(-pow((r - uPulseRadius * 0.72) / 0.75, 2.0)) * 0.55;
+      intensity += (primaryCrest + echoCrest) * uPulseStrength * 1.65;
     }
 
-    // Physical Multi-Tier Blackbody Color Spectrum:
-    // Core ISCO: ultra-hot diamond white/blue (T > 10^7 K) -> mid-disk amber -> outer rim deep red dust
-    vec3 baseLut = texture2D(uSpectrumLut, vec2(clamp(flux * 0.65, 0.02, 0.98), 0.5)).rgb;
-    vec3 hotCoreTint = vec3(0.95, 0.97, 1.0);
-    vec3 midDiskTint = vec3(1.0, 0.84, 0.45);
-    vec3 outerRimTint = vec3(0.85, 0.28, 0.08);
-    float radT = clamp((r - rIn) / 6.0, 0.0, 1.0);
-    vec3 physicalColorGradient = mix(hotCoreTint, mix(midDiskTint, outerRimTint, radT), clamp(radT * 1.2, 0.0, 1.0));
+    vec3 diskColor = nasaBlackbodyPalette(intensity * 1.18, spectralMode, approachCos);
+    float outerFade = 1.0 - smoothstep(rOut - 3.2, rOut, r);
+    float diskAlpha = clamp(innerRise * outerFade * smoothstep(0.02, 0.22, intensity) * 0.98, 0.0, 0.99);
 
-    if (spectralMode == 1) { // EHT 230 GHz
-      baseLut = mix(vec3(0.14, 0.02, 0.01), vec3(1.0, 0.95, 0.65), clamp(flux * 0.85, 0.0, 1.0));
-    } else if (spectralMode == 2) { // Chandra X-Ray
-      baseLut = mix(vec3(0.04, 0.12, 0.35), vec3(0.92, 0.98, 1.0), clamp(flux * 0.85, 0.0, 1.0));
-    } else if (spectralMode == 3) { // Doppler shift map
-      baseLut = mix(vec3(0.95, 0.38, 0.1), vec3(0.2, 0.85, 1.0), clamp(approachCos * 0.5 + 0.5, 0.0, 1.0)) * flux;
-    } else {
-      baseLut *= physicalColorGradient;
+    if (isCorona > 0.5) {
+      float coronaRadial = exp(-pow((r - (rIn + 0.8)) / 2.4, 2.0));
+      diskAlpha *= 0.22 * coronaRadial;
     }
 
-    vec3 diskColor = baseLut * 1.55;
-    float diskAlpha = clamp(flux * (0.68 + 0.32 * diskFilaments) * min(1.65, dopplerBoost), 0.0, 0.98);
-
-    // Smooth inner boundary blend to horizon
-    diskAlpha *= smoothstep(r_horizon, r_horizon + 0.08, r);
-
-    // Exposure & Tone Mapping: ACES filmic tone mapping to maintain texture/contrast on Doppler beamed side
-    vec3 tonemappedColor = acesFilm(diskColor * 1.15);
-    gl_FragColor = vec4(tonemappedColor, diskAlpha);
+    if (diskAlpha <= 0.003) discard;
+    gl_FragColor = vec4(acesFilm(diskColor * 1.08), diskAlpha);
   }
 `;
 
+// 2. 3D Event Horizon Shadow Sphere Shader — Pure Pitch Black (#000000) Interior
+const HORIZON_VERTEX_SHADER = `
+  void main() {
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
 
+const HORIZON_FRAGMENT_SHADER = `
+  uniform float uSpin;
+  uniform int uSpectralMode;
 
-// 3. Relativistic Gravitational Lensing Shader (The Interstellar Gargantua Double-Arch Effect & Background Warping)
+  void main() {
+    // Pure pitch black (#000000) inside the black hole shadow as requested
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+  }
+`;
+
+// 2b. Relativistic Compact Star / Pulsar Magnetothermal Crust Shader
+const STAR_SURFACE_VERTEX_SHADER = `
+  varying vec3 vNormal;
+  varying vec3 vLocalPos;
+  varying vec3 vWorldPos;
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    vLocalPos = position;
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPos = worldPos.xyz;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`;
+
+const STAR_SURFACE_FRAGMENT_SHADER = `
+  uniform float uTime;
+  uniform float uSpin;
+  varying vec3 vNormal;
+  varying vec3 vLocalPos;
+  varying vec3 vWorldPos;
+
+` + GLSL_SIMPLEX_NOISE + `
+
+  void main() {
+    vec3 nPos = normalize(vLocalPos);
+    vec3 viewDir = normalize(cameraPosition - vWorldPos);
+    float ndotv = max(0.0, dot(vNormal, viewDir));
+
+    // Spherical coordinates for animated magnetothermal convection granulation
+    float phi = atan(nPos.z, nPos.x);
+    float theta = acos(clamp(nPos.y, -1.0, 1.0));
+    vec2 uvSphere = vec2(phi * 1.5, theta * 3.0);
+
+    float gran1 = fbm(uvSphere * 2.8 + vec2(uTime * 0.35, -uTime * 0.2));
+    float gran2 = fbm(uvSphere * 6.2 - vec2(uTime * 0.55, gran1 * 1.8));
+    float crustCells = clamp(gran1 * 0.6 + gran2 * 0.4, 0.0, 1.0);
+
+    // Magnetic dipole axis tilted by 24 degrees
+    vec3 magAxis = normalize(vec3(-sin(0.4188), cos(0.4188), 0.0));
+    float magDot = abs(dot(nPos, magAxis));
+    // Intense polar synchrotron & X-ray hotspot caps at north & south magnetic poles
+    float polarHotspot = pow(magDot, 6.0) * 1.85 + pow(magDot, 18.0) * 2.2;
+
+    // Base superheated neutron star / magnetar color palette
+    vec3 deepCrust = vec3(0.06, 0.28, 0.68);
+    vec3 midPlasma = vec3(0.22, 0.72, 0.98);
+    vec3 hotCore = vec3(0.92, 0.98, 1.0);
+
+    vec3 surfaceCol = mix(deepCrust, midPlasma, smoothstep(0.22, 0.78, crustCells));
+    surfaceCol = mix(surfaceCol, hotCore, clamp(pow(crustCells, 2.6) * 0.85 + polarHotspot * 0.65, 0.0, 1.0));
+
+    // Relativistic atmospheric limb brightening
+    float limb = pow(1.0 - ndotv, 2.4);
+    surfaceCol += vec3(0.35, 0.88, 1.0) * limb * 0.95;
+    surfaceCol += vec3(0.85, 0.96, 1.0) * polarHotspot * 0.55;
+
+    gl_FragColor = vec4(surfaceCol, 1.0);
+  }
+`;
+
+// 2c. Volumetric Pulsar Synchrotron Lighthouse Beam Shader
+const PULSAR_BEAM_VERTEX_SHADER = `
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vWorldPos;
+  varying vec3 vLocalPos;
+  void main() {
+    vUv = uv;
+    vNormal = normalize(normalMatrix * normal);
+    vLocalPos = position;
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPos = worldPos.xyz;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`;
+
+const PULSAR_BEAM_FRAGMENT_SHADER = `
+  uniform float uTime;
+  uniform vec3 uColor;
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vWorldPos;
+  varying vec3 vLocalPos;
+
+  void main() {
+    vec3 viewDir = normalize(cameraPosition - vWorldPos);
+    float edgeSoftness = pow(abs(dot(vNormal, viewDir)), 1.35);
+    float distAlong = clamp(abs(vLocalPos.y) / 18.0, 0.0, 1.0);
+    float longitudinalFade = (1.0 - smoothstep(0.15, 1.0, distAlong)) * smoothstep(0.0, 0.08, distAlong);
+
+    float pulseWave = sin(distAlong * 18.0 - uTime * 9.5) * 0.5 + 0.5;
+    float coreSpine = pow(edgeSoftness, 3.2);
+
+    vec3 col = mix(uColor, vec3(0.92, 0.99, 1.0), coreSpine * 0.75 + pulseWave * 0.25);
+    float alpha = (edgeSoftness * 0.52 + coreSpine * 0.65) * longitudinalFade * (0.75 + 0.25 * pulseWave);
+    gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.88));
+  }
+`;
+
+// 3. NASA / Schnittman Relativistic Gravitational Lensing Shader:
+// Renders:
+// - The Upper Lensed Arch ("Image of the disk's far side")
+// - The Lower Lensed Arch ("Image of the disk's underside")
+// - The Razor-Thin Relativistic Photon Ring inside the dark Black Hole Shadow
 const LENSING_VERTEX_SHADER = `
   varying vec2 vUv;
   varying vec3 vWorldPos;
@@ -319,157 +447,130 @@ const LENSING_FRAGMENT_SHADER = `
   varying vec2 vUv;
   varying vec3 vWorldPos;
 
-` + GLSL_SIMPLEX_NOISE + `
-
-  // ACES filmic tone mapping to preserve dynamic range and avoid blown-out highlights
-  vec3 acesFilm(vec3 x) {
-    float a = 2.51;
-    float b = 0.03;
-    float c = 2.43;
-    float d = 0.59;
-    float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-  }
+` + GLSL_SIMPLEX_NOISE + GLSL_NASA_DISK_COLOR + `
 
   void main() {
-    // Coordinate in view quad plane relative to black hole center in scale units
-    vec2 uvCentered = (vUv - vec2(0.5)) * 32.0;
-    float r = length(uvCentered); // Impact parameter / radius in units of black hole scale
-    float r_horizon = (uIsStar > 0.5) ? 0.0 : mix(2.62, 2.05, uSpin * 0.65);
-
-    // Smooth edge fade of outer quad to prevent boundary seams
-    float quadFade = 1.0 - smoothstep(13.8, 15.6, r);
-    if (quadFade <= 0.001) discard;
-
-    // 1. Direct inner event horizon shadow clamp
-    if (r <= r_horizon) {
-      gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-      return;
+    if (uIsStar > 0.5 || uLensingActive < 0.5) {
+      discard;
     }
 
-    vec3 rayDir = normalize(vWorldPos - uCameraPos);
-    vec3 toCenter = uBlackHolePos - uCameraPos;
-    float tCenter = dot(toCenter, rayDir);
-    vec3 pClosest = uCameraPos + tCenter * rayDir;
-    vec3 bVec = pClosest - uBlackHolePos;
+    // View-plane coordinates centered on the black hole (in Rg scale units, [-16..16])
+    vec2 p = (vUv - vec2(0.5)) * 32.0;
 
-    float rs = 1.75 * uScale;
+    // Slight Kerr spin asymmetry shifting the photon ring & shadow slightly left
+    vec2 pShifted = p - vec2(-uSpin * 0.08, 0.0);
+    float r = length(pShifted);
 
-    // 2. Dual-Order Incandescent Photon Rings (razor-sharp Einstein ring inner edge)
-    float ringDist1 = abs(r - r_horizon * 1.014);
-    float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(ringDist1 / 0.022, 2.0));
-    float ringDist2 = abs(r - r_horizon * 1.038);
-    float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow(ringDist2 / 0.038, 2.0)) * 0.42;
-    float photonRing = photonRing1 + photonRing2;
-    vec3 photonColor = mix(vec3(1.0, 0.98, 0.95), vec3(1.0, 0.84, 0.45), uSpin * 0.45);
+    // Outer boundary fade
+    float quadFade = 1.0 - smoothstep(13.5, 15.6, r);
+    if (quadFade <= 0.001) discard;
 
-    // 3. Gravitational deflection of light rays in curved spacetime (Continuous Einstein Lens)
-    float bNorm = max(0.18, r);
-    float alpha = (uLensingActive > 0.5) ? (4.2 / bNorm) * (1.0 + 1.25 / bNorm) : 0.0;
-    vec3 deflNormal = normalize(bVec);
-    vec3 bentRay = normalize(rayDir - deflNormal * sin(alpha));
+    // Compute observer elevation angle relative to the equatorial accretion plane
+    vec3 viewVec = normalize(uCameraPos - uBlackHolePos);
+    float elevSin = abs(viewVec.y); // ~0.17 at 80 deg inclination (grazing), ~1.0 at polar
+    // Lensed arches are most prominent when viewing near the equatorial plane (as in the NASA image)
+    float archVisibility = smoothstep(0.96, 0.55, elevSin);
 
-    // 4. Lensed Accretion Disk (Interstellar Gargantua Double Arch: back rim bent over top and bottom)
-    vec3 lensedDiskColor = vec3(0.0);
-    float lensedDiskAlpha = 0.0;
+    // Doppler beaming factor across horizontal axis (left side p.x < 0 is approaching us!)
+    float approachCos = clamp(-p.x / max(1.8, abs(p.x) + 1.4), -1.0, 1.0);
+    float beta = clamp(0.68 * inversesqrt(max(0.9, r - 0.9)), 0.12, 0.78);
+    float gamma = inversesqrt(max(0.15, 1.0 - beta * beta));
+    float dopplerFactor = 1.0 / (gamma * (1.0 - beta * approachCos * uDopplerStrength));
+    float dopplerBoost = mix(1.0, pow(clamp(dopplerFactor, 0.34, 2.85), 2.15), uDopplerStrength);
 
-    float deltaY = pClosest.y - uBlackHolePos.y;
-    float bentDy = bentRay.y;
+    // --- 1. RAZOR-THIN RELATIVISTIC PHOTON RING (n=1 primary & n=2 sub-ring) ---
+    // In the NASA image, the photon ring is a crisp, delicate golden-orange circle at r = 2.08
+    // surrounded by the pitch-black Black Hole Shadow!
+    float rPhoton = 2.06;
+    float distPhoton1 = abs(r - rPhoton);
+    float distPhoton2 = abs(r - (rPhoton * 0.965));
 
-    if (abs(bentDy) > 0.004) {
-      float tCross = -deltaY / bentDy;
-      // Intersection behind the black hole plane
-      if (tCross > 0.0 && uLensingActive > 0.5) {
-        vec3 hitPos = pClosest + bentRay * tCross;
-        float rHit = length(hitPos.xz - uBlackHolePos.xz) / max(0.01, uScale);
-        float rIn = mix(2.55, 1.25, uSpin);
-        float rOut = 12.0;
+    // Fine granular photon-orbit texture along the ring
+    float ringAngle = atan(pShifted.y, pShifted.x);
+    float ringGranule = 0.78 + 0.22 * sin(ringAngle * 14.0 + uTime * 3.5);
+    float photonDoppler = mix(0.28, 1.65, clamp((-pShifted.x / max(0.5, r)) * 0.5 + 0.5, 0.0, 1.0));
 
-        if (rHit >= r_horizon && rHit <= rOut) {
-          float phi = atan(hitPos.z - uBlackHolePos.z, hitPos.x - uBlackHolePos.x);
-          float omega = 3.6 / (pow(rHit, 1.42) + 0.12 * uSpin);
-          float spiralPhase = phi + uTime * omega * 2.2;
-          float diskTurb = snoise(vec2(rHit * 1.8, spiralPhase * 2.4 + uTime * 0.35)) * 0.5 + 0.5;
-          float diskRings = sin(rHit * 9.5 - uTime * 3.2 + diskTurb * 2.6) * 0.5 + 0.5;
-          float diskFilaments = mix(diskTurb, diskRings, 0.38);
+    float photonRing1 = exp(-pow(distPhoton1 / 0.024, 2.0)) * 1.45 * photonDoppler * ringGranule;
+    float photonRing2 = exp(-pow(distPhoton2 / 0.018, 2.0)) * 0.55 * photonDoppler;
+    float photonGlow  = exp(-pow(distPhoton1 / 0.075, 2.0)) * 0.24 * photonDoppler;
+    float totalPhoton = photonRing1 + photonRing2 + photonGlow;
 
-          // Doppler beaming on lensed arch
-          vec3 tanVel = normalize(vec3(-(hitPos.z - uBlackHolePos.z), 0.0, hitPos.x - uBlackHolePos.x));
-          float approach = dot(tanVel, -rayDir);
-          float beta = clamp(0.70 / sqrt(max(1.0, rHit - 0.7)), 0.05, 0.78);
-          float gamma = inversesqrt(max(0.1, 1.0 - beta * beta));
-          float dopplerFactor = 1.0 / (gamma * (1.0 - beta * approach * uDopplerStrength));
-          float dopplerBoost = mix(1.0, pow(clamp(dopplerFactor, 0.35, 2.8), 2.2), clamp(uDopplerStrength, 0.0, 1.0));
+    vec3 photonCol = nasaBlackbodyPalette(totalPhoton * 1.05, uSpectralMode, approachCos);
 
-          float flux = 0.0;
-          if (rHit >= rIn) {
-            float normR = clamp((rHit - rIn) / (rOut - rIn), 0.0, 1.0);
-            float thermalProfile = pow(rIn / rHit, 0.75) * pow(clamp(1.0 - sqrt(rIn / rHit), 0.0, 1.0), 0.25);
-            flux = (thermalProfile * 2.2 + pow(1.0 - normR, 1.35) * 0.55) * smoothstep(rIn, rIn + 0.22, rHit) * (1.0 - smoothstep(rOut - 2.2, rOut, rHit));
-          } else {
-            float plungeT = clamp((rHit - r_horizon) / (rIn - r_horizon), 0.0, 1.0);
-            flux = pow(plungeT, 0.75) * 0.95;
-          }
+    // --- 2. UPPER LENSED ARCH ("Image of the disk's far side") ---
+    // Warps the far side of the disk up and over the Black Hole Shadow (r from 2.48 to 6.35),
+    // flaring smoothly outward at the horizontal waist (p.y -> 0) into the main disk wings!
+    vec3 upperArchCol = vec3(0.0);
+    float upperArchAlpha = 0.0;
 
-          flux *= (0.65 + 0.75 * diskFilaments) * dopplerBoost * (0.7 + 0.55 * uAccretionRate);
+    if (p.y > -0.35) {
+      // Horizontal waist flare creates the continuous saucer/arch transition at y ~ 0
+      float waistFlare = exp(-pow(max(0.0, p.y) / 1.45, 1.65)) * 0.92;
+      vec2 pUpper = vec2(p.x / (1.0 + waistFlare), p.y * 1.03);
+      float rUpper = length(pUpper);
+      float rInUpper = 2.48;
+      float rOutUpper = 6.45;
 
-          // Pulse shock front ripples across gravitationally lensed arches
-          if (uPulseStrength > 0.001) {
-            float primaryDist = abs(rHit - uPulseRadius);
-            float primaryCrest = exp(-pow(primaryDist / 0.55, 2.0));
-            float echoDist = abs(rHit - (uPulseRadius * 0.72));
-            float echoCrest = exp(-pow(echoDist / 0.75, 2.0)) * 0.65;
-            flux += (primaryCrest + echoCrest) * uPulseStrength * 2.8;
-          }
+      if (rUpper >= rInUpper * 0.95 && rUpper <= rOutUpper) {
+        float normRU = clamp((rUpper - rInUpper) / (rOutUpper - rInUpper), 0.0, 1.0);
+        float innerEdgeU = smoothstep(rInUpper * 0.96, rInUpper + 0.26, rUpper);
+        float outerEdgeU = 1.0 - smoothstep(rOutUpper - 1.65, rOutUpper, rUpper);
+        float yCutU = smoothstep(-0.32, 0.08, p.y);
 
-          vec3 baseLut = texture2D(uSpectrumLut, vec2(clamp(flux * 0.65, 0.02, 0.98), 0.5)).rgb;
-          vec3 hotCoreTint = vec3(0.95, 0.97, 1.0);
-          vec3 midDiskTint = vec3(1.0, 0.84, 0.45);
-          vec3 outerRimTint = vec3(0.85, 0.28, 0.08);
-          float radT = clamp((rHit - rIn) / 6.0, 0.0, 1.0);
-          vec3 physicalColorGradient = mix(hotCoreTint, mix(midDiskTint, outerRimTint, radT), clamp(radT * 1.2, 0.0, 1.0));
+        float phiUpper = atan(pUpper.y, -pUpper.x);
+        float streamlinesU = computeNasaStreamlines(rUpper * 1.15, phiUpper, uTime, uSpin);
+        float radialFluxU = pow(max(0.0, 1.0 - normRU), 1.35) * (0.52 + 0.78 * exp(-normRU * 2.2));
 
-          if (uSpectralMode == 1) { // EHT 230 GHz
-            baseLut = mix(vec3(0.14, 0.02, 0.01), vec3(1.0, 0.95, 0.65), clamp(flux * 0.85, 0.0, 1.0));
-          } else if (uSpectralMode == 2) { // Chandra X-ray
-            baseLut = mix(vec3(0.04, 0.12, 0.35), vec3(0.92, 0.98, 1.0), clamp(flux * 0.85, 0.0, 1.0));
-          } else if (uSpectralMode == 3) { // Doppler shift map
-            baseLut = mix(vec3(0.95, 0.38, 0.1), vec3(0.2, 0.85, 1.0), clamp(approach * 0.5 + 0.5, 0.0, 1.0)) * flux;
-          } else {
-            baseLut *= physicalColorGradient;
-          }
-
-          vec3 rawDiskColor = baseLut * 1.55;
-
-          // Exposure & Tone Mapping: ACES film tone mapping preserves dynamic range on Doppler boosted side
-          lensedDiskColor = acesFilm(rawDiskColor * 1.15);
-          lensedDiskAlpha = clamp(flux * (0.68 + 0.32 * diskFilaments) * min(1.65, dopplerBoost), 0.0, 0.98);
-          lensedDiskAlpha *= smoothstep(r_horizon, r_horizon + 0.08, rHit);
-        }
+        float intensityU = innerEdgeU * outerEdgeU * yCutU * radialFluxU * streamlinesU * dopplerBoost * (0.68 + 0.42 * uAccretionRate) * archVisibility;
+        upperArchCol = nasaBlackbodyPalette(intensityU * 1.15, uSpectralMode, approachCos);
+        upperArchAlpha = clamp(innerEdgeU * outerEdgeU * yCutU * smoothstep(0.02, 0.18, intensityU) * 0.96 * archVisibility, 0.0, 0.98);
       }
     }
 
-    // 5. Gravitational Deflection of the Celestial Sky Dome
-    float skyPhi = atan(bentRay.z, bentRay.x);
-    float skyTheta = acos(clamp(bentRay.y, -1.0, 1.0));
-    vec2 skyUv = vec2((skyPhi + 3.14159) / 6.28318, skyTheta / 3.14159);
-    vec3 bgSky = texture2D(uSkyTexture, skyUv).rgb;
+    // --- 3. LOWER LENSED ARCH ("Image of the disk's underside") ---
+    // Light rays from beneath the far side of the disk bent under the Black Hole Shadow.
+    // Separated from the foreground horizontal disk belt by a realistic dark occlusion gap near y ~ -0.25!
+    vec3 lowerArchCol = vec3(0.0);
+    float lowerArchAlpha = 0.0;
 
-    // Continuous Einstein Ring Glow around the horizon
-    float distFromShadow = max(0.001, r - r_horizon);
-    float einsteinGlow = (uIsStar > 0.5 || uLensingActive < 0.5) ? 0.0 : clamp((rs * 0.30) / (distFromShadow + 0.06), 0.0, 0.8) * 0.22;
-    bgSky += vec3(0.2, 0.35, 0.55) * einsteinGlow;
+    if (p.y < -0.22) {
+      float waistFlareL = exp(-pow(abs(p.y + 0.22) / 1.05, 1.8)) * 0.32;
+      vec2 pLower = vec2(p.x / (1.0 + waistFlareL), (p.y + 0.12) * 1.06);
+      float rLower = length(pLower);
+      float rInLower = 2.48;
+      float rOutLower = 5.55;
 
-    // ACES tone mapping to photon ring emission
-    vec3 mappedPhotonColor = acesFilm(photonColor * (photonRing * 3.8));
+      if (rLower >= rInLower * 0.95 && rLower <= rOutLower) {
+        float normRL = clamp((rLower - rInLower) / (rOutLower - rInLower), 0.0, 1.0);
+        float innerEdgeL = smoothstep(rInLower * 0.96, rInLower + 0.24, rLower);
+        float outerEdgeL = 1.0 - smoothstep(rOutLower - 1.35, rOutLower, rLower);
+        // Crisp dark occlusion gap directly beneath the foreground equatorial disk plane
+        float underDiskGap = smoothstep(-0.24, -0.58, p.y);
 
-    // Composite: Sky + Lensed Arches + Continuous Einstein Ring
-    vec3 col = bgSky;
-    col = mix(col, lensedDiskColor, lensedDiskAlpha);
-    col += mappedPhotonColor;
+        float phiLower = atan(-pLower.y, -pLower.x);
+        float streamlinesL = computeNasaStreamlines(rLower * 1.22, phiLower, uTime, uSpin);
+        float radialFluxL = pow(max(0.0, 1.0 - normRL), 1.42) * (0.48 + 0.75 * exp(-normRL * 2.3));
 
-    float outAlpha = max(lensedDiskAlpha, photonRing * 0.94) * quadFade;
-    gl_FragColor = vec4(col, outAlpha);
+        float intensityL = innerEdgeL * outerEdgeL * underDiskGap * radialFluxL * streamlinesL * dopplerBoost * (0.64 + 0.40 * uAccretionRate) * archVisibility;
+        lowerArchCol = nasaBlackbodyPalette(intensityL * 1.12, uSpectralMode, approachCos);
+        lowerArchAlpha = clamp(innerEdgeL * outerEdgeL * underDiskGap * smoothstep(0.02, 0.18, intensityL) * 0.95 * archVisibility, 0.0, 0.98);
+      }
+    }
+
+    // Combine Upper Arch, Lower Arch, and Photon Ring
+    vec3 combinedArchCol = upperArchCol + lowerArchCol;
+    float combinedArchAlpha = clamp(max(upperArchAlpha, lowerArchAlpha), 0.0, 0.98);
+
+    vec3 finalCol = combinedArchCol + photonCol;
+    float finalAlpha = clamp(max(combinedArchAlpha, clamp(totalPhoton, 0.0, 0.98)), 0.0, 0.99) * quadFade;
+
+    // Inside the black hole shadow (where there is no photon ring or lensed arch), discard so the
+    // pure-black 3D eventHorizonMesh and central Singularity remain 100% crisp and unobstructed!
+    if (finalAlpha <= 0.004) {
+      discard;
+    }
+
+    gl_FragColor = vec4(acesFilm(finalCol * 1.06), finalAlpha);
   }
 `;
 
@@ -550,8 +651,12 @@ export class BlackHoleSceneController {
   // Root composite 3D groups
   private blackHoleGroup = new THREE.Group();
   private eventHorizonMesh!: THREE.Mesh;
+  private eventHorizonMat!: THREE.ShaderMaterial;
   private accretionDiskGroup = new THREE.Group();
   private accretionDiskMat!: THREE.ShaderMaterial;
+  private accretionCoronaMat!: THREE.ShaderMaterial;
+  private singularityGroup = new THREE.Group();
+  private singularityGlowMesh!: THREE.Mesh;
   private ergosphereGroup = new THREE.Group();
 
   // Spacetime Well Manifold
@@ -561,7 +666,9 @@ export class BlackHoleSceneController {
   // Prototype Compact Star / Neutron Star subsystem
   private neutronStarGroup = new THREE.Group();
   private neutronStarMesh!: THREE.Mesh;
+  private neutronStarMat!: THREE.ShaderMaterial;
   private pulsarBeamsGroup = new THREE.Group();
+  private pulsarBeamMat!: THREE.ShaderMaterial;
   private magneticDipoleGroup = new THREE.Group();
 
   // Orbital stars & Deep Starfield
@@ -574,6 +681,12 @@ export class BlackHoleSceneController {
   private starTwinklePhases = new Float32Array(5500);
   private starTwinkleSpeeds = new Float32Array(5500);
   private starBaseScales = new Float32Array(5500);
+  private starParallaxWeights = new Float32Array(5500);
+  private dampedCamAzimuth = 0.0;
+  private dampedCamElevation = 0.17;
+  private prevCamAzimuth = 0.0;
+  private prevCamElevation = 0.17;
+  private camRotParallaxVel = new THREE.Vector2(0, 0);
 
   // Null Geodesics
   private geodesicGroup = new THREE.Group();
@@ -588,8 +701,6 @@ export class BlackHoleSceneController {
   // Relativistic Gravitational Lensing Shader Mesh (Interstellar Gargantua ray-marched distortion)
   private gravitationalLensMesh!: THREE.Mesh;
   private gravitationalLensMat!: THREE.ShaderMaterial;
-
-
 
   // Panoramic Soothing Cosmic Sky Dome
   private cosmicSkyDomeMesh!: THREE.Mesh;
@@ -639,7 +750,7 @@ export class BlackHoleSceneController {
 
   // Camera transition state
   private cameraTransitionActive = false;
-  private targetCamPos = new THREE.Vector3(0, 6.8, 19.5);
+  private targetCamPos = new THREE.Vector3(0, 4.3, 25.2);
   private targetCamLook = new THREE.Vector3(0, 0, 0);
   private followStarMode = false;
 
@@ -683,20 +794,20 @@ export class BlackHoleSceneController {
     this.renderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
     container.appendChild(this.renderer.domElement);
 
-    // 2. Scene & Deep Space Horizon Fog
+    // 2. Scene & Pure Pitch-Black Vacuum Outside the Black Hole
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x04060b);
-    this.scene.fog = new THREE.FogExp2(0x04060b, 0.0055);
+    this.scene.background = new THREE.Color(0x000000);
+    this.scene.fog = new THREE.FogExp2(0x000000, 0.0);
 
     // 3. Environment Reflection
     const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     pmremGenerator.dispose();
 
-    // 4. Camera & OrbitControls
+    // 4. Camera & OrbitControls (Framed at ~80° grazing equatorial inclination like NASA visualization)
     const aspect = (container.clientWidth || window.innerWidth) / Math.max(1, container.clientHeight || window.innerHeight);
-    this.camera = new THREE.PerspectiveCamera(46, aspect, 0.1, 500);
-    this.camera.position.set(0, 8.2, 24.5);
+    this.camera = new THREE.PerspectiveCamera(44, aspect, 0.1, 500);
+    this.camera.position.set(0, 4.3, 25.2);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = !isSoftwareGl;
@@ -766,14 +877,13 @@ export class BlackHoleSceneController {
     canvas.height = 32;
     const ctx = canvas.getContext('2d')!;
     const grad = ctx.createLinearGradient(0, 0, 512, 0);
-    grad.addColorStop(0.0, '#0a0305');
-    grad.addColorStop(0.12, '#3d0a08');
-    grad.addColorStop(0.28, '#992608');
-    grad.addColorStop(0.48, '#ea580c');
-    grad.addColorStop(0.68, '#f59e0b');
-    grad.addColorStop(0.85, '#fef08a');
-    grad.addColorStop(0.96, '#ffffff');
-    grad.addColorStop(1.0, '#ffffff');
+    grad.addColorStop(0.0, '#000000');
+    grad.addColorStop(0.14, '#3d0400');
+    grad.addColorStop(0.32, '#991400');
+    grad.addColorStop(0.54, '#f24800');
+    grad.addColorStop(0.76, '#ff9900');
+    grad.addColorStop(0.92, '#ffe066');
+    grad.addColorStop(1.0, '#fff7d6');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 512, 32);
 
@@ -787,38 +897,126 @@ export class BlackHoleSceneController {
   private buildCompositeBlackHole() {
     const spectrumLut = this.createProceduralSpectrumTexture();
 
-    // 1. Central Event Horizon (Shadow rendered directly on the lens quad)
-    this.eventHorizonMesh = new THREE.Mesh();
+    // 1. Central 3D Black Hole Shadow Sphere (Pure #000000 pitch-black interior, writes to depth so front half of disk passes in front while rear half is occluded)
+    const horizonGeo = new THREE.SphereGeometry(2.38, 64, 64);
+    this.eventHorizonMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uSpin: { value: this.params.spin },
+        uSpectralMode: { value: 0 },
+      },
+      vertexShader: HORIZON_VERTEX_SHADER,
+      fragmentShader: HORIZON_FRAGMENT_SHADER,
+      depthWrite: true,
+      depthTest: true,
+    });
+    this.eventHorizonMesh = new THREE.Mesh(horizonGeo, this.eventHorizonMat);
+    this.eventHorizonMesh.renderOrder = 0;
     this.eventHorizonMesh.layers.enable(1);
     this.eventHorizonMesh.userData.feature = {
-      title: 'Event Horizon (r₊)',
-      subtitle: 'Kerr Spacetime Causal Boundary',
-      formula: 'r₊ = (GM/c²)[1 + √(1 - a*²)]',
+      title: 'Black Hole Shadow & Event Horizon (r₊)',
+      subtitle: 'Gravitational Light-Capture Boundary',
+      formula: 'R_shadow = √27 GM/c² ≈ 2.6 R_s · r₊ = (GM/c²)[1 + √(1 - a*²)]',
       description:
-        'The null hypersurface boundary of no return. Within r₊, escape velocity exceeds c and all timelike geodesics terminate at the central ring singularity.',
+        'An area roughly twice the size of the event horizon — the black hole\'s point of no return — formed by its extreme gravitational lensing and capture of light rays.',
     } satisfies InspectedFeature;
     this.blackHoleGroup.add(this.eventHorizonMesh);
 
-    // 2. High-Fidelity 3D Relativistic Accretion Disk (Equatorial Plane)
-    // Pre-calculate initial Doppler coefficients: (dopplerStrength, betaScale, gammaClamp, dopplerExponent)
+    // 1b. Central Gravitational Singularity (Kerr Ring Singularity & Quantum Core at r = 0)
+    this.singularityGroup = new THREE.Group();
+    const singFeature: InspectedFeature = {
+      title: 'Gravitational Singularity (r = 0)',
+      subtitle: 'Kerr Ring Singularity & Infinite Curvature Core',
+      formula: 'r = 0, θ = π/2 · R_μνρσ R^μνρσ → ∞ · ρ → ∞',
+      description:
+        'At the very center of the black hole lies the gravitational singularity — a one-dimensional ring in a spinning Kerr black hole where all infalling matter is compressed to infinite density and general-relativistic spacetime curvature diverges.',
+    };
+
+    // Pinpoint incandescent central core
+    const coreGeo = new THREE.SphereGeometry(0.055, 24, 24);
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: 0xfff7d6,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+      opacity: 0.95,
+    });
+    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    coreMesh.renderOrder = 5;
+    coreMesh.layers.enable(1);
+    coreMesh.userData.feature = singFeature;
+    this.singularityGroup.add(coreMesh);
+
+    // Delicate equatorial Kerr Ring Singularity
+    const kerrRingGeo = new THREE.RingGeometry(0.11, 0.145, 64);
+    kerrRingGeo.rotateX(-Math.PI / 2);
+    const kerrRingMat = new THREE.MeshBasicMaterial({
+      color: 0xffb74d,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+    });
+    const kerrRingMesh = new THREE.Mesh(kerrRingGeo, kerrRingMat);
+    kerrRingMesh.renderOrder = 5;
+    kerrRingMesh.layers.enable(1);
+    kerrRingMesh.userData.feature = singFeature;
+    this.singularityGroup.add(kerrRingMesh);
+
+    // Subtle singularity caustic glint
+    const glintGeo = new THREE.PlaneGeometry(0.55, 0.55);
+    const glintMat = new THREE.ShaderMaterial({
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        void main() {
+          vec2 p = (vUv - 0.5) * 2.0;
+          float d = length(p);
+          float halo = exp(-d * 6.5) * 0.65;
+          float crossSpikes = (exp(-abs(p.x) * 28.0) * exp(-abs(p.y) * 4.5) + exp(-abs(p.y) * 28.0) * exp(-abs(p.x) * 4.5)) * 0.55;
+          float a = clamp((halo + crossSpikes) * (1.0 - smoothstep(0.65, 1.0, d)), 0.0, 0.9);
+          if (a <= 0.01) discard;
+          vec3 col = mix(vec3(1.0, 0.52, 0.08), vec3(1.0, 0.96, 0.82), clamp(halo + crossSpikes, 0.0, 1.0));
+          gl_FragColor = vec4(col, a);
+        }
+      `,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    this.singularityGlowMesh = new THREE.Mesh(glintGeo, glintMat);
+    this.singularityGlowMesh.renderOrder = 5;
+    this.singularityGlowMesh.layers.enable(1);
+    this.singularityGlowMesh.userData.feature = singFeature;
+    this.singularityGroup.add(this.singularityGlowMesh);
+
+    this.blackHoleGroup.add(this.singularityGroup);
+
+    // 2. High-Fidelity 3D Relativistic Accretion Disk (Equatorial Plane + Subtle Corona)
     const initialDopplerCoeffs = new THREE.Vector4(
       this.params.dopplerStrength,
-      0.70, // betaScale
-      1.0,  // gamma clamp factor
-      2.2   // doppler exponent
+      0.72,
+      1.0,
+      2.2
     );
 
-    // Initial Disk Parameters: (spin, accretionRate, spectralMode, isStar)
     const initialDiskParams = new THREE.Vector4(
       this.params.spin,
       this.params.accretionRate,
       0.0,
-      this.params.objectCategory === 'star' ? 1.0 : 0.0
+      0.0
     );
 
-    // Uniform-Buffer Orbital Turbulence Math: (basePhase, ringPhase, shearRate, timeScale)
     const initialTurbBuffer = new THREE.Vector4(0.0, 0.0, 0.0, this.params.timeScale);
-    // Harmonics: (radialFreq, spiralFreq, harmonicAmp, filamentBlend)
     const initialHarmonics = new THREE.Vector4(1.8, 2.4, 0.5, 0.38);
 
     this.accretionDiskMat = new THREE.ShaderMaterial({
@@ -835,28 +1033,52 @@ export class BlackHoleSceneController {
       fragmentShader: ACCRETION_FRAGMENT_SHADER,
       transparent: true,
       depthWrite: false,
+      depthTest: true,
       side: THREE.DoubleSide,
       blending: THREE.NormalBlending,
     });
 
-    // 2. High-Fidelity 3D Relativistic Accretion Disk (Equatorial Ring Geometry)
-    const diskPlaneGeo = new THREE.RingGeometry(1.02, 12.2, 144, 48);
+    const diskPlaneGeo = new THREE.RingGeometry(2.38, 12.6, 160, 64);
     const mainDiskMesh = new THREE.Mesh(diskPlaneGeo, this.accretionDiskMat);
     mainDiskMesh.rotation.x = -Math.PI / 2;
+    mainDiskMesh.renderOrder = 2;
     mainDiskMesh.layers.enable(1);
     mainDiskMesh.userData.feature = {
-      title: 'Relativistic Accretion Disk (ISCO)',
-      subtitle: 'Magnetohydrodynamic Plasma & Differential Shear',
+      title: 'Relativistic Accretion Disk',
+      subtitle: 'Hot Rotating Plasma & Relativistic Doppler Beaming',
       formula: 'T(r) ∝ r⁻³ᐟ⁴ [1 - √(r_in/r)]¹ᐟ⁴ · D = [γ(1 - β cos θ)]⁻¹',
       description:
-        'Superheated gas spiraling inwards toward the innermost stable circular orbit (ISCO), reaching millions of degrees and radiating across X-ray and optical spectra.',
+        'The hot, thin, rotating disk formed by matter slowly spiraling toward the black hole. Light from glowing gas is brighter on the left side where material is moving toward us.',
     } satisfies InspectedFeature;
     this.accretionDiskGroup.add(mainDiskMesh);
+
+    // Thin Volumetric Upper & Lower Plasma Corona Layers
+    this.accretionCoronaMat = this.accretionDiskMat.clone();
+    this.accretionCoronaMat.blending = THREE.AdditiveBlending;
+    this.accretionCoronaMat.uniforms.uDiskParams.value = new THREE.Vector4(
+      this.params.spin,
+      this.params.accretionRate,
+      0.0,
+      1.0
+    );
+
+    const coronaGeo = new THREE.RingGeometry(2.42, 9.8, 128, 32);
+    const upperCorona = new THREE.Mesh(coronaGeo, this.accretionCoronaMat);
+    upperCorona.rotation.x = -Math.PI / 2;
+    upperCorona.position.y = 0.08;
+    upperCorona.renderOrder = 3;
+    this.accretionDiskGroup.add(upperCorona);
+
+    const lowerCorona = new THREE.Mesh(coronaGeo, this.accretionCoronaMat);
+    lowerCorona.rotation.x = -Math.PI / 2;
+    lowerCorona.position.y = -0.08;
+    lowerCorona.renderOrder = 3;
+    this.accretionDiskGroup.add(lowerCorona);
 
     this.blackHoleGroup.add(this.accretionDiskGroup);
 
     // 3. Ergosphere Geometric Boundary (Toggled OFF automatically by default)
-    const ergoGeo = new THREE.SphereGeometry(2.35, 32, 32);
+    const ergoGeo = new THREE.SphereGeometry(2.55, 32, 32);
     ergoGeo.scale(1.0, 0.72, 1.0);
     const ergoMat = new THREE.MeshStandardMaterial({
       color: 0x0284c7,
@@ -994,17 +1216,17 @@ export class BlackHoleSceneController {
   }
 
   private buildPrototypeNeutronStar() {
-    // 1. Ultra-Dense Crystalline Iron Crust Sphere (20 km Physical Stellar Surface)
-    const crustGeo = new THREE.SphereGeometry(1.65, 48, 48);
-    const crustMat = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      emissive: 0x0284c7,
-      emissiveIntensity: 1.25,
-      roughness: 0.25,
-      metalness: 0.9,
-      wireframe: false,
+    // 1. Ultra-Dense Crystalline Iron Crust Sphere with Procedural Magnetothermal Convection & Polar Hotspots
+    const crustGeo = new THREE.SphereGeometry(1.65, 64, 64);
+    this.neutronStarMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uSpin: { value: this.params.spin },
+      },
+      vertexShader: STAR_SURFACE_VERTEX_SHADER,
+      fragmentShader: STAR_SURFACE_FRAGMENT_SHADER,
     });
-    this.neutronStarMesh = new THREE.Mesh(crustGeo, crustMat);
+    this.neutronStarMesh = new THREE.Mesh(crustGeo, this.neutronStarMat);
     this.neutronStarMesh.layers.enable(1);
     this.neutronStarMesh.userData.feature = {
       title: 'Neutron Star Crystalline Crust',
@@ -1015,40 +1237,67 @@ export class BlackHoleSceneController {
     } satisfies InspectedFeature;
     this.neutronStarGroup.add(this.neutronStarMesh);
 
-    // Glowing Hotspot Corona Aura
-    const auraGeo = new THREE.SphereGeometry(1.85, 32, 32);
-    const auraMat = new THREE.MeshBasicMaterial({
-      color: 0x67e8f9,
+    // Volumetric Fresnel Magnetospheric Corona Shroud
+    const auraGeo = new THREE.SphereGeometry(2.05, 48, 48);
+    const auraMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(0x38bdf8) },
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
+        void main() {
+          vNormal = normalize(normalMatrix * normal);
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPos = worldPos.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor;
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
+        void main() {
+          vec3 viewDir = normalize(cameraPosition - vWorldPos);
+          float fresnel = pow(1.0 - abs(dot(vNormal, viewDir)), 2.2);
+          vec3 col = mix(uColor, vec3(0.9, 0.98, 1.0), fresnel * 0.65);
+          gl_FragColor = vec4(col, fresnel * 0.68);
+        }
+      `,
       transparent: true,
-      opacity: 0.35,
       blending: THREE.AdditiveBlending,
+      side: THREE.BackSide,
+      depthWrite: false,
     });
     const auraMesh = new THREE.Mesh(auraGeo, auraMat);
     this.neutronStarMesh.add(auraMesh);
 
-    // 2. Dual Relativistic Pulsar Radio Lighthouse Beams (Synchrotron Jet Cones)
-    // Beams are tilted at ~24° relative to the rotational axis
+    // 2. Dual Relativistic Pulsar Radio Lighthouse Beams (Volumetric Synchrotron Jet Cones)
     this.pulsarBeamsGroup = new THREE.Group();
     this.pulsarBeamsGroup.rotation.z = THREE.MathUtils.degToRad(24);
 
-    const beamConeGeo = new THREE.ConeGeometry(2.2, 18.0, 32, 1, true);
-    beamConeGeo.translate(0, 9.0, 0);
+    const beamConeGeo = new THREE.ConeGeometry(2.35, 18.5, 48, 1, true);
+    beamConeGeo.translate(0, 9.25, 0);
 
-    const beamMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
+    this.pulsarBeamMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: new THREE.Color(0x38bdf8) },
+      },
+      vertexShader: PULSAR_BEAM_VERTEX_SHADER,
+      fragmentShader: PULSAR_BEAM_FRAGMENT_SHADER,
       transparent: true,
-      opacity: 0.42,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
 
     // North Magnetic Pole Beam
-    const northBeam = new THREE.Mesh(beamConeGeo, beamMat);
+    const northBeam = new THREE.Mesh(beamConeGeo, this.pulsarBeamMat);
     this.pulsarBeamsGroup.add(northBeam);
 
     // South Magnetic Pole Beam
-    const southBeam = new THREE.Mesh(beamConeGeo, beamMat.clone());
+    const southBeam = new THREE.Mesh(beamConeGeo, this.pulsarBeamMat);
     southBeam.rotation.x = Math.PI;
     this.pulsarBeamsGroup.add(southBeam);
 
@@ -1061,28 +1310,35 @@ export class BlackHoleSceneController {
     } satisfies InspectedFeature;
     this.neutronStarGroup.add(this.pulsarBeamsGroup);
 
-    // 3. Magnetic Dipole Field Lines (10¹² Gauss Toroidal Cage Loops)
+    // 3. Magnetic Dipole Field Lines (Multi-shell 10¹²–10¹⁵ Gauss Dipolar Magnetosphere Cage)
     this.magneticDipoleGroup = new THREE.Group();
     this.magneticDipoleGroup.rotation.z = THREE.MathUtils.degToRad(24);
 
-    const loopCount = 8;
-    for (let l = 0; l < loopCount; l++) {
-      const angle = (l / loopCount) * Math.PI;
-      const curve = new THREE.EllipseCurve(0, 0, 4.2, 2.6, 0, 2 * Math.PI, false, 0);
-      const points = curve.getPoints(64).map((p) => new THREE.Vector3(p.x, p.y, 0));
-      const loopGeo = new THREE.BufferGeometry().setFromPoints(points);
-      const loopMat = new THREE.LineBasicMaterial({
-        color: 0x34d399,
-        transparent: true,
-        opacity: 0.38,
-      });
-      const loopLine = new THREE.Line(loopGeo, loopMat);
-      loopLine.rotation.y = angle;
-      this.magneticDipoleGroup.add(loopLine);
+    const loopCount = 12;
+    const shellRadii = [
+      { rx: 3.4, ry: 2.1, color: 0x67e8f9, opacity: 0.52 },
+      { rx: 4.8, ry: 3.0, color: 0x34d399, opacity: 0.36 },
+    ];
+    for (const shell of shellRadii) {
+      for (let l = 0; l < loopCount; l++) {
+        const angle = (l / loopCount) * Math.PI;
+        const curve = new THREE.EllipseCurve(0, 0, shell.rx, shell.ry, 0, 2 * Math.PI, false, 0);
+        const points = curve.getPoints(72).map((p) => new THREE.Vector3(p.x, p.y, 0));
+        const loopGeo = new THREE.BufferGeometry().setFromPoints(points);
+        const loopMat = new THREE.LineBasicMaterial({
+          color: shell.color,
+          transparent: true,
+          opacity: shell.opacity,
+          blending: THREE.AdditiveBlending,
+        });
+        const loopLine = new THREE.Line(loopGeo, loopMat);
+        loopLine.rotation.y = angle;
+        this.magneticDipoleGroup.add(loopLine);
+      }
     }
 
     this.magneticDipoleGroup.userData.feature = {
-      title: 'Magnetic Dipole Field (10¹² Gauss)',
+      title: 'Magnetic Dipole Field (10¹²–10¹⁵ Gauss)',
       subtitle: 'Dipolar Magnetosphere & Polar Caps',
       formula: 'B(r, θ) = (μ / r³) √(1 + 3 cos²θ)',
       description:
@@ -1219,7 +1475,8 @@ export class BlackHoleSceneController {
     });
 
     this.gravitationalLensMesh = new THREE.Mesh(lensGeo, this.gravitationalLensMat);
-    this.gravitationalLensMesh.renderOrder = 2;
+    // RenderOrder 1: after 3D eventHorizonMesh (0), before 3D equatorial accretionDiskGroup (2)
+    this.gravitationalLensMesh.renderOrder = 1;
     this.blackHoleGroup.add(this.gravitationalLensMesh);
   }
 
@@ -1444,6 +1701,7 @@ export class BlackHoleSceneController {
     this.starTwinklePhases = new Float32Array(starCount);
     this.starTwinkleSpeeds = new Float32Array(starCount);
     this.starBaseScales = new Float32Array(starCount);
+    this.starParallaxWeights = new Float32Array(starCount);
 
     // Authentic Harvard astronomical spectral classes and B-V blackbody temperatures
     const spectralColors = [
@@ -1468,7 +1726,14 @@ export class BlackHoleSceneController {
 
     for (let i = 0; i < starCount; i++) {
       let x = 0, y = 0, z = 0;
-      const radius = 75 + Math.random() * 135;
+      // Multi-tiered radial depth distribution [60..215] for rich 3D parallax separation
+      const depthTierRand = Math.random();
+      const radius =
+        depthTierRand < 0.18
+          ? 60 + Math.random() * 32 // Foreground stellar cluster tier (strong parallax)
+          : depthTierRand < 0.68
+          ? 92 + Math.random() * 55 // Mid-field galactic disc tier (moderate parallax)
+          : 147 + Math.random() * 68; // Deep background halo tier (subtle reference parallax)
 
       // 72% of stars form the dense, realistic Milky Way Galactic Disc & Central Bulge band
       if (i < starCount * 0.72) {
@@ -1508,18 +1773,19 @@ export class BlackHoleSceneController {
       const restPos = new THREE.Vector3(x, y, z);
       this.starRestPositions.push(restPos);
 
+      // Inverse-distance parallax weight: foreground stars shift more than distant background stars
+      const normInvDist = (220.0 - radius) / 160.0; // ~1.0 for close (r=60), ~0.03 for far (r=215)
+      this.starParallaxWeights[i] = 0.12 + Math.pow(Math.max(0.0, normInvDist), 1.35) * 1.85;
+
       // Realistic Astronomical Initial Mass Function (IMF) / Apparent Magnitude Distribution:
-      // - 82% faint dwarf stars: tiny, crisp, beautiful sub-pixel pinpricks
-      // - 14% medium brightness stars
-      // - 4% luminous bright navigation stars & supergiant beacons
       let baseScale = 0.18;
       const magRand = Math.random();
-      if (magRand < 0.82) {
-        baseScale = 0.14 + Math.pow(Math.random(), 3.2) * 0.28;
-      } else if (magRand < 0.96) {
-        baseScale = 0.45 + Math.random() * 0.40;
+      if (magRand < 0.80) {
+        baseScale = 0.15 + Math.pow(Math.random(), 2.8) * 0.30;
+      } else if (magRand < 0.95) {
+        baseScale = 0.48 + Math.random() * 0.44;
       } else {
-        baseScale = 0.95 + Math.random() * 0.95;
+        baseScale = 0.98 + Math.random() * 1.05;
       }
 
       this.starBaseScales[i] = baseScale;
@@ -1532,18 +1798,15 @@ export class BlackHoleSceneController {
       _mat4.compose(restPos, _quat.identity(), scaleVec);
       this.starfieldInstanced.setMatrixAt(i, _mat4);
 
-      // Real astronomical spectral population weighting:
-      // M and K red/orange dwarf stars are by far the most numerous in the universe (~60%),
-      // Solar G and F stars are moderate (~30%), while hot B and O stars are rare (~10%)
       let colorIndex = 0;
       const specRand = Math.random();
-      if (specRand < 0.32) {
+      if (specRand < 0.30) {
         colorIndex = 6; // M red dwarf
-      } else if (specRand < 0.58) {
+      } else if (specRand < 0.55) {
         colorIndex = 5; // K orange dwarf
-      } else if (specRand < 0.78) {
+      } else if (specRand < 0.76) {
         colorIndex = 4; // G solar yellow
-      } else if (specRand < 0.90) {
+      } else if (specRand < 0.89) {
         colorIndex = 3; // F warm white
       } else if (specRand < 0.96) {
         colorIndex = 2; // A white
@@ -1554,8 +1817,8 @@ export class BlackHoleSceneController {
       }
 
       const col = spectralColors[colorIndex].clone();
-      if (baseScale > 0.8) {
-        col.multiplyScalar(1.25);
+      if (baseScale > 0.75) {
+        col.multiplyScalar(1.35);
       }
       this.starfieldColors.push(col);
       this.starfieldInstanced.setColorAt(i, col);
@@ -1565,79 +1828,118 @@ export class BlackHoleSceneController {
     if (this.starfieldInstanced.instanceColor) {
       this.starfieldInstanced.instanceColor.needsUpdate = true;
     }
-    this.starfieldInstanced.computeBoundingSphere();
+    this.starfieldInstanced.frustumCulled = false;
     this.scene.add(this.starfieldInstanced);
   }
 
   /**
-   * Applies General Relativistic Gravitational Lensing Deflection & Motion Parallax:
-   * 1. 3D Spatial Depth Parallax: stars at varying celestial distances (R ~ 75-210) experience
-   *    differential parallax as the observer rotates or orbits around the gravitational titan.
-   * 2. General Relativistic Lensing: Light passing near the central mass is deflected by
-   *    Einstein's angle α ≈ 4GM/(c² b) = 2 Rs / b. Background stars behind the object warp radially
-   *    outward away from the event horizon shadow.
+   * Updates Background Starfield with Camera-Rotation Parallax & General Relativistic Lensing:
+   * 1. Multi-Layer Camera Rotation Parallax: Computes the camera's spherical azimuth & elevation
+   *    rotation angles as well as instantaneous angular rotation velocity, shifting foreground,
+   *    mid-field, and deep-field stars differentially along the camera's local right/up tangent plane.
+   * 2. Sky Dome Counter-Parallax: Subtly shifts the cosmic nebula dome at infinity for spatial orientation.
+   * 3. General Relativistic Lensing: Deflects starlight passing near the central mass by α ≈ 2 Rs / b.
    */
-  private updateGravitationalLensingOfStarfield() {
+  private updateGravitationalLensingOfStarfield(rawDelta = 0.016) {
     const camPos = this.camera.position;
+    const camDist = Math.max(0.1, camPos.length());
     const rs = 1.75 * this.currentScale;
     const einsteinRadiusSq = Math.max(0.2, rs * rs * 2.8);
     const elapsed = this.clock.getElapsedTime();
+    const lensingActive = this.params.gravitationalLensing !== false;
 
-    // Camera coordinate frame for rotation and orbit parallax
+    // Compute camera spherical rotation coordinates (azimuth & elevation)
+    const rawAzimuth = Math.atan2(camPos.x, camPos.z);
+    const rawElevation = Math.asin(THREE.MathUtils.clamp(camPos.y / camDist, -1.0, 1.0));
+
+    // Handle shortest-arc wrap-around at +-PI for azimuth
+    let deltaAz = rawAzimuth - this.dampedCamAzimuth;
+    if (deltaAz > Math.PI) deltaAz -= Math.PI * 2.0;
+    if (deltaAz < -Math.PI) deltaAz += Math.PI * 2.0;
+
+    const dampRate = 1.0 - Math.exp(-8.5 * rawDelta);
+    this.dampedCamAzimuth += deltaAz * dampRate;
+    this.dampedCamElevation += (rawElevation - this.dampedCamElevation) * dampRate;
+
+    // Instantaneous angular rotation velocity for dynamic rotational parallax feel
+    let stepAz = rawAzimuth - this.prevCamAzimuth;
+    if (stepAz > Math.PI) stepAz -= Math.PI * 2.0;
+    if (stepAz < -Math.PI) stepAz += Math.PI * 2.0;
+    const stepEl = rawElevation - this.prevCamElevation;
+    this.prevCamAzimuth = rawAzimuth;
+    this.prevCamElevation = rawElevation;
+
+    const invDt = rawDelta > 0.0005 ? Math.min(30.0, 1.0 / rawDelta) : 0.0;
+    const targetRotVelX = THREE.MathUtils.clamp(stepAz * invDt * 1.8, -6.5, 6.5);
+    const targetRotVelY = THREE.MathUtils.clamp(stepEl * invDt * 1.8, -6.5, 6.5);
+    this.camRotParallaxVel.x += (targetRotVelX - this.camRotParallaxVel.x) * dampRate;
+    this.camRotParallaxVel.y += (targetRotVelY - this.camRotParallaxVel.y) * dampRate;
+
+    // Subtle counter-rotation parallax on the deep nebula sky dome
+    if (this.cosmicSkyDomeMesh) {
+      this.cosmicSkyDomeMesh.rotation.y = -this.dampedCamAzimuth * 0.045;
+      this.cosmicSkyDomeMesh.rotation.x = this.dampedCamElevation * 0.035;
+    }
+
+    // Camera local orthonormal frame for screen-aligned parallax displacement
     _camRight.setFromMatrixColumn(this.camera.matrixWorld, 0).normalize();
     _camUp.setFromMatrixColumn(this.camera.matrixWorld, 1).normalize();
-
-    // Camera view direction
     _vec3B.subVectors(this.controls.target, camPos).normalize();
+
+    const azSin = Math.sin(this.dampedCamAzimuth);
+    const azCos = Math.cos(this.dampedCamAzimuth);
+    const elSin = Math.sin(this.dampedCamElevation - 0.32);
 
     for (let i = 0; i < this.starfieldCount; i++) {
       const restPos = this.starRestPositions[i];
-      const restDist = restPos.length();
+      const pWeight = this.starParallaxWeights[i];
 
       // Subtle celestial twinkle scintillation
-      const twinkle = 1.0 + Math.sin(elapsed * this.starTwinkleSpeeds[i] + this.starTwinklePhases[i]) * 0.15;
+      const twinkle = 1.0 + Math.sin(elapsed * this.starTwinkleSpeeds[i] + this.starTwinklePhases[i]) * 0.16;
       const curScale = this.starBaseScales[i] * twinkle;
       this.starfieldScales[i].set(curScale, curScale, curScale);
 
-      // 1. Subtle camera rotation & orbital depth parallax:
-      // Stars at 75-210 units have varying depth factors. Closer stars shift more than distant ones.
-      const depthFactor = (135.0 / Math.max(50.0, restDist)) - 0.85; // ~+0.95 for close, ~-0.2 for far
-      // Parallax translation from camera orbital position
-      _vec3D.copy(camPos).multiplyScalar(-0.045 * depthFactor);
-      // Parallax shear from camera rotation angle relative to star vector
-      const dotRight = _camRight.dot(restPos);
-      const dotUp = _camUp.dot(restPos);
-      _vec3D.addScaledVector(_camRight, -dotRight * 0.0022 * depthFactor);
-      _vec3D.addScaledVector(_camUp, -dotUp * 0.0022 * depthFactor);
+      // 1. Camera-Rotation & Orbital Depth Parallax:
+      // Combines positional orbital parallax, spherical camera-angle tangent shift, and angular velocity lag
+      const rotShiftRight = (azSin * 4.8 + this.camRotParallaxVel.x * 1.65) * pWeight;
+      const rotShiftUp = (elSin * 4.2 + this.camRotParallaxVel.y * 1.45) * pWeight;
 
-      // Star position with parallax applied
-      const parallaxPos = _vec3E.copy(restPos).add(_vec3D);
+      _vec3D.copy(camPos).multiplyScalar(-0.065 * pWeight);
+      _vec3D.addScaledVector(_camRight, -rotShiftRight);
+      _vec3D.addScaledVector(_camUp, rotShiftUp);
 
-      // 2. Gravitational lensing deflection
-      _vec3A.subVectors(parallaxPos, camPos);
-      const starDist = _vec3A.length();
-      if (starDist < 1.0) continue;
+      // Differential azimuthal twist around vertical axis based on camera rotation
+      const twistAngle = (azSin * 0.038 + (1.0 - azCos) * 0.022) * pWeight;
+      const cosT = Math.cos(twistAngle);
+      const sinT = Math.sin(twistAngle);
+      const rx = restPos.x * cosT - restPos.z * sinT;
+      const rz = restPos.x * sinT + restPos.z * cosT;
 
-      const starDir = _vec3A.normalize();
-      const cosAngle = starDir.dot(_vec3B);
+      const parallaxPos = _vec3E.set(rx, restPos.y, rz).add(_vec3D);
 
-      // Only stars behind or near the central object (cosAngle > 0.35) experience visible lensing deflection
-      if (cosAngle > 0.35) {
-        const sinAngle = Math.sqrt(Math.max(0.001, 1.0 - cosAngle * cosAngle));
-        const impactB = Math.max(rs * 0.9, starDist * sinAngle);
+      // 2. General Relativistic Lensing Deflection (when enabled)
+      if (lensingActive) {
+        _vec3A.subVectors(parallaxPos, camPos);
+        const starDist = _vec3A.length();
+        if (starDist < 1.0) continue;
 
-        // Einstein deflection displacement: α ≈ 2 Rs / b
-        const deflectionFactor = Math.min(7.5, einsteinRadiusSq / (impactB + 0.35));
+        const starDir = _vec3A.normalize();
+        const cosAngle = starDir.dot(_vec3B);
 
-        // Transverse outward unit vector from black hole center to star in view plane
-        _vec3C.crossVectors(_vec3B, starDir).crossVectors(_vec3C, _vec3B).normalize();
+        if (cosAngle > 0.35) {
+          const sinAngle = Math.sqrt(Math.max(0.001, 1.0 - cosAngle * cosAngle));
+          const impactB = Math.max(rs * 0.9, starDist * sinAngle);
+          const deflectionFactor = Math.min(7.5, einsteinRadiusSq / (impactB + 0.35));
 
-        const deflectedPos = _vec3A.copy(parallaxPos).addScaledVector(_vec3C, deflectionFactor * 2.2);
-        _mat4.compose(deflectedPos, _quat.identity(), this.starfieldScales[i]);
-      } else {
-        _mat4.compose(parallaxPos, _quat.identity(), this.starfieldScales[i]);
+          _vec3C.crossVectors(_vec3B, starDir).crossVectors(_vec3C, _vec3B).normalize();
+          const deflectedPos = _vec3A.copy(parallaxPos).addScaledVector(_vec3C, deflectionFactor * 2.2);
+          _mat4.compose(deflectedPos, _quat.identity(), this.starfieldScales[i]);
+          this.starfieldInstanced.setMatrixAt(i, _mat4);
+          continue;
+        }
       }
 
+      _mat4.compose(parallaxPos, _quat.identity(), this.starfieldScales[i]);
       this.starfieldInstanced.setMatrixAt(i, _mat4);
     }
     this.starfieldInstanced.instanceMatrix.needsUpdate = true;
@@ -1901,9 +2203,8 @@ export class BlackHoleSceneController {
         : 0;
 
     if (this.accretionDiskMat) {
-      // Pre-calculated Doppler shift coefficients: (dopplerStrength, betaScale, gammaClamp, dopplerExponent)
       const dopplerStrength = nextParams.dopplerStrength;
-      const betaScale = 0.70;
+      const betaScale = 0.72;
       const gammaClamp = 1.0;
       const dopplerExponent = 2.2;
       this.accretionDiskMat.uniforms.uDopplerCoeffs.value.set(
@@ -1913,13 +2214,38 @@ export class BlackHoleSceneController {
         dopplerExponent
       );
 
-      // Compact disk parameter vector: (spin, accretionRate, spectralMode, isStar)
       this.accretionDiskMat.uniforms.uDiskParams.value.set(
         nextParams.spin,
         nextParams.accretionRate,
         modeIndex,
-        isStar ? 1.0 : 0.0
+        0.0
       );
+    }
+
+    if (this.accretionCoronaMat) {
+      this.accretionCoronaMat.uniforms.uDopplerCoeffs.value.set(
+        nextParams.dopplerStrength,
+        0.72,
+        1.0,
+        2.2
+      );
+      this.accretionCoronaMat.uniforms.uDiskParams.value.set(
+        nextParams.spin,
+        nextParams.accretionRate,
+        modeIndex,
+        1.0
+      );
+    }
+
+    if (this.eventHorizonMat) {
+      this.eventHorizonMat.uniforms.uSpin.value = nextParams.spin;
+      this.eventHorizonMat.uniforms.uSpectralMode.value = modeIndex;
+      this.eventHorizonMesh.scale.setScalar(this.currentScale);
+    }
+
+    if (this.singularityGroup) {
+      this.singularityGroup.visible = !isStar;
+      this.singularityGroup.scale.setScalar(this.currentScale);
     }
 
     if (this.gravitationalLensMat) {
@@ -1932,7 +2258,6 @@ export class BlackHoleSceneController {
       this.gravitationalLensMesh.visible = isStar ? false : (nextParams.layers.accretionDisk || nextParams.gravitationalLensing);
     }
 
-
     if (nextParams.backgroundTheme && (nextParams.backgroundTheme !== prevBackgroundTheme || immediate)) {
       this.setBackgroundTheme(nextParams.backgroundTheme);
     } else if (nextParams.backgroundTheme === 'pure_black') {
@@ -1943,11 +2268,13 @@ export class BlackHoleSceneController {
     // Object Category switching: Black hole vs Compact Star
     if (isStar) {
       this.eventHorizonMesh.visible = false;
+      this.singularityGroup.visible = false;
       this.neutronStarGroup.visible = true;
       this.pulsarBeamsGroup.visible = nextParams.layers.pulsarBeams ?? true;
       this.magneticDipoleGroup.visible = nextParams.layers.magneticField ?? true;
     } else {
       this.eventHorizonMesh.visible = true;
+      this.singularityGroup.visible = true;
       this.neutronStarGroup.visible = false;
     }
 
@@ -1982,7 +2309,7 @@ export class BlackHoleSceneController {
 
     switch (preset) {
       case 'equatorial':
-        this.targetCamPos.set(0, Math.cos(incRad) * (26.5 * distMultiplier), Math.sin(incRad) * (26.5 * distMultiplier));
+        this.targetCamPos.set(0, Math.cos(incRad) * (25.5 * distMultiplier), Math.sin(incRad) * (25.5 * distMultiplier));
         this.targetCamLook.set(0, 0, 0);
         break;
       case 'polar':
@@ -2105,8 +2432,6 @@ export class BlackHoleSceneController {
     const elapsed = this.accretionDiskSimTime;
 
     if (this.accretionDiskMat) {
-      // Uniform-Buffer Orbital Turbulence Vector:
-      // (basePhase, ringPhase, shearRate, timeScale)
       const basePhase = elapsed;
       const ringPhase = elapsed * 0.35;
       const shearRate = elapsed * 3.2;
@@ -2120,11 +2445,26 @@ export class BlackHoleSceneController {
       );
     }
 
+    if (this.accretionCoronaMat) {
+      this.accretionCoronaMat.uniforms.uTurbulenceBuffer.value.set(
+        elapsed,
+        elapsed * 0.35,
+        elapsed * 3.2,
+        this.params.timeScale
+      );
+    }
+
     // 2. Smooth Exponential Damping on Scale & Exploded Anatomy Separation
     this.currentScale = THREE.MathUtils.damp(this.currentScale, this.targetScale, 5.5, rawDelta);
     this.currentExploded = THREE.MathUtils.damp(this.currentExploded, this.targetExploded, 6.0, rawDelta);
 
     this.eventHorizonMesh.scale.setScalar(this.currentScale);
+    if (this.singularityGroup) {
+      this.singularityGroup.scale.setScalar(this.currentScale);
+      if (this.singularityGlowMesh) {
+        this.singularityGlowMesh.quaternion.copy(this.camera.quaternion);
+      }
+    }
     this.accretionDiskGroup.scale.setScalar(this.currentScale);
     this.neutronStarGroup.scale.setScalar(this.currentScale);
 
@@ -2142,11 +2482,17 @@ export class BlackHoleSceneController {
 
     // 4. Pulsar Lighthouse Beams & Magnetic Field Rotation
     if (this.params.objectCategory === 'star') {
-      // Rapid rotation of neutron star crust and sweeping pulsar lighthouse beams (~1.3 second period)
       this.pulsarRotationAngle += simDelta * (4.5 + this.params.spin * 8.0);
       this.pulsarBeamsGroup.rotation.y = this.pulsarRotationAngle;
       this.magneticDipoleGroup.rotation.y = this.pulsarRotationAngle;
       this.neutronStarMesh.rotation.y = this.pulsarRotationAngle * 0.8;
+      if (this.neutronStarMat) {
+        this.neutronStarMat.uniforms.uTime.value = elapsed;
+        this.neutronStarMat.uniforms.uSpin.value = this.params.spin;
+      }
+      if (this.pulsarBeamMat) {
+        this.pulsarBeamMat.uniforms.uTime.value = elapsed;
+      }
     }
 
     // 4b. Event Horizon Pulse Animation (Accretion Disk Disturbance & Shockwave Ripple)
@@ -2162,44 +2508,43 @@ export class BlackHoleSceneController {
         this.gravitationalWaveShellMesh.visible = false;
         this.horizonFlashMesh.visible = false;
         this.accretionDiskMat.uniforms.uPulseStrength.value = 0.0;
+        if (this.accretionCoronaMat) {
+          this.accretionCoronaMat.uniforms.uPulseStrength.value = 0.0;
+        }
         this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
       } else {
-        // High-energy blast, decelerating outward with reverberating echoes
         const ease = 1.0 - Math.pow(1.0 - this.pulseProgress, 2.8);
         this.pulseStrength = Math.pow(1.0 - this.pulseProgress, 1.6);
         const startR = 1.75 * this.currentScale;
         const maxShockRadius = 22.0 * this.currentScale;
         this.pulseRadius = THREE.MathUtils.lerp(startR, maxShockRadius, ease);
 
-        // Update accretion disk disturbance shader uniforms
         this.accretionDiskMat.uniforms.uPulseRadius.value = this.pulseRadius / this.currentScale;
         this.accretionDiskMat.uniforms.uPulseStrength.value = this.pulseStrength;
-        this.accretionDiskMat.uniforms.uDiskParams.value.w = this.params.objectCategory === 'star' ? 1.0 : 0.0;
+        if (this.accretionCoronaMat) {
+          this.accretionCoronaMat.uniforms.uPulseRadius.value = this.pulseRadius / this.currentScale;
+          this.accretionCoronaMat.uniforms.uPulseStrength.value = this.pulseStrength;
+        }
 
-        // Primary shockwave ring expansion & fade
         this.primaryPulseMesh.visible = true;
         this.primaryPulseMesh.scale.set(this.pulseRadius, this.pulseRadius, this.pulseRadius);
         (this.primaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.95;
 
-        // Secondary harmonic echo ring
         const secondaryR = Math.max(startR, this.pulseRadius * 0.72);
         this.secondaryPulseMesh.visible = true;
         this.secondaryPulseMesh.scale.set(secondaryR, secondaryR, secondaryR);
         (this.secondaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.65;
 
-        // Tertiary reverberation ring
         const tertiaryR = Math.max(startR, this.pulseRadius * 0.48);
         this.tertiaryPulseMesh.visible = true;
         this.tertiaryPulseMesh.scale.set(tertiaryR, tertiaryR, tertiaryR);
         (this.tertiaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.40;
 
-        // 3D Quadrupole Gravitational Wave Shell (expands spherically at c)
         const gwShellR = THREE.MathUtils.lerp(startR, maxShockRadius * 1.2, ease);
         this.gravitationalWaveShellMesh.visible = true;
         this.gravitationalWaveShellMesh.scale.set(gwShellR, gwShellR, gwShellR);
         (this.gravitationalWaveShellMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.70;
 
-        // Horizon flash burst decay at the causal boundary
         if (this.pulseProgress < 0.28) {
           const burstT = this.pulseProgress / 0.28;
           const burstScale = THREE.MathUtils.lerp(1.0, 1.55, burstT) * this.currentScale;
@@ -2210,20 +2555,17 @@ export class BlackHoleSceneController {
           this.horizonFlashMesh.visible = false;
         }
 
-        // Ripple the spacetime well manifold in real-time
         this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
       }
     }
 
-    // 5. Authentic Gravitational Lensing of Background Starfield
-    if (this.params.gravitationalLensing !== false) {
-      this.updateGravitationalLensingOfStarfield();
-    }
+    // 5. Camera-Rotation Parallax & Gravitational Lensing of Background Starfield (always updates parallax)
+    this.updateGravitationalLensingOfStarfield(rawDelta);
 
     // 5b. Distant Background Star Gravitational Microlensing Simulation
     this.updateBackgroundStarMicrolensing(simDelta);
 
-    // 6. Advance Orbiting Star S2 along Relativistic Orbit
+    // 6. Advance Orbiting Star S2 along Relativistic Orbit with Doppler Color Shift
     const orbitSceneRadius = this.params.probeRadiusRs * 1.75 * this.currentScale;
     const angularSpeed = (1.65 * metrics.probeOrbitalBeta) / Math.max(1.5, this.params.probeRadiusRs * 0.45);
     this.starOrbitAngle += simDelta * angularSpeed;
@@ -2233,7 +2575,14 @@ export class BlackHoleSceneController {
     const starY = Math.sin(this.starOrbitAngle * 2.0) * 0.22 * this.params.spin;
     this.starS2Mesh.position.set(starX, starY, starZ);
 
-    const starPulse = 1.0 + Math.sin(elapsed * 4.0) * 0.12;
+    // Relativistic Doppler shift of Star S2 corona based on line-of-sight orbital velocity
+    _vec3A.set(-Math.sin(this.starOrbitAngle), 0, -Math.cos(this.starOrbitAngle)).normalize();
+    _vec3B.subVectors(this.camera.position, this.starS2Mesh.position).normalize();
+    const s2Approach = _vec3A.dot(_vec3B);
+    const s2Hue = THREE.MathUtils.clamp(0.58 + s2Approach * 0.08, 0.06, 0.65);
+    (this.starS2GlowMesh.material as THREE.MeshBasicMaterial).color.setHSL(s2Hue, 0.92, 0.68);
+
+    const starPulse = 1.0 + Math.sin(elapsed * 4.5) * 0.14;
     this.starS2GlowMesh.scale.setScalar(starPulse);
 
     // 7. Advance Companion S-Stars in Nuclear Cluster
@@ -2292,7 +2641,6 @@ export class BlackHoleSceneController {
       this.gravitationalLensMat.uniforms.uPulseStrength.value = this.pulseStrength;
     }
 
-
     // 12. Relativistic Audio Modulation: Camera Proximity & Gravitational Time Dilation
     const camDist = this.camera.position.length();
     const rs = 1.75 * this.currentScale;
@@ -2350,7 +2698,7 @@ export class BlackHoleSceneController {
     });
     this.cosmicSkyDomeMesh = new THREE.Mesh(skyGeo, this.skyDomeMat);
     this.scene.add(this.cosmicSkyDomeMesh);
-    this.updateSkyDomeTexture(this.params.backgroundTheme || 'galactic_core');
+    this.updateSkyDomeTexture(this.params.backgroundTheme || 'pure_black');
   }
 
   private updateSkyDomeTexture(themeId: BackgroundThemeId) {
@@ -2429,7 +2777,7 @@ export class BlackHoleSceneController {
 
   public setBackgroundTheme(themeId: BackgroundThemeId) {
     const isPureBlack = themeId === 'pure_black';
-    const theme = BACKGROUND_THEMES[themeId] || BACKGROUND_THEMES.galactic_core;
+    const theme = BACKGROUND_THEMES[themeId] || BACKGROUND_THEMES.pure_black;
     this.scene.background = new THREE.Color(theme.bgColor);
     this.scene.fog = new THREE.FogExp2(theme.fogColor, theme.fogDensity);
     this.updateSkyDomeTexture(themeId);
@@ -2449,6 +2797,22 @@ export class BlackHoleSceneController {
     const height = this.container.clientHeight || window.innerHeight;
     const scale = this.currentScale;
     const isStar = this.params.objectCategory === 'star';
+
+    // Camera-aligned right & up basis vectors so callouts on the lensed arches, photon ring,
+    // and black hole shadow always attach to the exact visual feature on screen!
+    _camRight.setFromMatrixColumn(this.camera.matrixWorld, 0).normalize();
+    _camUp.setFromMatrixColumn(this.camera.matrixWorld, 1).normalize();
+
+    const makeCamAlignedPos = (rightUnits: number, upUnits: number, forwardUnits = 0) => {
+      const p = new THREE.Vector3();
+      p.addScaledVector(_camRight, rightUnits * scale);
+      p.addScaledVector(_camUp, upUnits * scale);
+      if (forwardUnits !== 0) {
+        _vec3B.subVectors(this.camera.position, this.controls.target).normalize();
+        p.addScaledVector(_vec3B, forwardUnits * scale);
+      }
+      return p;
+    };
 
     if (isStar) {
       const starAnchors: Array<{
@@ -2515,7 +2879,7 @@ export class BlackHoleSceneController {
       });
     }
 
-    // Authentic labels directly from the user-provided PMF IAS infographic (Black-Holes_7bd54699.webp)
+    // Authentic NASA Goddard / Jeremy Schnittman Black Hole Anatomy Labels (BH_labeled-scaled_fb8356c7.jpeg) + Central Singularity
     const anchors: Array<{
       id: string;
       name: string;
@@ -2527,114 +2891,74 @@ export class BlackHoleSceneController {
       dockPosition: 'top-left' | 'top-right' | 'mid-left' | 'mid-right' | 'bottom-left' | 'bottom-right';
     }> = [
       {
-        id: 'sagittarius_a',
-        name: 'Sagittarius A*',
-        badge: 'Our Galactic Center',
-        badgeColor: 'text-amber-400 border-amber-500/40 bg-amber-950/40',
-        headline: 'Supermassive black hole at our galaxy\'s center',
-        description: 'Contains 4.3 million solar masses packed into a region smaller than Mercury\'s orbit, anchoring the central parsec of the Milky Way.',
-        pos: new THREE.Vector3(0, 2.15 * scale, 0),
+        id: 'far_side',
+        name: "Image of the disk's far side",
+        badge: 'Gravitational Lensing (Upper Arch)',
+        badgeColor: 'text-amber-300 border-amber-500/40 bg-amber-950/40',
+        headline: "Image of the disk's far side",
+        description: "The black hole's gravitational field alters the path of light from the far side of the disk, producing this part of the image.",
+        pos: makeCamAlignedPos(-1.65, 3.35),
         dockPosition: 'top-left',
       },
       {
-        id: 'einstein_1916',
-        name: 'Einstein Prediction (1916)',
-        badge: 'General Relativity',
-        badgeColor: 'text-cyan-400 border-cyan-500/40 bg-cyan-950/40',
-        headline: 'Einstein predicted black holes in 1916 via general relativity',
-        description: 'Curved spacetime bends light rays from the rear accretion disk upward and over the event horizon shadow into the iconic upper halo arc.',
-        pos: new THREE.Vector3(1.75 * scale, 2.75 * scale, -0.1),
+        id: 'photon_ring',
+        name: 'Photon ring',
+        badge: 'Multiple Orbiting Light Images',
+        badgeColor: 'text-amber-200 border-amber-400/40 bg-amber-950/40',
+        headline: 'Photon ring',
+        description: 'A ring of light composed of multiple distorted images of the disk. The light making up these images has orbited the black hole two, three or even more times before escaping to us. They become thinner and fainter closer to the black hole.',
+        pos: makeCamAlignedPos(0.18, 2.04),
         dockPosition: 'top-right',
       },
       {
-        id: 'eht_2019',
-        name: 'Event Horizon Telescope (EHT)',
-        badge: 'First Image (2019)',
+        id: 'black_hole_shadow',
+        name: 'Black hole shadow',
+        badge: '2× Event Horizon Capture Area',
+        badgeColor: 'text-neutral-200 border-neutral-600/50 bg-neutral-900/70',
+        headline: 'Black hole shadow',
+        description: "This is an area roughly twice the size of the event horizon — the black hole's point of no return — that is formed by its gravitational lensing and capture of light rays.",
+        pos: makeCamAlignedPos(1.05, 0.82),
+        dockPosition: 'mid-right',
+      },
+      {
+        id: 'doppler_beaming',
+        name: 'Doppler beaming',
+        badge: 'Relativistic Approaching Gas',
         badgeColor: 'text-amber-300 border-amber-500/40 bg-amber-950/40',
-        headline: 'EHT collaboration released the first image of a black hole (2019)',
-        description: 'Synchronized radio dishes across planet Earth resolved the bright photon ring and shadow of supermassive black hole M87* and Sagittarius A*.',
-        pos: new THREE.Vector3(1.85 * scale, 0.85 * scale, 0.05),
-        dockPosition: 'mid-right',
-      },
-      {
-        id: 'the_unicorn',
-        name: 'The Unicorn',
-        badge: 'Closest Black Hole to Earth',
-        badgeColor: 'text-emerald-400 border-emerald-500/40 bg-emerald-950/40',
-        headline: 'One of the closest known black holes to Earth (~1,500 ly)',
-        description: 'Located in the constellation Monoceros, this tiny stellar-mass black hole (~3 Suns) orbits a red giant companion.',
-        pos: new THREE.Vector3(4.8 * scale, 0.0, 0),
-        dockPosition: 'mid-right',
-      },
-      {
-        id: 'hawking_evaporation',
-        name: 'Hawking Evaporation',
-        badge: 'Quantum Radiation',
-        badgeColor: 'text-purple-400 border-purple-500/40 bg-purple-950/40',
-        headline: 'Do not die, but are theoretically predicted to slowly evaporate',
-        description: 'Hawking predicted black holes emit quantum radiation and slowly shrink over unfathomable cosmic timescales (~10⁶⁷ to 10¹⁰⁰ years).',
-        pos: new THREE.Vector3(2.05 * scale, -1.85 * scale, 0),
-        dockPosition: 'bottom-right',
-      },
-      {
-        id: 'ligo_waves',
-        name: 'LIGO Gravitational Waves',
-        badge: 'Spacetime Ripples (2015)',
-        badgeColor: 'text-rose-400 border-rose-500/40 bg-rose-950/40',
-        headline: 'In 2015, LIGO detected gravitational waves from merging stellar black holes',
-        description: 'Laser interferometers measured spacetime distortion 1/10,000th the width of a proton when two black holes collided 1.3 billion light-years away.',
-        pos: new THREE.Vector3(3.6 * scale, -2.75 * scale, 0.8),
-        dockPosition: 'bottom-right',
-      },
-      {
-        id: 'cygnus_x1',
-        name: 'Cygnus X-1',
-        badge: 'First Discovered Black Hole',
-        badgeColor: 'text-amber-400 border-amber-500/40 bg-amber-950/40',
-        headline: 'First discovered black hole in the Milky Way (1964/1971)',
-        description: 'An X-ray source in Cygnus consisting of a 21-solar-mass black hole feeding on high-velocity gas from a blue supergiant companion star.',
-        pos: new THREE.Vector3(0, -2.25 * scale, 0),
-        dockPosition: 'bottom-left',
-      },
-      {
-        id: 'three_layers',
-        name: 'Three Layers',
-        badge: 'Horizon & Singularity',
-        badgeColor: 'text-cyan-400 border-cyan-500/40 bg-cyan-950/40',
-        headline: 'Outer and inner event horizon and the central singularity',
-        description: 'Event Horizon: Boundary beyond which light cannot escape. Singularity: Infinitely dense zero-volume point where all mass is concentrated.',
-        pos: new THREE.Vector3(-1.35 * scale, -1.65 * scale, 0.1),
-        dockPosition: 'bottom-left',
-      },
-      {
-        id: 'matter_attraction',
-        name: 'Matter Attraction',
-        badge: 'Relativistic Accretion',
-        badgeColor: 'text-amber-400 border-amber-500/40 bg-amber-950/40',
-        headline: 'Grow by attracting nearby matter through their immense gravity',
-        description: 'Interstellar gas and torn companion stars spiral down into an accretion disk, converting gravitational potential energy into brilliant radiation.',
-        pos: new THREE.Vector3(-3.8 * scale, -0.25 * scale, 0.2),
+        headline: 'Doppler beaming',
+        description: "Light from glowing gas in the accretion disk is brighter on the side where material is moving toward us, fainter on the side where it's moving away from us.",
+        pos: makeCamAlignedPos(-3.15, 0.25, 1.2),
         dockPosition: 'mid-left',
       },
       {
-        id: 'alpha_centauri',
-        name: 'Alpha Centauri',
-        badge: 'Nearest Star Reference',
-        badgeColor: 'text-slate-300 border-slate-600/40 bg-slate-900/60',
-        headline: 'Nearest star system; Proxima Centauri is closest to Earth (4.24 ly)',
-        description: 'Our closest stellar neighbor is over 40 trillion km away. Black holes are safely isolated at vast interstellar and intergalactic distances.',
-        pos: new THREE.Vector3(-5.2 * scale, 0.3 * scale, 0),
-        dockPosition: 'mid-left',
+        id: 'accretion_disk',
+        name: 'Accretion disk',
+        badge: 'Infalling Superheated Matter',
+        badgeColor: 'text-orange-300 border-orange-500/40 bg-orange-950/40',
+        headline: 'Accretion disk',
+        description: 'The hot, thin, rotating disk formed by matter slowly spiraling toward the black hole.',
+        pos: makeCamAlignedPos(-6.65, -0.22, 1.8),
+        dockPosition: 'bottom-left',
       },
       {
-        id: 'not_wormholes',
-        name: 'Not Wormholes',
-        badge: 'Physical Reality',
-        badgeColor: 'text-rose-400 border-rose-500/40 bg-rose-950/40',
-        headline: 'Black holes are NOT wormholes (tunnels connecting two points)',
-        description: 'Unlike speculative sci-fi wormholes connecting two portals in space and time, black holes crush all infalling matter into a singular dense core.',
-        pos: new THREE.Vector3(-2.3 * scale, 1.95 * scale, 0),
-        dockPosition: 'top-left',
+        id: 'underside',
+        name: "Image of the disk's underside",
+        badge: 'Gravitationally Lensed Underside',
+        badgeColor: 'text-amber-300 border-amber-500/40 bg-amber-950/40',
+        headline: "Image of the disk's underside",
+        description: 'Light rays from beneath the far side of the disk are gravitationally "lensed" to produce this part of the image.',
+        pos: makeCamAlignedPos(-1.62, -3.05),
+        dockPosition: 'bottom-left',
+      },
+      {
+        id: 'singularity',
+        name: 'Singularity',
+        badge: 'Infinite Curvature Core (r = 0)',
+        badgeColor: 'text-amber-100 border-amber-300/40 bg-amber-950/50',
+        headline: 'Singularity',
+        description: 'The infinitely dense central core inside the event horizon where spacetime curvature becomes infinite and all infalling matter is crushed.',
+        pos: new THREE.Vector3(0, 0, 0),
+        dockPosition: 'bottom-right',
       },
     ];
 

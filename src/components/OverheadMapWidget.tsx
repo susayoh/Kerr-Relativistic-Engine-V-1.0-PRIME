@@ -23,7 +23,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
   onSetProbeRadius,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [isMinimized, setIsMinimized] = useState<boolean>(false);
+  const [isMinimized, setIsMinimized] = useState<boolean>(true);
   const [zoomLevel, setZoomLevel] = useState<number>(1.0); // 1.0x (up to 7 Rs), 2.0x (zoom into ISCO/horizon)
   const [telemetry, setTelemetry] = useState<{
     rRs: number;

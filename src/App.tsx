@@ -31,14 +31,14 @@ import { TimeDilationDisplay } from './components/TimeDilationDisplay';
 
 const DEFAULT_PARAMS: BlackHoleParams = {
   objectCategory: 'black_hole',
-  backgroundTheme: 'galactic_core',
+  backgroundTheme: 'pure_black',
   presetId: 'ton618',
   trueMassSolar: 66000000000,
   massSolar: 100,
   spin: 0.98,
   accretionRate: 1.95,
-  inclinationDeg: 58,
-  dopplerStrength: 0.65,
+  inclinationDeg: 80,
+  dopplerStrength: 0.75,
   probeRadiusRs: 3.6,
   explodedSeparation: 0.0,
   timeScale: 1.0,
@@ -84,6 +84,48 @@ export default function App() {
         anatomyLines: !(prev.layers.anatomyLines ?? true),
       },
     }));
+  }, []);
+
+  // Unified Clean Mode ("Hide UI") handler:
+  // When activated, hides all UI overlays, switches background to pure black (#000000),
+  // and removes the gravity well (spacetimeGrid) as well as S-Stars (orbitalStars & microlensingStar).
+  const handleSetCleanMode = useCallback((nextClean: boolean) => {
+    setIsCleanMode(nextClean);
+    if (nextClean) {
+      setParams((prev) => ({
+        ...prev,
+        backgroundTheme: 'pure_black',
+        layers: {
+          ...prev.layers,
+          spacetimeGrid: false,
+          orbitalStars: false,
+          microlensingStar: false,
+          geodesicRays: false,
+          ergosphereCage: false,
+        },
+      }));
+    }
+  }, []);
+
+  const handleToggleCleanMode = useCallback(() => {
+    setIsCleanMode((prev) => {
+      const nextClean = !prev;
+      if (nextClean) {
+        setParams((p) => ({
+          ...p,
+          backgroundTheme: 'pure_black',
+          layers: {
+            ...p.layers,
+            spacetimeGrid: false,
+            orbitalStars: false,
+            microlensingStar: false,
+            geodesicRays: false,
+            ergosphereCage: false,
+          },
+        }));
+      }
+      return nextClean;
+    });
   }, []);
 
   const [inspectedFeature, setInspectedFeature] = useState<InspectedFeature | null>(null);
@@ -145,14 +187,14 @@ export default function App() {
       if (e.key === 'h' || e.key === 'H') {
         setIsDockCollapsed((prev) => !prev);
       } else if (e.key === 'c' || e.key === 'C') {
-        setIsCleanMode((prev) => !prev);
+        handleToggleCleanMode();
       } else if (e.key === 'Escape') {
-        setIsCleanMode(false);
+        handleSetCleanMode(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [handleToggleCleanMode, handleSetCleanMode]);
 
   const handleSelectPreset = useCallback((presetId: string) => {
     const found = ASTROPHYSICAL_PRESETS.find((p) => p.id === presetId);
@@ -215,7 +257,7 @@ export default function App() {
   const isStar = params.objectCategory === 'star';
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#05070d] select-none flex flex-col">
+    <div className="relative w-screen h-screen overflow-hidden bg-black select-none flex flex-col">
       {/* Zone 1-3 Top Navigation Bar (Hidden in Clean Mode) */}
       {!isCleanMode && (
         <TopBar
@@ -225,12 +267,12 @@ export default function App() {
           onOpenArchetypeModal={() => setIsArchetypeModalOpen(true)}
           onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
           onOpenBackgroundModal={() => setIsBackgroundModalOpen(true)}
-          activeBackgroundTheme={params.backgroundTheme || 'galactic_core'}
+          activeBackgroundTheme={params.backgroundTheme || 'pure_black'}
           isAnatomyVisible={isAnatomyVisible}
           onToggleAnatomyVisible={handleToggleAnatomyVisible}
           onExportSnapshot={handleExportSnapshot}
           isCleanMode={isCleanMode}
-          onToggleCleanMode={() => setIsCleanMode((prev) => !prev)}
+          onToggleCleanMode={handleToggleCleanMode}
         />
       )}
 
@@ -253,11 +295,11 @@ export default function App() {
           />
         )}
 
-        {/* Left HUD Column: Astrophysical Target Specification Badge (Anatomy Guide sits cleanly below it) */}
+        {/* Left HUD Column: Target Specification Badge + Relocated Time Dilation UI + Compact Radar */}
         {!isCleanMode && (
           <div className="absolute top-3 left-4 z-10 flex flex-col items-start gap-2.5 pointer-events-none max-w-xs sm:max-w-sm">
             {/* Target Spec Badge */}
-            <div className="pointer-events-auto bg-[#050811]/90 border border-slate-800/80 rounded-xl p-3 shadow-xl backdrop-blur-md transition-all">
+            <div className="pointer-events-auto bg-[#050811]/95 border border-slate-800/80 rounded-xl p-3 shadow-xl transition-all w-full">
               <div className="flex items-center justify-between gap-2">
                 <span
                   className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border ${
@@ -322,56 +364,24 @@ export default function App() {
                 </div>
               )}
             </div>
-          </div>
-        )}
 
-        {/* Right HUD Column: Interactive Feature Popover + 2D Overhead Map + Repositioned Time Dilation Monitor */}
-        {!isCleanMode && (
-          <div className="absolute top-4 right-6 z-20 flex flex-col items-end gap-3 pointer-events-auto max-w-xs sm:max-w-sm">
-            {/* Interactive Click-to-Inspect Feature Popover */}
-            {inspectedFeature && (
-              <div className="w-80 bg-[#080c16]/95 border border-slate-800 rounded-lg p-3.5 shadow-xl pointer-events-auto">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-[11px] font-mono text-amber-400">
-                      {inspectedFeature.subtitle}
-                    </div>
-                    <h3 className="font-display text-sm font-bold text-slate-100 mt-0.5">
-                      {inspectedFeature.title}
-                    </h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setInspectedFeature(null)}
-                    className="p-1 text-slate-400 hover:text-slate-100 rounded cursor-pointer"
-                    aria-label="Close inspection card"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div className="mt-2 px-2 py-1 bg-[#0d1322] border border-slate-800/90 rounded font-mono text-xs text-cyan-300">
-                  {inspectedFeature.formula}
-                </div>
-                <p className="mt-2 text-xs text-slate-300 leading-relaxed">
-                  {inspectedFeature.description}
-                </p>
-              </div>
-            )}
-
-            {/* 2D Overhead Map Widget: Top-Down View & Real-Time Probe Tracking */}
-            <OverheadMapWidget
-              sceneController={controllerInstance || sceneControllerRef.current}
-              onSetProbeRadius={(newRadius) =>
-                setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
-              }
-            />
-
-            {/* Repositioned Real-Time Local Time Dilation Display (dt/dτ) in Right HUD stack */}
-            <div className="w-full">
+            {/* Relocated Real-Time Local Time Dilation Display (dt/dτ) in Left HUD Column */}
+            <div className="pointer-events-auto">
               <TimeDilationDisplay
                 probeRadiusRs={params.probeRadiusRs}
                 spin={params.spin}
                 timeScale={params.timeScale}
+                initialCollapsed={false}
+                onSetProbeRadius={(newRadius) =>
+                  setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
+                }
+              />
+            </div>
+
+            {/* 2D Overhead Map Widget: Top-Down View & Real-Time Probe Tracking */}
+            <div className="pointer-events-auto">
+              <OverheadMapWidget
+                sceneController={controllerInstance || sceneControllerRef.current}
                 onSetProbeRadius={(newRadius) =>
                   setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
                 }
@@ -380,19 +390,49 @@ export default function App() {
           </div>
         )}
 
-        {/* Clean Mode Floating Restore UI Pill */}
+        {/* Interactive Click-to-Inspect Feature Popover (Bottom-Right when active) */}
+        {!isCleanMode && inspectedFeature && (
+          <div className="absolute bottom-24 right-6 z-20 w-80 bg-[#080c16]/95 border border-slate-800 rounded-lg p-3.5 shadow-xl pointer-events-auto">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-mono text-amber-400">
+                  {inspectedFeature.subtitle}
+                </div>
+                <h3 className="font-display text-sm font-bold text-slate-100 mt-0.5">
+                  {inspectedFeature.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectedFeature(null)}
+                className="p-1 text-slate-400 hover:text-slate-100 rounded cursor-pointer"
+                aria-label="Close inspection card"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="mt-2 px-2 py-1 bg-[#0d1322] border border-slate-800/90 rounded font-mono text-xs text-cyan-300">
+              {inspectedFeature.formula}
+            </div>
+            <p className="mt-2 text-xs text-slate-300 leading-relaxed">
+              {inspectedFeature.description}
+            </p>
+          </div>
+        )}
+
+        {/* Clean Mode Floating Restore UI Button (Unobtrusive Bottom-Right Corner) */}
         {isCleanMode && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+          <div className="absolute bottom-5 right-5 z-30 pointer-events-auto">
             <button
               type="button"
-              onClick={() => setIsCleanMode(false)}
-              className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-black/90 hover:bg-black text-neutral-200 hover:text-white border border-neutral-700 hover:border-amber-400 shadow-2xl backdrop-blur-md font-mono text-xs transition-all cursor-pointer ring-1 ring-white/10 hover:scale-105"
+              onClick={() => handleSetCleanMode(false)}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#050811]/90 hover:bg-black text-neutral-200 hover:text-white border border-neutral-700/80 hover:border-amber-400 shadow-2xl font-mono text-xs transition-all cursor-pointer"
               title="Restore full user interface (Shortcut: C or ESC)"
             >
               <Eye className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-semibold tracking-wide">Restore UI</span>
+              <span className="font-semibold tracking-wide">Show UI</span>
               <span className="text-[10px] text-neutral-400 bg-neutral-900 px-1.5 py-0.5 rounded border border-neutral-800">
-                Esc / C
+                C / Esc
               </span>
             </button>
           </div>
@@ -406,6 +446,7 @@ export default function App() {
             activePresetId={activePresetId}
             isCollapsed={isDockCollapsed}
             onToggleCollapse={() => setIsDockCollapsed((prev) => !prev)}
+            onToggleCleanMode={handleToggleCleanMode}
             onChangeParams={setParams}
             onSelectPreset={handleSelectPreset}
             onResetParams={handleResetParams}

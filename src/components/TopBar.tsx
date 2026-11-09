@@ -34,7 +34,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   const activePreset = ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
 
   return (
-    <header className="relative z-20 flex items-center justify-between gap-4 px-5 py-2.5 bg-black/95 backdrop-blur-md border-b border-neutral-800">
+    <header className="relative z-20 flex items-center justify-between gap-4 px-5 py-2.5 bg-[#05070d]/95 border-b border-neutral-800">
       {/* Zone 1: Smart Brand & Active Target Badge */}
       <div className="flex items-center gap-3 shrink-0">
         <a
@@ -50,7 +50,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
           <span
-            className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+            className={`w-1.5 h-1.5 rounded-full ${
               activePreset.category === 'star' ? 'bg-emerald-400' : 'bg-amber-400'
             }`}
           />
@@ -91,15 +91,15 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Zone 3: Actions */}
       <div className="flex items-center gap-2 shrink-0">
-        {/* Clean View Toggle */}
+        {/* Clean View / Hide UI Toggle */}
         <button
           type="button"
           onClick={onToggleCleanMode}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border bg-neutral-900 text-neutral-300 border-neutral-800 hover:text-white hover:bg-neutral-800 hover:border-neutral-700"
-          title="Clean View: Hide all UI elements for an unobstructed cinematic view (Shortcut: C / ESC)"
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border bg-amber-500/15 text-amber-200 border-amber-500/40 hover:text-white hover:bg-amber-500/25 hover:border-amber-400 shadow-sm"
+          title="Hide all UI elements for an unobstructed clean view (Shortcut: C / ESC)"
         >
-          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-          <span>Clean View</span>
+          <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+          <span>Hide UI</span>
         </button>
 
         {/* Anatomy Infographic Lines Toggle */}
