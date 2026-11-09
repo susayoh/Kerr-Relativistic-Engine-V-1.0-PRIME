@@ -156,100 +156,60 @@ const ACCRETION_FRAGMENT_SHADER = `
 
   void main() {
     float r = length(vLocalPos.xy);
-    float horizonRadius = mix(1.75, 1.08, uSpin * 0.72);
-    float iscoRadius = mix(2.65, 1.45, uSpin * 0.88);
-    float outerRadius = 12.2;
+    float rIn = 1.68;
+    float rOut = 11.8;
 
-    if (r < horizonRadius * 0.96 || r > outerRadius) {
+    if (r < rIn || r > rOut) {
       discard;
     }
 
     float angle = atan(vLocalPos.y, vLocalPos.x);
 
-    // Relativistic Keplerian differential shear omega ~ r^(-1.5)
+    // Relativistic Keplerian differential shear omega ~ r^(-1.42)
     float omega = 3.6 / (pow(r, 1.42) + 0.12 * uSpin);
-    float spiralAngle = angle + uTime * omega + 4.2 / (max(0.2, r - iscoRadius + 0.55));
+    float spiralPhase = angle + uTime * omega * 2.2;
 
-    // Multi-scale Magneto-Rotational Instability (MRI) filaments
-    vec2 spiralCoord = vec2(r * 1.6, spiralAngle * 2.2);
-    float turbulence = fbm(spiralCoord + vec2(uTime * 0.25, -uTime * 0.45));
-    float fineRings = sin(r * 8.5 - uTime * 2.8 + turbulence * 3.5) * 0.5 + 0.5;
-    float filaments = mix(turbulence, fineRings, 0.35);
+    // Multi-scale Magneto-Rotational Instability (MRI) filaments matching top arch
+    float diskTurb = snoise(vec2(r * 1.8, spiralPhase * 2.4 + uTime * 0.35)) * 0.5 + 0.5;
+    float diskRings = sin(r * 9.5 - uTime * 3.2 + diskTurb * 2.6) * 0.5 + 0.5;
+    float diskFilaments = mix(diskTurb, diskRings, 0.38);
 
     // Relativistic Kinematics:
-    // Orbital velocity v/c in Kerr spacetime
-    float beta = clamp(0.72 / sqrt(max(1.08, r - 0.75 + 0.25 * uSpin)), 0.05, 0.78);
-    float gamma = inversesqrt(max(0.12, 1.0 - beta * beta));
-
-    // Tangent velocity unit vector in world space
     vec3 tangentDir = normalize(vec3(-vWorldPos.z, 0.0, vWorldPos.x));
     vec3 viewDir = normalize(cameraPosition - vWorldPos);
     float approachCos = dot(tangentDir, viewDir);
 
-    // Continuous Relativistic Doppler Factor: D = 1 / [gamma * (1 - beta * cos theta)]
-    float dopplerFactor = 1.0 / (gamma * (1.0 - beta * approachCos * 0.85 * uDopplerStrength));
-    float dopplerBoost = mix(1.0, pow(clamp(dopplerFactor, 0.45, 2.4), 2.2), clamp(uDopplerStrength, 0.0, 1.0));
+    float beta = clamp(0.70 / sqrt(max(1.0, r - 0.7)), 0.05, 0.76);
+    float gamma = inversesqrt(max(0.1, 1.0 - beta * beta));
+    float dopplerFactor = 1.0 / (gamma * (1.0 - beta * approachCos * uDopplerStrength));
+    float dopplerBoost = mix(1.0, pow(clamp(dopplerFactor, 0.35, 2.7), 2.2), clamp(uDopplerStrength, 0.0, 1.0));
 
-    // Novikov-Thorne radial temperature profile with inner plunging decay
-    float normR = clamp((r - iscoRadius) / (outerRadius - iscoRadius), 0.0, 1.0);
-    float mainDiskFlux = pow(1.0 - normR, 1.55) * smoothstep(iscoRadius - 0.15, iscoRadius + 0.45, r);
-    float outerFalloff = 1.0 - smoothstep(outerRadius - 2.2, outerRadius, r);
-
-    // Inner plunging region between Horizon and ISCO: matter free-falls into horizon
-    float plungeMask = (1.0 - smoothstep(horizonRadius, iscoRadius, r)) * smoothstep(horizonRadius * 0.95, horizonRadius + 0.15, r);
-    float plungeSpiral = sin(angle * 3.0 + uTime * 6.5 + 8.0 / max(0.1, r - horizonRadius + 0.2)) * 0.5 + 0.5;
-    float plungeFlux = plungeMask * (0.35 + 0.65 * plungeSpiral) * 0.55;
-
-    float totalFlux = (mainDiskFlux + plungeFlux) * outerFalloff * (0.55 + 0.85 * filaments);
-    float intensity = totalFlux * dopplerBoost * (0.65 + 0.55 * uAccretionRate);
+    // Radial Novikov-Thorne flux profile matching top arch
+    float normR = clamp((r - rIn) / (rOut - rIn), 0.0, 1.0);
+    float flux = pow(1.0 - normR, 1.42) * smoothstep(rIn, rIn + 0.3, r) * (1.0 - smoothstep(rOut - 2.0, rOut, r));
+    flux *= (0.65 + 0.8 * diskFilaments) * dopplerBoost * (0.7 + 0.5 * uAccretionRate);
 
     // Event Horizon Pulse & Accretion Disturbance Shockwave
     if (uPulseStrength > 0.001) {
       float pulseDist = abs(r - uPulseRadius);
       float shockCrest = exp(-pow(pulseDist / 0.82, 2.0));
-      float shockBrightness = shockCrest * uPulseStrength * 3.2;
-      intensity += shockBrightness;
+      flux += shockCrest * uPulseStrength * 1.8;
     }
 
-    // Physical Blackbody Color Spectrum:
-    float effTempRatio = clamp(intensity * (0.75 + 0.35 * dopplerFactor), 0.02, 1.4);
-    vec3 baseColor = texture2D(uSpectrumLut, vec2(clamp(effTempRatio * 0.68, 0.02, 0.98), 0.5)).rgb;
-
-    if (uPulseStrength > 0.001) {
-      float pulseDist = abs(r - uPulseRadius);
-      float shockCrest = exp(-pow(pulseDist / 0.82, 2.0));
-      vec3 shockTint = mix(vec3(1.0, 0.92, 0.75), vec3(0.45, 0.92, 1.0), uIsStar);
-      baseColor = mix(baseColor, baseColor + shockTint * 1.8, clamp(shockCrest * uPulseStrength * 0.85, 0.0, 1.0));
+    // Physical Blackbody Color Spectrum (identical to top lensed arch)
+    vec3 baseLut = texture2D(uSpectrumLut, vec2(clamp(flux * 0.65, 0.02, 0.98), 0.5)).rgb;
+    if (uSpectralMode == 1) { // EHT 230 GHz
+      baseLut = mix(vec3(0.14, 0.02, 0.01), vec3(1.0, 0.95, 0.65), clamp(flux * 0.85, 0.0, 1.0));
+    } else if (uSpectralMode == 2) { // Chandra X-Ray
+      baseLut = mix(vec3(0.04, 0.12, 0.35), vec3(0.92, 0.98, 1.0), clamp(flux * 0.85, 0.0, 1.0));
+    } else if (uSpectralMode == 3) { // Doppler shift map
+      baseLut = mix(vec3(0.95, 0.38, 0.1), vec3(0.2, 0.85, 1.0), clamp(approachCos * 0.5 + 0.5, 0.0, 1.0)) * flux;
     }
 
-    // Spectral mode adjustments
-    if (uSpectralMode == 1) {
-      // EHT 230 GHz Sub-mm palette
-      vec3 ehtDark = vec3(0.14, 0.02, 0.01);
-      vec3 ehtMid = vec3(0.95, 0.38, 0.04);
-      vec3 ehtHot = vec3(1.0, 0.94, 0.65);
-      baseColor = mix(ehtDark, ehtMid, clamp(intensity * 0.85, 0.0, 1.0));
-      baseColor = mix(baseColor, ehtHot, clamp((intensity - 0.7) * 1.2, 0.0, 1.0));
-    } else if (uSpectralMode == 2) {
-      // Chandra X-Ray palette
-      vec3 xDark = vec3(0.04, 0.12, 0.35);
-      vec3 xMid = vec3(0.18, 0.65, 0.98);
-      vec3 xHot = vec3(0.92, 0.98, 1.0);
-      baseColor = mix(xDark, xMid, clamp(intensity * 0.85, 0.0, 1.0));
-      baseColor = mix(baseColor, xHot, clamp((intensity - 0.6) * 1.3, 0.0, 1.0));
-    } else if (uSpectralMode == 3) {
-      // Smooth Doppler velocity map
-      vec3 recedeAmber = vec3(0.95, 0.42, 0.12);
-      vec3 neutralGold = vec3(0.98, 0.82, 0.35);
-      vec3 approachCyan = vec3(0.25, 0.85, 1.0);
-      float shiftT = clamp(approachCos * 0.48 * uDopplerStrength + 0.5, 0.0, 1.0);
-      vec3 dopplerRgb = mix(recedeAmber, neutralGold, smoothstep(0.0, 0.5, shiftT));
-      dopplerRgb = mix(dopplerRgb, approachCyan, smoothstep(0.5, 1.0, shiftT));
-      baseColor = mix(baseColor, dopplerRgb, 0.6) * intensity;
-    }
+    vec3 diskColor = baseLut * 1.5;
+    float diskAlpha = clamp(flux * (0.65 + 0.35 * diskFilaments) * min(1.6, dopplerBoost), 0.0, 0.98);
 
-    float alpha = clamp(totalFlux * (0.55 + 0.45 * filaments) * min(1.4, intensity + 0.35), 0.0, 0.98);
-    gl_FragColor = vec4(baseColor, alpha);
+    gl_FragColor = vec4(diskColor, diskAlpha);
   }
 `;
 
@@ -660,9 +620,6 @@ export class BlackHoleSceneController {
     this.scene.add(this.neutronStarGroup);
     this.scene.add(this.geodesicGroup);
 
-    // Seed initial null geodesic trajectories
-    this.seedInitialGeodesics();
-
     // Apply initial parameters
     this.updateParams(initialParams, true);
 
@@ -674,7 +631,6 @@ export class BlackHoleSceneController {
     window.addEventListener('resize', this.handleResize);
     this.renderer.domElement.addEventListener('pointermove', this.handlePointerMove);
     this.renderer.domElement.addEventListener('click', this.handleCanvasClick);
-    this.renderer.domElement.addEventListener('dblclick', this.handleCanvasDoubleClick);
 
     this.startLoop();
   }
@@ -765,7 +721,7 @@ export class BlackHoleSceneController {
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
     });
 
     // 2. High-Fidelity 3D Relativistic Accretion Disk (Equatorial Ring Geometry)
@@ -1517,6 +1473,9 @@ export class BlackHoleSceneController {
 
     if (nextParams.backgroundTheme && (nextParams.backgroundTheme !== prevBackgroundTheme || immediate)) {
       this.setBackgroundTheme(nextParams.backgroundTheme);
+    } else if (nextParams.backgroundTheme === 'pure_black') {
+      if (this.cosmicSkyDomeMesh) this.cosmicSkyDomeMesh.visible = false;
+      if (this.starfieldInstanced) this.starfieldInstanced.visible = false;
     }
 
     // Object Category switching: Black hole vs Compact Star
@@ -1788,11 +1747,18 @@ export class BlackHoleSceneController {
       comp.mesh.position.set(cx, cy, cz);
     }
 
-    // 8. Advance Geodesic Photon Pulses
-    for (const item of this.activeGeodesicPulses) {
+    // 8. Advance Geodesic Photon Pulses (Single-pass decay without infinite looping)
+    for (let i = this.activeGeodesicPulses.length - 1; i >= 0; i--) {
+      const item = this.activeGeodesicPulses[i];
       item.progress += rawDelta * item.speed * Math.max(0.25, this.params.timeScale);
       if (item.progress >= item.points.length - 1) {
-        item.progress = 0;
+        this.geodesicGroup.remove(item.mesh, item.line);
+        item.mesh.geometry.dispose();
+        (item.mesh.material as THREE.Material).dispose();
+        item.line.geometry.dispose();
+        (item.line.material as THREE.Material).dispose();
+        this.activeGeodesicPulses.splice(i, 1);
+        continue;
       }
       const idx = Math.floor(item.progress);
       const frac = item.progress - idx;
@@ -1875,7 +1841,10 @@ export class BlackHoleSceneController {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    if (themeId === 'galactic_core') {
+    if (themeId === 'pure_black') {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, 512, 256);
+    } else if (themeId === 'galactic_core') {
       const grad = ctx.createRadialGradient(256, 128, 15, 256, 128, 255);
       grad.addColorStop(0.0, '#2d180d');
       grad.addColorStop(0.35, '#180d07');
@@ -1940,12 +1909,19 @@ export class BlackHoleSceneController {
   }
 
   public setBackgroundTheme(themeId: BackgroundThemeId) {
+    const isPureBlack = themeId === 'pure_black';
     const theme = BACKGROUND_THEMES[themeId] || BACKGROUND_THEMES.galactic_core;
     this.scene.background = new THREE.Color(theme.bgColor);
     this.scene.fog = new THREE.FogExp2(theme.fogColor, theme.fogDensity);
     this.updateSkyDomeTexture(themeId);
     if (this.gravitationalLensMat && this.skyDomeMat?.map) {
       this.gravitationalLensMat.uniforms.uSkyTexture.value = this.skyDomeMat.map;
+    }
+    if (this.cosmicSkyDomeMesh) {
+      this.cosmicSkyDomeMesh.visible = !isPureBlack;
+    }
+    if (this.starfieldInstanced) {
+      this.starfieldInstanced.visible = !isPureBlack;
     }
   }
 

@@ -49,7 +49,7 @@ const DEFAULT_PARAMS: BlackHoleParams = {
     ergosphereCage: false, // Toggled off automatically by default
     spacetimeGrid: true,
     orbitalStars: true,
-    geodesicRays: true,
+    geodesicRays: false, // Disabled by default per user request
     pulsarBeams: true,
     magneticField: true,
     anatomyLines: true,

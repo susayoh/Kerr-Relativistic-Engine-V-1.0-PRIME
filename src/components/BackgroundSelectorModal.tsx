@@ -58,6 +58,7 @@ export const BackgroundSelectorModal: React.FC<BackgroundSelectorModalProps> = (
 
             // Visual preview swatches
             const previewGradients: Record<BackgroundThemeId, string> = {
+              pure_black: 'from-black via-black to-black',
               galactic_core: 'from-[#2d180d] via-[#140a05] to-[#0a0705]',
               cosmic_nebula: 'from-[#082332] via-[#09152b] to-[#040810]',
               stellar_nursery: 'from-[#260e32] via-[#150722] to-[#08040d]',

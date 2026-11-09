@@ -5,7 +5,8 @@ export type BackgroundThemeId =
   | 'cosmic_nebula'
   | 'stellar_nursery'
   | 'soothing_void'
-  | 'slate_minimal';
+  | 'slate_minimal'
+  | 'pure_black';
 
 export interface BackgroundThemeDef {
   id: BackgroundThemeId;
@@ -18,6 +19,15 @@ export interface BackgroundThemeDef {
 }
 
 export const BACKGROUND_THEMES: Record<BackgroundThemeId, BackgroundThemeDef> = {
+  pure_black: {
+    id: 'pure_black',
+    name: 'Pure Black Void (No Stars)',
+    tagline: 'Deep obsidian black vacuum with zero background stars or haze',
+    bgColor: 0x000000,
+    fogColor: 0x000000,
+    fogDensity: 0.0,
+    badgeBg: 'bg-black text-slate-300 border-slate-800',
+  },
   galactic_core: {
     id: 'galactic_core',
     name: 'Galactic Center (Milky Way)',
