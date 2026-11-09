@@ -9,13 +9,16 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Scale,
   Send,
   Sliders,
+  Sparkles,
   Trash2,
   Volume2,
   VolumeX,
 } from 'lucide-react';
 import {
+  ARCHETYPE_DEFINITIONS,
   ASTROPHYSICAL_PRESETS,
   BlackHoleParams,
   DerivedRelativisticMetrics,
@@ -99,81 +102,75 @@ export const ControlDock: React.FC<ControlDockProps> = ({
         </button>
       </div>
 
-      {/* Main Dock Panel (Solid dark surface without backdrop-filter to keep WebGL fast) */}
-      <div className="bg-[#080c16]/95 border border-slate-800 rounded-xl shadow-2xl p-4">
+      {/* Main Dock Panel (Smart minimalistic glass surface) */}
+      <div className="bg-[#060912]/92 backdrop-blur-md border border-slate-800/80 rounded-xl shadow-2xl p-3 sm:p-3.5">
         {/* Top Row: Mode Tabs + Quick Transport & Telemetry Summary */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-slate-800/80">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 mb-2.5 border-b border-slate-800/70">
           {/* Interactive Functional Segmented Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-[#0d1322] rounded-lg border border-slate-800/80">
+          <div className="flex items-center gap-1 p-0.5 bg-[#0a0f1d] rounded-lg border border-slate-800/80">
             <button
               type="button"
               onClick={() => setActiveTab('spacetime')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                 activeTab === 'spacetime'
-                  ? 'bg-amber-500 text-slate-950 font-semibold'
-                  : 'text-slate-300 hover:text-white'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span>Spacetime & Disk</span>
+              <span>Spacetime</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('spectral')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                 activeTab === 'spectral'
-                  ? 'bg-amber-500 text-slate-950 font-semibold'
-                  : 'text-slate-300 hover:text-white'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Spectrum & Layers</span>
+              <span>Layers</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('camera')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                 activeTab === 'camera'
-                  ? 'bg-amber-500 text-slate-950 font-semibold'
-                  : 'text-slate-300 hover:text-white'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <Camera className="w-3.5 h-3.5" />
-              <span>Camera & Stars</span>
+              <span>Camera</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('geodesics')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                 activeTab === 'geodesics'
-                  ? 'bg-amber-500 text-slate-950 font-semibold'
-                  : 'text-slate-300 hover:text-white'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <Orbit className="w-3.5 h-3.5" />
-              <span>Photon Geodesics</span>
+              <span>Geodesics</span>
             </button>
           </div>
 
           {/* Unboxed Telemetry Readout + Transport Action Buttons */}
-          <div className="flex items-center gap-4">
-            <div className="hidden lg:flex items-center gap-2 text-xs text-slate-400 font-mono tabular-nums">
-              <span className="text-slate-200 font-medium">{activePreset.name}</span>
-              <span aria-hidden="true">·</span>
-              <span>
-                Rₛ <strong className="text-amber-400">{metrics.schwarzschildRadiusKm.toFixed(1)}</strong> km
+          <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-2 text-xs font-mono tabular-nums">
+              <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${ARCHETYPE_DEFINITIONS[activePreset.archetype].badgeBg}`}>
+                {activePreset.name} · {activePreset.plainMassExplanation}
               </span>
-              <span aria-hidden="true">·</span>
-              <span>
-                ISCO <strong className="text-cyan-400">{metrics.iscoProgradeRg.toFixed(2)}</strong> R_g
-              </span>
-              <span aria-hidden="true">·</span>
-              <span>
+              <span aria-hidden="true" className="text-slate-600">·</span>
+              <span className="text-slate-400">
                 dτ/dt <strong className="text-emerald-400">{(1 / metrics.probeTimeDilationFactor).toFixed(3)}</strong>
               </span>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() =>
@@ -182,49 +179,83 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                     timeScale: prev.timeScale === 0 ? 1.0 : 0.0,
                   }))
                 }
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-200 bg-[#111827] hover:bg-slate-800 border border-slate-700/80 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-200 bg-[#0f172a] hover:bg-slate-800 border border-slate-700/80 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 title={isPaused ? 'Resume Simulation' : 'Pause Simulation'}
               >
-                {isPaused ? <Play className="w-3.5 h-3.5 text-amber-400" /> : <Pause className="w-3.5 h-3.5 text-amber-400" />}
-                <span>{isPaused ? 'Resume' : 'Pause'}</span>
+                {isPaused ? <Play className="w-3 h-3 text-amber-400" /> : <Pause className="w-3 h-3 text-amber-400" />}
+                <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={onToggleAudio}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`flex items-center gap-1 px-2 py-1 text-xs font-medium border rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   audioEnabled
                     ? 'bg-cyan-950/80 text-cyan-300 border-cyan-700/80'
-                    : 'bg-[#111827] text-slate-300 border-slate-700/80 hover:bg-slate-800'
+                    : 'bg-[#0f172a] text-slate-300 border-slate-700/80 hover:bg-slate-800'
                 }`}
-                title="Toggle Procedural Gravitational & Plasma Sonification"
+                title="Toggle Procedural Relativistic Audio"
               >
                 {audioEnabled ? <Volume2 className="w-3.5 h-3.5 text-cyan-400" /> : <VolumeX className="w-3.5 h-3.5 text-slate-400" />}
-                <span>Audio</span>
               </button>
 
               <button
                 type="button"
                 onClick={onResetParams}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-300 bg-[#111827] hover:bg-slate-800 border border-slate-700/80 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-300 bg-[#0f172a] hover:bg-slate-800 border border-slate-700/80 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 title="Reset Parameters"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset</span>
               </button>
             </div>
           </div>
         </div>
 
+        {/* Smart Archetype Quick Selector Strip */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-2.5 border-b border-slate-800/50 text-xs scrollbar-none">
+          <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-amber-400" />
+            <span className="hidden sm:inline">Targets:</span>
+          </span>
+          {ASTROPHYSICAL_PRESETS.map((preset) => {
+            const isCurrent = activePresetId === preset.id;
+            const isTon618 = preset.id === 'ton618';
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => onSelectPreset(preset.id)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                  isCurrent
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                    : isTon618
+                    ? 'bg-amber-950/40 text-amber-300 border border-amber-500/40 hover:bg-amber-900/40'
+                    : 'bg-[#0a0f1d] text-slate-300 border border-slate-800 hover:text-white hover:border-slate-700'
+                }`}
+                title={`${preset.name}: ${preset.solarEquivalence}`}
+              >
+                {isTon618 && <Sparkles className="w-3 h-3 text-amber-400" />}
+                <span>{preset.name}</span>
+                <span className="text-[10px] opacity-75 font-mono">
+                  {preset.archetype === 'ultramassive' ? 'UMBH' : preset.archetype === 'primordial' ? 'PBH' : preset.archetype === 'supermassive' ? 'SMBH' : preset.archetype === 'intermediate' ? 'IMBH' : 'Stellar'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* TAB 1: Spacetime & Accretion Disk Parameters */}
         {activeTab === 'spacetime' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Mass Slider */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {/* Mass Slider with Plain-English Solar Mass Explanations */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Mass Scale (M)</span>
-                <span className="font-mono tabular-nums text-slate-100 font-semibold">
-                  {params.massSolar.toFixed(1)} <span className="text-slate-500">M☉</span>
+                <span className="text-slate-300 font-medium flex items-center gap-1">
+                  <Scale className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Mass Scale</span>
+                </span>
+                <span className="font-mono tabular-nums text-slate-100 font-bold">
+                  {params.massSolar.toFixed(1)} <span className="text-amber-400 font-sans text-[11px]">Suns (M☉)</span>
                 </span>
               </div>
               <input
@@ -238,9 +269,9 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 }
                 className="sci-slider w-full"
               />
-              <div className="flex justify-between text-[11px] font-mono text-slate-500">
-                <span>r₊ {metrics.eventHorizonKm.toFixed(0)} km</span>
-                <span>T_H {metrics.hawkingTempNanoK.toFixed(2)} nK</span>
+              <div className="flex items-center justify-between text-[11px] text-slate-400">
+                <span title="1 Solar Mass = Weight of our Sun (~333,000 Earths)">1 M☉ = 1 Sun (~333k Earths)</span>
+                <span className="font-mono text-cyan-400">r₊ {metrics.eventHorizonKm.toFixed(0)} km</span>
               </div>
             </div>
 

@@ -59,6 +59,18 @@ export const PhysicsModal: React.FC<PhysicsModalProps> = ({
         </div>
 
         <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+          {/* Solar Mass Concept Note */}
+          <div className="p-3 bg-[#0c1220] border border-amber-500/30 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div>
+              <span className="font-semibold text-amber-300">Active Simulation Mass:</span>{' '}
+              <span className="font-mono text-slate-100 font-bold">{params.massSolar.toFixed(1)} Solar Masses (M☉)</span>{' '}
+              <span className="text-slate-400 font-sans">= Equal to {params.massSolar.toFixed(1)} Suns</span>
+            </div>
+            <span className="text-[11px] text-slate-400 font-mono">
+              1 M☉ ≈ 1.989 × 10³⁰ kg (~333,000 Earths)
+            </span>
+          </div>
+
           {/* Metric Readout Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 bg-[#0e1526] border border-slate-800/90 rounded-lg">

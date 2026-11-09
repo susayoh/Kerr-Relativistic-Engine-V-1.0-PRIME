@@ -27,25 +27,138 @@ export interface BlackHoleParams {
   };
 }
 
+export type BlackHoleArchetype =
+  | 'ultramassive'
+  | 'supermassive'
+  | 'intermediate'
+  | 'stellar'
+  | 'primordial';
+
+export interface ArchetypeDefinition {
+  id: BlackHoleArchetype;
+  name: string;
+  tagline: string;
+  massRangeDisplay: string;
+  sunsComparison: string;
+  typicalDiameter: string;
+  formationMechanism: string;
+  hawkingEvaporationTime: string;
+  examples: string[];
+  badgeBg: string;
+}
+
+export const ARCHETYPE_DEFINITIONS: Record<BlackHoleArchetype, ArchetypeDefinition> = {
+  ultramassive: {
+    id: 'ultramassive',
+    name: 'Ultramassive Black Hole (UMBH)',
+    tagline: 'The absolute titans of the cosmos (>10 Billion Suns)',
+    massRangeDisplay: '> 10 Billion Solar Masses (10¹⁰ to ~10¹¹ M☉)',
+    sunsComparison: 'Over 10,000,000,000 Suns! 1 Solar Mass (M☉) = 1 Sun (~333,000 Earths).',
+    typicalDiameter: 'Hundreds of billions of km (>2,500 AU, over 40 complete Solar Systems wide)',
+    formationMechanism: 'Rapid hyper-accretion onto early primordial seeds during cosmic dawn at the theoretical mass limit.',
+    hawkingEvaporationTime: '~10¹⁰⁰ years (vastly longer than the current age of the universe)',
+    examples: ['TON 618 (66 Billion Suns)', 'Phoenix A (100 Billion Suns)', 'Holmberg 15A (40 Billion Suns)'],
+    badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  },
+  supermassive: {
+    id: 'supermassive',
+    name: 'Supermassive Black Hole (SMBH)',
+    tagline: 'Galactic gravitational anchors (Millions to Billions of Suns)',
+    massRangeDisplay: '100,000 to 10 Billion Solar Masses',
+    sunsComparison: 'Millions to billions of Suns compressed into the heart of a galaxy.',
+    typicalDiameter: 'Millions to billions of km (size of Mercury\'s orbit to beyond Pluto)',
+    formationMechanism: 'Successive mergers of intermediate seed black holes and sustained gas accretion over cosmic time.',
+    hawkingEvaporationTime: '~10⁸⁵ to 10⁹⁵ years',
+    examples: ['Sagittarius A* (4.3 Million Suns)', 'M87* (6.5 Billion Suns)', 'Andromeda core (140 Million Suns)'],
+    badgeBg: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+  },
+  intermediate: {
+    id: 'intermediate',
+    name: 'Intermediate-Mass Black Hole (IMBH)',
+    tagline: 'The elusive cosmic "missing link" (100 to 100,000 Suns)',
+    massRangeDisplay: '100 to 100,000 Solar Masses',
+    sunsComparison: 'Hundreds to hundreds of thousands of Suns.',
+    typicalDiameter: 'Thousands to tens of thousands of km (size of Earth or Jupiter)',
+    formationMechanism: 'Runaway stellar collisions in dense globular clusters or dwarf galaxy strip-mergers.',
+    hawkingEvaporationTime: '~10⁷³ years',
+    examples: ['HLX-1 (20,000 Suns)', 'GW190521 Remnant (142 Suns)'],
+    badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+  },
+  stellar: {
+    id: 'stellar',
+    name: 'Stellar-Mass Black Hole',
+    tagline: 'Collapsed graves of ancient giant stars (3 to ~100 Suns)',
+    massRangeDisplay: '3 to ~100 Solar Masses',
+    sunsComparison: '3 to 100 Suns crushed down into the footprint of a city (1 Solar Mass = ~333,000 Earths).',
+    typicalDiameter: '18 to 600 kilometers across (size of Manhattan or a small state)',
+    formationMechanism: 'Catastrophic gravitational core collapse of massive stars (>20 M☉) in supernova explosions.',
+    hawkingEvaporationTime: '~10⁶⁷ years',
+    examples: ['Cygnus X-1 (21.2 Suns)', 'GW150914 (62.0 Suns)', 'V404 Cygni (9.0 Suns)'],
+    badgeBg: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+  },
+  primordial: {
+    id: 'primordial',
+    name: 'Primordial Black Hole (PBH)',
+    tagline: 'Ancient Big Bang relics from the first microsecond',
+    massRangeDisplay: '< 1 Solar Mass (Microscopic up to Earth / Planet mass)',
+    sunsComparison: 'From an asteroid or mountain up to 1 Earth mass (0.000003 Suns).',
+    typicalDiameter: 'Subatomic scale up to a few centimeters (an Earth-mass PBH is 1.8 cm across, like a coin!)',
+    formationMechanism: 'Direct collapse of high-density quantum fluctuations in the primordial plasma of the early universe.',
+    hawkingEvaporationTime: 'Sub-seconds for micro-PBHs; >10⁵⁰ years for planetary mass PBHs',
+    examples: ['PBH-Earth (1.0 Earth Mass)', 'Asteroid-Mass PBH (10¹⁵ kg)'],
+    badgeBg: 'bg-pink-500/20 text-pink-300 border-pink-500/40',
+  },
+};
+
 export interface AstrophysicalPreset {
   id: string;
   name: string;
   designation: string;
   classification: string;
+  archetype: BlackHoleArchetype;
   distanceLightYears: string;
   realMassSolarDisplay: string;
+  plainMassExplanation: string;
+  solarEquivalence: string;
+  horizonDiameterKmDisplay: string;
   params: Partial<BlackHoleParams>;
   description: string;
 }
 
 export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
   {
+    id: 'ton618',
+    name: 'TON 618',
+    designation: 'Tonantzintla 618 · Hyperluminous Quasar',
+    classification: 'Ultramassive Black Hole',
+    archetype: 'ultramassive',
+    distanceLightYears: '18.2 × 10⁹ ly (z = 2.219)',
+    realMassSolarDisplay: '66.0 × 10⁹ M☉',
+    plainMassExplanation: '66 Billion Suns (66,000,000,000 Suns)',
+    solarEquivalence: 'Equal to 66 Billion stars identical to our Sun. 1 Solar Mass (M☉) = 333,000 Earths. TON 618 is wider than 40 Solar Systems side-by-side!',
+    horizonDiameterKmDisplay: '390 Billion km (~2,600 AU)',
+    params: {
+      massSolar: 100,
+      spin: 0.98,
+      accretionRate: 1.95,
+      inclinationDeg: 58,
+      dopplerStrength: 0.65,
+      probeRadiusRs: 3.6,
+      spectralMode: 'blackbody',
+    },
+    description: 'The largest known black hole in the observable universe, weighing 66 billion Suns. Its event horizon spans 390 billion km, powering a hyperluminous quasar that outshines 140 trillion Suns.',
+  },
+  {
     id: 'sgra',
     name: 'Sagittarius A*',
     designation: 'Sgr A* · Galactic Center',
     classification: 'Supermassive Kerr',
+    archetype: 'supermassive',
     distanceLightYears: '26,670 ly',
     realMassSolarDisplay: '4.30 × 10⁶ M☉',
+    plainMassExplanation: '4.3 Million Suns (4,300,000 Suns)',
+    solarEquivalence: 'Equal to 4.3 Million Suns compressed into a region smaller than Mercury\'s orbit around the Sun.',
+    horizonDiameterKmDisplay: '25.6 Million km (~0.17 AU)',
     params: {
       massSolar: 43,
       spin: 0.90,
@@ -55,15 +168,19 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       probeRadiusRs: 3.4,
       spectralMode: 'blackbody',
     },
-    description: 'Supermassive black hole at the dynamical center of the Milky Way, imaged by the Event Horizon Telescope collaboration and tracked via orbiting S-stars.',
+    description: 'Supermassive black hole at the dynamical center of the Milky Way, imaged by the Event Horizon Telescope and tracked via orbiting S-stars.',
   },
   {
     id: 'm87',
     name: 'M87* (Powehi)',
     designation: 'NGC 4486 · Virgo A Core',
-    classification: 'Relativistic Jet AGN',
+    classification: 'Supermassive Elliptical',
+    archetype: 'supermassive',
     distanceLightYears: '53.49 × 10⁶ ly',
     realMassSolarDisplay: '6.50 × 10⁹ M☉',
+    plainMassExplanation: '6.5 Billion Suns (6,500,000,000 Suns)',
+    solarEquivalence: 'Equal to 6.5 Billion Suns. Large enough that our entire Solar System out to Pluto would easily fit inside.',
+    horizonDiameterKmDisplay: '38.4 Billion km (~256 AU)',
     params: {
       massSolar: 65,
       spin: 0.94,
@@ -73,15 +190,41 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       probeRadiusRs: 4.0,
       spectralMode: 'eht230ghz',
     },
-    description: 'Colossal active galactic nucleus powering a 5,000-light-year relativistic collimated plasma jet via the Blandford-Znajek mechanism.',
+    description: 'Colossal active galactic nucleus in the Virgo cluster, the first black hole ever directly imaged in human history.',
+  },
+  {
+    id: 'hlx1',
+    name: 'HLX-1',
+    designation: 'ESO 243-49 HLX-1 · Off-Center Core',
+    classification: 'Intermediate-Mass Black Hole',
+    archetype: 'intermediate',
+    distanceLightYears: '290 × 10⁶ ly',
+    realMassSolarDisplay: '2.00 × 10⁴ M☉',
+    plainMassExplanation: '20,000 Suns (20 Thousand Suns)',
+    solarEquivalence: 'Equal to 20,000 Suns. The elusive cosmic "missing link" between stellar remnants and galactic monsters.',
+    horizonDiameterKmDisplay: '118,000 km (size of Saturn)',
+    params: {
+      massSolar: 50,
+      spin: 0.75,
+      accretionRate: 1.15,
+      inclinationDeg: 70,
+      dopplerStrength: 0.55,
+      probeRadiusRs: 3.2,
+      spectralMode: 'xray',
+    },
+    description: 'Premier candidate for an intermediate-mass black hole, likely the remnant stripped nucleus of a consumed dwarf galaxy.',
   },
   {
     id: 'cygx1',
     name: 'Cygnus X-1',
     designation: 'HDE 226868 · High-Mass Binary',
-    classification: 'Extreme Kerr Stellar',
+    classification: 'Stellar-Mass Kerr',
+    archetype: 'stellar',
     distanceLightYears: '7,200 ly',
     realMassSolarDisplay: '21.2 M☉',
+    plainMassExplanation: '21.2 Suns (21 Suns)',
+    solarEquivalence: '21 times the mass of our Sun crushed into a sphere just 125 km across (the size of a small state).',
+    horizonDiameterKmDisplay: '125 km',
     params: {
       massSolar: 21.2,
       spin: 0.998,
@@ -91,15 +234,19 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       probeRadiusRs: 2.2,
       spectralMode: 'xray',
     },
-    description: 'Near-maximal spinning stellar-mass black hole accreting stellar wind from blue supergiant companion star HDE 226868.',
+    description: 'Near-maximal spinning stellar-mass black hole accreting stellar wind from companion blue supergiant star HDE 226868.',
   },
   {
     id: 'gw150914',
     name: 'GW150914 Remnant',
     designation: 'LIGO O1 Merger Event',
-    classification: 'Post-Merger Kerr',
+    classification: 'Stellar-Mass Post-Merger',
+    archetype: 'stellar',
     distanceLightYears: '1.30 × 10⁹ ly',
     realMassSolarDisplay: '62.0 M☉',
+    plainMassExplanation: '62.0 Suns (62 Suns)',
+    solarEquivalence: '62 Suns. Formed by the violent collision of two black holes that converted 3 full Suns of mass into gravitational ripples.',
+    horizonDiameterKmDisplay: '366 km',
     params: {
       massSolar: 62.0,
       spin: 0.68,
@@ -110,6 +257,28 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       spectralMode: 'doppler',
     },
     description: 'First direct gravitational-wave detection remnant formed by the inspiral and ringdown of 36 M☉ and 29 M☉ black holes.',
+  },
+  {
+    id: 'pbh_earth',
+    name: 'PBH-Earth',
+    designation: 'Hypothetical Big Bang Micro-Relic',
+    classification: 'Primordial Black Hole',
+    archetype: 'primordial',
+    distanceLightYears: 'Local Universe Candidate',
+    realMassSolarDisplay: '3.00 × 10⁻⁶ M☉ (1 Earth Mass)',
+    plainMassExplanation: '1 Earth Mass (0.000003 Suns)',
+    solarEquivalence: 'The entire mass of planet Earth (~6 × 10²⁴ kg) compressed down to the size of a coin (1.8 cm across).',
+    horizonDiameterKmDisplay: '0.000018 km (1.8 cm / coin-size)',
+    params: {
+      massSolar: 10,
+      spin: 0.15,
+      accretionRate: 0.35,
+      inclinationDeg: 40,
+      dopplerStrength: 0.40,
+      probeRadiusRs: 2.8,
+      spectralMode: 'doppler',
+    },
+    description: 'Hypothetical primordial black hole forged directly from dense fluctuations during the Big Bang. An Earth-mass black hole has an event horizon just 1.8 cm wide!',
   },
 ];
 

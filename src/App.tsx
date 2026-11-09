@@ -4,8 +4,9 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { Sparkles, X } from 'lucide-react';
 import {
+  ARCHETYPE_DEFINITIONS,
   ASTROPHYSICAL_PRESETS,
   BlackHoleParams,
   GeodesicTrajectory,
@@ -20,16 +21,17 @@ import { relativisticAudio } from './audio/relativisticAudio';
 import { TopBar } from './components/TopBar';
 import { ControlDock } from './components/ControlDock';
 import { PhysicsModal } from './components/PhysicsModal';
+import { ArchetypeModal } from './components/ArchetypeModal';
 import { OverheadMapWidget } from './components/OverheadMapWidget';
 import { TimeDilationDisplay } from './components/TimeDilationDisplay';
 
 const DEFAULT_PARAMS: BlackHoleParams = {
-  massSolar: 43,
-  spin: 0.90,
-  accretionRate: 0.85,
-  inclinationDeg: 78,
-  dopplerStrength: 0.55,
-  probeRadiusRs: 3.4,
+  massSolar: 100,
+  spin: 0.98,
+  accretionRate: 1.95,
+  inclinationDeg: 58,
+  dopplerStrength: 0.65,
+  probeRadiusRs: 3.6,
   explodedSeparation: 0.0,
   timeScale: 1.0,
   spectralMode: 'blackbody',
@@ -48,10 +50,11 @@ export default function App() {
   const [controllerInstance, setControllerInstance] = useState<BlackHoleSceneController | null>(null);
 
   const [params, setParams] = useState<BlackHoleParams>(DEFAULT_PARAMS);
-  const [activePresetId, setActivePresetId] = useState<string>('sgra');
+  const [activePresetId, setActivePresetId] = useState<string>('ton618');
   const [activeCamera, setActiveCamera] = useState<CameraPresetId>('equatorial');
   const [isDockCollapsed, setIsDockCollapsed] = useState<boolean>(false);
   const [isTheoryModalOpen, setIsTheoryModalOpen] = useState<boolean>(false);
+  const [isArchetypeModalOpen, setIsArchetypeModalOpen] = useState<boolean>(false);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
 
   const [inspectedFeature, setInspectedFeature] = useState<InspectedFeature | null>(null);
@@ -124,7 +127,7 @@ export default function App() {
   }, []);
 
   const handleResetParams = useCallback(() => {
-    setActivePresetId('sgra');
+    setActivePresetId('ton618');
     setParams(DEFAULT_PARAMS);
     setActiveCamera('equatorial');
     sceneControllerRef.current?.setCameraPreset('equatorial');
@@ -165,6 +168,7 @@ export default function App() {
         activePresetId={activePresetId}
         onSelectPreset={handleSelectPreset}
         onOpenTheoryModal={() => setIsTheoryModalOpen(true)}
+        onOpenArchetypeModal={() => setIsArchetypeModalOpen(true)}
         onExportSnapshot={handleExportSnapshot}
       />
 
@@ -177,27 +181,49 @@ export default function App() {
         />
 
         {/* Left HUD Column: Astrophysical Target Specification + Real-Time Time Dilation Monitor */}
-        <div className="absolute top-4 left-6 z-10 flex flex-col items-start gap-3 pointer-events-none max-w-sm">
-          {/* Target Spec Badge */}
-          <div className="pointer-events-none">
-            <div className="text-xs font-mono text-slate-400">
-              <span>{activePreset.designation}</span>
-              <span className="mx-1.5" aria-hidden="true">·</span>
-              <span>{activePreset.classification}</span>
+        <div className="absolute top-3 left-4 z-10 flex flex-col items-start gap-2.5 pointer-events-none max-w-xs sm:max-w-sm">
+          {/* Target Spec Badge with Smart Minimalist Hierarchy */}
+          <div className="pointer-events-auto bg-[#050811]/88 border border-slate-800/80 rounded-xl p-3 shadow-xl backdrop-blur-md transition-all">
+            <div className="flex items-center justify-between gap-2">
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border ${
+                  ARCHETYPE_DEFINITIONS[activePreset.archetype].badgeBg
+                }`}
+              >
+                {activePreset.classification}
+              </span>
+              <span className="text-[10px] font-mono text-slate-400 truncate">
+                {activePreset.designation}
+              </span>
             </div>
-            <h1 className="font-display text-2xl font-bold text-slate-100 tracking-tight mt-0.5">
-              {activePreset.name}
-            </h1>
-            <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-slate-400 mt-1 tabular-nums">
-              <span>Mass {activePreset.realMassSolarDisplay}</span>
-              <span aria-hidden="true">·</span>
-              <span>Dist {activePreset.distanceLightYears}</span>
-              <span aria-hidden="true">·</span>
-              <span>Spin a* {params.spin.toFixed(3)}</span>
+
+            <div className="flex items-baseline justify-between gap-2 mt-1">
+              <h1 className="font-display text-xl sm:text-2xl font-bold text-slate-100 tracking-tight flex items-center gap-1.5">
+                <span>{activePreset.name}</span>
+                {activePreset.id === 'ton618' && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-normal flex items-center gap-0.5">
+                    <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                    Titan
+                  </span>
+                )}
+              </h1>
+              <span className="font-mono text-amber-300 font-bold text-xs sm:text-sm">
+                {activePreset.plainMassExplanation}
+              </span>
             </div>
+
+            <p className="text-[11px] text-slate-300 leading-snug mt-1">
+              {activePreset.solarEquivalence}
+            </p>
+
+            <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-1.5 mt-1.5 border-t border-slate-800/60">
+              <span>Horizon <strong className="text-slate-200">{activePreset.horizonDiameterKmDisplay}</strong></span>
+              <span>Spin a* <strong className="text-cyan-300">{params.spin.toFixed(3)}</strong></span>
+            </div>
+
             {hoverCoords && (
-              <div className="mt-2 text-[11px] font-mono text-cyan-300/90 tabular-nums">
-                Cursor Geodesic: r = {hoverCoords.rRs.toFixed(2)} Rₛ · φ = {hoverCoords.phiDeg.toFixed(0)}° · z = +{hoverCoords.redshiftZ.toFixed(3)}
+              <div className="mt-1.5 pt-1 border-t border-slate-800/50 text-[10px] font-mono text-cyan-300/90 tabular-nums">
+                Cursor: r = {hoverCoords.rRs.toFixed(2)} Rₛ · φ = {hoverCoords.phiDeg.toFixed(0)}° · z = +{hoverCoords.redshiftZ.toFixed(3)}
               </div>
             )}
           </div>
@@ -282,6 +308,14 @@ export default function App() {
         onClose={() => setIsTheoryModalOpen(false)}
         params={params}
         metrics={metrics}
+      />
+
+      {/* Cosmic Archetypes & Solar Mass Guide Modal */}
+      <ArchetypeModal
+        isOpen={isArchetypeModalOpen}
+        onClose={() => setIsArchetypeModalOpen(false)}
+        onSelectPreset={handleSelectPreset}
+        activePresetId={activePresetId}
       />
     </div>
   );

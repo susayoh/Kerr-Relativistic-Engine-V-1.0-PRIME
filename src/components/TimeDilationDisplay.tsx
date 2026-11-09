@@ -92,24 +92,24 @@ export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
       : 'border-rose-500/30 bg-rose-950/20';
 
   return (
-    <div className="w-80 bg-[#080c16]/95 border border-slate-800 rounded-lg shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
+    <div className="w-72 sm:w-80 bg-[#050811]/88 backdrop-blur-md border border-slate-800/80 rounded-xl shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
       {/* Header Bar */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#0b101e] border-b border-slate-800/90">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-3 py-2 bg-[#080d19]/90 border-b border-slate-800/70">
+        <div className="flex items-center gap-1.5">
           <Clock className="w-3.5 h-3.5 text-amber-400" />
-          <div>
-            <h3 className="font-display text-xs font-semibold text-slate-100 uppercase tracking-wide">
-              Time Dilation (Star S2)
-            </h3>
-          </div>
+          <h3 className="font-display text-xs font-semibold text-slate-200 tracking-wide">
+            Time Dilation (Star S2)
+          </h3>
         </div>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-mono text-slate-500">dt/dτ</span>
+          <span className="text-[10px] font-mono text-emerald-400 font-bold">
+            {dilation.dt_dtau.toFixed(2)}×
+          </span>
           <button
             type="button"
             onClick={() => setIsCollapsed((v) => !v)}
-            className="p-1 text-slate-400 hover:text-slate-100 bg-[#111827] rounded border border-slate-800 transition-colors cursor-pointer"
+            className="p-1 text-slate-400 hover:text-slate-100 bg-slate-900/80 rounded border border-slate-800 transition-colors cursor-pointer"
             title={isCollapsed ? 'Expand Time Dilation Display' : 'Collapse Display'}
             aria-label={isCollapsed ? 'Expand Time Dilation Display' : 'Collapse Display'}
           >
@@ -120,7 +120,7 @@ export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
 
       {/* Main Body */}
       {!isCollapsed && (
-        <div className="p-3.5 space-y-3">
+        <div className="p-3 space-y-2.5">
           {/* Primary Factor Hero */}
           <div className={`p-3 rounded-md border ${severityBg} transition-colors`}>
             <div className="flex items-baseline justify-between">

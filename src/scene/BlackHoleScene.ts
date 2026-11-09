@@ -212,11 +212,6 @@ const ACCRETION_FRAGMENT_SHADER = `
       baseColor = mix(baseColor, dopplerRgb, 0.6) * intensity;
     }
 
-    // Brilliant thin Einstein Photon Ring right at photon orbit
-    float photonSphereR = mix(2.05, 1.35, uSpin * 0.7);
-    float photonRingGlow = exp(-pow((r - photonSphereR) / 0.14, 2.0)) * 1.85 * (0.6 + 0.4 * dopplerBoost);
-    baseColor += vec3(1.0, 0.96, 0.85) * photonRingGlow * (0.7 + 0.5 * uAccretionRate);
-
     float alpha = clamp(totalFlux * (0.45 + 0.55 * filaments) * min(1.4, intensity + 0.3), 0.0, 0.98);
     gl_FragColor = vec4(baseColor, alpha);
   }
@@ -235,7 +230,6 @@ export class BlackHoleSceneController {
   // Root composite 3D groups
   private blackHoleGroup = new THREE.Group();
   private eventHorizonMesh!: THREE.Mesh;
-  private photonRingMesh!: THREE.Mesh;
   private accretionDiskGroup = new THREE.Group();
   private accretionDiskMat!: THREE.ShaderMaterial;
   private ergosphereGroup = new THREE.Group();
@@ -325,14 +319,14 @@ export class BlackHoleSceneController {
 
     // 4. Camera & OrbitControls
     const aspect = (container.clientWidth || window.innerWidth) / Math.max(1, container.clientHeight || window.innerHeight);
-    this.camera = new THREE.PerspectiveCamera(46, aspect, 0.1, 400);
-    this.camera.position.set(0, 6.2, 19.5);
+    this.camera = new THREE.PerspectiveCamera(46, aspect, 0.1, 500);
+    this.camera.position.set(0, 8.2, 24.5);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = !isSoftwareGl;
     this.controls.dampingFactor = 0.06;
-    this.controls.maxDistance = 64;
-    this.controls.minDistance = 3.2;
+    this.controls.maxDistance = 95;
+    this.controls.minDistance = 3.8;
     this.controls.target.set(0, 0, 0);
 
     this.controls.addEventListener('start', () => {
@@ -440,13 +434,8 @@ export class BlackHoleSceneController {
         }
       `,
       fragmentShader: `
-        varying vec3 vNormal;
-        varying vec3 vWorldPos;
         void main() {
-          vec3 viewDir = normalize(cameraPosition - vWorldPos);
-          float fresnel = pow(1.0 - max(0.0, dot(viewDir, vNormal)), 5.0);
-          vec3 rimGlow = vec3(1.0, 0.65, 0.22) * fresnel * 0.85;
-          gl_FragColor = vec4(rimGlow, 1.0);
+          gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
         }
       `,
     });
@@ -461,25 +450,7 @@ export class BlackHoleSceneController {
     } satisfies InspectedFeature;
     this.blackHoleGroup.add(this.eventHorizonMesh);
 
-    // 2. Brilliant Caustic Photon Sphere Ring (r_ph)
-    const photonGeo = new THREE.TorusGeometry(2.05, 0.04, 24, 128);
-    const photonMat = new THREE.MeshBasicMaterial({
-      color: 0xfef3c7,
-      transparent: true,
-      opacity: 0.92,
-    });
-    this.photonRingMesh = new THREE.Mesh(photonGeo, photonMat);
-    this.photonRingMesh.layers.enable(1);
-    this.photonRingMesh.userData.feature = {
-      title: 'Einstein Photon Ring (r_ph)',
-      subtitle: 'Unstable Bound Null Geodesics',
-      formula: 'b_crit = √27 GM/c² · r_ph = 2(GM/c²)[1 + cos(⅔ arccos(-a*))]',
-      description:
-        'Grazing photons orbit the black hole multiple times before escaping to distant observers, producing the thin, razor-sharp caustic photon ring imaged by the Event Horizon Telescope.',
-    } satisfies InspectedFeature;
-    this.blackHoleGroup.add(this.photonRingMesh);
-
-    // 3. High-Fidelity 3D Relativistic Accretion Disk (Multi-Layered with Warping & Plunging Flow)
+    // 2. High-Fidelity 3D Relativistic Accretion Disk (Multi-Layered with Warping & Plunging Flow)
     this.accretionDiskMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
@@ -548,39 +519,31 @@ export class BlackHoleSceneController {
   }
 
   private buildSpacetimeWellManifold() {
-    // High-Precision Polar Geodesic Spacetime Manifold (Concentric rings + radial geodesic spokes)
-    const radialSegments = 72;
-    const ringSegments = 48;
-    const outerRadius = 18.5;
-    const innerRadius = 1.35;
-
-    // Use RingGeometry with high radial definition for smooth Flamm's paraboloid funnel
-    this.spacetimeWellGeo = new THREE.RingGeometry(innerRadius, outerRadius, radialSegments, ringSegments);
+    // Expansive, clean Cartesian Spacetime Manifold (Continuous rubber sheet with NO hole in center)
+    // Spreads 110 units wide into deep space, asymptotically flattening to Minkowski spacetime
+    this.spacetimeWellGeo = new THREE.PlaneGeometry(110, 110, 64, 64);
     this.spacetimeWellGeo.rotateX(-Math.PI / 2);
 
     const wellMat = new THREE.MeshStandardMaterial({
-      color: 0x0ea5e9,
-      emissive: 0x0369a1,
-      emissiveIntensity: 0.52,
+      color: 0x06b6d4,
+      emissive: 0x0284c7,
+      emissiveIntensity: 0.35,
       wireframe: true,
       transparent: true,
-      opacity: 0.38,
-      roughness: 0.4,
-      metalness: 0.7,
-      polygonOffset: true,
-      polygonOffsetFactor: -1,
-      polygonOffsetUnits: -1,
+      opacity: 0.22,
+      roughness: 0.35,
+      metalness: 0.8,
     });
 
     this.spacetimeWellMesh = new THREE.Mesh(this.spacetimeWellGeo, wellMat);
-    this.spacetimeWellMesh.position.y = -3.2;
+    this.spacetimeWellMesh.position.y = -3.8;
     this.spacetimeWellMesh.layers.enable(1);
     this.spacetimeWellMesh.userData.feature = {
-      title: "Flamm's Paraboloid Spacetime Manifold",
+      title: 'Spacetime Curvature Manifold (Gravity Well)',
       subtitle: 'General Relativistic Equatorial Embedding',
-      formula: 'z(r) = -2√(Rs(r - Rs)) · g_rr = (1 - Rs/r)⁻¹',
+      formula: 'g_μν dx^μ dx^ν · G_μν = (8πG/c⁴) T_μν',
       description:
-        'Exact geometric embedding diagram illustrating equatorial spatial curvature. Geodesic coordinate spokes vortex inward following Kerr frame-dragging.',
+        'Continuous general-relativistic embedding diagram illustrating equatorial spatial curvature extending far into the cosmic background with a solid central throat.',
     } satisfies InspectedFeature;
     this.scene.add(this.spacetimeWellMesh);
 
@@ -589,20 +552,22 @@ export class BlackHoleSceneController {
 
   private deformSpacetimeWell(massSolar: number, spin: number) {
     const posAttr = this.spacetimeWellGeo.attributes.position as THREE.BufferAttribute;
-    const wellDepth = 3.6 + (massSolar / 100) * 5.8;
-    const rs = 1.6 + (massSolar / 100) * 1.1;
+    const wellDepth = 4.8 + (massSolar / 100) * 8.0;
+    const rs = 2.4 + (massSolar / 100) * 2.2;
 
     for (let i = 0; i < posAttr.count; i++) {
       const x = posAttr.getX(i);
       const z = posAttr.getZ(i);
       const r = Math.hypot(x, z);
 
-      // Flamm's paraboloid spatial curvature funnel
-      const funnel = -wellDepth / Math.sqrt(Math.max(0.42, (r * r) / (rs * rs) + 0.38));
+      // Smooth Einstein gravitational funnel with solid center (no hole)
+      // At r -> 0: curves down smoothly to the throat bottom
+      // At large r: asymptotically flattens out into flat space
+      const funnel = -wellDepth / Math.pow((r * r) / (rs * rs) + 0.65, 0.44);
 
-      // Kerr Lense-Thirring frame-dragging vortex spiral
+      // Subtle Kerr frame-dragging vortex spiral
       const angle = Math.atan2(z, x);
-      const frameDragSpiral = spin * 0.32 * Math.sin(angle * 3.0 + r * 0.55) * Math.exp(-r * 0.14);
+      const frameDragSpiral = spin * 0.35 * Math.sin(angle * 2.0 + r * 0.32) * Math.exp(-r * 0.12);
 
       posAttr.setY(i, funnel + frameDragSpiral);
     }
@@ -810,7 +775,8 @@ export class BlackHoleSceneController {
 
     this.params = nextParams;
 
-    this.targetScale = 0.78 + (nextParams.massSolar / 100) * 0.62;
+    // Scale black hole significantly bigger: up to 3.0x scale for majestic cosmic presence
+    this.targetScale = 1.35 + (nextParams.massSolar / 100) * 1.65;
     this.targetExploded = nextParams.explodedSeparation;
 
     if (immediate) {
@@ -862,20 +828,20 @@ export class BlackHoleSceneController {
 
     switch (preset) {
       case 'equatorial':
-        this.targetCamPos.set(0, Math.cos(incRad) * 20.5, Math.sin(incRad) * 20.5);
+        this.targetCamPos.set(0, Math.cos(incRad) * 26.5, Math.sin(incRad) * 26.5);
         this.targetCamLook.set(0, 0, 0);
         break;
       case 'polar':
-        this.targetCamPos.set(0, 23.5, 1.2);
+        this.targetCamPos.set(0, 32.0, 1.5);
         this.targetCamLook.set(0, 0, 0);
         break;
       case 'grazing':
-        this.targetCamPos.set(-5.8, 1.35, 11.2);
-        this.targetCamLook.set(1.2, 0.2, 0);
+        this.targetCamPos.set(-9.5, 2.2, 16.5);
+        this.targetCamLook.set(1.5, 0.2, 0);
         break;
       case 'well':
-        this.targetCamPos.set(14.5, -5.8, 16.5);
-        this.targetCamLook.set(0, -3.8, 0);
+        this.targetCamPos.set(22.0, -8.5, 26.0);
+        this.targetCamLook.set(0, -4.5, 0);
         break;
       case 'star':
         break;
@@ -985,13 +951,10 @@ export class BlackHoleSceneController {
     this.currentExploded = THREE.MathUtils.damp(this.currentExploded, this.targetExploded, 6.0, rawDelta);
 
     this.eventHorizonMesh.scale.setScalar(this.currentScale);
-    this.photonRingMesh.scale.setScalar(this.currentScale);
     this.accretionDiskGroup.scale.setScalar(this.currentScale);
 
     this.ergosphereGroup.position.y = this.currentExploded * 3.8;
     this.spacetimeWellMesh.position.y = -3.2 - this.currentExploded * 3.6;
-
-    this.photonRingMesh.lookAt(this.camera.position);
 
     // 3. Lense-Thirring Frame-Dragging Rotation
     const metrics = computeRelativisticMetrics(this.params);
