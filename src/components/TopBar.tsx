@@ -13,6 +13,8 @@ interface TopBarProps {
   isAnatomyVisible: boolean;
   onToggleAnatomyVisible: () => void;
   onExportSnapshot: () => void;
+  isCleanMode?: boolean;
+  onToggleCleanMode?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -26,6 +28,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   isAnatomyVisible,
   onToggleAnatomyVisible,
   onExportSnapshot,
+  isCleanMode = false,
+  onToggleCleanMode,
 }) => {
   const activePreset = ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
 
@@ -87,6 +91,17 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Zone 3: Actions */}
       <div className="flex items-center gap-2 shrink-0">
+        {/* Clean View Toggle */}
+        <button
+          type="button"
+          onClick={onToggleCleanMode}
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border bg-neutral-900 text-neutral-300 border-neutral-800 hover:text-white hover:bg-neutral-800 hover:border-neutral-700"
+          title="Clean View: Hide all UI elements for an unobstructed cinematic view (Shortcut: C / ESC)"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          <span>Clean View</span>
+        </button>
+
         {/* Anatomy Infographic Lines Toggle */}
         <button
           type="button"

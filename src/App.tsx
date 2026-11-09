@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, X, Zap, Maximize2 } from 'lucide-react';
+import { Sparkles, X, Zap, Maximize2, Eye } from 'lucide-react';
 import {
   ARCHETYPE_DEFINITIONS,
   ASTROPHYSICAL_PRESETS,
@@ -32,6 +32,8 @@ import { TimeDilationDisplay } from './components/TimeDilationDisplay';
 const DEFAULT_PARAMS: BlackHoleParams = {
   objectCategory: 'black_hole',
   backgroundTheme: 'galactic_core',
+  presetId: 'ton618',
+  trueMassSolar: 66000000000,
   massSolar: 100,
   spin: 0.98,
   accretionRate: 1.95,
@@ -66,6 +68,7 @@ export default function App() {
   const [activePresetId, setActivePresetId] = useState<string>('ton618');
   const [activeCamera, setActiveCamera] = useState<CameraPresetId>('equatorial');
   const [isDockCollapsed, setIsDockCollapsed] = useState<boolean>(false);
+  const [isCleanMode, setIsCleanMode] = useState<boolean>(false);
   const [isTheoryModalOpen, setIsTheoryModalOpen] = useState<boolean>(false);
   const [isArchetypeModalOpen, setIsArchetypeModalOpen] = useState<boolean>(false);
   const [isCosmicScaleModalOpen, setIsCosmicScaleModalOpen] = useState<boolean>(false);
@@ -133,7 +136,7 @@ export default function App() {
     relativisticAudio.updateParameters(params);
   }, [params]);
 
-  // Keyboard shortcut 'H' for Cinema / Zen Mode control dock collapse
+  // Keyboard shortcut 'H' for dock collapse, 'C' for clean mode, 'Escape' to restore UI
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -141,6 +144,10 @@ export default function App() {
       }
       if (e.key === 'h' || e.key === 'H') {
         setIsDockCollapsed((prev) => !prev);
+      } else if (e.key === 'c' || e.key === 'C') {
+        setIsCleanMode((prev) => !prev);
+      } else if (e.key === 'Escape') {
+        setIsCleanMode(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -154,6 +161,8 @@ export default function App() {
     setParams((prev) => ({
       ...prev,
       ...found.params,
+      presetId: found.id,
+      trueMassSolar: found.trueMassSolar,
       objectCategory: found.category,
       // Ensure ergosphere remains off by default
       layers: {
@@ -207,19 +216,23 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#05070d] select-none flex flex-col">
-      {/* Zone 1-3 Top Navigation Bar */}
-      <TopBar
-        activePresetId={activePresetId}
-        onSelectPreset={handleSelectPreset}
-        onOpenTheoryModal={() => setIsTheoryModalOpen(true)}
-        onOpenArchetypeModal={() => setIsArchetypeModalOpen(true)}
-        onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
-        onOpenBackgroundModal={() => setIsBackgroundModalOpen(true)}
-        activeBackgroundTheme={params.backgroundTheme || 'galactic_core'}
-        isAnatomyVisible={isAnatomyVisible}
-        onToggleAnatomyVisible={handleToggleAnatomyVisible}
-        onExportSnapshot={handleExportSnapshot}
-      />
+      {/* Zone 1-3 Top Navigation Bar (Hidden in Clean Mode) */}
+      {!isCleanMode && (
+        <TopBar
+          activePresetId={activePresetId}
+          onSelectPreset={handleSelectPreset}
+          onOpenTheoryModal={() => setIsTheoryModalOpen(true)}
+          onOpenArchetypeModal={() => setIsArchetypeModalOpen(true)}
+          onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
+          onOpenBackgroundModal={() => setIsBackgroundModalOpen(true)}
+          activeBackgroundTheme={params.backgroundTheme || 'galactic_core'}
+          isAnatomyVisible={isAnatomyVisible}
+          onToggleAnatomyVisible={handleToggleAnatomyVisible}
+          onExportSnapshot={handleExportSnapshot}
+          isCleanMode={isCleanMode}
+          onToggleCleanMode={() => setIsCleanMode((prev) => !prev)}
+        />
+      )}
 
       {/* Main 3D Viewport Stage */}
       <main className="relative flex-1 w-full h-full overflow-hidden">
@@ -229,161 +242,187 @@ export default function App() {
           className="absolute inset-0 w-full h-full cursor-crosshair"
         />
 
-        {/* Dynamic Relativistic Anatomy & Leader Lines Overlay matching PMF IAS Poster */}
-        <BlackHoleAnatomyOverlay
-          sceneController={controllerInstance || sceneControllerRef.current}
-          isVisible={isAnatomyVisible}
-          onToggleVisible={handleToggleAnatomyVisible}
-          onSelectPreset={handleSelectPreset}
-          isDockCollapsed={isDockCollapsed}
-        />
+        {/* Dynamic Relativistic Anatomy & Leader Lines Overlay */}
+        {!isCleanMode && (
+          <BlackHoleAnatomyOverlay
+            sceneController={controllerInstance || sceneControllerRef.current}
+            isVisible={isAnatomyVisible}
+            onToggleVisible={handleToggleAnatomyVisible}
+            onSelectPreset={handleSelectPreset}
+            isDockCollapsed={isDockCollapsed}
+          />
+        )}
 
-        {/* Left HUD Column: Astrophysical Target Specification + Real-Time Time Dilation Monitor */}
-        <div className="absolute top-3 left-4 z-10 flex flex-col items-start gap-2.5 pointer-events-none max-w-xs sm:max-w-sm">
-          {/* Target Spec Badge */}
-          <div className="pointer-events-auto bg-[#050811]/90 border border-slate-800/80 rounded-xl p-3 shadow-xl backdrop-blur-md transition-all">
-            <div className="flex items-center justify-between gap-2">
-              <span
-                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border ${
-                  ARCHETYPE_DEFINITIONS[activePreset.archetype].badgeBg
-                }`}
-              >
-                {activePreset.classification}
-              </span>
-              <span className="text-[10px] font-mono text-slate-400 truncate">
-                {activePreset.designation}
-              </span>
-            </div>
-
-            <div className="flex items-baseline justify-between gap-2 mt-1">
-              <h1 className="font-display text-xl sm:text-2xl font-bold text-slate-100 tracking-tight flex items-center gap-1.5">
-                <span>{activePreset.name}</span>
-                {activePreset.id === 'ton618' && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-normal flex items-center gap-0.5">
-                    <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                    Titan
-                  </span>
-                )}
-                {isStar && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-normal flex items-center gap-0.5">
-                    <Zap className="w-2.5 h-2.5 text-emerald-400" />
-                    Pulsar
-                  </span>
-                )}
-              </h1>
-              <span className="font-mono text-amber-300 font-bold text-xs sm:text-sm">
-                {activePreset.plainMassExplanation}
-              </span>
-            </div>
-
-            <p className="text-[11px] text-slate-300 leading-snug mt-1">
-              {activePreset.solarEquivalence}
-            </p>
-
-            <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-1.5 mt-1.5 border-t border-slate-800/60">
-              <span>{isStar ? 'Physical Crust' : 'Horizon'} <strong className="text-slate-200">{activePreset.horizonDiameterKmDisplay}</strong></span>
-              <span>Spin a* <strong className="text-cyan-300">{params.spin.toFixed(3)}</strong></span>
-            </div>
-
-            {/* Quick Link to Real Scale Explorer if TON 618 is selected */}
-            {activePreset.id === 'ton618' && (
-              <div className="mt-1.5 pt-1.5 border-t border-slate-800/60 flex items-center justify-between">
-                <span className="text-[10px] text-amber-400 font-mono">True Scale: 66 Billion M☉ (2,600 AU)</span>
-                <button
-                  type="button"
-                  onClick={() => setIsCosmicScaleModalOpen(true)}
-                  className="text-[10px] font-bold text-amber-300 hover:text-amber-200 flex items-center gap-0.5 cursor-pointer"
+        {/* Left HUD Column: Astrophysical Target Specification Badge (Anatomy Guide sits cleanly below it) */}
+        {!isCleanMode && (
+          <div className="absolute top-3 left-4 z-10 flex flex-col items-start gap-2.5 pointer-events-none max-w-xs sm:max-w-sm">
+            {/* Target Spec Badge */}
+            <div className="pointer-events-auto bg-[#050811]/90 border border-slate-800/80 rounded-xl p-3 shadow-xl backdrop-blur-md transition-all">
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border ${
+                    ARCHETYPE_DEFINITIONS[activePreset.archetype].badgeBg
+                  }`}
                 >
-                  <Maximize2 className="w-2.5 h-2.5" />
-                  Compare Real Size
-                </button>
+                  {activePreset.classification}
+                </span>
+                <span className="text-[10px] font-mono text-slate-400 truncate">
+                  {activePreset.designation}
+                </span>
               </div>
-            )}
 
-            {hoverCoords && (
-              <div className="mt-1.5 pt-1 border-t border-slate-800/50 text-[10px] font-mono text-cyan-300/90 tabular-nums">
-                Cursor: r = {hoverCoords.rRs.toFixed(2)} Rₛ · φ = {hoverCoords.phiDeg.toFixed(0)}° · z = +{hoverCoords.redshiftZ.toFixed(3)}
+              <div className="flex items-baseline justify-between gap-2 mt-1">
+                <h1 className="font-display text-xl sm:text-2xl font-bold text-slate-100 tracking-tight flex items-center gap-1.5">
+                  <span>{activePreset.name}</span>
+                  {activePreset.id === 'ton618' && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-normal flex items-center gap-0.5">
+                      <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                      Titan
+                    </span>
+                  )}
+                  {isStar && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-normal flex items-center gap-0.5">
+                      <Zap className="w-2.5 h-2.5 text-emerald-400" />
+                      Pulsar
+                    </span>
+                  )}
+                </h1>
+                <span className="font-mono text-amber-300 font-bold text-xs sm:text-sm">
+                  {activePreset.plainMassExplanation}
+                </span>
               </div>
-            )}
+
+              <p className="text-[11px] text-slate-300 leading-snug mt-1">
+                {activePreset.solarEquivalence}
+              </p>
+
+              <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-1.5 mt-1.5 border-t border-slate-800/60">
+                <span>{isStar ? 'Physical Crust' : 'Horizon'} <strong className="text-slate-200">{activePreset.horizonDiameterKmDisplay}</strong></span>
+                <span>Spin a* <strong className="text-cyan-300">{params.spin.toFixed(3)}</strong></span>
+              </div>
+
+              {/* Quick Link to Real Scale Explorer if TON 618 is selected */}
+              {activePreset.id === 'ton618' && (
+                <div className="mt-1.5 pt-1.5 border-t border-slate-800/60 flex items-center justify-between">
+                  <span className="text-[10px] text-amber-400 font-mono">True Scale: 66 Billion M☉ (2,600 AU)</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsCosmicScaleModalOpen(true)}
+                    className="text-[10px] font-bold text-amber-300 hover:text-amber-200 flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Maximize2 className="w-2.5 h-2.5" />
+                    Compare Real Size
+                  </button>
+                </div>
+              )}
+
+              {hoverCoords && (
+                <div className="mt-1.5 pt-1 border-t border-slate-800/50 text-[10px] font-mono text-cyan-300/90 tabular-nums">
+                  Cursor: r = {hoverCoords.rRs.toFixed(2)} Rₛ · φ = {hoverCoords.phiDeg.toFixed(0)}° · z = +{hoverCoords.redshiftZ.toFixed(3)}
+                </div>
+              )}
+            </div>
           </div>
+        )}
 
-          {/* Real-Time Local Time Dilation Display (dt/dτ) */}
-          <div className="pointer-events-auto">
-            <TimeDilationDisplay
-              probeRadiusRs={params.probeRadiusRs}
-              spin={params.spin}
-              timeScale={params.timeScale}
+        {/* Right HUD Column: Interactive Feature Popover + 2D Overhead Map + Repositioned Time Dilation Monitor */}
+        {!isCleanMode && (
+          <div className="absolute top-4 right-6 z-20 flex flex-col items-end gap-3 pointer-events-auto max-w-xs sm:max-w-sm">
+            {/* Interactive Click-to-Inspect Feature Popover */}
+            {inspectedFeature && (
+              <div className="w-80 bg-[#080c16]/95 border border-slate-800 rounded-lg p-3.5 shadow-xl pointer-events-auto">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-[11px] font-mono text-amber-400">
+                      {inspectedFeature.subtitle}
+                    </div>
+                    <h3 className="font-display text-sm font-bold text-slate-100 mt-0.5">
+                      {inspectedFeature.title}
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setInspectedFeature(null)}
+                    className="p-1 text-slate-400 hover:text-slate-100 rounded cursor-pointer"
+                    aria-label="Close inspection card"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="mt-2 px-2 py-1 bg-[#0d1322] border border-slate-800/90 rounded font-mono text-xs text-cyan-300">
+                  {inspectedFeature.formula}
+                </div>
+                <p className="mt-2 text-xs text-slate-300 leading-relaxed">
+                  {inspectedFeature.description}
+                </p>
+              </div>
+            )}
+
+            {/* 2D Overhead Map Widget: Top-Down View & Real-Time Probe Tracking */}
+            <OverheadMapWidget
+              sceneController={controllerInstance || sceneControllerRef.current}
               onSetProbeRadius={(newRadius) =>
                 setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
               }
             />
-          </div>
-        </div>
 
-        {/* Right HUD Column: Interactive Feature Card + 2D Overhead Map Widget */}
-        <div className="absolute top-4 right-6 z-20 flex flex-col items-end gap-3 pointer-events-auto">
-          {/* Interactive Click-to-Inspect Feature Popover */}
-          {inspectedFeature && (
-            <div className="w-80 bg-[#080c16]/95 border border-slate-800 rounded-lg p-3.5 shadow-xl pointer-events-auto">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="text-[11px] font-mono text-amber-400">
-                    {inspectedFeature.subtitle}
-                  </div>
-                  <h3 className="font-display text-sm font-bold text-slate-100 mt-0.5">
-                    {inspectedFeature.title}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setInspectedFeature(null)}
-                  className="p-1 text-slate-400 hover:text-slate-100 rounded cursor-pointer"
-                  aria-label="Close inspection card"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="mt-2 px-2 py-1 bg-[#0d1322] border border-slate-800/90 rounded font-mono text-xs text-cyan-300">
-                {inspectedFeature.formula}
-              </div>
-              <p className="mt-2 text-xs text-slate-300 leading-relaxed">
-                {inspectedFeature.description}
-              </p>
+            {/* Repositioned Real-Time Local Time Dilation Display (dt/dτ) in Right HUD stack */}
+            <div className="w-full">
+              <TimeDilationDisplay
+                probeRadiusRs={params.probeRadiusRs}
+                spin={params.spin}
+                timeScale={params.timeScale}
+                onSetProbeRadius={(newRadius) =>
+                  setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
+                }
+              />
             </div>
-          )}
+          </div>
+        )}
 
-          {/* 2D Overhead Map Widget: Top-Down View & Real-Time Probe Tracking */}
-          <OverheadMapWidget
-            sceneController={controllerInstance || sceneControllerRef.current}
-            onSetProbeRadius={(newRadius) =>
-              setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
-            }
-          />
-        </div>
+        {/* Clean Mode Floating Restore UI Pill */}
+        {isCleanMode && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+            <button
+              type="button"
+              onClick={() => setIsCleanMode(false)}
+              className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-black/90 hover:bg-black text-neutral-200 hover:text-white border border-neutral-700 hover:border-amber-400 shadow-2xl backdrop-blur-md font-mono text-xs transition-all cursor-pointer ring-1 ring-white/10 hover:scale-105"
+              title="Restore full user interface (Shortcut: C or ESC)"
+            >
+              <Eye className="w-3.5 h-3.5 text-amber-400" />
+              <span className="font-semibold tracking-wide">Restore UI</span>
+              <span className="text-[10px] text-neutral-400 bg-neutral-900 px-1.5 py-0.5 rounded border border-neutral-800">
+                Esc / C
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* Unified Collapsible Bottom Control Dock */}
-        <ControlDock
-          params={params}
-          metrics={metrics}
-          activePresetId={activePresetId}
-          isCollapsed={isDockCollapsed}
-          onToggleCollapse={() => setIsDockCollapsed((prev) => !prev)}
-          onChangeParams={setParams}
-          onSelectPreset={handleSelectPreset}
-          onResetParams={handleResetParams}
-          onSelectCamera={handleSelectCamera}
-          activeCamera={activeCamera}
-          onLaunchPhoton={handleLaunchPhoton}
-          onClearPhotons={handleClearPhotons}
-          lastTrajectory={lastTrajectory}
-          audioEnabled={audioEnabled}
-          onToggleAudio={handleToggleAudio}
-          onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
-          onTriggerPulse={() => {
-            sceneControllerRef.current?.triggerEventHorizonPulse(params.objectCategory);
-            relativisticAudio.triggerAccretionShockPulse(params.objectCategory === 'star');
-          }}
-        />
+        {!isCleanMode && (
+          <ControlDock
+            params={params}
+            metrics={metrics}
+            activePresetId={activePresetId}
+            isCollapsed={isDockCollapsed}
+            onToggleCollapse={() => setIsDockCollapsed((prev) => !prev)}
+            onChangeParams={setParams}
+            onSelectPreset={handleSelectPreset}
+            onResetParams={handleResetParams}
+            onSelectCamera={handleSelectCamera}
+            activeCamera={activeCamera}
+            onLaunchPhoton={handleLaunchPhoton}
+            onClearPhotons={handleClearPhotons}
+            lastTrajectory={lastTrajectory}
+            audioEnabled={audioEnabled}
+            onToggleAudio={handleToggleAudio}
+            onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
+            onTriggerPulse={() => {
+              sceneControllerRef.current?.triggerEventHorizonPulse(params.objectCategory);
+              relativisticAudio.triggerAccretionShockPulse(params.objectCategory === 'star');
+            }}
+          />
+        )}
       </main>
 
       {/* Relativistic Metrics & Effective Potential Modal */}

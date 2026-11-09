@@ -80,6 +80,10 @@ export interface BlackHoleParams {
   objectCategory: ObjectCategory;
   /** Active background cosmic environment theme */
   backgroundTheme: BackgroundThemeId;
+  /** Active astrophysical preset identifier (e.g. 'ton618', 'cygnus_x1') */
+  presetId?: string;
+  /** True astrophysical mass in solar masses (e.g. 66e9 for TON 618, 21.2 for Cygnus X-1) */
+  trueMassSolar?: number;
   /** Mass multiplier in log10 solar masses or normalized scale (1 to 100 solar masses base scale for 3D visual geometry) */
   massSolar: number;
   /** Dimensionless Kerr spin parameter a* in [0, 0.998] */

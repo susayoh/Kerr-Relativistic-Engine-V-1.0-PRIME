@@ -35,6 +35,9 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'anatomy' | 'types'>('anatomy');
+  const [dockMode, setDockMode] = useState<'left-telemetry' | 'top-center' | 'custom'>('left-telemetry');
+  const [customPos, setCustomPos] = useState<{ x: number; y: number } | null>(null);
+  const dragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [cardRect, setCardRect] = useState<{
     x: number;
@@ -42,9 +45,9 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
     width: number;
     height: number;
   }>({
-    x: 20,
-    y: typeof window !== 'undefined' ? window.innerHeight - 340 : 500,
-    width: 380,
+    x: 16,
+    y: 255,
+    width: 330,
     height: 220,
   });
 
@@ -113,34 +116,80 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
     setHoveredIndex(null);
   };
 
-  // Calculate dynamic leader line connection point from card to 3D target
-  // Always called unconditionally to satisfy React's Rules of Hooks
+  const handleMouseDownHeader = (e: React.MouseEvent) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('button')) return;
+    const rect = cardRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startX: rect.left,
+      startY: rect.top,
+    };
+    const onMouseMove = (moveEv: MouseEvent) => {
+      if (!dragStartRef.current) return;
+      const dx = moveEv.clientX - dragStartRef.current.mouseX;
+      const dy = moveEv.clientY - dragStartRef.current.mouseY;
+      const newX = Math.max(8, Math.min(window.innerWidth - 320, dragStartRef.current.startX + dx));
+      const newY = Math.max(8, Math.min(window.innerHeight - 180, dragStartRef.current.startY + dy));
+      setCustomPos({ x: newX, y: newY });
+      setDockMode('custom');
+    };
+    const onMouseUp = () => {
+      dragStartRef.current = null;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const handleToggleDock = () => {
+    if (dockMode === 'left-telemetry') {
+      setDockMode('top-center');
+      setCustomPos(null);
+    } else {
+      setDockMode('left-telemetry');
+      setCustomPos(null);
+    }
+  };
+
+  // Calculate dynamic leader line connection point from card perimeter to 3D target
   const lineCoords = useMemo(() => {
     if (!isVisible || !activeAnchor || !activeAnchor.isVisible) return null;
 
     const targetX = activeAnchor.screenX;
     const targetY = activeAnchor.screenY;
 
-    // Connect primarily from the top-right corner of the docked HUD card towards the center target
-    let startX = cardRect.x + cardRect.width;
-    let startY = cardRect.y + 24;
+    const cardLeft = cardRect.x;
+    const cardRight = cardRect.x + cardRect.width;
+    const cardTop = cardRect.y;
+    const cardBottom = cardRect.y + cardRect.height;
+    const cardCenterX = cardRect.x + cardRect.width * 0.5;
 
-    // If target is above the card
-    if (targetY < cardRect.y) {
-      startX = cardRect.x + cardRect.width * 0.75;
-      startY = cardRect.y;
-    } else if (targetX < cardRect.x) {
-      startX = cardRect.x;
-      startY = cardRect.y + 24;
+    let startX = cardCenterX;
+    let startY = cardBottom;
+
+    if (targetY > cardBottom) {
+      startX = Math.max(cardLeft + 24, Math.min(cardRight - 24, targetX));
+      startY = cardBottom;
+    } else if (targetY < cardTop) {
+      startX = Math.max(cardLeft + 24, Math.min(cardRight - 24, targetX));
+      startY = cardTop;
+    } else if (targetX < cardLeft) {
+      startX = cardLeft;
+      startY = Math.max(cardTop + 16, Math.min(cardBottom - 16, targetY));
+    } else {
+      startX = cardRight;
+      startY = Math.max(cardTop + 16, Math.min(cardBottom - 16, targetY));
     }
 
-    // Midpoint elbow bend for blueprint infographic aesthetic
-    let midX = (startX + targetX) * 0.5;
-    let midY = startY;
+    let midX = startX;
+    let midY = (startY + targetY) * 0.5;
 
-    if (Math.abs(startY - targetY) > Math.abs(startX - targetX)) {
-      midX = startX;
-      midY = (startY + targetY) * 0.5;
+    if (Math.abs(startX - targetX) > Math.abs(startY - targetY)) {
+      midX = (startX + targetX) * 0.5;
+      midY = startY;
     }
 
     return {
@@ -158,9 +207,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
       <button
         type="button"
         onClick={onToggleVisible}
-        className={`absolute left-4 sm:left-6 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/95 border border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-900 transition-all text-xs font-medium shadow-lg backdrop-blur-md cursor-pointer pointer-events-auto ring-1 ring-neutral-800/60 ${
-          isDockCollapsed ? 'bottom-12' : 'bottom-[48vh] sm:bottom-[44vh] md:bottom-24'
-        }`}
+        className="absolute top-[252px] left-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/95 border border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-900 transition-all text-xs font-mono shadow-lg backdrop-blur-md cursor-pointer pointer-events-auto ring-1 ring-neutral-800/60"
         title="Show Black Hole Anatomy & Discovery Guide"
       >
         <Eye className="w-3.5 h-3.5 text-amber-400/90" />
@@ -327,77 +374,153 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
         );
       })}
 
-      {/* Docked Anatomy & Discovery Guide HUD Card (Bottom-Left above Dock - completely clear of controls) */}
-      <div
-        ref={cardRef}
-        className={`absolute left-4 sm:left-6 pointer-events-auto z-25 w-[min(380px,calc(100vw-2.5rem))] transition-all duration-200 ${
-          isDockCollapsed
-            ? 'bottom-12'
-            : 'bottom-[48vh] sm:bottom-[44vh] md:bottom-24'
-        }`}
-      >
-        <div className="bg-black/95 border border-neutral-800 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden ring-1 ring-neutral-800/60 max-h-[42vh] flex flex-col">
-          {/* Header Bar */}
-          <div className="flex items-center justify-between px-3 py-2 bg-neutral-950 border-b border-neutral-800/80 shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              <h3 className="font-display text-xs font-bold uppercase tracking-wider text-amber-300">
-                Anatomy Guide
-              </h3>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              {/* Tab Selector */}
-              <div className="flex items-center p-0.5 bg-neutral-900 rounded border border-neutral-800 text-[10px]">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('anatomy')}
-                  className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
-                    activeTab === 'anatomy'
-                      ? 'bg-neutral-800 text-amber-300 font-medium'
-                      : 'text-neutral-400 hover:text-neutral-200'
-                  }`}
-                >
-                  Feature #{anchors.length > 0 ? activeIdx + 1 : 0}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('types')}
-                  className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
-                    activeTab === 'types'
-                      ? 'bg-neutral-800 text-amber-300 font-medium'
-                      : 'text-neutral-400 hover:text-neutral-200'
-                  }`}
-                >
-                  3 Types
-                </button>
-              </div>
-
-              {/* Minimize / Expand Toggle */}
+      {/* Compact Minimized HUD Pill Mode */}
+      {isPanelCollapsed ? (
+        <div
+          ref={cardRef}
+          style={customPos ? { left: `${customPos.x}px`, top: `${customPos.y}px` } : undefined}
+          className={`absolute pointer-events-auto z-25 transition-all duration-150 ${
+            customPos
+              ? ''
+              : dockMode === 'top-center'
+              ? 'top-3 left-1/2 -translate-x-1/2'
+              : 'top-[245px] left-4'
+          }`}
+        >
+          <div
+            onMouseDown={handleMouseDownHeader}
+            className="flex items-center gap-2 px-3 py-1.5 bg-black/95 border border-neutral-800 rounded-full shadow-2xl backdrop-blur-md ring-1 ring-neutral-800/60 cursor-move select-none"
+            title="Drag to reposition anywhere"
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+            <span className="font-display text-xs font-bold text-amber-300 whitespace-nowrap">
+              #{activeIdx + 1}: {activeAnchor ? activeAnchor.name.split(' (')[0] : 'Anatomy'}
+            </span>
+            <div className="flex items-center gap-0.5 ml-1">
               <button
                 type="button"
-                onClick={() => setIsPanelCollapsed((prev) => !prev)}
-                className="p-1 text-neutral-400 hover:text-white hover:bg-neutral-900 rounded transition-colors cursor-pointer"
-                title={isPanelCollapsed ? 'Expand Details' : 'Minimize Card'}
+                onClick={handlePrev}
+                className="p-1 text-neutral-400 hover:text-white rounded hover:bg-neutral-900 cursor-pointer"
+                title="Previous feature"
               >
-                {isPanelCollapsed ? (
-                  <Maximize2 className="w-3.5 h-3.5" />
-                ) : (
-                  <Minimize2 className="w-3.5 h-3.5" />
-                )}
+                <ChevronLeft className="w-3.5 h-3.5" />
               </button>
-
-              {/* Hide Guide Button */}
+              <button
+                type="button"
+                onClick={handleNext}
+                className="p-1 text-neutral-400 hover:text-white rounded hover:bg-neutral-900 cursor-pointer"
+                title="Next feature"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPanelCollapsed(false)}
+                className="flex items-center gap-1 px-2 py-0.5 ml-1 text-[11px] font-mono text-neutral-300 hover:text-white bg-neutral-900 border border-neutral-800 rounded hover:border-neutral-700 cursor-pointer"
+                title="Expand full guide"
+              >
+                <Maximize2 className="w-3 h-3 text-amber-400" />
+                <span>Expand</span>
+              </button>
               <button
                 type="button"
                 onClick={onToggleVisible}
-                className="p-1 text-neutral-400 hover:text-rose-400 hover:bg-neutral-900 rounded transition-colors cursor-pointer"
-                title="Hide Anatomy Guide"
+                className="p-1 text-neutral-400 hover:text-rose-400 rounded hover:bg-neutral-900 cursor-pointer ml-0.5"
+                title="Hide guide"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
+        </div>
+      ) : (
+        /* Full Expanded Anatomy HUD Card (Left-docked where Time Dilation used to be, or Top-Docked) */
+        <div
+          ref={cardRef}
+          style={customPos ? { left: `${customPos.x}px`, top: `${customPos.y}px` } : undefined}
+          className={`absolute pointer-events-auto z-25 w-[min(360px,calc(100vw-1.5rem))] transition-all duration-150 ${
+            customPos
+              ? ''
+              : dockMode === 'top-center'
+              ? 'top-3 left-1/2 -translate-x-1/2'
+              : 'top-[245px] left-4'
+          }`}
+        >
+          <div className="bg-black/95 border border-neutral-800 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden ring-1 ring-neutral-800/60 max-h-[min(340px,calc(100vh-270px))] flex flex-col">
+            {/* Header Bar with Drag Handle and Dock Switcher */}
+            <div
+              onMouseDown={handleMouseDownHeader}
+              className="flex items-center justify-between px-3 py-2 bg-neutral-950 border-b border-neutral-800/80 shrink-0 cursor-move select-none"
+              title="Click and drag to move card anywhere"
+            >
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <h3 className="font-display text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                  <span>Anatomy Guide</span>
+                  <span className="text-[9px] font-mono font-normal text-neutral-400 px-1 py-0.2 bg-neutral-900 rounded border border-neutral-800">
+                    {customPos ? 'Floating' : dockMode === 'top-center' ? 'Top-Center' : 'Left Dock'}
+                  </span>
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {/* Dock Position Switcher */}
+                <button
+                  type="button"
+                  onClick={handleToggleDock}
+                  className="p-1 text-neutral-400 hover:text-amber-300 hover:bg-neutral-900 rounded transition-colors cursor-pointer"
+                  title={dockMode === 'top-center' ? 'Switch to Top-Right Dock' : 'Switch to Top-Center Dock'}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Tab Selector */}
+                <div className="flex items-center p-0.5 bg-neutral-900 rounded border border-neutral-800 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('anatomy')}
+                    className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                      activeTab === 'anatomy'
+                        ? 'bg-neutral-800 text-amber-300 font-medium'
+                        : 'text-neutral-400 hover:text-neutral-200'
+                    }`}
+                  >
+                    Pin #{anchors.length > 0 ? activeIdx + 1 : 0}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('types')}
+                    className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                      activeTab === 'types'
+                        ? 'bg-neutral-800 text-amber-300 font-medium'
+                        : 'text-neutral-400 hover:text-neutral-200'
+                    }`}
+                  >
+                    3 Types
+                  </button>
+                </div>
+
+                {/* Minimize / Expand Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsPanelCollapsed(true)}
+                  className="p-1 text-neutral-400 hover:text-white hover:bg-neutral-900 rounded transition-colors cursor-pointer"
+                  title="Minimize into compact pill"
+                >
+                  <Minimize2 className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Hide Guide Button */}
+                <button
+                  type="button"
+                  onClick={onToggleVisible}
+                  className="p-1 text-neutral-400 hover:text-rose-400 hover:bg-neutral-900 rounded transition-colors cursor-pointer"
+                  title="Hide Anatomy Guide"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
 
           {/* Body Content */}
           {!isPanelCollapsed && (
@@ -561,6 +684,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
           )}
         </div>
       </div>
+      )}
     </div>
   );
 };
