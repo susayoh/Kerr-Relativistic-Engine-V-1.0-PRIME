@@ -1,12 +1,6 @@
 export type ObjectCategory = 'black_hole' | 'star';
 
-export type BackgroundThemeId =
-  | 'galactic_core'
-  | 'cosmic_nebula'
-  | 'stellar_nursery'
-  | 'soothing_void'
-  | 'slate_minimal'
-  | 'pure_black';
+export type BackgroundThemeId = 'galactic_core' | 'pure_black';
 
 export interface BackgroundThemeDef {
   id: BackgroundThemeId;
@@ -19,59 +13,23 @@ export interface BackgroundThemeDef {
 }
 
 export const BACKGROUND_THEMES: Record<BackgroundThemeId, BackgroundThemeDef> = {
+  galactic_core: {
+    id: 'galactic_core',
+    name: 'Pure Black with Stars',
+    tagline: 'Pitch-black #000000 vacuum with gravitationally lensed background stars',
+    bgColor: 0x000000,
+    fogColor: 0x000000,
+    fogDensity: 0.0,
+    badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  },
   pure_black: {
     id: 'pure_black',
-    name: 'Pure Black Void (No Stars)',
-    tagline: 'Deep obsidian black vacuum with zero background stars or haze',
+    name: 'Pure Black',
+    tagline: 'Pitch-black #000000 vacuum with zero background stars or haze',
     bgColor: 0x000000,
     fogColor: 0x000000,
     fogDensity: 0.0,
     badgeBg: 'bg-black text-slate-300 border-slate-800',
-  },
-  galactic_core: {
-    id: 'galactic_core',
-    name: 'Galactic Center (Milky Way)',
-    tagline: 'Warm golden dust lane & soft stellar bulge — comfortable & cinematic',
-    bgColor: 0x0a0705,
-    fogColor: 0x0a0705,
-    fogDensity: 0.0035,
-    badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-  },
-  cosmic_nebula: {
-    id: 'cosmic_nebula',
-    name: 'Deep Cosmic Nebula (Teal & Indigo)',
-    tagline: 'Calm oceanic space nebula with soothing ethereal hues',
-    bgColor: 0x040810,
-    fogColor: 0x040810,
-    fogDensity: 0.0035,
-    badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
-  },
-  stellar_nursery: {
-    id: 'stellar_nursery',
-    name: 'Orion Stellar Nursery (Violet)',
-    tagline: 'Soft lavender & magenta diffuse ionized gas clouds',
-    bgColor: 0x08040d,
-    fogColor: 0x08040d,
-    fogDensity: 0.0038,
-    badgeBg: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
-  },
-  soothing_void: {
-    id: 'soothing_void',
-    name: 'Quiet Velvet Space (Anti-Glare)',
-    tagline: 'Gentle low-contrast deep space — designed to eliminate eye strain',
-    bgColor: 0x030407,
-    fogColor: 0x030407,
-    fogDensity: 0.0045,
-    badgeBg: 'bg-slate-700/30 text-slate-300 border-slate-600/40',
-  },
-  slate_minimal: {
-    id: 'slate_minimal',
-    name: 'Scientific Slate (Clean Studio)',
-    tagline: 'Uniform soft dark charcoal background for maximum clarity',
-    bgColor: 0x080a10,
-    fogColor: 0x080a10,
-    fogDensity: 0.003,
-    badgeBg: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
   },
 };
 
@@ -289,8 +247,8 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
         accretionDisk: true,
         ergosphereCage: false, // Ergosphere toggled off automatically by default
         spacetimeGrid: true,
-        orbitalStars: true,
-        geodesicRays: true,
+        orbitalStars: false,
+        geodesicRays: false,
       },
     },
     description: 'The largest known black hole in the observable universe, weighing 66 billion Suns. Its event horizon spans 390 billion km (2,600 AU), powering a hyperluminous quasar that outshines 140 trillion Suns.',
@@ -324,8 +282,8 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
         accretionDisk: true,
         ergosphereCage: false,
         spacetimeGrid: true,
-        orbitalStars: true,
-        geodesicRays: true,
+        orbitalStars: false,
+        geodesicRays: false,
       },
     },
     description: 'Supermassive black hole at the dynamical center of the Milky Way, imaged by the Event Horizon Telescope and tracked via orbiting S-stars.',
@@ -359,8 +317,8 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
         accretionDisk: true,
         ergosphereCage: false,
         spacetimeGrid: true,
-        orbitalStars: true,
-        geodesicRays: true,
+        orbitalStars: false,
+        geodesicRays: false,
       },
     },
     description: 'Colossal active galactic nucleus in the Virgo cluster, the first black hole ever directly imaged in human history.',
@@ -394,8 +352,8 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
         accretionDisk: true,
         ergosphereCage: false,
         spacetimeGrid: true,
-        orbitalStars: true,
-        geodesicRays: true,
+        orbitalStars: false,
+        geodesicRays: false,
       },
     },
     description: 'Premier candidate for an intermediate-mass black hole, likely the remnant stripped nucleus of a consumed dwarf galaxy.',
@@ -429,8 +387,8 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
         accretionDisk: true,
         ergosphereCage: false,
         spacetimeGrid: true,
-        orbitalStars: true,
-        geodesicRays: true,
+        orbitalStars: false,
+        geodesicRays: false,
       },
     },
     description: 'Near-maximal spinning stellar-mass black hole accreting stellar wind from companion blue supergiant star HDE 226868.',
@@ -464,8 +422,8 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
         accretionDisk: true,
         ergosphereCage: false,
         spacetimeGrid: true,
-        orbitalStars: true,
-        geodesicRays: true,
+        orbitalStars: false,
+        geodesicRays: false,
       },
     },
     description: 'First direct gravitational-wave detection remnant formed by the inspiral and ringdown of 36 M☉ and 29 M☉ black holes.',
@@ -499,8 +457,8 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
         accretionDisk: true,
         ergosphereCage: false,
         spacetimeGrid: true,
-        orbitalStars: true,
-        geodesicRays: true,
+        orbitalStars: false,
+        geodesicRays: false,
       },
     },
     description: 'Hypothetical primordial black hole forged directly from dense fluctuations during the Big Bang. An Earth-mass black hole has an event horizon just 1.8 cm wide!',
@@ -536,8 +494,8 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
         accretionDisk: true,
         ergosphereCage: false,
         spacetimeGrid: true,
-        orbitalStars: true,
-        geodesicRays: true,
+        orbitalStars: false,
+        geodesicRays: false,
         pulsarBeams: true,
         magneticField: true,
       },
@@ -573,8 +531,8 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
         accretionDisk: true,
         ergosphereCage: false,
         spacetimeGrid: true,
-        orbitalStars: true,
-        geodesicRays: true,
+        orbitalStars: false,
+        geodesicRays: false,
         pulsarBeams: true,
         magneticField: true,
       },

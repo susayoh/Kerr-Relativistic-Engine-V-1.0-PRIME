@@ -59,11 +59,7 @@ export const BackgroundSelectorModal: React.FC<BackgroundSelectorModalProps> = (
             // Visual preview swatches
             const previewGradients: Record<BackgroundThemeId, string> = {
               pure_black: 'from-black via-black to-black',
-              galactic_core: 'from-[#2d180d] via-[#140a05] to-[#0a0705]',
-              cosmic_nebula: 'from-[#082332] via-[#09152b] to-[#040810]',
-              stellar_nursery: 'from-[#260e32] via-[#150722] to-[#08040d]',
-              soothing_void: 'from-[#111722] via-[#080c14] to-[#030407]',
-              slate_minimal: 'from-[#141b29] via-[#0c121d] to-[#080a10]',
+              galactic_core: 'from-black via-neutral-950 to-black',
             };
 
             return (
@@ -88,11 +84,7 @@ export const BackgroundSelectorModal: React.FC<BackgroundSelectorModalProps> = (
                       className={`w-4 h-4 ${
                         theme.id === 'galactic_core'
                           ? 'text-amber-400'
-                          : theme.id === 'cosmic_nebula'
-                          ? 'text-cyan-400'
-                          : theme.id === 'stellar_nursery'
-                          ? 'text-purple-400'
-                          : 'text-neutral-400'
+                          : 'text-neutral-500'
                       }`}
                     />
                   </div>
@@ -102,11 +94,6 @@ export const BackgroundSelectorModal: React.FC<BackgroundSelectorModalProps> = (
                       <h3 className="font-semibold text-sm text-neutral-100">
                         {theme.name}
                       </h3>
-                      {theme.id === 'soothing_void' && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-900 text-neutral-300 border border-neutral-800 font-mono">
-                          Calm Neutral
-                        </span>
-                      )}
                     </div>
                     <p className="text-xs text-neutral-400 mt-0.5 leading-snug">
                       {theme.tagline}

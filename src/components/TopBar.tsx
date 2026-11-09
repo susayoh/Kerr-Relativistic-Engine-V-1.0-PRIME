@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Layers, Activity, Download, Maximize2, Zap, Sun, Eye, EyeOff } from 'lucide-react';
+import { Sparkles, Layers, Activity, Download, Maximize2, Zap, Sun, Eye, EyeOff, Settings } from 'lucide-react';
 import { ASTROPHYSICAL_PRESETS, BackgroundThemeId, BACKGROUND_THEMES } from '../physics/gravitationalPhysics';
 
 interface TopBarProps {
@@ -9,6 +9,7 @@ interface TopBarProps {
   onOpenArchetypeModal: () => void;
   onOpenCosmicScaleModal: () => void;
   onOpenBackgroundModal: () => void;
+  onOpenSettingsModal?: () => void;
   activeBackgroundTheme: BackgroundThemeId;
   isAnatomyVisible: boolean;
   onToggleAnatomyVisible: () => void;
@@ -24,6 +25,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenArchetypeModal,
   onOpenCosmicScaleModal,
   onOpenBackgroundModal,
+  onOpenSettingsModal,
   activeBackgroundTheme,
   isAnatomyVisible,
   onToggleAnatomyVisible,
@@ -160,6 +162,17 @@ export const TopBar: React.FC<TopBarProps> = ({
         >
           <Activity className="w-3.5 h-3.5 text-neutral-400" />
           <span>Metrics</span>
+        </button>
+
+        {/* Settings Button */}
+        <button
+          type="button"
+          onClick={onOpenSettingsModal}
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-neutral-300 bg-neutral-900 border border-neutral-800 rounded-md hover:bg-neutral-800 hover:text-amber-300 hover:border-neutral-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          title="Open Visualizer Settings & Preferences"
+        >
+          <Settings className="w-3.5 h-3.5 text-amber-400/90" />
+          <span className="hidden md:inline">Settings</span>
         </button>
 
         <button

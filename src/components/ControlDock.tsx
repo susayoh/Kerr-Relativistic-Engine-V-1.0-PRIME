@@ -205,22 +205,21 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 value={activePresetId}
                 onChange={(e) => onSelectPreset(e.target.value)}
                 className="w-full pl-8 pr-7 py-1 text-xs bg-neutral-900 hover:bg-neutral-850 border border-neutral-700/80 hover:border-amber-400/80 text-neutral-200 font-semibold rounded-lg transition-colors cursor-pointer appearance-none outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40 truncate"
-                title="Select Astrophysical Target (TON 618, Sagittarius A*, M87*, Cygnus X-1, etc.)"
+                title="Select Astrophysical Target (TON 618, Sagittarius A*, M87*, Cygnus X-1, Pulsars, etc.)"
               >
-                <optgroup label="Supermassive & Ultramassive Black Holes" className="bg-neutral-950 text-neutral-200">
-                  <option value="ton618">TON 618 (66 Billion M☉ · Ultramassive)</option>
-                  <option value="m87">M87* (6.5 Billion M☉ · EHT Target)</option>
-                  <option value="sagittarius_a">Sagittarius A* (4.15 Million M☉ · Milky Way)</option>
-                </optgroup>
-                <optgroup label="Intermediate & Stellar Black Holes" className="bg-neutral-950 text-neutral-200">
-                  <option value="gw190521">GW190521 (142 M☉ · LIGO Merger)</option>
-                  <option value="cygnus_x1">Cygnus X-1 (21.2 M☉ · HMXB System)</option>
-                  <option value="v404_cygni">V404 Cygni (9.0 M☉ · Jet Precession)</option>
-                  <option value="primordial_micro">Micro PBH (10¹² kg · Hawking Decay)</option>
+                <optgroup label="Black Holes (Ultramassive to Primordial)" className="bg-neutral-950 text-neutral-200">
+                  {ASTROPHYSICAL_PRESETS.filter((p) => p.category === 'black_hole').map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.plainMassExplanation} · {p.classification})
+                    </option>
+                  ))}
                 </optgroup>
                 <optgroup label="Compact Relativistic Stars" className="bg-neutral-950 text-neutral-200">
-                  <option value="psr_b1919">PSR B1919+21 (Pulsar · Lighthouse Beams)</option>
-                  <option value="sgr_1806">SGR 1806-20 (Magnetar · 10¹⁵ G Field)</option>
+                  {ASTROPHYSICAL_PRESETS.filter((p) => p.category === 'star').map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.plainMassExplanation} · {p.classification})
+                    </option>
+                  ))}
                 </optgroup>
               </select>
               <div className="absolute right-2 pointer-events-none flex items-center text-neutral-400">
@@ -293,7 +292,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               type="button"
               onClick={onResetParams}
               className="p-1.5 text-xs text-neutral-400 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors cursor-pointer"
-              title="Reset Default Parameters"
+              title={`Reset Default Parameters for ${activePreset.name}`}
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -589,12 +588,16 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    const nextOrbitalStars = !params.layers.orbitalStars;
+                    if (!nextOrbitalStars && activeCamera === 'star') {
+                      onSelectCamera('equatorial');
+                    }
                     onChangeParams((prev) => ({
                       ...prev,
-                      layers: { ...prev.layers, orbitalStars: !prev.layers.orbitalStars },
-                    }))
-                  }
+                      layers: { ...prev.layers, orbitalStars: nextOrbitalStars },
+                    }));
+                  }}
                   className={`px-2 py-1 text-xs rounded border transition-colors cursor-pointer ${
                     params.layers.orbitalStars
                       ? 'bg-neutral-800 text-neutral-200 border-neutral-700 font-medium'
@@ -610,12 +613,12 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       ...prev,
                       layers: {
                         ...prev.layers,
-                        anatomyLines: !(prev.layers.anatomyLines ?? true),
+                        anatomyLines: !(prev.layers.anatomyLines ?? false),
                       },
                     }))
                   }
                   className={`px-2 py-1 text-xs rounded border transition-colors cursor-pointer ${
-                    params.layers.anatomyLines ?? true
+                    params.layers.anatomyLines ?? false
                       ? 'bg-neutral-800 text-amber-300 font-medium border-neutral-700'
                       : 'bg-neutral-900 text-neutral-500 border-neutral-800'
                   }`}
@@ -629,12 +632,12 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       ...prev,
                       layers: {
                         ...prev.layers,
-                        microlensingStar: !(prev.layers.microlensingStar ?? true),
+                        microlensingStar: !(prev.layers.microlensingStar ?? false),
                       },
                     }))
                   }
                   className={`col-span-2 px-2 py-1 text-xs rounded border transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                    params.layers.microlensingStar ?? true
+                    params.layers.microlensingStar ?? false
                       ? 'bg-neutral-800 text-cyan-300 font-medium border-neutral-700 shadow-sm'
                       : 'bg-neutral-900 text-neutral-500 border-neutral-800'
                   }`}
@@ -651,10 +654,9 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               <span className="text-[11px] font-mono text-neutral-400 uppercase tracking-wider">
                 Environment
               </span>
-              <div className="grid grid-cols-2 gap-1 mt-0.5">
-                {Object.values(BACKGROUND_THEMES).slice(0, 4).map((theme) => {
+              <div className="grid grid-cols-1 gap-1 mt-0.5">
+                {Object.values(BACKGROUND_THEMES).map((theme) => {
                   const isActive = (params.backgroundTheme || 'galactic_core') === theme.id;
-                  const isPitchBlack = theme.id === 'pure_black';
                   return (
                     <button
                       key={theme.id}
@@ -668,13 +670,11 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       className={`px-2 py-1 text-xs rounded border transition-all truncate cursor-pointer text-left ${
                         isActive
                           ? 'bg-neutral-800 text-amber-300 font-medium border-neutral-700 shadow-sm'
-                          : isPitchBlack
-                          ? 'bg-black text-neutral-300 border-neutral-750 hover:border-neutral-600'
-                          : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
+                          : 'bg-black text-neutral-300 border-neutral-800 hover:border-neutral-600'
                       }`}
                       title={theme.name}
                     >
-                      {isPitchBlack ? 'Pure Black' : theme.name.split(' (')[0]}
+                      {theme.name}
                     </button>
                   );
                 })}
@@ -685,14 +685,16 @@ export const ControlDock: React.FC<ControlDockProps> = ({
 
         {/* TAB 3: CAMERA OBSERVATORY VIEWPORTS */}
         {activeTab === 'camera' && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+          <div className={`grid grid-cols-2 sm:grid-cols-3 ${params.layers.orbitalStars ? 'md:grid-cols-6' : 'md:grid-cols-5'} gap-2`}>
             {(
               [
                 { id: 'equatorial', label: 'Equatorial', desc: 'Accretion Plane' },
                 { id: 'polar', label: 'Polar Axis', desc: 'Overhead Jet' },
                 { id: 'grazing', label: 'Grazing', desc: 'Rim Horizon' },
                 { id: 'well', label: 'Gravity Well', desc: 'Throat Funnel' },
-                { id: 'star', label: 'Orbiting Star', desc: 'S2 Companion' },
+                ...(params.layers.orbitalStars
+                  ? ([{ id: 'star', label: 'Orbiting Star', desc: 'S2 Companion' }] as const)
+                  : []),
               ] as const
             ).map((preset) => (
               <button

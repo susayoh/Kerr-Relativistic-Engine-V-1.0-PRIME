@@ -23,7 +23,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
   onSetProbeRadius,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [isMinimized, setIsMinimized] = useState<boolean>(true);
+  const [isMinimized, setIsMinimized] = useState<boolean>(false);
   const [zoomLevel, setZoomLevel] = useState<number>(1.0); // 1.0x (up to 7 Rs), 2.0x (zoom into ISCO/horizon)
   const [telemetry, setTelemetry] = useState<{
     rRs: number;
@@ -31,12 +31,20 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
     phiDeg: number;
     beta: number;
     timeDilation: number;
+    orbitalStarsVisible: boolean;
+    eventHorizonRs: number;
+    photonSphereRs: number;
+    iscoRs: number;
   }>({
     rRs: 3.4,
     rRg: 6.8,
     phiDeg: 0,
     beta: 0.48,
     timeDilation: 0.82,
+    orbitalStarsVisible: false,
+    eventHorizonRs: 0.56,
+    photonSphereRs: 0.65,
+    iscoRs: 0.81,
   });
 
   const [hoverRadius, setHoverRadius] = useState<number | null>(null);
@@ -67,6 +75,10 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
           phiDeg: data.probeAngleDeg,
           beta: data.probeOrbitalBeta,
           timeDilation: 1.0 / data.probeTimeDilationFactor,
+          orbitalStarsVisible: data.orbitalStarsVisible,
+          eventHorizonRs: data.eventHorizonRs,
+          photonSphereRs: data.photonSphereRs,
+          iscoRs: data.iscoRs,
         });
       }
 
@@ -247,63 +259,64 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
         }
       }
 
-      // 10. Probe Circular Orbit Path
-      const probeOrbitPx = data.probeRadiusRs * pixelsPerRs;
-      ctx.beginPath();
-      ctx.arc(cx, cy, probeOrbitPx, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(14, 165, 233, 0.4)';
-      ctx.lineWidth = 0.9;
-      ctx.setLineDash([3, 3]);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // 10 & 11. Star S2 Circular Orbit Path & Real-Time Position Indicator (Only visible when S-Stars layer is enabled)
+      if (data.orbitalStarsVisible) {
+        const probeOrbitPx = data.probeRadiusRs * pixelsPerRs;
+        ctx.beginPath();
+        ctx.arc(cx, cy, probeOrbitPx, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(14, 165, 233, 0.4)';
+        ctx.lineWidth = 0.9;
+        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
 
-      // Radial beam connecting singularity to probe
-      const probePx = cx + data.probeX * pixelsPerRs;
-      const probePy = cy + data.probeZ * pixelsPerRs;
+        // Radial beam connecting singularity to probe
+        const probePx = cx + data.probeX * pixelsPerRs;
+        const probePy = cy + data.probeZ * pixelsPerRs;
 
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(probePx, probePy);
-      ctx.strokeStyle = 'rgba(14, 165, 233, 0.25)';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(probePx, probePy);
+        ctx.strokeStyle = 'rgba(14, 165, 233, 0.25)';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
 
-      // 11. Probe Real-Time Position Indicator
-      // Expanding radar beacon wave around probe
-      const pulsePhase = (time * 0.003) % 1;
-      const pulseRad = 4 + pulsePhase * 10;
-      ctx.beginPath();
-      ctx.arc(probePx, probePy, pulseRad, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(56, 189, 248, ${0.85 * (1 - pulsePhase)})`;
-      ctx.lineWidth = 1;
-      ctx.stroke();
+        // Expanding radar beacon wave around probe
+        const pulsePhase = (time * 0.003) % 1;
+        const pulseRad = 4 + pulsePhase * 10;
+        ctx.beginPath();
+        ctx.arc(probePx, probePy, pulseRad, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(56, 189, 248, ${0.85 * (1 - pulsePhase)})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
-      // Instantaneous tangent velocity vector
-      const tangentVx = -Math.sin(data.probeAngleRad) * 12;
-      const tangentVz = -Math.cos(data.probeAngleRad) * 12;
-      ctx.beginPath();
-      ctx.moveTo(probePx, probePy);
-      ctx.lineTo(probePx + tangentVx, probePy + tangentVz);
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+        // Instantaneous tangent velocity vector
+        const tangentVx = -Math.sin(data.probeAngleRad) * 12;
+        const tangentVz = -Math.cos(data.probeAngleRad) * 12;
+        ctx.beginPath();
+        ctx.moveTo(probePx, probePy);
+        ctx.lineTo(probePx + tangentVx, probePy + tangentVz);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
 
-      // Star S2 core marker (Blue-white B-type star with glowing halo)
-      ctx.beginPath();
-      ctx.arc(probePx, probePy, 3.8, 0, Math.PI * 2);
-      ctx.fillStyle = '#93c5fd';
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
+        // Star S2 core marker (Blue-white B-type star with glowing halo)
+        ctx.beginPath();
+        ctx.arc(probePx, probePy, 3.8, 0, Math.PI * 2);
+        ctx.fillStyle = '#93c5fd';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
 
-      // Star label
-      ctx.fillStyle = '#e2e8f0';
-      ctx.font = '8px monospace';
-      ctx.fillText('STAR S2', probePx + 6, probePy - 4);
+        // Star label
+        ctx.fillStyle = '#e2e8f0';
+        ctx.font = '8px monospace';
+        ctx.fillText('STAR S2', probePx + 6, probePy - 4);
+      }
 
-      // 12. Hover cursor indicator if user is hovering over canvas
-      if (hoverRadius !== null) {
+      // 12. Hover cursor indicator if user is hovering over canvas and S-Stars are enabled
+      if (hoverRadius !== null && data.orbitalStarsVisible) {
         const hoverPx = hoverRadius * pixelsPerRs;
         ctx.beginPath();
         ctx.arc(cx, cy, hoverPx, 0, Math.PI * 2);
@@ -419,46 +432,64 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
             </div>
 
             {/* Hover radius helper */}
-            {hoverRadius !== null && (
+            {hoverRadius !== null && telemetry.orbitalStarsVisible && (
               <div className="absolute bottom-1 right-1.5 pointer-events-none text-[9px] font-mono text-amber-300/90 bg-black/80 px-1 rounded border border-neutral-800">
                 r: {hoverRadius.toFixed(2)} Rₛ (Click to set)
               </div>
             )}
           </div>
 
-          {/* Real-Time Live Probe Telemetry Strip */}
-          <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono tabular-nums bg-neutral-950 p-2 rounded border border-neutral-800/80">
-            <div>
-              <span className="text-neutral-500 block text-[9px] uppercase">Star S2 Radius</span>
-              <span className="text-neutral-200 font-semibold">
-                {telemetry.rRs.toFixed(2)} <span className="text-neutral-500 text-[10px]">Rₛ</span>
-              </span>
-              <span className="text-neutral-500 text-[10px] ml-1">
-                ({telemetry.rRg.toFixed(2)} R_g)
-              </span>
-            </div>
+          {/* Real-Time Telemetry Strip */}
+          {telemetry.orbitalStarsVisible ? (
+            <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono tabular-nums bg-neutral-950 p-2 rounded border border-neutral-800/80">
+              <div>
+                <span className="text-neutral-500 block text-[9px] uppercase">Star S2 Radius</span>
+                <span className="text-neutral-200 font-semibold">
+                  {telemetry.rRs.toFixed(2)} <span className="text-neutral-500 text-[10px]">Rₛ</span>
+                </span>
+                <span className="text-neutral-500 text-[10px] ml-1">
+                  ({telemetry.rRg.toFixed(2)} R_g)
+                </span>
+              </div>
 
-            <div>
-              <span className="text-neutral-500 block text-[9px] uppercase">Azimuth (φ)</span>
-              <span className="text-amber-300/90 font-semibold">
-                {telemetry.phiDeg.toFixed(1)}°
-              </span>
-            </div>
+              <div>
+                <span className="text-neutral-500 block text-[9px] uppercase">Azimuth (φ)</span>
+                <span className="text-amber-300/90 font-semibold">
+                  {telemetry.phiDeg.toFixed(1)}°
+                </span>
+              </div>
 
-            <div>
-              <span className="text-neutral-500 block text-[9px] uppercase">Orbital Speed</span>
-              <span className="text-neutral-200 font-semibold">
-                {(telemetry.beta * 100).toFixed(1)}% <span className="text-neutral-500 text-[10px]">c</span>
-              </span>
-            </div>
+              <div>
+                <span className="text-neutral-500 block text-[9px] uppercase">Orbital Speed</span>
+                <span className="text-neutral-200 font-semibold">
+                  {(telemetry.beta * 100).toFixed(1)}% <span className="text-neutral-500 text-[10px]">c</span>
+                </span>
+              </div>
 
-            <div>
-              <span className="text-neutral-500 block text-[9px] uppercase">Clock Dilation</span>
-              <span className="text-neutral-200 font-semibold">
-                {telemetry.timeDilation.toFixed(3)} <span className="text-neutral-500 text-[10px]">dτ/dt</span>
-              </span>
+              <div>
+                <span className="text-neutral-500 block text-[9px] uppercase">Clock Dilation</span>
+                <span className="text-neutral-200 font-semibold">
+                  {telemetry.timeDilation.toFixed(3)} <span className="text-neutral-500 text-[10px]">dτ/dt</span>
+                </span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono tabular-nums bg-neutral-950 p-2 rounded border border-neutral-800/80">
+              <div>
+                <span className="text-neutral-500 block text-[9px] uppercase">Horizon (r₊)</span>
+                <span className="text-amber-300/90 font-semibold">
+                  {telemetry.eventHorizonRs.toFixed(2)} <span className="text-neutral-500 text-[10px]">Rₛ</span>
+                </span>
+              </div>
+
+              <div>
+                <span className="text-neutral-500 block text-[9px] uppercase">ISCO Boundary</span>
+                <span className="text-cyan-300/90 font-semibold">
+                  {telemetry.iscoRs.toFixed(2)} <span className="text-neutral-500 text-[10px]">Rₛ</span>
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

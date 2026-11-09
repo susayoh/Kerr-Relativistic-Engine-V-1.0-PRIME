@@ -75,29 +75,51 @@ const CALLOUT_LAYOUTS: Record<string, CalloutLayoutSpec> = {
     lineStartRelX: -8,
     lineStartRelY: 14,
   },
+  // Callouts when Accretion Disk is toggled off (Naked Black Hole & Spacetime Distortion)
+  spacetime_distortion: {
+    offsetX: -265,
+    offsetY: -125,
+    width: 245,
+    lineStartRelX: 215,
+    lineStartRelY: 72,
+  },
+  gravity_well: {
+    offsetX: -245,
+    offsetY: 42,
+    width: 240,
+    lineStartRelX: 215,
+    lineStartRelY: 14,
+  },
+  star_s2: {
+    offsetX: -260,
+    offsetY: -85,
+    width: 235,
+    lineStartRelX: 225,
+    lineStartRelY: 44,
+  },
+  ergosphere: {
+    offsetX: 165,
+    offsetY: 28,
+    width: 235,
+    lineStartRelX: -8,
+    lineStartRelY: 20,
+  },
   // Fallback layouts for neutron star / pulsar mode
-  star_crust: {
+  ns_crust: {
     offsetX: -250,
     offsetY: -120,
     width: 230,
     lineStartRelX: 220,
     lineStartRelY: 60,
   },
-  star_jets: {
+  ns_pulsar_beam: {
     offsetX: 90,
     offsetY: -175,
     width: 235,
     lineStartRelX: 0,
     lineStartRelY: 75,
   },
-  star_magnetosphere: {
-    offsetX: 180,
-    offsetY: -60,
-    width: 235,
-    lineStartRelX: -6,
-    lineStartRelY: 35,
-  },
-  star_gravity_well: {
+  ns_tov_limit: {
     offsetX: -230,
     offsetY: 65,
     width: 235,
@@ -113,7 +135,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
   onSelectPreset,
 }) => {
   const [anchors, setAnchors] = useState<AnatomyCalloutAnchor[]>([]);
-  const [showSingularityLabel, setShowSingularityLabel] = useState<boolean>(true);
+  const [showSingularityLabel, setShowSingularityLabel] = useState<boolean>(false);
   const [showTypesDrawer, setShowTypesDrawer] = useState<boolean>(false);
   const [viewportSize, setViewportSize] = useState<{ w: number; h: number }>({
     w: typeof window !== 'undefined' ? window.innerWidth : 1440,
@@ -129,6 +151,11 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  // Keep 3D singularity visibility synced with the Anatomy Guide Singularity toggle
+  useEffect(() => {
+    sceneController?.setShowSingularityInAnatomy(showSingularityLabel);
+  }, [sceneController, showSingularityLabel]);
 
   // Poll 3D projected screen coordinates from Three.js scene camera
   useEffect(() => {
@@ -156,17 +183,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
   }, [isVisible, sceneController]);
 
   if (!isVisible) {
-    return (
-      <button
-        type="button"
-        onClick={onToggleVisible}
-        className="absolute top-3 right-6 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/95 border border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-900 transition-all text-xs font-mono shadow-lg cursor-pointer pointer-events-auto ring-1 ring-neutral-800/60"
-        title="Show Black Hole Anatomy Diagram"
-      >
-        <Eye className="w-3.5 h-3.5 text-amber-400/90" />
-        <span>Show Anatomy Guide</span>
-      </button>
-    );
+    return null;
   }
 
   // Scale callout offsets gracefully on smaller viewports
@@ -205,33 +222,6 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
 
   return (
     <div className="absolute inset-0 pointer-events-none z-15 overflow-hidden select-none">
-      {/* Crisp NASA-style Straight White Leader Lines */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none">
-        {visibleCallouts.map(({ anchor, lineStartX, lineStartY }) => (
-          <g key={`leader-line-${anchor.id}`}>
-            {/* Subtle dark backing stroke so white line remains legible over bright plasma */}
-            <line
-              x1={lineStartX}
-              y1={lineStartY}
-              x2={anchor.screenX}
-              y2={anchor.screenY}
-              stroke="rgba(0,0,0,0.65)"
-              strokeWidth="3.2"
-              strokeLinecap="round"
-            />
-            {/* Crisp white straight scientific leader line */}
-            <line
-              x1={lineStartX}
-              y1={lineStartY}
-              x2={anchor.screenX}
-              y2={anchor.screenY}
-              stroke="#ffffff"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </g>
-        ))}
-      </svg>
 
       {/* Floating NASA Scientific Callout Text Blocks */}
       {visibleCallouts.map(({ anchor, spec, boxX, boxY }) => (
