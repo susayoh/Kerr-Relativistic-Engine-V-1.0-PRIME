@@ -10,6 +10,7 @@ import {
   ASTROPHYSICAL_PRESETS,
   BlackHoleParams,
   GeodesicTrajectory,
+  SystemCategory,
   computeRelativisticMetrics,
 } from './physics/gravitationalPhysics';
 import {
@@ -30,9 +31,11 @@ import { BlackHoleAnatomyOverlay } from './components/BlackHoleAnatomyOverlay';
 import { OverheadMapWidget } from './components/OverheadMapWidget';
 import { TimeDilationDisplay } from './components/TimeDilationDisplay';
 import { SettingsModal } from './components/SettingsModal';
+import { useHaptics } from './hooks/useHaptics';
 
 const DEFAULT_PARAMS: BlackHoleParams = {
   objectCategory: 'black_hole',
+  systemCategory: 'isolated',
   backgroundTheme: 'galactic_core',
   presetId: 'ton618',
   trueMassSolar: 66000000000,
@@ -80,6 +83,8 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
   const [isSingularityCollapsed, setIsSingularityCollapsed] = useState<boolean>(true);
+
+  const haptics = useHaptics({ enabled: settings.hapticsEnabled !== false });
 
   const isAnatomyVisible = params.layers.anatomyLines ?? false;
   const handleToggleAnatomyVisible = useCallback(() => {
@@ -227,11 +232,15 @@ export default function App() {
         handleToggleCleanMode();
       } else if (e.key === 'Escape') {
         handleSetCleanMode(false);
+      } else if (e.code === 'Space') {
+        e.preventDefault();
+        haptics.medium();
+        setParams((p) => ({ ...p, timeScale: p.timeScale === 0 ? 1.0 : 0.0 }));
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleToggleCleanMode, handleSetCleanMode]);
+  }, [handleToggleCleanMode, handleSetCleanMode, haptics]);
 
   const handleSelectPreset = useCallback((presetId: string) => {
     const found = ASTROPHYSICAL_PRESETS.find((p) => p.id === presetId);
@@ -297,6 +306,14 @@ export default function App() {
     sceneControllerRef.current?.setCameraPreset(preset);
   }, []);
 
+  const handleChangeSystemCategory = useCallback((nextCategory: SystemCategory) => {
+    setParams((prev) => ({
+      ...prev,
+      objectCategory: 'black_hole',
+      systemCategory: nextCategory,
+    }));
+  }, []);
+
   const handleLaunchPhoton = useCallback((impactB: number) => {
     sceneControllerRef.current?.launchPhotonGeodesic(impactB, 0);
   }, []);
@@ -313,12 +330,13 @@ export default function App() {
 
   const handleExportSnapshot = useCallback(() => {
     if (!sceneControllerRef.current) return;
+    haptics.success();
     const dataUrl = sceneControllerRef.current.captureSnapshotDataUrl();
     const link = document.createElement('a');
     link.download = `cosmic-vis-${activePresetId}-${Date.now()}.png`;
     link.href = dataUrl;
     link.click();
-  }, [activePresetId]);
+  }, [activePresetId, haptics]);
 
   const isStar = params.objectCategory === 'star';
 
@@ -329,6 +347,8 @@ export default function App() {
         <TopBar
           activePresetId={activePresetId}
           onSelectPreset={handleSelectPreset}
+          systemCategory={params.systemCategory || 'isolated'}
+          onChangeSystemCategory={handleChangeSystemCategory}
           onOpenTheoryModal={() => setIsTheoryModalOpen(true)}
           onOpenArchetypeModal={() => setIsArchetypeModalOpen(true)}
           onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
@@ -340,6 +360,8 @@ export default function App() {
           onExportSnapshot={handleExportSnapshot}
           isCleanMode={isCleanMode}
           onToggleCleanMode={handleToggleCleanMode}
+          isPhoneMode={settings.phoneMode}
+          hapticsEnabled={settings.hapticsEnabled !== false}
         />
       )}
 
@@ -348,8 +370,24 @@ export default function App() {
         {/* Isolated WebGL Canvas Container */}
         <div
           ref={canvasMountRef}
-          className="absolute inset-0 w-full h-full cursor-crosshair"
+          className="absolute inset-0 w-full h-full cursor-crosshair touch-none select-none overscroll-none"
         />
+
+        {/* High-Visibility Simulation Paused Status Pill */}
+        {params.timeScale === 0 && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#050811]/95 border border-amber-500/60 text-amber-300 font-mono text-[11px] font-semibold backdrop-blur-md shadow-[0_0_25px_rgba(245,158,11,0.3)]">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+            <span className="tracking-wide">SIMULATION PAUSED</span>
+            <button
+              type="button"
+              onClick={() => setParams((p) => ({ ...p, timeScale: 1.0 }))}
+              className="ml-1 px-2.5 py-0.5 rounded-full bg-amber-400 text-black hover:bg-amber-300 font-sans text-[11px] font-bold cursor-pointer transition-colors shadow-sm"
+              title="Resume Simulation (Space)"
+            >
+              Resume
+            </button>
+          </div>
+        )}
 
         {/* Dynamic Relativistic Anatomy & Leader Lines Overlay */}
         {!isCleanMode && (
@@ -364,10 +402,10 @@ export default function App() {
 
         {/* Left HUD Column: Target Specification Badge + Overhead Radar (with optional Time Dilation UI from Settings) */}
         {!isCleanMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation) && (
-          <div className="absolute top-3 left-4 z-10 flex flex-col items-start gap-2.5 pointer-events-none max-w-xs sm:max-w-sm">
+          <div className={`absolute top-2 sm:top-3 left-2 sm:left-4 z-10 flex flex-col items-start gap-2 pointer-events-none ${settings.phoneMode ? 'max-w-[250px]' : 'max-w-xs sm:max-w-sm'}`}>
             {/* Target Spec Badge */}
             {settings.showLeftHud && (
-              <div className="pointer-events-auto bg-[#050811]/95 border border-slate-800/80 rounded-xl p-3 shadow-xl transition-all w-full">
+              <div className={`pointer-events-auto bg-[#050811]/95 border border-slate-800/80 rounded-xl ${settings.phoneMode ? 'p-2' : 'p-3'} shadow-xl transition-all w-full`}>
                 <div className="flex items-center justify-between gap-2">
                   <span
                     className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border ${
@@ -382,7 +420,7 @@ export default function App() {
                 </div>
 
                 <div className="flex items-baseline justify-between gap-2 mt-1">
-                  <h1 className="font-display text-xl sm:text-2xl font-bold text-slate-100 tracking-tight flex items-center gap-1.5">
+                  <h1 className={`font-display ${settings.phoneMode ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl'} font-bold text-slate-100 tracking-tight flex items-center gap-1.5`}>
                     <span>{activePreset.name}</span>
                     {activePreset.id === 'ton618' && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-normal flex items-center gap-0.5">
@@ -495,15 +533,21 @@ export default function App() {
 
         {/* Interactive Singularity Ball Prompt (Displayed when compressed as a small singularity ball) */}
         {!isCleanMode && !isStar && isSingularityCollapsed && (
-          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+          <div className={`absolute ${settings.phoneMode ? (isDockCollapsed ? 'bottom-12' : 'bottom-[51vh]') : 'bottom-20 sm:bottom-24'} left-1/2 -translate-x-1/2 z-20 pointer-events-auto px-2 w-full max-w-sm flex justify-center transition-all`}>
             <button
               type="button"
-              onClick={() => sceneControllerRef.current?.expandFromSingularity()}
-              className="group flex items-center gap-2.5 px-4 py-2 rounded-xl bg-[#050811]/90 hover:bg-[#0a1022] border border-amber-500/40 hover:border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.2)] transition-all cursor-pointer"
+              onClick={() => {
+                haptics.pulseBoom();
+                if (params.timeScale === 0) {
+                  setParams((p) => ({ ...p, timeScale: 1.0 }));
+                }
+                sceneControllerRef.current?.expandFromSingularity();
+              }}
+              className="group flex items-center justify-center gap-2.5 px-4 py-2 rounded-xl bg-[#050811]/90 hover:bg-[#0a1022] border border-amber-500/40 hover:border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.2)] transition-all cursor-pointer text-center"
             >
-              <span className="inline-flex rounded-full h-2.5 w-2.5 bg-amber-400" />
+              <span className="inline-flex rounded-full h-2.5 w-2.5 bg-amber-400 shrink-0" />
               <span className="font-mono text-xs font-semibold text-amber-200 group-hover:text-white tracking-wide">
-                Singularity Seed — Click the black hole to expand
+                Singularity Seed — Tap black hole to expand
               </span>
             </button>
           </div>
@@ -557,7 +601,11 @@ export default function App() {
             audioEnabled={audioEnabled}
             onToggleAudio={handleToggleAudio}
             onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
+            onChangeSystemCategory={handleChangeSystemCategory}
+            isPhoneMode={settings.phoneMode}
+            hapticsEnabled={settings.hapticsEnabled !== false}
             onTriggerPulse={() => {
+              haptics.pulseBoom();
               if (params.objectCategory === 'black_hole') {
                 sceneControllerRef.current?.replaySingularityExpansion();
               } else {

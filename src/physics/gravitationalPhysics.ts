@@ -35,7 +35,11 @@ export const BACKGROUND_THEMES: Record<BackgroundThemeId, BackgroundThemeDef> = 
 
 export type AccretionState = 'quiescent' | 'active';
 
+export type SystemCategory = 'isolated' | 'binary';
+
 export interface BlackHoleParams {
+  /** System architecture category: Isolated Singularity vs. Binary Accretion System (Roche Lobe Overflow) */
+  systemCategory?: SystemCategory;
   /** Object category: black hole or compact star remnant */
   objectCategory: ObjectCategory;
   /** Active background cosmic environment theme */

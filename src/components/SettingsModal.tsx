@@ -9,12 +9,16 @@ import {
   RotateCcw,
   Lock,
   Compass,
+  Smartphone,
+  Check,
+  Vibrate,
 } from 'lucide-react';
 import {
   VisualizerSettings,
   DEFAULT_VISUALIZER_SETTINGS,
 } from '../scene/BlackHoleScene';
 import { AccretionState } from '../physics/gravitationalPhysics';
+import { useHaptics } from '../hooks/useHaptics';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -35,9 +39,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onChangeAccretionState,
   onResetPhysics,
 }) => {
+  const haptics = useHaptics({ enabled: settings.hapticsEnabled !== false });
+
   if (!isOpen) return null;
 
   const toggleSetting = (key: keyof VisualizerSettings) => {
+    haptics.light();
     onUpdateSettings((prev) => ({
       ...prev,
       [key]: !prev[key],
@@ -45,19 +52,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const setNumericSetting = (key: keyof VisualizerSettings, val: number) => {
+    haptics.sliderTick();
     onUpdateSettings((prev) => ({
       ...prev,
       [key]: val,
     }));
   };
 
+  const handleTogglePhoneMode = () => {
+    haptics.medium();
+    onUpdateSettings((prev) => {
+      const nextPhoneMode = !prev.phoneMode;
+      if (nextPhoneMode) {
+        // Apply optimized mobile layout preset:
+        // compact view, wider FOV for vertical smartphone screens, hide cluttering desktop radar/left HUD,
+        // disable heavy motion blur for smooth 60fps mobile GPU rendering
+        return {
+          ...prev,
+          phoneMode: true,
+          showLeftHud: false,
+          showOverheadMap: false,
+          showCursorTelemetry: false,
+          cameraFov: 56,
+          motionBlurEnabled: false,
+        };
+      } else {
+        // Restore desktop layout preset
+        return {
+          ...prev,
+          phoneMode: false,
+          showLeftHud: true,
+          showOverheadMap: true,
+          showCursorTelemetry: true,
+          cameraFov: 46,
+        };
+      }
+    });
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 pointer-events-auto">
-      <div className="relative w-full max-w-xl bg-[#070a12] border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 pointer-events-auto">
+      <div className="relative w-full max-w-xl bg-[#070a12] border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800/90 bg-neutral-950">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 sm:py-4 border-b border-neutral-800/90 bg-neutral-950">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-300">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-300 shrink-0">
               <Settings className="w-4 h-4" />
             </div>
             <div>
@@ -65,7 +104,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 Visualizer Settings & Preferences
               </h2>
               <p className="text-[11px] font-mono text-neutral-400">
-                Customize camera behavior, spacetime distortion optics, singularity sync & HUD
+                Customize camera behavior, Phone Mode layout, spacetime distortion optics & HUD
               </p>
             </div>
           </div>
@@ -73,7 +112,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700 transition-colors cursor-pointer shrink-0"
             title="Close Settings"
           >
             <X className="w-4 h-4" />
@@ -81,7 +120,128 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Scrollable Settings Body */}
-        <div className="p-5 overflow-y-auto space-y-5 text-xs">
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 sm:space-y-5 text-xs">
+          {/* Section 0: Phone Mode (Mobile Optimization) */}
+          <div className="bg-gradient-to-r from-emerald-950/40 via-neutral-950/90 to-neutral-950/90 border border-emerald-500/30 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-emerald-300 font-mono text-[11px] uppercase tracking-wider font-semibold">
+                <Smartphone className="w-4 h-4 text-emerald-400" />
+                <span>Phone Mode (Mobile Experience)</span>
+              </div>
+              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                settings.phoneMode
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+              }`}>
+                {settings.phoneMode ? 'ACTIVE' : 'OFF'}
+              </span>
+            </div>
+
+            <div className="flex items-start justify-between gap-4 pt-1">
+              <div>
+                <div className="text-neutral-100 font-medium text-xs">
+                  Enable Phone Mode
+                </div>
+                <p className="text-[11px] text-neutral-300 leading-relaxed mt-0.5">
+                  Optimizes the interface for smartphones and small touchscreens:
+                </p>
+                <ul className="text-[11px] text-neutral-400 space-y-1 mt-2 font-mono">
+                  <li className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                    <span>Hides bulky desktop telemetry panels & overhead radar for full viewport visibility</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                    <span>Increases camera FOV to 56° to frame the accretion disk on vertical phone screens</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                    <span>Disables heavy post-processing motion blur for maximum mobile GPU performance</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                    <span>Enlarges touch targets and compacts bottom dock controls for one-thumb use</span>
+                  </li>
+                </ul>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleTogglePhoneMode}
+                className={`w-14 h-7.5 rounded-full transition-colors p-1 shrink-0 cursor-pointer border ${
+                  settings.phoneMode
+                    ? 'bg-emerald-500/40 border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+                    : 'bg-neutral-900 border-neutral-700'
+                }`}
+                title="Toggle Phone Mode"
+              >
+                <div
+                  className={`w-5.5 h-5.5 rounded-full transition-transform ${
+                    settings.phoneMode
+                      ? 'translate-x-6 bg-emerald-300'
+                      : 'translate-x-0 bg-neutral-500'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Sub-item: Vibration Haptics Toggle */}
+            <div className="pt-3 border-t border-emerald-500/20 flex items-center justify-between gap-4">
+              <div className="flex items-start gap-2.5">
+                <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 shrink-0 mt-0.5">
+                  <Vibrate className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-neutral-100 font-medium text-xs flex items-center gap-1.5">
+                    <span>Touch Vibration Haptics</span>
+                    {haptics.isSupported && (
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        ACTIVE
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-neutral-400 leading-snug mt-0.5">
+                    Tactile vibration pulses on range slider scrubbing, preset taps, and sonic boom explosions.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {haptics.isSupported && (
+                  <button
+                    type="button"
+                    onClick={() => haptics.pulseBoom()}
+                    className="px-2.5 py-1 text-[10px] font-mono font-bold text-emerald-300 bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/40 rounded-lg transition-colors cursor-pointer shadow-sm"
+                    title="Test Device Vibration Pulse"
+                  >
+                    Test Pulse
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.medium();
+                    toggleSetting('hapticsEnabled');
+                  }}
+                  className={`w-11 h-6 rounded-full transition-colors p-0.5 cursor-pointer border ${
+                    settings.hapticsEnabled !== false
+                      ? 'bg-emerald-500/40 border-emerald-400'
+                      : 'bg-neutral-900 border-neutral-700'
+                  }`}
+                  title="Toggle Vibration Haptics"
+                >
+                  <div
+                    className={`w-4.5 h-4.5 rounded-full transition-transform ${
+                      settings.hapticsEnabled !== false
+                        ? 'translate-x-5 bg-emerald-300'
+                        : 'translate-x-0 bg-neutral-500'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Section 1: Background & Screen Lock */}
           <div className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-4 space-y-3.5">
             <div className="flex items-center gap-2 text-amber-300 font-mono text-[11px] uppercase tracking-wider font-semibold">

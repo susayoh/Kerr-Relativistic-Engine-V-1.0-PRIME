@@ -53,3 +53,26 @@ input[type="range"].sci-slider::-webkit-slider-thumb:hover {
   transform: scale(1.15);
   background: #f59e0b;
 }
+
+/* Mobile & Touchscreen Usability Enhancements */
+@media (pointer: coarse), (max-width: 768px) {
+  input[type="range"].sci-slider {
+    height: 6px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+  }
+
+  input[type="range"].sci-slider::-webkit-slider-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    background: #f59e0b;
+    border: 2px solid #78350f;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+  }
+
+  /* Prevent browser double-tap zoom delays on interactive UI elements */
+  button, select, input {
+    touch-action: manipulation;
+  }
+}
