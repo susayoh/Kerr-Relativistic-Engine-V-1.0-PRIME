@@ -75,20 +75,67 @@ class RelativisticAudioEngine {
     this.updateParameters(params);
   }
 
+  private currentParams: BlackHoleParams | null = null;
+  private currentDistanceRs = 18.0;
+
   public updateParameters(params: BlackHoleParams) {
+    this.currentParams = params;
+    this.applyAudioModulation();
+  }
+
+  /**
+   * Modulates ambient relativistic drone based on camera proximity to the event horizon.
+   * As camera orbits closer to the horizon (r -> 1.5 - 3.0 Rs), extreme gravitational redshift
+   * and time dilation lowers the fundamental frequency into a deep, visceral bass rumble.
+   * Pulling back into deep space shifts frequencies higher into an ethereal celestial hum.
+   */
+  public updateCameraProximity(distanceRs: number, timeDilationFactor: number) {
+    this.currentDistanceRs = Math.max(1.05, distanceRs);
+    this.applyAudioModulation(timeDilationFactor);
+  }
+
+  private applyAudioModulation(timeDilation?: number) {
     if (!this.ctx || this.isMuted || !this.subOsc || !this.harmonicOsc || !this.filterNode || !this.lfoOsc) {
       return;
     }
+    const params = this.currentParams;
     const now = this.ctx.currentTime;
-    // Higher mass -> deeper gravitational fundamental frequency
-    const baseFreq = Math.max(32, 78 - params.massSolar * 0.42);
-    const spinDetune = 1 + params.spin * 0.5;
-    this.subOsc.frequency.setTargetAtTime(baseFreq, now, 0.15);
-    this.harmonicOsc.frequency.setTargetAtTime(baseFreq * 1.5 * spinDetune, now, 0.15);
 
-    const cutoff = 110 + params.accretionRate * 140 + params.dopplerStrength * 85;
-    this.filterNode.frequency.setTargetAtTime(cutoff, now, 0.15);
-    this.lfoOsc.frequency.setTargetAtTime(0.6 + params.spin * 4.5 * Math.max(0.2, params.timeScale), now, 0.15);
+    // Camera proximity factor: 0.0 near horizon (~1.5 Rs), 1.0 in deep space (>= 22 Rs)
+    const distT = Math.min(1.0, Math.max(0.0, (this.currentDistanceRs - 1.8) / 20.0));
+    const tdFactor = timeDilation ?? Math.sqrt(Math.max(0.01, 1.0 - 1.0 / this.currentDistanceRs));
+
+    const massSolar = params?.massSolar ?? 100;
+    const spin = params?.spin ?? 0.98;
+    const accretionRate = params?.accretionRate ?? 1.95;
+    const dopplerStrength = params?.dopplerStrength ?? 0.65;
+    const timeScale = params?.timeScale ?? 1.0;
+
+    // Deep bass-heavy gravitational time-dilation drone:
+    // Near horizon (distT -> 0): drops down to 26 - 32 Hz sub-bass rumble
+    // Pulling back (distT -> 1): shifts higher to 64 - 82 Hz celestial hum
+    const massOffset = (massSolar / 100) * 12.0;
+    const closeFreq = Math.max(26.0, 32.0 - massOffset * 0.4);
+    const farFreq = Math.max(52.0, 78.0 - massOffset);
+    const targetSubFreq = closeFreq + (farFreq - closeFreq) * Math.pow(distT, 0.75);
+
+    const spinDetune = 1.0 + spin * 0.35;
+    const targetHarmonicFreq = targetSubFreq * 1.5 * spinDetune;
+
+    // Lowpass filter cutoff: near horizon, gravitational redshifting muffles high frequencies
+    // Far away, the filter opens up allowing sparkling harmonics
+    const baseCutoff = 80 + accretionRate * 90 + dopplerStrength * 60;
+    const closeCutoff = Math.max(55, baseCutoff * 0.45);
+    const targetCutoff = closeCutoff + (baseCutoff - closeCutoff) * distT;
+
+    // LFO time-dilation slowdown: frame-dragging oscillations slow down near horizon
+    const baseLfo = (0.5 + spin * 3.5) * Math.max(0.2, timeScale);
+    const targetLfo = Math.max(0.2, baseLfo * (0.25 + 0.75 * tdFactor));
+
+    this.subOsc.frequency.setTargetAtTime(targetSubFreq, now, 0.12);
+    this.harmonicOsc.frequency.setTargetAtTime(targetHarmonicFreq, now, 0.12);
+    this.filterNode.frequency.setTargetAtTime(targetCutoff, now, 0.12);
+    this.lfoOsc.frequency.setTargetAtTime(targetLfo, now, 0.15);
   }
 
   public triggerGeodesicPing(outcome: 'captured' | 'scattered' | 'critical-orbit') {
