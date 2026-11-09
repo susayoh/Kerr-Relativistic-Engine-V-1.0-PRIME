@@ -131,18 +131,18 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
     COSMIC_BENCHMARKS.find((b) => b.id === selectedBenchmarkId) || COSMIC_BENCHMARKS[7];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md pointer-events-auto">
-      <div className="w-full max-w-4xl bg-[#080c16] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md pointer-events-auto">
+      <div className="w-full max-w-4xl bg-black border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Modal Header */}
-        <div className="flex items-start justify-between px-6 py-4 border-b border-slate-800 bg-[#05070e]">
+        <div className="flex items-start justify-between px-6 py-4 border-b border-neutral-800/80 bg-neutral-950">
           <div>
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              <span className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">
                 Astronomical Scale Explorer
               </span>
-              <span className="text-xs font-mono text-slate-400">Order-of-Magnitude Visualizer</span>
+              <span className="text-xs font-mono text-neutral-400">Order-of-Magnitude Visualizer</span>
             </div>
-            <h2 className="font-display text-xl font-bold text-slate-100 mt-1 flex items-center gap-2">
+            <h2 className="font-display text-xl font-bold text-neutral-100 mt-1 flex items-center gap-2">
               <span>Why TON 618 Scaled to 100 Suns & Real Cosmic Scale</span>
               <Sparkles className="w-4 h-4 text-amber-400" />
             </h2>
@@ -150,7 +150,7 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white bg-slate-900 rounded-lg border border-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 text-neutral-400 hover:text-neutral-100 bg-neutral-900 rounded-lg border border-neutral-800 transition-colors cursor-pointer"
             aria-label="Close modal"
           >
             <X className="w-4 h-4" />
@@ -158,22 +158,22 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="p-6 space-y-6 overflow-y-auto">
+        <div className="p-6 space-y-6 overflow-y-auto bg-black">
           {/* Direct Plain-English Answer Banner */}
-          <div className="p-4 bg-gradient-to-r from-amber-950/40 via-[#0e1627] to-cyan-950/30 border border-amber-500/30 rounded-xl">
+          <div className="p-4 bg-neutral-950 border border-neutral-800 rounded-xl">
             <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-amber-500/20 text-amber-300 shrink-0">
+              <div className="p-2 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/25 shrink-0">
                 <AlertCircle className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-sm font-bold text-amber-300">
                   Why did TON 618 previously scale to 100 Suns in the 3D scene?
                 </h3>
-                <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                <p className="text-xs text-neutral-300 mt-1.5 leading-relaxed">
                   In reality, <strong>TON 618 has 66 BILLION Solar Masses (66,000,000,000 M☉)</strong> and an event horizon spanning <strong>390 Billion km (2,600 AU)</strong>.
                   If drawn on a true 1:1 linear screen scale where a 20 km Neutron Star is 1 millimeter wide, TON 618 would be <strong>19.5 kilometers (12 miles) wide</strong>—it would shatter your screen!
                 </p>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
                   Standard 3D visualizers map masses to a normalized scale (1 to 100) so that your camera can render orbiting stars, accretion disks, and spacetime manifolds simultaneously. Below, explore the true cosmic scale comparisons from 20 km up to 390 billion km!
                 </p>
               </div>
@@ -183,10 +183,10 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
           {/* Interactive Benchmark Comparison Strip */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-mono font-bold text-slate-200 uppercase tracking-wider">
+              <span className="text-xs font-mono font-bold text-neutral-300 uppercase tracking-wider">
                 True Physical Dimensions (Logarithmic Step Scale)
               </span>
-              <span className="text-xs text-slate-400">Click any object to inspect scale</span>
+              <span className="text-xs text-neutral-400">Click any object to inspect scale</span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -199,12 +199,12 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
                     onClick={() => setSelectedBenchmarkId(bm.id)}
                     className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-slate-800/90 border-amber-400 shadow-md ring-1 ring-amber-400/50'
-                        : 'bg-[#0a0f1e] border-slate-800/80 hover:border-slate-700'
+                        ? 'bg-neutral-900 border-amber-400/90 shadow-md ring-1 ring-amber-400/30'
+                        : 'bg-neutral-950 border-neutral-800/80 hover:border-neutral-700'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded text-slate-400 bg-slate-900 border border-slate-800 truncate">
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded text-neutral-400 bg-neutral-900 border border-neutral-800 truncate">
                         {bm.badge}
                       </span>
                       <span
@@ -212,7 +212,7 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
                         style={{ backgroundColor: bm.color }}
                       />
                     </div>
-                    <div className="font-semibold text-xs text-slate-100 mt-1.5 truncate">
+                    <div className="font-semibold text-xs text-neutral-200 mt-1.5 truncate">
                       {bm.name}
                     </div>
                     <div className="font-mono text-[11px] text-amber-300 font-bold mt-0.5 truncate">
@@ -225,15 +225,15 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
           </div>
 
           {/* Selected Benchmark Deep-Dive Card */}
-          <div className="p-5 bg-[#0a0f1e] border border-slate-800/90 rounded-xl space-y-4">
+          <div className="p-5 bg-neutral-950 border border-neutral-800 rounded-xl space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-cyan-300 border border-slate-700">
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-neutral-900 text-amber-300 border border-neutral-800">
                     {currentBenchmark.badge}
                   </span>
-                  <span className="text-xs font-mono text-slate-400">
-                    Mass: <strong className="text-slate-200">{currentBenchmark.massSolarDisplay}</strong>
+                  <span className="text-xs font-mono text-neutral-400">
+                    Mass: <strong className="text-neutral-200">{currentBenchmark.massSolarDisplay}</strong>
                   </span>
                 </div>
                 <h4 className="font-display text-lg font-bold text-slate-100 mt-1">
@@ -258,20 +258,20 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
             </div>
 
             {/* Scale Comparison Graphic Bars */}
-            <div className="space-y-2 pt-2 border-t border-slate-800/70">
-              <div className="text-xs text-slate-300 leading-relaxed">
+            <div className="space-y-2 pt-2 border-t border-neutral-800/80">
+              <div className="text-xs text-neutral-300 leading-relaxed">
                 <strong>Human Analogy:</strong> {currentBenchmark.humanAnalogy}
               </div>
 
               {currentBenchmark.auEquivalent && (
-                <div className="text-xs font-mono text-amber-300 bg-amber-950/30 px-3 py-1.5 rounded border border-amber-500/30">
+                <div className="text-xs font-mono text-amber-300 bg-neutral-900 px-3 py-1.5 rounded border border-neutral-800">
                   Astronomical Units: {currentBenchmark.auEquivalent} (1 AU = Earth-Sun distance = 150 Million km)
                 </div>
               )}
 
               {/* Logarithmic Scale Ratio Bar relative to TON 618 */}
               <div className="mt-3 pt-2">
-                <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-1">
+                <div className="flex items-center justify-between text-[11px] font-mono text-neutral-400 mb-1">
                   <span>Relative Diameter vs TON 618 (390 Billion km)</span>
                   <span className="text-amber-300 font-bold">
                     {currentBenchmark.id === 'ton618'
@@ -279,7 +279,7 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
                       : `${((currentBenchmark.diameterKm / 390000000000) * 100).toExponential(3)}%`}
                   </span>
                 </div>
-                <div className="w-full h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800 relative">
+                <div className="w-full h-3 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800 relative">
                   <div
                     className="h-full rounded-full transition-all duration-300"
                     style={{
@@ -297,7 +297,7 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
                     }}
                   />
                 </div>
-                <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 mt-1">
+                <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500 mt-1">
                   <span>20 km (Neutron Star)</span>
                   <span>12 Billion km (Pluto)</span>
                   <span>390 Billion km (TON 618)</span>
@@ -308,12 +308,12 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-between px-6 py-3 border-t border-slate-800 bg-[#05070e] text-xs text-slate-400">
+        <div className="flex items-center justify-between px-6 py-3 border-t border-neutral-800/80 bg-neutral-950 text-xs text-neutral-400">
           <span>1 Solar Mass (M☉) = 1.989 × 10³⁰ kg = 333,000 Earths</span>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 text-xs font-semibold text-slate-900 bg-slate-200 rounded-md hover:bg-white transition-colors cursor-pointer"
+            className="px-4 py-1.5 text-xs font-semibold text-neutral-950 bg-neutral-200 rounded-md hover:bg-white transition-colors cursor-pointer"
           >
             Close Explorer
           </button>

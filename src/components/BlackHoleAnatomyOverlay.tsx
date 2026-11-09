@@ -40,10 +40,10 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
     width: number;
     height: number;
   }>({
-    x: typeof window !== 'undefined' ? window.innerWidth / 2 - 210 : 300,
-    y: 56,
-    width: 420,
-    height: 180,
+    x: 20,
+    y: typeof window !== 'undefined' ? window.innerHeight - 340 : 500,
+    width: 380,
+    height: 220,
   });
 
   const rafRef = useRef<number>(0);
@@ -119,30 +119,26 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
     const targetX = activeAnchor.screenX;
     const targetY = activeAnchor.screenY;
 
-    // Default start from bottom center of the card
-    let startX = cardRect.x + cardRect.width / 2;
-    let startY = cardRect.y + cardRect.height;
+    // Connect primarily from the top-right corner of the docked HUD card towards the center target
+    let startX = cardRect.x + cardRect.width;
+    let startY = cardRect.y + 24;
 
     // If target is above the card
     if (targetY < cardRect.y) {
+      startX = cardRect.x + cardRect.width * 0.75;
       startY = cardRect.y;
-    } else if (targetX < cardRect.x - 20) {
-      // Target is far to the left
+    } else if (targetX < cardRect.x) {
       startX = cardRect.x;
-      startY = cardRect.y + cardRect.height / 2;
-    } else if (targetX > cardRect.x + cardRect.width + 20) {
-      // Target is far to the right
-      startX = cardRect.x + cardRect.width;
-      startY = cardRect.y + cardRect.height / 2;
+      startY = cardRect.y + 24;
     }
 
     // Midpoint elbow bend for blueprint infographic aesthetic
-    let midX = startX;
-    let midY = (startY + targetY) * 0.5;
+    let midX = (startX + targetX) * 0.5;
+    let midY = startY;
 
-    if (Math.abs(startX - targetX) > Math.abs(startY - targetY)) {
-      midX = (startX + targetX) * 0.5;
-      midY = startY;
+    if (Math.abs(startY - targetY) > Math.abs(startX - targetX)) {
+      midX = startX;
+      midY = (startY + targetY) * 0.5;
     }
 
     return {
@@ -160,10 +156,10 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
       <button
         type="button"
         onClick={onToggleVisible}
-        className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#050811]/92 border border-amber-500/40 text-amber-300 hover:text-amber-200 hover:bg-amber-950/60 transition-all text-xs font-medium shadow-lg backdrop-blur-md cursor-pointer pointer-events-auto"
+        className="absolute bottom-20 left-4 sm:left-6 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/95 border border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-900 transition-all text-xs font-medium shadow-lg backdrop-blur-md cursor-pointer pointer-events-auto ring-1 ring-neutral-800/60"
         title="Show Black Hole Anatomy & Discovery Guide"
       >
-        <Eye className="w-3.5 h-3.5 text-amber-400" />
+        <Eye className="w-3.5 h-3.5 text-amber-400/90" />
         <span>Show Anatomy Guide</span>
       </button>
     );
@@ -182,9 +178,9 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
             </feMerge>
           </filter>
           <linearGradient id="activeLineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.9" />
-            <stop offset="50%" stopColor="#fef08a" stopOpacity="0.95" />
-            <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.9" />
+            <stop offset="0%" stopColor="#d97706" stopOpacity="0.85" />
+            <stop offset="50%" stopColor="#f59e0b" stopOpacity="0.95" />
+            <stop offset="100%" stopColor="#78716c" stopOpacity="0.8" />
           </linearGradient>
         </defs>
 
@@ -197,7 +193,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
               fill="none"
               stroke="#000000"
               strokeWidth="4"
-              opacity="0.6"
+              opacity="0.7"
             />
 
             {/* Glowing active line with dash pattern */}
@@ -205,17 +201,17 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
               points={`${lineCoords.startX},${lineCoords.startY} ${lineCoords.midX},${lineCoords.midY} ${lineCoords.targetX},${lineCoords.targetY}`}
               fill="none"
               stroke="url(#activeLineGrad)"
-              strokeWidth="2"
+              strokeWidth="1.8"
               strokeDasharray="6,3"
-              opacity="0.95"
+              opacity="0.9"
             />
 
             {/* Card connection dot */}
             <circle
               cx={lineCoords.startX}
               cy={lineCoords.startY}
-              r="3.5"
-              fill="#f59e0b"
+              r="3"
+              fill="#d97706"
             />
 
             {/* Target reticle on the black hole */}
@@ -224,25 +220,25 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
               cy={lineCoords.targetY}
               r="12"
               fill="none"
-              stroke="#f59e0b"
-              strokeWidth="1.5"
+              stroke="#d97706"
+              strokeWidth="1.2"
               strokeDasharray="4,3"
-              opacity="0.9"
+              opacity="0.85"
             />
             <circle
               cx={lineCoords.targetX}
               cy={lineCoords.targetY}
               r="5"
               fill="none"
-              stroke="#38bdf8"
-              strokeWidth="1.5"
-              opacity="0.95"
+              stroke="#a8a29e"
+              strokeWidth="1.2"
+              opacity="0.9"
             />
             <circle
               cx={lineCoords.targetX}
               cy={lineCoords.targetY}
               r="2.5"
-              fill="#fef08a"
+              fill="#f59e0b"
             />
 
             {/* Crosshair ticks */}
@@ -251,32 +247,32 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
               y1={lineCoords.targetY}
               x2={lineCoords.targetX - 7}
               y2={lineCoords.targetY}
-              stroke="#f59e0b"
-              strokeWidth="1.5"
+              stroke="#d97706"
+              strokeWidth="1.2"
             />
             <line
               x1={lineCoords.targetX + 7}
               y1={lineCoords.targetY}
               x2={lineCoords.targetX + 16}
               y2={lineCoords.targetY}
-              stroke="#f59e0b"
-              strokeWidth="1.5"
+              stroke="#d97706"
+              strokeWidth="1.2"
             />
             <line
               x1={lineCoords.targetX}
               y1={lineCoords.targetY - 16}
               x2={lineCoords.targetX}
               y2={lineCoords.targetY - 7}
-              stroke="#f59e0b"
-              strokeWidth="1.5"
+              stroke="#d97706"
+              strokeWidth="1.2"
             />
             <line
               x1={lineCoords.targetX}
               y1={lineCoords.targetY + 7}
               x2={lineCoords.targetX}
               y2={lineCoords.targetY + 16}
-              stroke="#f59e0b"
-              strokeWidth="1.5"
+              stroke="#d97706"
+              strokeWidth="1.2"
             />
           </g>
         )}
@@ -309,8 +305,8 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
               onMouseLeave={() => setHoveredIndex(null)}
               className={`flex items-center justify-center rounded-full transition-all duration-150 cursor-pointer shadow-lg ${
                 isSelected
-                  ? 'w-7 h-7 bg-amber-500 text-slate-950 font-bold border-2 border-amber-200 ring-4 ring-amber-500/35 scale-110 z-30'
-                  : 'w-6 h-6 bg-[#070b16]/90 text-amber-300 font-semibold border border-amber-500/60 hover:bg-amber-950 hover:scale-105 z-20'
+                  ? 'w-7 h-7 bg-neutral-900 text-amber-300 font-bold border-2 border-amber-400 ring-2 ring-amber-400/20 scale-110 z-30'
+                  : 'w-6 h-6 bg-black/95 text-neutral-300 font-semibold border border-neutral-700 hover:bg-neutral-900 hover:text-white hover:scale-105 z-20'
               }`}
               title={`Click to inspect #${idx + 1}: ${anchor.name}`}
             >
@@ -319,7 +315,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
 
             {/* Attached name label when selected */}
             {isSelected && (
-              <div className="absolute left-1/2 -top-6 -translate-x-1/2 pointer-events-none bg-[#070b16]/95 border border-amber-500/60 text-amber-300 text-[10px] font-mono font-semibold px-2 py-0.5 rounded shadow-xl whitespace-nowrap z-35 animate-fade-in">
+              <div className="absolute left-1/2 -top-6 -translate-x-1/2 pointer-events-none bg-black/95 border border-neutral-800 text-amber-300 text-[10px] font-mono font-semibold px-2 py-0.5 rounded shadow-xl whitespace-nowrap z-35 animate-fade-in">
                 #{idx + 1} {anchor.name}
               </div>
             )}
@@ -327,31 +323,31 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
         );
       })}
 
-      {/* Central Non-Overlapping Anatomy Callout Card (Centered Below TopBar) */}
+      {/* Docked Anatomy & Discovery Guide HUD Card (Bottom-Left above Dock - completely clear of the central black hole) */}
       <div
         ref={cardRef}
-        className="absolute top-14 left-1/2 -translate-x-1/2 pointer-events-auto z-25 w-[min(460px,calc(100vw-2rem))] transition-all duration-200"
+        className="absolute bottom-20 left-4 sm:left-6 pointer-events-auto z-25 w-[min(380px,calc(100vw-2.5rem))] transition-all duration-200"
       >
-        <div className="bg-[#050811]/95 border border-amber-500/50 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden">
+        <div className="bg-black/95 border border-neutral-800 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden ring-1 ring-neutral-800/60">
           {/* Header Bar */}
-          <div className="flex items-center justify-between px-3.5 py-2 bg-[#090e1e] border-b border-slate-800/80">
+          <div className="flex items-center justify-between px-3 py-2 bg-neutral-950 border-b border-neutral-800/80">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
               <h3 className="font-display text-xs font-bold uppercase tracking-wider text-amber-300">
-                Anatomy & Discovery Guide
+                Anatomy Guide
               </h3>
             </div>
 
             <div className="flex items-center gap-1.5">
               {/* Tab Selector */}
-              <div className="flex items-center p-0.5 bg-slate-900 rounded border border-slate-800 text-[10px]">
+              <div className="flex items-center p-0.5 bg-neutral-900 rounded border border-neutral-800 text-[10px]">
                 <button
                   type="button"
                   onClick={() => setActiveTab('anatomy')}
                   className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
                     activeTab === 'anatomy'
-                      ? 'bg-amber-500 text-slate-950 font-bold'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-neutral-800 text-amber-300 font-medium'
+                      : 'text-neutral-400 hover:text-neutral-200'
                   }`}
                 >
                   Feature #{anchors.length > 0 ? activeIdx + 1 : 0}
@@ -361,8 +357,8 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
                   onClick={() => setActiveTab('types')}
                   className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
                     activeTab === 'types'
-                      ? 'bg-amber-500 text-slate-950 font-bold'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-neutral-800 text-amber-300 font-medium'
+                      : 'text-neutral-400 hover:text-neutral-200'
                   }`}
                 >
                   3 Types
@@ -373,7 +369,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
               <button
                 type="button"
                 onClick={() => setIsPanelCollapsed((prev) => !prev)}
-                className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                className="p-1 text-neutral-400 hover:text-white hover:bg-neutral-900 rounded transition-colors cursor-pointer"
                 title={isPanelCollapsed ? 'Expand Details' : 'Minimize Card'}
               >
                 {isPanelCollapsed ? (
@@ -387,7 +383,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
               <button
                 type="button"
                 onClick={onToggleVisible}
-                className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                className="p-1 text-neutral-400 hover:text-rose-400 hover:bg-neutral-900 rounded transition-colors cursor-pointer"
                 title="Hide Anatomy Guide"
               >
                 <X className="w-3.5 h-3.5" />
@@ -401,19 +397,19 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
               {activeTab === 'anatomy' && activeAnchor && (
                 <>
                   {/* Step Navigation Bar */}
-                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-neutral-800/80">
                     <button
                       type="button"
                       onClick={handlePrev}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs text-slate-300 hover:text-white bg-slate-900 border border-slate-700/80 rounded hover:border-amber-400 transition-colors cursor-pointer"
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs text-neutral-300 hover:text-white bg-neutral-900 border border-neutral-800 rounded hover:border-neutral-700 transition-colors cursor-pointer"
                       title="Previous anatomical feature"
                     >
-                      <ChevronLeft className="w-3.5 h-3.5 text-amber-400" />
+                      <ChevronLeft className="w-3.5 h-3.5 text-amber-400/90" />
                       <span>Prev</span>
                     </button>
 
                     <div className="text-center">
-                      <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
+                      <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider block">
                         Pin {activeIdx + 1} of {anchors.length}
                       </span>
                       <span className="text-xs font-bold text-amber-300">
@@ -424,11 +420,11 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
                     <button
                       type="button"
                       onClick={handleNext}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs text-slate-300 hover:text-white bg-slate-900 border border-slate-700/80 rounded hover:border-amber-400 transition-colors cursor-pointer"
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs text-neutral-300 hover:text-white bg-neutral-900 border border-neutral-800 rounded hover:border-neutral-700 transition-colors cursor-pointer"
                       title="Next anatomical feature"
                     >
                       <span>Next</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-amber-400" />
+                      <ChevronRight className="w-3.5 h-3.5 text-amber-400/90" />
                     </button>
                   </div>
 
@@ -436,29 +432,29 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <span
-                        className={`text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${activeAnchor.badgeColor}`}
+                        className={`text-[9px] font-mono font-medium uppercase tracking-wider px-2 py-0.5 rounded border ${activeAnchor.badgeColor}`}
                       >
                         {activeAnchor.badge}
                       </span>
-                      <span className="text-[10px] font-mono text-cyan-300">
+                      <span className="text-[10px] font-mono text-neutral-400">
                         Target Connected ↵
                       </span>
                     </div>
 
-                    <h4 className="text-xs font-bold text-slate-100 leading-snug pt-0.5">
+                    <h4 className="text-xs font-bold text-neutral-100 leading-snug pt-0.5">
                       {activeAnchor.headline}
                     </h4>
 
-                    <p className="text-xs text-slate-300 leading-relaxed pt-0.5">
+                    <p className="text-xs text-neutral-300 leading-relaxed pt-0.5">
                       {activeAnchor.description}
                     </p>
                   </div>
 
                   {/* Quick Feature Jump Pills */}
-                  <div className="pt-2 border-t border-slate-800/70">
-                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-1">
+                  <div className="pt-2 border-t border-neutral-800/80">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400 mb-1">
                       <span>Jump to Pin:</span>
-                      <span className="text-amber-400">Lines track in 3D</span>
+                      <span className="text-amber-300/80">Lines track in 3D</span>
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {anchors.map((a, i) => (
@@ -473,8 +469,8 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
                           onMouseLeave={() => setHoveredIndex(null)}
                           className={`px-2 py-0.5 text-[10px] font-mono rounded border transition-colors cursor-pointer ${
                             activeIdx === i
-                              ? 'bg-amber-500 text-slate-950 font-bold border-amber-400'
-                              : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+                              ? 'bg-neutral-800 text-amber-300 font-medium border-neutral-700'
+                              : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-neutral-200 hover:border-neutral-700'
                           }`}
                         >
                           {i + 1}. {a.name.split(' (')[0]}
@@ -488,12 +484,12 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
               {/* Three Types of Black Holes Guide Tab */}
               {activeTab === 'types' && (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs text-amber-300 font-bold pb-1 border-b border-slate-800/80">
+                  <div className="flex items-center justify-between text-xs text-amber-300 font-bold pb-1 border-b border-neutral-800/80">
                     <div className="flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400/90" />
                       <span>Three Types of Black Holes</span>
                     </div>
-                    <span className="text-[10px] font-mono text-slate-400 font-normal">
+                    <span className="text-[10px] font-mono text-neutral-500 font-normal">
                       Click to load preset
                     </span>
                   </div>
@@ -501,17 +497,17 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
                   {/* 1. Stellar */}
                   <div
                     onClick={() => onSelectPreset?.('cygnus_x1')}
-                    className="p-2 rounded-lg bg-[#080d1a] border border-amber-500/30 hover:border-amber-400 transition-colors cursor-pointer"
+                    className="p-2 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-[10px] font-mono font-bold text-amber-400 uppercase">
+                      <span className="text-[10px] font-mono font-medium text-amber-300/90 uppercase">
                         1. Stellar (3–30 M☉)
                       </span>
-                      <span className="text-[9px] font-mono text-amber-300 underline">
+                      <span className="text-[9px] font-mono text-neutral-400 hover:underline">
                         Cygnus X-1 ↵
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-200 leading-snug">
+                    <p className="text-[11px] text-neutral-300 leading-snug">
                       Formed when massive stars exhaust nuclear fuel and undergo gravitational core collapse.
                     </p>
                   </div>
@@ -519,17 +515,17 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
                   {/* 2. Supermassive */}
                   <div
                     onClick={() => onSelectPreset?.('ton618')}
-                    className="p-2 rounded-lg bg-[#080d1a] border border-purple-500/30 hover:border-purple-400 transition-colors cursor-pointer"
+                    className="p-2 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-[10px] font-mono font-bold text-purple-400 uppercase">
+                      <span className="text-[10px] font-mono font-medium text-amber-300/90 uppercase">
                         2. Supermassive (10⁶–10¹¹ M☉)
                       </span>
-                      <span className="text-[9px] font-mono text-purple-300 underline">
+                      <span className="text-[9px] font-mono text-neutral-400 hover:underline">
                         TON 618 ↵
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-200 leading-snug">
+                    <p className="text-[11px] text-neutral-300 leading-snug">
                       Lurk at galactic nuclei, formed through ancient mergers and gas accumulation.
                     </p>
                   </div>
@@ -537,17 +533,17 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
                   {/* 3. Intermediate */}
                   <div
                     onClick={() => onSelectPreset?.('gw190521')}
-                    className="p-2 rounded-lg bg-[#080d1a] border border-cyan-500/30 hover:border-cyan-400 transition-colors cursor-pointer"
+                    className="p-2 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-neutral-700 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-[10px] font-mono font-bold text-cyan-400 uppercase">
+                      <span className="text-[10px] font-mono font-medium text-amber-300/90 uppercase">
                         3. Intermediate (100–10⁵ M☉)
                       </span>
-                      <span className="text-[9px] font-mono text-cyan-300 underline">
+                      <span className="text-[9px] font-mono text-neutral-400 hover:underline">
                         GW190521 ↵
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-200 leading-snug">
+                    <p className="text-[11px] text-neutral-300 leading-snug">
                       Formed in dense stellar clusters through runaway collision chain reactions.
                     </p>
                   </div>

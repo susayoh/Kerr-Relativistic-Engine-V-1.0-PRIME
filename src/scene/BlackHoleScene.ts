@@ -31,6 +31,7 @@ const _vec3B = new THREE.Vector3();
 const _vec3C = new THREE.Vector3();
 const _mat4 = new THREE.Matrix4();
 const _quat = new THREE.Quaternion();
+const _quatA = new THREE.Quaternion();
 const _color = new THREE.Color();
 
 export const isSoftwareGl = (() => {
@@ -138,21 +139,24 @@ const ACCRETION_VERTEX_SHADER = `
 `;
 
 const ACCRETION_FRAGMENT_SHADER = `
-  uniform float uTime;
-  uniform float uSpin;
-  uniform float uAccretionRate;
-  uniform float uDopplerStrength;
-  uniform int uSpectralMode;
+  // Pre-calculated Doppler Shift & Relativistic Kinematics Coefficients:
+  // uDopplerCoeffs: (uDopplerStrength, betaScale, gammaClamp, dopplerExponent)
+  uniform vec4 uDopplerCoeffs;
+  // uDiskParams: (spin, accretionRate, spectralMode, isStar)
+  uniform vec4 uDiskParams;
+  // Uniform-Buffer Orbital Turbulence & Shear State (pre-computed each frame)
+  // uTurbulenceBuffer: (basePhase, ringPhase, shearRate, timeScale)
+  uniform vec4 uTurbulenceBuffer;
+  // uTurbulenceHarmonics: (freq1, freq2, harmonicAmp, filamentBlend)
+  uniform vec4 uTurbulenceHarmonics;
+
   uniform sampler2D uSpectrumLut;
   uniform float uPulseRadius;
   uniform float uPulseStrength;
-  uniform float uIsStar;
 
   varying vec2 vUv;
   varying vec3 vWorldPos;
   varying vec3 vLocalPos;
-
-` + GLSL_SIMPLEX_NOISE + `
 
   // ACES filmic tone mapping to preserve dynamic range under strong Doppler beaming
   vec3 acesFilm(vec3 x) {
@@ -166,7 +170,11 @@ const ACCRETION_FRAGMENT_SHADER = `
 
   void main() {
     float r = length(vLocalPos.xy);
-    float r_horizon = mix(1.75, 1.08, uSpin * 0.72);
+    float spin = uDiskParams.x;
+    float accretionRate = uDiskParams.y;
+    int spectralMode = int(uDiskParams.z);
+
+    float r_horizon = mix(1.75, 1.08, spin * 0.72);
     float rIn = 1.68;
     float rOut = 11.8;
 
@@ -182,51 +190,66 @@ const ACCRETION_FRAGMENT_SHADER = `
 
     float angle = atan(vLocalPos.y, vLocalPos.x);
 
-    // Relativistic Keplerian differential shear omega ~ r^(-1.42)
-    float omega = 3.6 / (pow(r, 1.42) + 0.12 * uSpin);
-    float spiralPhase = angle + uTime * omega * 2.2;
+    // Optimized Relativistic Keplerian differential shear using uniform-buffer constants
+    // Avoids expensive per-fragment pow() with optimized rational shear formulation
+    float rInv = 1.0 / (r * sqrt(r) + 0.12 * spin);
+    float omega = 3.6 * rInv;
+    float spiralPhase = angle + uTurbulenceBuffer.x * omega * 2.2;
 
-    // Multi-scale Magneto-Rotational Instability (MRI) filaments matching top arch
-    float diskTurb = snoise(vec2(r * 1.8, spiralPhase * 2.4 + uTime * 0.35)) * 0.5 + 0.5;
-    float diskRings = sin(r * 9.5 - uTime * 3.2 + diskTurb * 2.6) * 0.5 + 0.5;
-    float diskFilaments = mix(diskTurb, diskRings, 0.38);
+    // Fast multi-frequency trigonometric orbital turbulence & density wave harmonics
+    // Sourced directly from the uniform-buffer parameters (bypasses heavy multi-octave simplex loops)
+    float waveA = sin(r * uTurbulenceHarmonics.x + spiralPhase * uTurbulenceHarmonics.y + uTurbulenceBuffer.y);
+    float waveB = cos(r * 9.5 - uTurbulenceBuffer.z + waveA * 1.8);
+    float waveC = sin(r * 4.2 + spiralPhase * 1.5 - uTurbulenceBuffer.w);
+    float diskTurb = waveA * 0.5 + 0.5;
+    float diskRings = waveB * 0.5 + 0.5;
+    float diskFilaments = mix(diskTurb, diskRings, uTurbulenceHarmonics.w) + waveC * 0.12;
 
     // Relativistic Kinematics:
     vec3 tangentDir = normalize(vec3(-vWorldPos.z, 0.0, vWorldPos.x));
     vec3 viewDir = normalize(cameraPosition - vWorldPos);
     float approachCos = dot(tangentDir, viewDir);
 
-    float beta = clamp(0.70 / sqrt(max(1.0, r - 0.7)), 0.05, 0.76);
+    // Optimized Doppler factor using pre-calculated uniform coefficients
+    // beta = clamp(betaScale / sqrt(r - 0.7), 0.05, 0.76)
+    float beta = clamp(uDopplerCoeffs.y * inversesqrt(max(1.0, r - 0.7)), 0.05, 0.76);
     float gamma = inversesqrt(max(0.1, 1.0 - beta * beta));
-    float dopplerFactor = 1.0 / (gamma * (1.0 - beta * approachCos * uDopplerStrength));
-    float dopplerBoost = mix(1.0, pow(clamp(dopplerFactor, 0.35, 2.7), 2.2), clamp(uDopplerStrength, 0.0, 1.0));
+    float dopplerFactor = 1.0 / (gamma * (1.0 - beta * approachCos * uDopplerCoeffs.x));
+    float dopplerBoost = mix(1.0, pow(clamp(dopplerFactor, 0.35, 2.7), uDopplerCoeffs.w), uDopplerCoeffs.x);
 
     // Radial Novikov-Thorne flux profile matching top arch
     float normR = clamp((r - rIn) / (rOut - rIn), 0.0, 1.0);
     float flux = pow(1.0 - normR, 1.42) * smoothstep(rIn, rIn + 0.28, r) * (1.0 - smoothstep(rOut - 2.0, rOut, r));
-    flux *= (0.65 + 0.8 * diskFilaments) * dopplerBoost * (0.7 + 0.5 * uAccretionRate);
+    flux *= (0.65 + 0.8 * diskFilaments) * dopplerBoost * (0.7 + 0.5 * accretionRate);
 
-    // Event Horizon Pulse & Accretion Disturbance Shockwave
+    // Event Horizon Multi-Stage Pulse & Accretion Disturbance Shockwave
     if (uPulseStrength > 0.001) {
-      float pulseDist = abs(r - uPulseRadius);
-      float shockCrest = exp(-pow(pulseDist / 0.82, 2.0));
-      flux += shockCrest * uPulseStrength * 1.8;
+      // Primary compression shock front
+      float primaryDist = abs(r - uPulseRadius);
+      float primaryCrest = exp(-pow(primaryDist / 0.55, 2.0));
+      // Trailing harmonic echoes (density ripples reverberating across disk)
+      float echoDist1 = abs(r - (uPulseRadius * 0.72));
+      float echoCrest1 = exp(-pow(echoDist1 / 0.75, 2.0)) * 0.65;
+      float echoDist2 = abs(r - (uPulseRadius * 0.48));
+      float echoCrest2 = exp(-pow(echoDist2 / 0.95, 2.0)) * 0.40;
+      float totalShock = (primaryCrest + echoCrest1 + echoCrest2) * uPulseStrength;
+      flux += totalShock * 2.8;
     }
 
     // Physical Blackbody Color Spectrum (identical to top lensed arch)
     vec3 baseLut = texture2D(uSpectrumLut, vec2(clamp(flux * 0.65, 0.02, 0.98), 0.5)).rgb;
-    if (uSpectralMode == 1) { // EHT 230 GHz
+    if (spectralMode == 1) { // EHT 230 GHz
       baseLut = mix(vec3(0.14, 0.02, 0.01), vec3(1.0, 0.95, 0.65), clamp(flux * 0.85, 0.0, 1.0));
-    } else if (uSpectralMode == 2) { // Chandra X-Ray
+    } else if (spectralMode == 2) { // Chandra X-Ray
       baseLut = mix(vec3(0.04, 0.12, 0.35), vec3(0.92, 0.98, 1.0), clamp(flux * 0.85, 0.0, 1.0));
-    } else if (uSpectralMode == 3) { // Doppler shift map
+    } else if (spectralMode == 3) { // Doppler shift map
       baseLut = mix(vec3(0.95, 0.38, 0.1), vec3(0.2, 0.85, 1.0), clamp(approachCos * 0.5 + 0.5, 0.0, 1.0)) * flux;
     }
 
     vec3 diskColor = baseLut * 1.5;
     float diskAlpha = clamp(flux * (0.65 + 0.35 * diskFilaments) * min(1.6, dopplerBoost), 0.0, 0.98);
 
-    // 2. Exposure & Tone Mapping: ACES tone mapping to maintain texture/contrast on Doppler beamed side
+    // Exposure & Tone Mapping: ACES tone mapping to maintain texture/contrast on Doppler beamed side
     vec3 tonemappedColor = acesFilm(diskColor * 1.15);
     gl_FragColor = vec4(tonemappedColor, diskAlpha);
   }
@@ -349,6 +372,15 @@ const LENSING_FRAGMENT_SHADER = `
           float flux = pow(1.0 - normR, 1.42) * smoothstep(rIn, rIn + 0.28, rHit) * (1.0 - smoothstep(rOut - 2.0, rOut, rHit));
           flux *= (0.65 + 0.8 * diskFilaments) * dopplerBoost * (0.7 + 0.5 * uAccretionRate);
 
+          // Pulse shock front ripples across gravitationally lensed arches
+          if (uPulseStrength > 0.001) {
+            float primaryDist = abs(rHit - uPulseRadius);
+            float primaryCrest = exp(-pow(primaryDist / 0.55, 2.0));
+            float echoDist = abs(rHit - (uPulseRadius * 0.72));
+            float echoCrest = exp(-pow(echoDist / 0.75, 2.0)) * 0.65;
+            flux += (primaryCrest + echoCrest) * uPulseStrength * 2.8;
+          }
+
           vec3 baseLut = texture2D(uSpectrumLut, vec2(clamp(flux * 0.65, 0.02, 0.98), 0.5)).rgb;
           if (uSpectralMode == 1) { // EHT 230 GHz
             baseLut = mix(vec3(0.14, 0.02, 0.01), vec3(1.0, 0.95, 0.65), clamp(flux * 0.85, 0.0, 1.0));
@@ -391,6 +423,60 @@ const LENSING_FRAGMENT_SHADER = `
   }
 `;
 
+// 4. Relativistic Camera-Motion Blur Shader (Simulates optical aberration & chromatic dispersion of high-velocity observers)
+const MOTION_BLUR_VERTEX_SHADER = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`;
+
+const MOTION_BLUR_FRAGMENT_SHADER = `
+  uniform sampler2D tDiffuse;
+  uniform vec2 uVelocity;
+  uniform float uStrength;
+  uniform vec2 uResolution;
+  varying vec2 vUv;
+
+  void main() {
+    if (uStrength < 0.005) {
+      gl_FragColor = texture2D(tDiffuse, vUv);
+      return;
+    }
+
+    // Relativistic motion streak & chromatic aberration
+    vec2 screenAspect = vec2(uResolution.x / max(1.0, uResolution.y), 1.0);
+    vec2 blurDir = uVelocity * (uStrength * 0.042);
+    blurDir.x /= max(0.1, screenAspect.x);
+
+    vec4 accum = vec4(0.0);
+    float totalWeight = 0.0;
+
+    // 9-tap directional integration with relativistic chromatic dispersion
+    for (int i = -4; i <= 4; i++) {
+      float t = float(i) / 4.0;
+      float weight = exp(-t * t * 2.2);
+      vec2 offset = blurDir * t;
+
+      // Relativistic chromatic aberration: slight Doppler dispersion of wavelengths
+      float r = texture2D(tDiffuse, vUv + offset * (1.0 + 0.16 * uStrength)).r;
+      float g = texture2D(tDiffuse, vUv + offset).g;
+      float b = texture2D(tDiffuse, vUv + offset * (1.0 - 0.16 * uStrength)).b;
+      float a = texture2D(tDiffuse, vUv + offset).a;
+
+      accum += vec4(r, g, b, a) * weight;
+      totalWeight += weight;
+    }
+
+    vec4 finalColor = accum / totalWeight;
+
+    // Relativistic Doppler optical headlamp tint on high-speed observer motion
+    vec3 tinted = mix(finalColor.rgb, finalColor.rgb * vec3(0.94, 0.98, 1.06), uStrength * 0.22);
+    gl_FragColor = vec4(tinted, finalColor.a);
+  }
+`;
+
 export class BlackHoleSceneController {
   private container: HTMLElement;
   private renderer: THREE.WebGLRenderer;
@@ -400,6 +486,16 @@ export class BlackHoleSceneController {
   private clock = new THREE.Clock();
   private frameId = 0;
   private isDisposed = false;
+
+  // Relativistic Camera-Motion Blur Post-Processing
+  private motionBlurRenderTarget!: THREE.WebGLRenderTarget;
+  private postScene = new THREE.Scene();
+  private postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private postMaterial!: THREE.ShaderMaterial;
+  private postQuad!: THREE.Mesh;
+  private prevCamQuat = new THREE.Quaternion();
+  private camMotionBlurStrength = 0.0;
+  private camMotionVelocity = new THREE.Vector2(0, 0);
 
   // Root composite 3D groups
   private blackHoleGroup = new THREE.Group();
@@ -446,14 +542,19 @@ export class BlackHoleSceneController {
   private cosmicSkyDomeMesh!: THREE.Mesh;
   private skyDomeMat!: THREE.MeshBasicMaterial;
 
+  // Accretion disk simulation time & uniform buffer state
+  private accretionDiskSimTime = 0.0;
+
   // Event Horizon Pulse & Accretion Disturbance subsystem
   private eventHorizonPulseGroup = new THREE.Group();
   private primaryPulseMesh!: THREE.Mesh;
   private secondaryPulseMesh!: THREE.Mesh;
+  private tertiaryPulseMesh!: THREE.Mesh;
+  private gravitationalWaveShellMesh!: THREE.Mesh;
   private horizonFlashMesh!: THREE.Mesh;
   private isPulseActive = false;
   private pulseProgress = 0.0;
-  private pulseDuration = 1.85;
+  private pulseDuration = 2.4;
   private pulseStrength = 0.0;
   private pulseRadius = 1.75;
   private pulseColor = new THREE.Color(0xfbbf24);
@@ -551,6 +652,7 @@ export class BlackHoleSceneController {
     this.setupLightingRig();
 
     // 6. Build Composite Subsystems
+    this.buildRelativisticMotionBlurPass();
     this.buildCosmicSkyDome();
     this.buildCompositeBlackHole();
     this.buildEventHorizonPulseSystem();
@@ -633,17 +735,36 @@ export class BlackHoleSceneController {
     this.blackHoleGroup.add(this.eventHorizonMesh);
 
     // 2. High-Fidelity 3D Relativistic Accretion Disk (Equatorial Plane)
+    // Pre-calculate initial Doppler coefficients: (dopplerStrength, betaScale, gammaClamp, dopplerExponent)
+    const initialDopplerCoeffs = new THREE.Vector4(
+      this.params.dopplerStrength,
+      0.70, // betaScale
+      1.0,  // gamma clamp factor
+      2.2   // doppler exponent
+    );
+
+    // Initial Disk Parameters: (spin, accretionRate, spectralMode, isStar)
+    const initialDiskParams = new THREE.Vector4(
+      this.params.spin,
+      this.params.accretionRate,
+      0.0,
+      this.params.objectCategory === 'star' ? 1.0 : 0.0
+    );
+
+    // Uniform-Buffer Orbital Turbulence Math: (basePhase, ringPhase, shearRate, timeScale)
+    const initialTurbBuffer = new THREE.Vector4(0.0, 0.0, 0.0, this.params.timeScale);
+    // Harmonics: (radialFreq, spiralFreq, harmonicAmp, filamentBlend)
+    const initialHarmonics = new THREE.Vector4(1.8, 2.4, 0.5, 0.38);
+
     this.accretionDiskMat = new THREE.ShaderMaterial({
       uniforms: {
-        uTime: { value: 0 },
-        uSpin: { value: this.params.spin },
-        uAccretionRate: { value: this.params.accretionRate },
-        uDopplerStrength: { value: this.params.dopplerStrength },
-        uSpectralMode: { value: 0 },
+        uDopplerCoeffs: { value: initialDopplerCoeffs },
+        uDiskParams: { value: initialDiskParams },
+        uTurbulenceBuffer: { value: initialTurbBuffer },
+        uTurbulenceHarmonics: { value: initialHarmonics },
         uSpectrumLut: { value: spectrumLut },
         uPulseRadius: { value: 0 },
         uPulseStrength: { value: 0 },
-        uIsStar: { value: this.params.objectCategory === 'star' ? 1.0 : 0.0 },
       },
       vertexShader: ACCRETION_VERTEX_SHADER,
       fragmentShader: ACCRETION_FRAGMENT_SHADER,
@@ -698,8 +819,8 @@ export class BlackHoleSceneController {
   private buildEventHorizonPulseSystem() {
     this.eventHorizonPulseGroup = new THREE.Group();
 
-    // Primary shockwave ring (expands in equatorial accretion plane)
-    const ringGeo = new THREE.RingGeometry(0.85, 1.45, 80);
+    // Primary shockwave ring (expands across equatorial accretion plane)
+    const ringGeo = new THREE.RingGeometry(0.85, 1.45, 96);
     ringGeo.rotateX(-Math.PI / 2);
 
     const pulseShaderMat = new THREE.ShaderMaterial({
@@ -720,8 +841,11 @@ export class BlackHoleSceneController {
         varying vec2 vUv;
         void main() {
           float dist = abs(length(vUv - 0.5) * 2.0 - 0.85);
-          float ring = exp(-pow(dist * 6.8, 2.0));
-          gl_FragColor = vec4(uColor, ring * uOpacity);
+          float ring = exp(-pow(dist * 7.5, 2.0));
+          // Bright, incandescent core line with soft plasma aura
+          float coreLine = exp(-pow(dist * 22.0, 2.0));
+          vec3 finalRgb = mix(uColor, vec3(1.0, 0.98, 0.88), coreLine * 0.7);
+          gl_FragColor = vec4(finalRgb, (ring + coreLine * 0.8) * uOpacity);
         }
       `,
       transparent: true,
@@ -739,6 +863,55 @@ export class BlackHoleSceneController {
     this.secondaryPulseMesh = new THREE.Mesh(ringGeo.clone(), secondaryMat);
     this.secondaryPulseMesh.visible = false;
     this.eventHorizonPulseGroup.add(this.secondaryPulseMesh);
+
+    // Tertiary reverberation ring
+    const tertiaryMat = pulseShaderMat.clone();
+    this.tertiaryPulseMesh = new THREE.Mesh(ringGeo.clone(), tertiaryMat);
+    this.tertiaryPulseMesh.visible = false;
+    this.eventHorizonPulseGroup.add(this.tertiaryPulseMesh);
+
+    // 3D Quadrupole Gravitational Wave Shell (spherical expanding ripple propagating at c)
+    const shellGeo = new THREE.SphereGeometry(1.0, 48, 32);
+    const shellMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(0xfbbf24) },
+        uOpacity: { value: 0.0 },
+        uTime: { value: 0.0 },
+      },
+      vertexShader: `
+        varying vec3 vNormalVec;
+        varying vec3 vPos;
+        void main() {
+          vNormalVec = normalize(normalMatrix * normal);
+          vPos = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        varying vec3 vNormalVec;
+        varying vec3 vPos;
+        void main() {
+          // Quadrupole radiation pattern (sin^2 theta cos 2 phi)
+          float theta = acos(clamp(vPos.y, -1.0, 1.0));
+          float phi = atan(vPos.z, vPos.x);
+          float quadrupole = pow(sin(theta), 2.0) * (0.65 + 0.35 * cos(phi * 2.0));
+          
+          // Fresnel rim glow
+          float fresnel = pow(1.0 - abs(vNormalVec.z), 2.5);
+          float alpha = fresnel * quadrupole * uOpacity;
+          gl_FragColor = vec4(uColor, alpha);
+        }
+      `,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.gravitationalWaveShellMesh = new THREE.Mesh(shellGeo, shellMat);
+    this.gravitationalWaveShellMesh.visible = false;
+    this.eventHorizonPulseGroup.add(this.gravitationalWaveShellMesh);
 
     // Horizon flash burst sphere (brief incandescent flash at the causal boundary)
     const burstGeo = new THREE.SphereGeometry(1.85, 32, 32);
@@ -928,10 +1101,21 @@ export class BlackHoleSceneController {
 
       // Dynamic Event Horizon Pulse: Spacetime Gravitational Wave Ripple
       let pulseWave = 0.0;
-      if (this.pulseStrength > 0.01) {
-        const wavePhase = r - this.pulseRadius * 1.85;
-        const waveProfile = Math.exp(-Math.pow(wavePhase / 4.2, 2.0));
-        pulseWave = Math.sin(wavePhase * 1.35) * waveProfile * this.pulseStrength * 3.6;
+      if (this.pulseStrength > 0.005) {
+        // Multi-harmonic gravitational wave train propagating through the metric
+        const shockRadius = this.pulseRadius * 1.85;
+        const wavePhase1 = r - shockRadius;
+        const waveProfile1 = Math.exp(-Math.pow(wavePhase1 / 3.4, 2.0));
+        const wave1 = Math.sin(wavePhase1 * 1.65) * waveProfile1;
+
+        // Trailing reverberation echo (dispersive metric deformation)
+        const wavePhase2 = r - (shockRadius * 0.72);
+        const waveProfile2 = Math.exp(-Math.pow(wavePhase2 / 4.6, 2.0));
+        const wave2 = Math.sin(wavePhase2 * 2.1) * waveProfile2 * 0.55;
+
+        // Radial dampening as the wave dissipates across asymptotic flat spacetime
+        const radialFalloff = 1.0 / (1.0 + r * 0.045);
+        pulseWave = (wave1 + wave2) * this.pulseStrength * 5.4 * radialFalloff;
       }
 
       posAttr.setY(i, depth + frameDragSpiral + pulseWave);
@@ -974,10 +1158,32 @@ export class BlackHoleSceneController {
     this.blackHoleGroup.add(this.gravitationalLensMesh);
   }
 
-
+  private buildRelativisticMotionBlurPass() {
+    const width = this.container.clientWidth || window.innerWidth;
+    const height = this.container.clientHeight || window.innerHeight;
+    this.motionBlurRenderTarget = new THREE.WebGLRenderTarget(width, height, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat,
+    });
+    this.postMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        tDiffuse: { value: this.motionBlurRenderTarget.texture },
+        uVelocity: { value: this.camMotionVelocity },
+        uStrength: { value: 0.0 },
+        uResolution: { value: new THREE.Vector2(width, height) },
+      },
+      vertexShader: MOTION_BLUR_VERTEX_SHADER,
+      fragmentShader: MOTION_BLUR_FRAGMENT_SHADER,
+      depthWrite: false,
+      depthTest: false,
+    });
+    this.postQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.postMaterial);
+    this.postScene.add(this.postQuad);
+    this.prevCamQuat.copy(this.camera.quaternion);
+  }
 
   private buildOrbitingStarCluster() {
-    // Primary Target: Relativistic S-Star S2
     const starS2Geo = new THREE.SphereGeometry(0.32, 24, 24);
     const starS2Mat = new THREE.MeshBasicMaterial({ color: 0x93c5fd });
     this.starS2Mesh = new THREE.Mesh(starS2Geo, starS2Mat);
@@ -1232,6 +1438,14 @@ export class BlackHoleSceneController {
       this.secondaryPulseMesh.visible = true;
       (this.secondaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uColor.value.copy(this.pulseColor);
     }
+    if (this.tertiaryPulseMesh) {
+      this.tertiaryPulseMesh.visible = true;
+      (this.tertiaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uColor.value.copy(this.pulseColor);
+    }
+    if (this.gravitationalWaveShellMesh) {
+      this.gravitationalWaveShellMesh.visible = true;
+      (this.gravitationalWaveShellMesh.material as THREE.ShaderMaterial).uniforms.uColor.value.copy(this.pulseColor);
+    }
     if (this.horizonFlashMesh) {
       this.horizonFlashMesh.visible = true;
       (this.horizonFlashMesh.material as THREE.MeshBasicMaterial).color.copy(this.pulseColor);
@@ -1267,12 +1481,29 @@ export class BlackHoleSceneController {
         ? 3
         : 0;
 
-    this.accretionDiskMat.uniforms.uSpin.value = nextParams.spin;
-    this.accretionDiskMat.uniforms.uAccretionRate.value = nextParams.accretionRate;
-    this.accretionDiskMat.uniforms.uDopplerStrength.value = nextParams.dopplerStrength;
-    this.accretionDiskMat.uniforms.uSpectralMode.value = modeIndex;
-
     const isStar = nextParams.objectCategory === 'star';
+
+    if (this.accretionDiskMat) {
+      // Pre-calculated Doppler shift coefficients: (dopplerStrength, betaScale, gammaClamp, dopplerExponent)
+      const dopplerStrength = nextParams.dopplerStrength;
+      const betaScale = 0.70;
+      const gammaClamp = 1.0;
+      const dopplerExponent = 2.2;
+      this.accretionDiskMat.uniforms.uDopplerCoeffs.value.set(
+        dopplerStrength,
+        betaScale,
+        gammaClamp,
+        dopplerExponent
+      );
+
+      // Compact disk parameter vector: (spin, accretionRate, spectralMode, isStar)
+      this.accretionDiskMat.uniforms.uDiskParams.value.set(
+        nextParams.spin,
+        nextParams.accretionRate,
+        modeIndex,
+        isStar ? 1.0 : 0.0
+      );
+    }
 
     if (this.gravitationalLensMat) {
       this.gravitationalLensMat.uniforms.uSpin.value = nextParams.spin;
@@ -1361,6 +1592,10 @@ export class BlackHoleSceneController {
     this.camera.aspect = width / Math.max(1, height);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+    this.motionBlurRenderTarget?.setSize(width, height);
+    if (this.postMaterial) {
+      this.postMaterial.uniforms.uResolution.value.set(width, height);
+    }
   };
 
   private handlePointerMove = (e: PointerEvent) => {
@@ -1447,10 +1682,25 @@ export class BlackHoleSceneController {
 
     const rawDelta = Math.min(0.1, this.clock.getDelta());
     const simDelta = rawDelta * this.params.timeScale;
-    const elapsed = this.accretionDiskMat.uniforms.uTime.value + simDelta;
+    // 1. Advance Simulation Time & Pre-Compute Uniform-Buffer Orbital Turbulence Math
+    this.accretionDiskSimTime += simDelta;
+    const elapsed = this.accretionDiskSimTime;
 
-    // 1. Advance Shader Uniform Clocks
-    this.accretionDiskMat.uniforms.uTime.value = elapsed;
+    if (this.accretionDiskMat) {
+      // Uniform-Buffer Orbital Turbulence Vector:
+      // (basePhase, ringPhase, shearRate, timeScale)
+      const basePhase = elapsed;
+      const ringPhase = elapsed * 0.35;
+      const shearRate = elapsed * 3.2;
+      const timeScale = this.params.timeScale;
+
+      this.accretionDiskMat.uniforms.uTurbulenceBuffer.value.set(
+        basePhase,
+        ringPhase,
+        shearRate,
+        timeScale
+      );
+    }
 
     // 2. Smooth Exponential Damping on Scale & Exploded Anatomy Separation
     this.currentScale = THREE.MathUtils.damp(this.currentScale, this.targetScale, 5.5, rawDelta);
@@ -1490,21 +1740,23 @@ export class BlackHoleSceneController {
         this.pulseStrength = 0.0;
         this.primaryPulseMesh.visible = false;
         this.secondaryPulseMesh.visible = false;
+        this.tertiaryPulseMesh.visible = false;
+        this.gravitationalWaveShellMesh.visible = false;
         this.horizonFlashMesh.visible = false;
         this.accretionDiskMat.uniforms.uPulseStrength.value = 0.0;
         this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
       } else {
-        // High-energy initial blast, decelerating outward through the disk
-        const ease = 1.0 - Math.pow(1.0 - this.pulseProgress, 2.6);
-        this.pulseStrength = Math.pow(1.0 - this.pulseProgress, 1.7);
+        // High-energy blast, decelerating outward with reverberating echoes
+        const ease = 1.0 - Math.pow(1.0 - this.pulseProgress, 2.8);
+        this.pulseStrength = Math.pow(1.0 - this.pulseProgress, 1.6);
         const startR = 1.75 * this.currentScale;
-        const maxShockRadius = 18.5 * this.currentScale;
+        const maxShockRadius = 22.0 * this.currentScale;
         this.pulseRadius = THREE.MathUtils.lerp(startR, maxShockRadius, ease);
 
         // Update accretion disk disturbance shader uniforms
         this.accretionDiskMat.uniforms.uPulseRadius.value = this.pulseRadius / this.currentScale;
         this.accretionDiskMat.uniforms.uPulseStrength.value = this.pulseStrength;
-        this.accretionDiskMat.uniforms.uIsStar.value = this.params.objectCategory === 'star' ? 1.0 : 0.0;
+        this.accretionDiskMat.uniforms.uDiskParams.value.w = this.params.objectCategory === 'star' ? 1.0 : 0.0;
 
         // Primary shockwave ring expansion & fade
         this.primaryPulseMesh.visible = true;
@@ -1512,18 +1764,30 @@ export class BlackHoleSceneController {
         (this.primaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.95;
 
         // Secondary harmonic echo ring
-        const secondaryR = Math.max(startR, this.pulseRadius * 0.74);
+        const secondaryR = Math.max(startR, this.pulseRadius * 0.72);
         this.secondaryPulseMesh.visible = true;
         this.secondaryPulseMesh.scale.set(secondaryR, secondaryR, secondaryR);
-        (this.secondaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.55;
+        (this.secondaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.65;
+
+        // Tertiary reverberation ring
+        const tertiaryR = Math.max(startR, this.pulseRadius * 0.48);
+        this.tertiaryPulseMesh.visible = true;
+        this.tertiaryPulseMesh.scale.set(tertiaryR, tertiaryR, tertiaryR);
+        (this.tertiaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.40;
+
+        // 3D Quadrupole Gravitational Wave Shell (expands spherically at c)
+        const gwShellR = THREE.MathUtils.lerp(startR, maxShockRadius * 1.2, ease);
+        this.gravitationalWaveShellMesh.visible = true;
+        this.gravitationalWaveShellMesh.scale.set(gwShellR, gwShellR, gwShellR);
+        (this.gravitationalWaveShellMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.70;
 
         // Horizon flash burst decay at the causal boundary
         if (this.pulseProgress < 0.28) {
           const burstT = this.pulseProgress / 0.28;
-          const burstScale = THREE.MathUtils.lerp(1.0, 1.45, burstT) * this.currentScale;
+          const burstScale = THREE.MathUtils.lerp(1.0, 1.55, burstT) * this.currentScale;
           this.horizonFlashMesh.visible = true;
           this.horizonFlashMesh.scale.set(burstScale, burstScale, burstScale);
-          (this.horizonFlashMesh.material as THREE.MeshBasicMaterial).opacity = (1.0 - burstT) * 0.85;
+          (this.horizonFlashMesh.material as THREE.MeshBasicMaterial).opacity = (1.0 - burstT) * 0.9;
         } else {
           this.horizonFlashMesh.visible = false;
         }
@@ -1616,7 +1880,32 @@ export class BlackHoleSceneController {
     relativisticAudio.updateCameraProximity(distanceRs, timeDilation);
 
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+
+    // 13. Camera Angular Velocity & Relativistic Motion Blur
+    const dot = Math.min(1.0, Math.max(-1.0, this.camera.quaternion.dot(this.prevCamQuat)));
+    const angleDiff = 2.0 * Math.acos(Math.abs(dot));
+    const camAngularSpeed = rawDelta > 0.0001 ? angleDiff / rawDelta : 0.0;
+
+    // Detect angular direction in screen space
+    _quatA.copy(this.camera.quaternion).multiply(this.prevCamQuat.clone().invert());
+    const velX = _quatA.y * 2.0;
+    const velY = _quatA.x * 2.0;
+    const targetStrength = Math.min(1.0, camAngularSpeed * 0.45);
+    const blendRate = 1.0 - Math.exp(-12.0 * rawDelta);
+    this.camMotionBlurStrength += (targetStrength - this.camMotionBlurStrength) * blendRate;
+    this.camMotionVelocity.set(velX, velY);
+    this.prevCamQuat.copy(this.camera.quaternion);
+
+    if (this.camMotionBlurStrength > 0.012 && this.motionBlurRenderTarget && this.postMaterial) {
+      this.postMaterial.uniforms.uStrength.value = this.camMotionBlurStrength;
+      this.postMaterial.uniforms.uVelocity.value.copy(this.camMotionVelocity);
+      this.renderer.setRenderTarget(this.motionBlurRenderTarget);
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.setRenderTarget(null);
+      this.renderer.render(this.postScene, this.postCamera);
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
 
     if (isSoftwareGl) {
       this.afterDraw(this.tick);
@@ -2020,6 +2309,9 @@ export class BlackHoleSceneController {
     this.gravitationalLensMesh?.geometry?.dispose();
     this.gravitationalLensMat?.dispose();
     this.accretionDiskMat?.dispose();
+    this.motionBlurRenderTarget?.dispose();
+    this.postMaterial?.dispose();
+    this.postQuad?.geometry?.dispose();
     this.renderer.dispose();
   }
 }

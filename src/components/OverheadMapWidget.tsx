@@ -95,11 +95,11 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
       const pixelsPerRs = (w / 2 - 14) / maxRs;
 
       // 1. Clear background
-      ctx.fillStyle = '#060912';
+      ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, w, h);
 
       // 2. Draw subtle background coordinate grid
-      ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
+      ctx.strokeStyle = 'rgba(50, 50, 50, 0.45)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(cx, 10);
@@ -359,15 +359,15 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
   }, []);
 
   return (
-    <div className="w-64 bg-[#080c16]/95 border border-slate-800 rounded-lg shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
+    <div className="w-64 bg-black/95 border border-neutral-800 rounded-lg shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between px-3 py-2 bg-[#0b101e] border-b border-slate-800/90">
+      <div className="flex items-center justify-between px-3 py-2 bg-neutral-950 border-b border-neutral-800/80">
         <div className="flex items-center gap-1.5">
-          <Compass className="w-3.5 h-3.5 text-amber-400" />
-          <span className="font-display text-xs font-semibold tracking-wide text-slate-100 uppercase">
+          <Compass className="w-3.5 h-3.5 text-amber-400/90" />
+          <span className="font-display text-xs font-semibold tracking-wide text-neutral-200 uppercase">
             Overhead Radar
           </span>
-          <span className="text-[10px] text-slate-500 font-mono">2D X-Z</span>
+          <span className="text-[10px] text-neutral-500 font-mono">2D X-Z</span>
         </div>
 
         <div className="flex items-center gap-1">
@@ -375,17 +375,17 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
           <button
             type="button"
             onClick={() => setZoomLevel((z) => (z === 1.0 ? 1.75 : 1.0))}
-            className="p-1 text-slate-400 hover:text-slate-100 bg-[#111827] rounded border border-slate-800 text-[10px] font-mono leading-none transition-colors cursor-pointer"
+            className="p-1 text-neutral-400 hover:text-white bg-neutral-900 rounded border border-neutral-800 text-[10px] font-mono leading-none transition-colors cursor-pointer"
             title={zoomLevel === 1.0 ? 'Zoom In to Core' : 'Zoom Out'}
           >
-            {zoomLevel === 1.0 ? <ZoomIn className="w-3 h-3" /> : <ZoomOut className="w-3 h-3 text-cyan-400" />}
+            {zoomLevel === 1.0 ? <ZoomIn className="w-3 h-3" /> : <ZoomOut className="w-3 h-3 text-neutral-300" />}
           </button>
 
           {/* Minimize / Maximize */}
           <button
             type="button"
             onClick={() => setIsMinimized((v) => !v)}
-            className="p-1 text-slate-400 hover:text-slate-100 bg-[#111827] rounded border border-slate-800 transition-colors cursor-pointer"
+            className="p-1 text-neutral-400 hover:text-white bg-neutral-900 rounded border border-neutral-800 transition-colors cursor-pointer"
             title={isMinimized ? 'Expand Overhead Map' : 'Minimize Overhead Map'}
             aria-label={isMinimized ? 'Expand Overhead Map' : 'Minimize Overhead Map'}
           >
@@ -398,7 +398,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
       {!isMinimized && (
         <div className="p-2.5 flex flex-col gap-2">
           {/* 2D Canvas */}
-          <div className="relative w-full aspect-square bg-[#060912] rounded border border-slate-800/80 overflow-hidden">
+          <div className="relative w-full aspect-square bg-black rounded border border-neutral-800/80 overflow-hidden">
             <canvas
               ref={canvasRef}
               onClick={handleCanvasClick}
@@ -408,54 +408,54 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
             />
             {/* Legend Overlay at Top Corner */}
             <div className="absolute top-1 left-1.5 pointer-events-none flex flex-col gap-0.5 text-[9px] font-mono leading-tight">
-              <span className="text-amber-400 flex items-center gap-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+              <span className="text-amber-400/90 flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400/90"></span>
                 r₊ Horizon
               </span>
-              <span className="text-cyan-400 flex items-center gap-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+              <span className="text-neutral-300 flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-neutral-400"></span>
                 ISCO Orbit
               </span>
             </div>
 
             {/* Hover radius helper */}
             {hoverRadius !== null && (
-              <div className="absolute bottom-1 right-1.5 pointer-events-none text-[9px] font-mono text-amber-300/90 bg-[#060912]/80 px-1 rounded">
+              <div className="absolute bottom-1 right-1.5 pointer-events-none text-[9px] font-mono text-amber-300/90 bg-black/80 px-1 rounded border border-neutral-800">
                 r: {hoverRadius.toFixed(2)} Rₛ (Click to set)
               </div>
             )}
           </div>
 
           {/* Real-Time Live Probe Telemetry Strip */}
-          <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono tabular-nums bg-[#0a0f1d] p-2 rounded border border-slate-800/70">
+          <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono tabular-nums bg-neutral-950 p-2 rounded border border-neutral-800/80">
             <div>
-              <span className="text-slate-500 block text-[9px] uppercase">Star S2 Radius</span>
-              <span className="text-slate-100 font-semibold">
-                {telemetry.rRs.toFixed(2)} <span className="text-slate-500 text-[10px]">Rₛ</span>
+              <span className="text-neutral-500 block text-[9px] uppercase">Star S2 Radius</span>
+              <span className="text-neutral-200 font-semibold">
+                {telemetry.rRs.toFixed(2)} <span className="text-neutral-500 text-[10px]">Rₛ</span>
               </span>
-              <span className="text-slate-500 text-[10px] ml-1">
+              <span className="text-neutral-500 text-[10px] ml-1">
                 ({telemetry.rRg.toFixed(2)} R_g)
               </span>
             </div>
 
             <div>
-              <span className="text-slate-500 block text-[9px] uppercase">Azimuth (φ)</span>
-              <span className="text-amber-400 font-semibold">
+              <span className="text-neutral-500 block text-[9px] uppercase">Azimuth (φ)</span>
+              <span className="text-amber-300/90 font-semibold">
                 {telemetry.phiDeg.toFixed(1)}°
               </span>
             </div>
 
             <div>
-              <span className="text-slate-500 block text-[9px] uppercase">Orbital Speed</span>
-              <span className="text-cyan-400 font-semibold">
-                {(telemetry.beta * 100).toFixed(1)}% <span className="text-slate-500 text-[10px]">c</span>
+              <span className="text-neutral-500 block text-[9px] uppercase">Orbital Speed</span>
+              <span className="text-neutral-200 font-semibold">
+                {(telemetry.beta * 100).toFixed(1)}% <span className="text-neutral-500 text-[10px]">c</span>
               </span>
             </div>
 
             <div>
-              <span className="text-slate-500 block text-[9px] uppercase">Clock Dilation</span>
-              <span className="text-emerald-400 font-semibold">
-                {telemetry.timeDilation.toFixed(3)} <span className="text-slate-500 text-[10px]">dτ/dt</span>
+              <span className="text-neutral-500 block text-[9px] uppercase">Clock Dilation</span>
+              <span className="text-neutral-200 font-semibold">
+                {telemetry.timeDilation.toFixed(3)} <span className="text-neutral-500 text-[10px]">dτ/dt</span>
               </span>
             </div>
           </div>

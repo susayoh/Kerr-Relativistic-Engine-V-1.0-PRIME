@@ -116,7 +116,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="flex items-center gap-1.5 px-3.5 py-1 text-[11px] font-mono text-slate-400 bg-[#070b16] border border-b-0 border-slate-800 rounded-t-md hover:text-amber-300 hover:bg-[#0a0f1d] transition-colors whitespace-nowrap shrink-0 cursor-pointer shadow-lg"
+          className="flex items-center gap-1.5 px-3.5 py-1 text-[11px] font-mono text-neutral-400 bg-neutral-950 border border-b-0 border-neutral-800 rounded-t-md hover:text-amber-300 hover:bg-neutral-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer shadow-lg"
           title="Toggle Control Dock (Shortcut: H)"
         >
           {isCollapsed ? (
@@ -126,7 +126,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             </>
           ) : (
             <>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
               <span>Minimize Dock (H)</span>
             </>
           )}
@@ -134,11 +134,11 @@ export const ControlDock: React.FC<ControlDockProps> = ({
       </div>
 
       {/* Main Grid Chassis */}
-      <div className="bg-[#050811]/95 backdrop-blur-md border border-slate-800/90 rounded-xl shadow-2xl p-2.5 sm:p-3 flex flex-col gap-2 max-h-[46vh] sm:max-h-[50vh] overflow-y-auto">
+      <div className="bg-black/95 backdrop-blur-md border border-neutral-800/90 rounded-xl shadow-2xl p-2.5 sm:p-3 flex flex-col gap-2 max-h-[46vh] sm:max-h-[50vh] overflow-y-auto">
         {/* ROW 1: Unified Modular Command Bar (Tabs + Target Preset Picker + Actions) */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center pb-2 border-b border-slate-800/80">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center pb-2 border-b border-neutral-800/80">
           {/* Section A: Segmented Mode Tabs (Cols 1-5) */}
-          <div className="md:col-span-5 flex items-center gap-1 p-0.5 bg-[#090e1c] rounded-lg border border-slate-800/90 w-full sm:w-auto">
+          <div className="md:col-span-5 flex items-center gap-1 p-0.5 bg-neutral-950 rounded-lg border border-neutral-800/90 w-full sm:w-auto">
             {(
               [
                 { id: 'spacetime', label: 'Spacetime', icon: Sliders },
@@ -156,8 +156,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap cursor-pointer ${
                     isActive
-                      ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                      ? 'bg-neutral-800 text-amber-300 font-medium border border-neutral-700/80 shadow-sm'
+                      : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -172,7 +172,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             <button
               type="button"
               onClick={handlePrevPreset}
-              className="p-1 rounded-md bg-[#090e1c] hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+              className="p-1 rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0"
               title="Previous Target Preset"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
@@ -189,26 +189,26 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               <select
                 value={activePresetId}
                 onChange={(e) => onSelectPreset(e.target.value)}
-                className="w-full pl-8 pr-7 py-1 text-xs bg-[#090e1c] hover:bg-[#0c1426] border border-slate-700/80 hover:border-amber-400/80 text-slate-100 font-semibold rounded-lg transition-colors cursor-pointer appearance-none outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40 truncate"
+                className="w-full pl-8 pr-7 py-1 text-xs bg-neutral-900 hover:bg-neutral-850 border border-neutral-700/80 hover:border-amber-400/80 text-neutral-200 font-semibold rounded-lg transition-colors cursor-pointer appearance-none outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40 truncate"
                 title="Select Astrophysical Target (TON 618, Sagittarius A*, M87*, Cygnus X-1, etc.)"
               >
-                <optgroup label="Supermassive & Ultramassive Black Holes" className="bg-[#070b16] text-slate-200">
+                <optgroup label="Supermassive & Ultramassive Black Holes" className="bg-neutral-950 text-neutral-200">
                   <option value="ton618">TON 618 (66 Billion M☉ · Ultramassive)</option>
                   <option value="m87">M87* (6.5 Billion M☉ · EHT Target)</option>
                   <option value="sagittarius_a">Sagittarius A* (4.15 Million M☉ · Milky Way)</option>
                 </optgroup>
-                <optgroup label="Intermediate & Stellar Black Holes" className="bg-[#070b16] text-slate-200">
+                <optgroup label="Intermediate & Stellar Black Holes" className="bg-neutral-950 text-neutral-200">
                   <option value="gw190521">GW190521 (142 M☉ · LIGO Merger)</option>
                   <option value="cygnus_x1">Cygnus X-1 (21.2 M☉ · HMXB System)</option>
                   <option value="v404_cygni">V404 Cygni (9.0 M☉ · Jet Precession)</option>
                   <option value="primordial_micro">Micro PBH (10¹² kg · Hawking Decay)</option>
                 </optgroup>
-                <optgroup label="Compact Relativistic Stars" className="bg-[#070b16] text-slate-200">
+                <optgroup label="Compact Relativistic Stars" className="bg-neutral-950 text-neutral-200">
                   <option value="psr_b1919">PSR B1919+21 (Pulsar · Lighthouse Beams)</option>
                   <option value="sgr_1806">SGR 1806-20 (Magnetar · 10¹⁵ G Field)</option>
                 </optgroup>
               </select>
-              <div className="absolute right-2 pointer-events-none flex items-center text-slate-400">
+              <div className="absolute right-2 pointer-events-none flex items-center text-neutral-400">
                 <ChevronDown className="w-3.5 h-3.5" />
               </div>
             </div>
@@ -216,7 +216,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             <button
               type="button"
               onClick={handleNextPreset}
-              className="p-1 rounded-md bg-[#090e1c] hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+              className="p-1 rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0"
               title="Next Target Preset"
             >
               <ChevronRight className="w-3.5 h-3.5" />
@@ -226,10 +226,10 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             <button
               type="button"
               onClick={onOpenCosmicScaleModal}
-              className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-amber-300 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/50 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-neutral-300 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               title="Compare Real Astronomical Scale (TON 618 vs Solar System)"
             >
-              <Maximize2 className="w-3 h-3 text-amber-400" />
+              <Maximize2 className="w-3 h-3 text-neutral-400" />
               <span className="hidden sm:inline">Scale</span>
             </button>
           </div>
@@ -244,17 +244,17 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   timeScale: prev.timeScale === 0 ? 1.0 : 0.0,
                 }))
               }
-              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-200 bg-[#090e1c] hover:bg-slate-800 border border-slate-800 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-neutral-300 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
               title={isPaused ? 'Resume Simulation' : 'Pause Simulation'}
             >
-              {isPaused ? <Play className="w-3 h-3 text-amber-400" /> : <Pause className="w-3 h-3 text-amber-400" />}
+              {isPaused ? <Play className="w-3 h-3 text-amber-400" /> : <Pause className="w-3 h-3 text-neutral-400" />}
               <span>{isPaused ? 'Resume' : 'Pause'}</span>
             </button>
 
             <button
               type="button"
               onClick={onTriggerPulse}
-              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-300 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/50 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-300 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
               title="Trigger Event Horizon Pulse (Accretion Shockwave)"
             >
               <Waves className="w-3 h-3 text-amber-400" />
@@ -266,18 +266,18 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               onClick={onToggleAudio}
               className={`p-1.5 text-xs rounded-lg border transition-colors cursor-pointer ${
                 audioEnabled
-                  ? 'bg-cyan-950/80 text-cyan-300 border-cyan-700/80'
-                  : 'bg-[#090e1c] text-slate-400 border-slate-800 hover:text-white'
+                  ? 'bg-neutral-800 text-amber-300 border-neutral-700'
+                  : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
               }`}
               title="Toggle Relativistic Audio"
             >
-              {audioEnabled ? <Volume2 className="w-3.5 h-3.5 text-cyan-400" /> : <VolumeX className="w-3.5 h-3.5" />}
+              {audioEnabled ? <Volume2 className="w-3.5 h-3.5 text-amber-400" /> : <VolumeX className="w-3.5 h-3.5" />}
             </button>
 
             <button
               type="button"
               onClick={onResetParams}
-              className="p-1.5 text-xs text-slate-400 hover:text-white bg-[#090e1c] hover:bg-slate-800 border border-slate-800 rounded-lg transition-colors cursor-pointer"
+              className="p-1.5 text-xs text-neutral-400 hover:text-white bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors cursor-pointer"
               title="Reset Default Parameters"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -292,14 +292,14 @@ export const ControlDock: React.FC<ControlDockProps> = ({
           <div className="flex flex-col gap-2">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {/* Module 1: Mass */}
-              <div className="flex flex-col justify-between gap-1 p-2 rounded-lg bg-[#070b16] border border-slate-800/80">
+              <div className="flex flex-col justify-between gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium flex items-center gap-1">
-                    <Scale className="w-3 h-3 text-amber-400" />
+                  <span className="text-neutral-300 font-medium flex items-center gap-1">
+                    <Scale className="w-3 h-3 text-amber-400/90" />
                     <span>{isStar ? 'Mass' : 'Mass (M)'}</span>
                   </span>
-                  <span className="font-mono text-xs text-slate-100 font-bold tabular-nums">
-                    {params.massSolar.toFixed(1)} <span className="text-amber-400 text-[10px]">M☉</span>
+                  <span className="font-mono text-xs text-neutral-100 font-bold tabular-nums">
+                    {params.massSolar.toFixed(1)} <span className="text-amber-400/80 text-[10px]">M☉</span>
                   </span>
                 </div>
                 <input
@@ -313,22 +313,22 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   }
                   className="sci-slider w-full"
                 />
-                <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+                <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500">
                   <span>{isStar ? '1.4 TOV' : '5 M☉'}</span>
-                  <span className="text-cyan-400">
+                  <span className="text-neutral-400">
                     {isStar ? 'R 20km' : `r₊ ${metrics.eventHorizonKm.toFixed(0)} km`}
                   </span>
                 </div>
               </div>
 
               {/* Module 2: Kerr Spin Parameter */}
-              <div className="flex flex-col justify-between gap-1 p-2 rounded-lg bg-[#070b16] border border-slate-800/80">
+              <div className="flex flex-col justify-between gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium flex items-center gap-1">
-                    <Orbit className="w-3 h-3 text-amber-400" />
+                  <span className="text-neutral-300 font-medium flex items-center gap-1">
+                    <Orbit className="w-3 h-3 text-amber-400/90" />
                     <span>{isStar ? 'Spin' : 'Kerr Spin (a*)'}</span>
                   </span>
-                  <span className="font-mono text-xs text-amber-400 font-bold tabular-nums">
+                  <span className="font-mono text-xs text-amber-300/90 font-bold tabular-nums">
                     {params.spin.toFixed(3)}
                   </span>
                 </div>
@@ -343,21 +343,21 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   }
                   className="sci-slider w-full"
                 />
-                <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+                <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500">
                   <span>0.000</span>
-                  <span className="text-slate-400">0.998 Limit</span>
+                  <span className="text-neutral-400">0.998 Limit</span>
                 </div>
               </div>
 
               {/* Module 3: Accretion Flux */}
-              <div className="flex flex-col justify-between gap-1 p-2 rounded-lg bg-[#070b16] border border-slate-800/80">
+              <div className="flex flex-col justify-between gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span className="text-neutral-300 font-medium flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-400/90" />
                     <span>{isStar ? 'Wind Flux' : 'Accretion (ṁ)'}</span>
                   </span>
-                  <span className="font-mono text-xs text-slate-100 font-bold tabular-nums">
-                    {params.accretionRate.toFixed(2)} <span className="text-slate-500 text-[10px]">Ṁ_Edd</span>
+                  <span className="font-mono text-xs text-neutral-100 font-bold tabular-nums">
+                    {params.accretionRate.toFixed(2)} <span className="text-neutral-500 text-[10px]">Ṁ_Edd</span>
                   </span>
                 </div>
                 <input
@@ -374,20 +374,20 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   }
                   className="sci-slider w-full"
                 />
-                <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+                <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500">
                   <span>{(metrics.peakDiskTempK / 1e6).toFixed(1)} MK</span>
                   <span>Plasma</span>
                 </div>
               </div>
 
               {/* Module 4: Gravity Well Depth */}
-              <div className="flex flex-col justify-between gap-1 p-2 rounded-lg bg-[#070b16] border border-slate-800/80">
+              <div className="flex flex-col justify-between gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium flex items-center gap-1">
-                    <Compass className="w-3 h-3 text-cyan-400" />
+                  <span className="text-neutral-300 font-medium flex items-center gap-1">
+                    <Compass className="w-3 h-3 text-cyan-400/90" />
                     <span>Well Depth</span>
                   </span>
-                  <span className="font-mono text-xs text-cyan-300 font-bold tabular-nums">
+                  <span className="font-mono text-xs text-neutral-200 font-bold tabular-nums">
                     {(params.wellDepthMultiplier || 2.2).toFixed(1)}×
                   </span>
                 </div>
@@ -405,7 +405,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   }
                   className="sci-slider w-full"
                 />
-                <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+                <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500">
                   <span>0.8× Shallow</span>
                   <span>3.5× Plunge</span>
                 </div>
@@ -413,7 +413,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             </div>
 
             {/* Bottom Sub-Strip: Gravitational Lensing Toggle + Doppler Beaming Slider + Telemetry */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center pt-1.5 border-t border-slate-800/60 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center pt-1.5 border-t border-neutral-800/80 text-xs">
               <div className="sm:col-span-4 flex items-center gap-1.5">
                 <button
                   type="button"
@@ -425,13 +425,13 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   }
                   className={`w-full flex items-center justify-between px-2.5 py-1 rounded-md border text-xs font-medium transition-all cursor-pointer ${
                     params.gravitationalLensing
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-sm'
-                      : 'bg-[#080d1a] text-slate-400 border-slate-800 hover:text-slate-200'
+                      ? 'bg-neutral-800 text-amber-300 border-neutral-700 shadow-sm'
+                      : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-neutral-200'
                   }`}
                   title="Toggle Interstellar Gargantua Double-Arch Deflection"
                 >
                   <span className="flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <Sparkles className="w-3 h-3 text-amber-400/90" />
                     <span>Lensing Shader:</span>
                   </span>
                   <span className="font-mono font-bold text-[10px] uppercase">
@@ -441,8 +441,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               </div>
 
               {/* Doppler strength scrubber */}
-              <div className="sm:col-span-4 flex items-center gap-2 px-2 py-1 bg-[#080d1a] border border-slate-800 rounded-md">
-                <span className="text-[11px] font-mono text-slate-400 whitespace-nowrap">Doppler:</span>
+              <div className="sm:col-span-4 flex items-center gap-2 px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-md">
+                <span className="text-[11px] font-mono text-neutral-400 whitespace-nowrap">Doppler:</span>
                 <input
                   type="range"
                   min={0.0}
@@ -457,16 +457,16 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   }
                   className="sci-slider flex-1"
                 />
-                <span className="font-mono text-[11px] text-amber-300 font-bold tabular-nums w-8 text-right">
+                <span className="font-mono text-[11px] text-amber-300/90 font-bold tabular-nums w-8 text-right">
                   {(params.dopplerStrength * 100).toFixed(0)}%
                 </span>
               </div>
 
               {/* Spacetime horizon telemetry */}
-              <div className="sm:col-span-4 flex items-center justify-between sm:justify-end gap-2 px-2 py-1 text-[11px] font-mono text-slate-400 bg-[#080d1a] border border-slate-800 rounded-md">
-                <span>ISCO: <strong className="text-cyan-300 font-semibold">{metrics.iscoProgradeRg.toFixed(2)} Rg</strong></span>
+              <div className="sm:col-span-4 flex items-center justify-between sm:justify-end gap-2 px-2 py-1 text-[11px] font-mono text-neutral-400 bg-neutral-950 border border-neutral-800 rounded-md">
+                <span>ISCO: <strong className="text-neutral-200 font-semibold">{metrics.iscoProgradeRg.toFixed(2)} Rg</strong></span>
                 <span>·</span>
-                <span>r_ph: <strong className="text-amber-300 font-semibold">{metrics.photonSphereRg.toFixed(2)} Rg</strong></span>
+                <span>r_ph: <strong className="text-amber-300/90 font-semibold">{metrics.photonSphereRg.toFixed(2)} Rg</strong></span>
               </div>
             </div>
           </div>
@@ -476,8 +476,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
         {activeTab === 'spectral' && (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
             {/* Cell 1: Observatory Spectral Band (Cols 1-3) */}
-            <div className="md:col-span-3 flex flex-col gap-1 p-2 rounded-lg bg-[#070b16] border border-slate-800/80">
-              <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+            <div className="md:col-span-3 flex flex-col gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
+              <span className="text-[11px] font-mono text-neutral-400 uppercase tracking-wider">
                 Spectral Filter
               </span>
               <div className="grid grid-cols-2 gap-1 mt-0.5">
@@ -497,8 +497,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                     }
                     className={`px-2 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap cursor-pointer text-center ${
                       params.spectralMode === mode.id
-                        ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-sm'
-                        : 'bg-[#090e1c] text-slate-400 border-slate-800 hover:text-white'
+                        ? 'bg-neutral-800 text-amber-300 font-medium border-neutral-700 shadow-sm'
+                        : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
                     }`}
                   >
                     {mode.label}
@@ -508,10 +508,10 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             </div>
 
             {/* Cell 2: Exploded Vertical Lift (Cols 4-5) */}
-            <div className="md:col-span-3 flex flex-col justify-between gap-1 p-2 rounded-lg bg-[#070b16] border border-slate-800/80">
+            <div className="md:col-span-3 flex flex-col justify-between gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-300 font-medium">Exploded View</span>
-                <span className="font-mono tabular-nums text-amber-400 font-bold">
+                <span className="text-neutral-300 font-medium">Exploded View</span>
+                <span className="font-mono tabular-nums text-amber-300/90 font-bold">
                   {(params.explodedSeparation * 100).toFixed(0)}%
                 </span>
               </div>
@@ -529,14 +529,14 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 }
                 className="sci-slider w-full"
               />
-              <span className="text-[10px] text-slate-500 font-mono">
+              <span className="text-[10px] text-neutral-500 font-mono">
                 Vertical Manifold Lift
               </span>
             </div>
 
             {/* Cell 3: Anatomical Subsystems Toggle (Cols 6-8) */}
-            <div className="md:col-span-3 flex flex-col gap-1 p-2 rounded-lg bg-[#070b16] border border-slate-800/80">
-              <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+            <div className="md:col-span-3 flex flex-col gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
+              <span className="text-[11px] font-mono text-neutral-400 uppercase tracking-wider">
                 Subsystem Layers
               </span>
               <div className="grid grid-cols-2 gap-1 mt-0.5">
@@ -550,8 +550,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   }
                   className={`px-2 py-1 text-xs rounded border transition-colors cursor-pointer ${
                     params.layers.accretionDisk
-                      ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600/70 font-semibold'
-                      : 'bg-[#090e1c] text-slate-500 border-slate-800'
+                      ? 'bg-neutral-800 text-neutral-200 border-neutral-700 font-medium'
+                      : 'bg-neutral-900 text-neutral-500 border-neutral-800'
                   }`}
                 >
                   Accretion Disk
@@ -566,8 +566,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   }
                   className={`px-2 py-1 text-xs rounded border transition-colors cursor-pointer ${
                     params.layers.spacetimeGrid
-                      ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600/70 font-semibold'
-                      : 'bg-[#090e1c] text-slate-500 border-slate-800'
+                      ? 'bg-neutral-800 text-neutral-200 border-neutral-700 font-medium'
+                      : 'bg-neutral-900 text-neutral-500 border-neutral-800'
                   }`}
                 >
                   Gravity Well
@@ -582,8 +582,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   }
                   className={`px-2 py-1 text-xs rounded border transition-colors cursor-pointer ${
                     params.layers.orbitalStars
-                      ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600/70 font-semibold'
-                      : 'bg-[#090e1c] text-slate-500 border-slate-800'
+                      ? 'bg-neutral-800 text-neutral-200 border-neutral-700 font-medium'
+                      : 'bg-neutral-900 text-neutral-500 border-neutral-800'
                   }`}
                 >
                   S-Stars
@@ -601,8 +601,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   }
                   className={`px-2 py-1 text-xs rounded border transition-colors cursor-pointer ${
                     params.layers.anatomyLines ?? true
-                      ? 'bg-amber-950/80 text-amber-300 border-amber-600/70 font-semibold'
-                      : 'bg-[#090e1c] text-slate-500 border-slate-800'
+                      ? 'bg-neutral-800 text-amber-300 font-medium border-neutral-700'
+                      : 'bg-neutral-900 text-neutral-500 border-neutral-800'
                   }`}
                 >
                   Anatomy Guide
@@ -611,8 +611,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             </div>
 
             {/* Cell 4: Cosmic Environment Swatches (Cols 9-12) */}
-            <div className="md:col-span-3 flex flex-col gap-1 p-2 rounded-lg bg-[#070b16] border border-slate-800/80">
-              <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+            <div className="md:col-span-3 flex flex-col gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
+              <span className="text-[11px] font-mono text-neutral-400 uppercase tracking-wider">
                 Environment
               </span>
               <div className="grid grid-cols-2 gap-1 mt-0.5">
@@ -631,10 +631,10 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       }
                       className={`px-2 py-1 text-xs rounded border transition-all truncate cursor-pointer text-left ${
                         isActive
-                          ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-sm'
+                          ? 'bg-neutral-800 text-amber-300 font-medium border-neutral-700 shadow-sm'
                           : isPitchBlack
-                          ? 'bg-black text-slate-300 border-slate-700 hover:border-slate-500'
-                          : 'bg-[#090e1c] text-slate-400 border-slate-800 hover:text-white'
+                          ? 'bg-black text-neutral-300 border-neutral-750 hover:border-neutral-600'
+                          : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
                       }`}
                       title={theme.name}
                     >
@@ -665,13 +665,13 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 onClick={() => onSelectCamera(preset.id)}
                 className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer ${
                   activeCamera === preset.id
-                    ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-sm'
-                    : 'bg-[#070b16] text-slate-300 border-slate-800 hover:border-slate-700 hover:text-white'
+                    ? 'bg-neutral-800 text-amber-300 font-medium border-neutral-700 shadow-sm'
+                    : 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:border-neutral-700 hover:text-white'
                 }`}
               >
-                <Camera className="w-3.5 h-3.5 mb-0.5" />
+                <Camera className="w-3.5 h-3.5 mb-0.5 text-neutral-400" />
                 <span className="text-xs font-semibold">{preset.label}</span>
-                <span className={`text-[10px] font-mono ${activeCamera === preset.id ? 'text-slate-900' : 'text-slate-500'}`}>
+                <span className={`text-[10px] font-mono ${activeCamera === preset.id ? 'text-amber-300/80' : 'text-neutral-500'}`}>
                   {preset.desc}
                 </span>
               </button>
@@ -688,13 +688,13 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               }
               className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer ${
                 params.trueCosmicScale
-                  ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-sm'
-                  : 'bg-[#070b16] text-slate-300 border-slate-800 hover:border-slate-700 hover:text-white'
+                  ? 'bg-neutral-800 text-amber-300 font-medium border-neutral-700 shadow-sm'
+                  : 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:border-neutral-700 hover:text-white'
               }`}
             >
-              <Maximize2 className="w-3.5 h-3.5 mb-0.5" />
+              <Maximize2 className="w-3.5 h-3.5 mb-0.5 text-neutral-400" />
               <span className="text-xs font-semibold">True Scale</span>
-              <span className={`text-[10px] font-mono ${params.trueCosmicScale ? 'text-slate-900' : 'text-slate-500'}`}>
+              <span className={`text-[10px] font-mono ${params.trueCosmicScale ? 'text-amber-300/80' : 'text-neutral-500'}`}>
                 {params.trueCosmicScale ? 'Gargantuan' : 'Normalized'}
               </span>
             </button>
@@ -705,13 +705,13 @@ export const ControlDock: React.FC<ControlDockProps> = ({
         {activeTab === 'geodesics' && (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-center">
             {/* Cell 1: Impact Parameter Slider (Cols 1-6) */}
-            <div className="md:col-span-6 flex flex-col justify-between gap-1 p-2 rounded-lg bg-[#070b16] border border-slate-800/80">
+            <div className="md:col-span-6 flex flex-col justify-between gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-300 font-medium flex items-center gap-1.5">
-                  <Orbit className="w-3 h-3 text-amber-400" />
+                <span className="text-neutral-300 font-medium flex items-center gap-1.5">
+                  <Orbit className="w-3 h-3 text-amber-400/90" />
                   <span>Impact Parameter (b)</span>
                 </span>
-                <span className="font-mono text-xs text-amber-300 font-bold tabular-nums">
+                <span className="font-mono text-xs text-amber-300/90 font-bold tabular-nums">
                   {impactB >= 0 ? `+${impactB.toFixed(1)}` : impactB.toFixed(1)} Rₛ
                 </span>
               </div>
@@ -724,33 +724,33 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 onChange={(e) => setImpactB(parseFloat(e.target.value))}
                 className="sci-slider w-full"
               />
-              <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+              <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500">
                 <span>-6.0 Rₛ (Retrograde)</span>
                 <span>+6.0 Rₛ (Prograde)</span>
               </div>
             </div>
 
             {/* Cell 2: Trajectory Outcome Prediction (Cols 7-9) */}
-            <div className="md:col-span-3 flex flex-col justify-between gap-1 p-2 rounded-lg bg-[#070b16] border border-slate-800/80 h-full">
-              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
+            <div className="md:col-span-3 flex flex-col justify-between gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80 h-full">
+              <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider">
                 Trajectory Outcome
               </span>
               <div className="flex items-center gap-1.5 my-auto">
                 {isCaptured ? (
-                  <span className="text-xs font-bold text-rose-400 bg-rose-950/60 px-2 py-1 rounded border border-rose-800/60 w-full text-center">
+                  <span className="text-xs font-medium text-rose-300 bg-neutral-900 px-2 py-1 rounded border border-rose-900/60 w-full text-center">
                     Horizon Plunge (Captured)
                   </span>
                 ) : isResonant ? (
-                  <span className="text-xs font-bold text-amber-300 bg-amber-950/60 px-2 py-1 rounded border border-amber-800/60 w-full text-center">
+                  <span className="text-xs font-medium text-amber-300 bg-neutral-900 px-2 py-1 rounded border border-amber-900/60 w-full text-center">
                     Photon Sphere Near-Orbit
                   </span>
                 ) : (
-                  <span className="text-xs font-bold text-cyan-300 bg-cyan-950/60 px-2 py-1 rounded border border-cyan-800/60 w-full text-center">
+                  <span className="text-xs font-medium text-neutral-200 bg-neutral-900 px-2 py-1 rounded border border-neutral-700/60 w-full text-center">
                     Einstein Deflection (Escape)
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-mono text-slate-500">
+              <span className="text-[10px] font-mono text-neutral-500">
                 b_crit = {bCrit.toFixed(2)} Rₛ
               </span>
             </div>
@@ -760,7 +760,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               <button
                 type="button"
                 onClick={() => onLaunchPhoton(impactB)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white transition-colors cursor-pointer shadow-md"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-neutral-700 transition-colors cursor-pointer shadow-md"
                 title="Fire a single test photon pulse to trace general-relativistic light bending"
               >
                 <Send className="w-3.5 h-3.5" />
@@ -770,7 +770,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               <button
                 type="button"
                 onClick={onClearPhotons}
-                className="flex items-center justify-center gap-1.5 px-2.5 py-1 text-xs text-slate-400 hover:text-rose-400 bg-[#090e1c] hover:bg-slate-800 border border-slate-800 rounded-lg transition-colors cursor-pointer"
+                className="flex items-center justify-center gap-1.5 px-2.5 py-1 text-xs text-neutral-400 hover:text-rose-400 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 rounded-lg transition-colors cursor-pointer"
                 title="Clear all active photon trajectories"
               >
                 <Trash2 className="w-3 h-3" />
