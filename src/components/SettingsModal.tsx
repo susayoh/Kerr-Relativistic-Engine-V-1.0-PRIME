@@ -14,12 +14,15 @@ import {
   VisualizerSettings,
   DEFAULT_VISUALIZER_SETTINGS,
 } from '../scene/BlackHoleScene';
+import { AccretionState } from '../physics/gravitationalPhysics';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: VisualizerSettings;
   onUpdateSettings: (updater: (prev: VisualizerSettings) => VisualizerSettings) => void;
+  accretionState?: AccretionState;
+  onChangeAccretionState?: (state: AccretionState) => void;
   onResetPhysics?: () => void;
 }
 
@@ -28,6 +31,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   settings,
   onUpdateSettings,
+  accretionState = 'quiescent',
+  onChangeAccretionState,
   onResetPhysics,
 }) => {
   if (!isOpen) return null;
@@ -178,6 +183,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <Sparkles className="w-3.5 h-3.5" />
               <span>Accretion Disk Style & Relativistic Optics</span>
             </div>
+
+            {/* Accretion State Physical Geometry Toggle (Quiescent vs Active) */}
+            {onChangeAccretionState && (
+              <div className="pt-1 pb-2 border-b border-neutral-900">
+                <div className="text-neutral-100 font-medium text-xs mb-1.5">
+                  Accretion State (Physical Geometry)
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onChangeAccretionState('quiescent')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      accretionState !== 'active'
+                        ? 'bg-amber-500/15 border-amber-500/50 text-amber-200 shadow-sm'
+                        : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-neutral-200'
+                    }`}
+                  >
+                    <div className="font-semibold text-xs">Quiescent (Razor-Thin)</div>
+                    <div className="text-[10px] text-neutral-400 mt-0.5 leading-snug">
+                      Standard thin equatorial Novikov-Thorne disk geometry
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onChangeAccretionState('active')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      accretionState === 'active'
+                        ? 'bg-amber-500/15 border-amber-500/50 text-amber-200 shadow-sm'
+                        : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-neutral-200'
+                    }`}
+                  >
+                    <div className="font-semibold text-xs">Active (Volumetric Thick)</div>
+                    <div className="text-[10px] text-neutral-400 mt-0.5 leading-snug">
+                      Turbulent high-emission torus smoothly connecting lensed arcs
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Accretion Disk Renderer Toggle (Classic vs Raymarched) */}
             <div className="pt-1 pb-2 border-b border-neutral-900">

@@ -170,16 +170,45 @@ const GLSL_SIMPLEX_NOISE = `
   }
 `;
 
-// 1. High-Fidelity 3D Relativistic Accretion Disk (Equatorial Ring Shader)
+// 1. High-Fidelity 3D Relativistic Accretion Disk (Equatorial Ring & Volumetric Torus Shader)
 const ACCRETION_VERTEX_SHADER = `
+  attribute float aVerticalLayer;
+  uniform float uAccretionState;
+  uniform vec4 uTurbulenceBuffer;
+
   varying vec2 vUv;
   varying vec3 vWorldPos;
   varying vec3 vLocalPos;
+  varying float vVerticalLayer;
 
   void main() {
     vUv = uv;
-    vLocalPos = position;
-    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+    vVerticalLayer = aVerticalLayer;
+    vec3 pos = position;
+    float r = length(pos.xy);
+
+    // In Active mode (uAccretionState > 0.01), drastically expand vertical (Y-axis) density scale
+    // with 3D turbulent MHD vertical billowing so the equatorial torus seamlessly bridges into the lensed arcs
+    if (uAccretionState > 0.01) {
+      float innerRamp = smoothstep(1.05, 2.35, r);
+      float outerEnvelope = 1.0 - 0.32 * smoothstep(10.8, 16.2, r);
+      float scaleHeight = (0.52 + 0.24 * max(0.0, r - 1.55)) * innerRamp * outerEnvelope;
+
+      vec2 unitDir = pos.xy / max(0.0001, r);
+      float cosPhi = unitDir.x;
+      float sinPhi = unitDir.y;
+      float cos2Phi = cosPhi * cosPhi - sinPhi * sinPhi;
+      float sin2Phi = 2.0 * cosPhi * sinPhi;
+
+      float billow = sin(r * 2.5 - uTurbulenceBuffer.z * 0.65 + cos2Phi * 1.9 + aVerticalLayer * 2.4) * 0.22
+                   + cos(r * 5.1 - uTurbulenceBuffer.x * 2.4 + sin2Phi * 1.6 - aVerticalLayer * 1.7) * 0.14;
+
+      // Local Z corresponds to world vertical Y because the ring mesh is rotated -PI/2 around X
+      pos.z += (aVerticalLayer * scaleHeight + billow * scaleHeight * (0.38 + 0.62 * abs(aVerticalLayer))) * uAccretionState;
+    }
+
+    vLocalPos = pos;
+    vec4 worldPosition = modelMatrix * vec4(pos, 1.0);
     vWorldPos = worldPosition.xyz;
     gl_Position = projectionMatrix * viewMatrix * worldPosition;
   }
@@ -202,10 +231,13 @@ const ACCRETION_FRAGMENT_SHADER = `
   uniform float uPulseStrength;
   uniform float uDiskStyle;
   uniform float uBloomIntensity;
+  uniform float uAccretionState;
+  uniform float uExpansionProgress;
 
   varying vec2 vUv;
   varying vec3 vWorldPos;
   varying vec3 vLocalPos;
+  varying float vVerticalLayer;
 
   // ACES filmic tone mapping with smooth highlight shoulder to preserve plasma band contrast
   vec3 acesFilm(vec3 x) {
@@ -218,17 +250,55 @@ const ACCRETION_FRAGMENT_SHADER = `
     return clamp((r * (a * r + b)) / (r * (c * r + d) + e), 0.0, 1.0);
   }
 
+  // High-energy thermal blackbody color progression for Active Accretion State:
+  // Burns incandescent white-hot at the inner core, transitions to bright gold, and tapers to deep red at the outer edges
+  vec3 computeActiveThermalSpectrum(float normR, float boostedFlux, float filaments) {
+    float radialHeat = pow(clamp(1.0 - normR, 0.0, 1.0), 0.82);
+    float fluxHeat = clamp(boostedFlux / (1.25 + boostedFlux * 0.30), 0.0, 1.0);
+    float T = clamp(mix(radialHeat, fluxHeat, 0.42) + (1.0 - normR) * 0.24 + (filaments - 0.5) * 0.08, 0.0, 1.0);
+
+    vec3 colDeepRed    = vec3(0.54, 0.03, 0.008);
+    vec3 colCrimson    = vec3(0.88, 0.15, 0.02);
+    vec3 colAmberFire  = vec3(0.98, 0.45, 0.06);
+    vec3 colBrightGold = vec3(1.00, 0.82, 0.24);
+    vec3 colWhiteHot   = vec3(1.00, 0.99, 0.94);
+
+    if (T > 0.76) {
+      return mix(colBrightGold, colWhiteHot, smoothstep(0.76, 0.94, T));
+    } else if (T > 0.48) {
+      return mix(colAmberFire, colBrightGold, smoothstep(0.48, 0.76, T));
+    } else if (T > 0.22) {
+      return mix(colCrimson, colAmberFire, smoothstep(0.22, 0.48, T));
+    } else {
+      return mix(colDeepRed, colCrimson, smoothstep(0.0, 0.22, T));
+    }
+  }
+
   void main() {
+    if (uExpansionProgress < 0.02) {
+      discard;
+    }
+
     float r = length(vLocalPos.xy);
     float spin = clamp(uDiskParams.x, 0.0, 0.998);
     float accretionRate = uDiskParams.y;
     int spectralMode = int(uDiskParams.z);
+    float absLayer = abs(vVerticalLayer);
+
+    // In Quiescent mode, discard any elevated volumetric strata so only the razor-thin midplane renders
+    if (uAccretionState < 0.5 && absLayer > 0.01) {
+      discard;
+    }
+
+    // Vertical Y-axis density falloff across the thick volumetric torus in Active mode
+    float verticalDensityFalloff = exp(-pow(absLayer, 1.45) * 1.55);
+    float layerPhaseOffset = vVerticalLayer * 1.65 * uAccretionState;
 
     // Classic Disk Mode (uDiskStyle < 0.5): Original vibrant 3D equatorial accretion disk
     if (uDiskStyle < 0.5) {
       float r_horizon = mix(2.05, 1.35, spin * 0.65);
       float rIn = max(r_horizon + 0.10, mix(2.55, 1.45, spin * 0.75));
-      float rOut = 12.2;
+      float rOut = mix(12.2, 14.4, uAccretionState);
 
       if (r < r_horizon) {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
@@ -241,7 +311,7 @@ const ACCRETION_FRAGMENT_SHADER = `
       // Continuous 2PI unit vector so the classic disk has zero horizontal slice seam
       vec2 unitDir = vLocalPos.xy / max(0.0001, r);
       float omega = 3.2 / (pow(r, 1.45) + 0.15 * spin);
-      float twist = uTurbulenceBuffer.x * omega * 1.5 - 1.35 * log(max(0.1, r / rIn));
+      float twist = uTurbulenceBuffer.x * omega * 1.5 - 1.35 * log(max(0.1, r / rIn)) + layerPhaseOffset * 0.35;
       float ct = cos(twist);
       float st = sin(twist);
       vec2 rotDir = vec2(unitDir.x * ct - unitDir.y * st, unitDir.x * st + unitDir.y * ct);
@@ -250,12 +320,13 @@ const ACCRETION_FRAGMENT_SHADER = `
       float sin2Phi = 2.0 * rotDir.x * rotDir.y;
       float cos3Phi = 4.0 * rotDir.x * rotDir.x * rotDir.x - 3.0 * rotDir.x;
 
-      float waveA = sin(r * uTurbulenceHarmonics.x * 3.1 - uTurbulenceBuffer.z * 0.55 + cos2Phi * 1.2 + uTurbulenceBuffer.y);
-      float waveB = cos(r * uTurbulenceHarmonics.x * 6.4 - uTurbulenceBuffer.z * 0.8 + waveA * 1.4 + sin2Phi * 0.9);
-      float waveC = sin(r * 3.8 + cos3Phi * 1.1 - uTurbulenceBuffer.w);
+      float turbFreqBoost = mix(1.0, 1.35, uAccretionState);
+      float waveA = sin(r * uTurbulenceHarmonics.x * 3.1 * turbFreqBoost - uTurbulenceBuffer.z * 0.55 + cos2Phi * 1.2 + uTurbulenceBuffer.y + layerPhaseOffset);
+      float waveB = cos(r * uTurbulenceHarmonics.x * 6.4 * turbFreqBoost - uTurbulenceBuffer.z * 0.8 + waveA * (1.4 + 0.45 * uAccretionState) + sin2Phi * 0.9 - layerPhaseOffset * 0.7);
+      float waveC = sin(r * 3.8 * turbFreqBoost + cos3Phi * 1.1 - uTurbulenceBuffer.w + layerPhaseOffset * 1.2);
       float diskTurb = waveA * 0.5 + 0.5;
       float diskRings = waveB * 0.5 + 0.5;
-      float diskFilaments = mix(mix(diskTurb, diskRings, uTurbulenceHarmonics.z), waveC * 0.5 + 0.5, 0.25);
+      float diskFilaments = mix(mix(diskTurb, diskRings, uTurbulenceHarmonics.z), waveC * 0.5 + 0.5, 0.25 + 0.12 * uAccretionState);
 
       vec2 toCamXZ = length(cameraPosition.xz) > 0.001
         ? normalize(cameraPosition.xz)
@@ -269,11 +340,20 @@ const ACCRETION_FRAGMENT_SHADER = `
       float dopplerBoost = pow(clamp(dopplerFactor, 0.35, 2.35), uDopplerCoeffs.w);
 
       float normR = clamp((r - rIn) / (rOut - rIn), 0.0, 1.0);
-      float innerTaper = smoothstep(rIn, rIn + 0.42, r);
-      float outerTaper = 1.0 - smoothstep(rOut - 2.2, rOut, r);
-      float radialProfile = pow(1.0 - normR, 1.15) * innerTaper * outerTaper;
+      float diskUnfurl = smoothstep(0.02, 0.96, uExpansionProgress);
+      float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.16), diskUnfurl + 0.02, normR);
+      if (unfurlMask <= 0.001) {
+        discard;
+      }
+      float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.085, 2.0)) * sin(uExpansionProgress * 3.14159265) * 1.85;
 
-      float flux = radialProfile * (0.30 + 0.70 * diskFilaments) * dopplerBoost * (0.65 + 0.45 * accretionRate);
+      float innerTaper = smoothstep(rIn, rIn + mix(0.42, 0.28, uAccretionState), r);
+      float outerTaper = 1.0 - smoothstep(rOut - mix(2.2, 3.2, uAccretionState), rOut, r);
+      float radialProfile = pow(1.0 - normR, mix(1.15, 0.92, uAccretionState)) * innerTaper * outerTaper;
+
+      // Constraint 2: Base Emission Multiplier significantly boosted in Active mode
+      float activeEmissionMult = mix(1.0, 2.45, uAccretionState) * (1.0 + ignitionWave);
+      float flux = radialProfile * (0.30 + 0.70 * diskFilaments) * dopplerBoost * (0.65 + 0.45 * accretionRate) * activeEmissionMult;
 
       float sonicRarefaction = 0.0;
       float sonicCompression = 0.0;
@@ -287,23 +367,43 @@ const ACCRETION_FRAGMENT_SHADER = `
         sonicRarefaction = clamp(rarefactionTrough * uPulseStrength * innerTaper * outerTaper, 0.0, 0.88);
       }
 
-      float lutU = clamp(flux * 0.65, 0.02, 0.98);
+      float lutU = clamp(flux * 0.65, 0.02, 0.99);
       vec3 baseLut = texture2D(uSpectrumLut, vec2(lutU, 0.5)).rgb;
 
+      // Constraint 3: Spectral Filter dictates final color, while Active mode's boosted emission pushes
+      // the standard thermal filter (spectralMode == 0) into white-hot core -> bright gold -> red outer edge
       if (spectralMode == 1) {
         baseLut = mix(vec3(0.18, 0.02, 0.01), vec3(1.0, 0.85, 0.42), lutU);
       } else if (spectralMode == 2) {
         baseLut = mix(vec3(0.06, 0.16, 0.42), vec3(0.84, 0.95, 1.0), lutU);
       } else if (spectralMode == 3) {
         baseLut = mix(vec3(0.95, 0.34, 0.08), vec3(0.22, 0.82, 1.0), clamp(approachCos * 0.5 + 0.5, 0.0, 1.0)) * (0.42 + 0.58 * diskFilaments);
+      } else if (uAccretionState > 0.5) {
+        vec3 activeThermal = computeActiveThermalSpectrum(normR, flux, diskFilaments);
+        baseLut = mix(baseLut, activeThermal, 0.85);
       }
 
       float bloomMult = max(0.0, uBloomIntensity);
-      float innerHalo = exp(-normR * 3.2) * bloomMult * 0.65 * dopplerBoost;
-      vec3 bloomGlow = vec3(1.0, 0.88, 0.56) * innerHalo + baseLut * (0.45 * bloomMult * flux);
+      float coreWhiteHot = exp(-normR * mix(3.2, 4.2, uAccretionState)) * (0.65 + 0.85 * uAccretionState) * max(0.45, bloomMult) * dopplerBoost;
+      vec3 coreTone = (spectralMode == 2)
+        ? vec3(0.88, 0.97, 1.0)
+        : (spectralMode == 3)
+        ? mix(vec3(1.0, 0.65, 0.35), vec3(0.75, 0.95, 1.0), clamp(approachCos * 0.5 + 0.5, 0.0, 1.0))
+        : mix(vec3(1.0, 0.88, 0.56), vec3(1.0, 0.99, 0.94), uAccretionState);
+
+      vec3 bloomGlow = coreTone * coreWhiteHot + baseLut * (0.45 * bloomMult * flux);
       vec3 diskColor = baseLut * (0.48 + (0.75 + 0.60 * bloomMult) * flux) + bloomGlow;
+      if (uAccretionState > 0.5 && spectralMode == 0) {
+        // Preserve rich bright-gold mid-disk and deep-red outer taper while keeping the inner core blazing white-hot
+        vec3 activeThermal = computeActiveThermalSpectrum(normR, flux, diskFilaments);
+        float outerRedMask = smoothstep(0.52, 0.92, normR);
+        diskColor = mix(diskColor, activeThermal * (0.75 + 0.55 * radialProfile), outerRedMask * 0.68);
+      }
+
       float bloomAlphaBoost = 0.82 + 0.22 * min(2.0, bloomMult);
-      float diskAlpha = clamp(radialProfile * (0.52 + 0.48 * diskFilaments) * min(1.4, dopplerBoost) * bloomAlphaBoost, 0.0, 0.98);
+      float baseAlpha = clamp(radialProfile * (0.52 + 0.48 * diskFilaments) * min(1.4, dopplerBoost) * bloomAlphaBoost * mix(1.0, 1.25, uAccretionState), 0.0, 0.98);
+      float stratumWeight = (absLayer > 0.01) ? (verticalDensityFalloff * 0.62) : 1.0;
+      float diskAlpha = clamp(baseAlpha * stratumWeight * unfurlMask * smoothstep(0.02, 0.16, uExpansionProgress), 0.0, 0.98);
 
       if (uPulseStrength > 0.001) {
         // Sonic boom N-wave: dark evacuated decompression cavity + desaturated neutral grey shock front (no bright colors)
@@ -321,7 +421,7 @@ const ACCRETION_FRAGMENT_SHADER = `
     // Volumetric Raymarched Mode (uDiskStyle >= 0.5)
     float r_horizon = mix(1.95, 1.62, spin * 0.45);
     float rIn = mix(2.38, 1.92, spin * 0.55);
-    float rOut = 15.6;
+    float rOut = mix(15.6, 16.2, uAccretionState);
 
     if (r < r_horizon) {
       gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
@@ -334,7 +434,7 @@ const ACCRETION_FRAGMENT_SHADER = `
 
     vec2 unitDir = vLocalPos.xy / max(0.0001, r);
     float omega = 3.2 / (pow(r, 1.35) + 0.15 * spin);
-    float twist = uTurbulenceBuffer.x * omega * 1.5 - 1.35 * log(max(0.1, r / rIn));
+    float twist = uTurbulenceBuffer.x * omega * 1.5 - 1.35 * log(max(0.1, r / rIn)) + layerPhaseOffset * 0.35;
     float ct = cos(twist);
     float st = sin(twist);
     vec2 rotDir = vec2(unitDir.x * ct - unitDir.y * st, unitDir.x * st + unitDir.y * ct);
@@ -343,9 +443,10 @@ const ACCRETION_FRAGMENT_SHADER = `
     float sin2Phi = 2.0 * rotDir.x * rotDir.y;
     float cos3Phi = 4.0 * rotDir.x * rotDir.x * rotDir.x - 3.0 * rotDir.x;
 
-    float waveA = sin(r * 4.4 - uTurbulenceBuffer.z * 0.55 + cos2Phi * 1.15 + uTurbulenceBuffer.y);
-    float waveB = cos(r * 8.8 - uTurbulenceBuffer.z * 0.8 + waveA * 1.35 + sin2Phi * 0.85);
-    float waveC = sin(r * 2.9 + cos3Phi * 0.9 - uTurbulenceBuffer.w);
+    float turbBoost = mix(1.0, 1.32, uAccretionState);
+    float waveA = sin(r * 4.4 * turbBoost - uTurbulenceBuffer.z * 0.55 + cos2Phi * 1.15 + uTurbulenceBuffer.y + layerPhaseOffset);
+    float waveB = cos(r * 8.8 * turbBoost - uTurbulenceBuffer.z * 0.8 + waveA * (1.35 + 0.4 * uAccretionState) + sin2Phi * 0.85 - layerPhaseOffset * 0.6);
+    float waveC = sin(r * 2.9 * turbBoost + cos3Phi * 0.9 - uTurbulenceBuffer.w + layerPhaseOffset);
     float diskTurb = waveA * 0.5 + 0.5;
     float diskRings = waveB * 0.5 + 0.5;
     float plasmaBands = pow(mix(diskTurb, diskRings, 0.45), 1.25);
@@ -367,14 +468,22 @@ const ACCRETION_FRAGMENT_SHADER = `
     );
 
     float normR = clamp((r - rIn) / (rOut - rIn), 0.0, 1.0);
+    float diskUnfurl = smoothstep(0.02, 0.96, uExpansionProgress);
+    float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.16), diskUnfurl + 0.02, normR);
+    if (unfurlMask <= 0.001) {
+      discard;
+    }
+    float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.085, 2.0)) * sin(uExpansionProgress * 3.14159265) * 1.85;
+
     float innerTaper = smoothstep(rIn, rIn + 0.25, r);
     float corePeak = exp(-normR * 2.1);
     float sustainedBody = pow(max(0.0, 1.0 - normR * 0.68), 0.55);
     float outerTaper = 1.0 - smoothstep(0.72, 1.0, normR);
     float radialProfile = mix(sustainedBody, corePeak, 0.35) * innerTaper * outerTaper;
 
-    float accretionScale = 0.95 + 0.52 * clamp(accretionRate, 0.0, 2.5);
-    float innerCoreBoost = 1.0 + 1.65 * exp(-normR * 5.2);
+    float activeEmissionMult = mix(1.0, 2.35, uAccretionState) * (1.0 + ignitionWave);
+    float accretionScale = (0.95 + 0.52 * clamp(accretionRate, 0.0, 2.5)) * activeEmissionMult;
+    float innerCoreBoost = 1.0 + mix(1.65, 2.65, uAccretionState) * exp(-normR * 5.2);
     float flux = radialProfile * innerCoreBoost * (0.34 + 0.66 * diskFilaments) * dopplerBoost * accretionScale;
 
     float sonicRarefaction = 0.0;
@@ -389,7 +498,7 @@ const ACCRETION_FRAGMENT_SHADER = `
       sonicRarefaction = clamp(rarefactionTrough * uPulseStrength * innerTaper * outerTaper, 0.0, 0.88);
     }
 
-    float lutU = clamp(flux / (1.0 + flux * 0.42), 0.04, 0.94);
+    float lutU = clamp(flux / (1.0 + flux * 0.42), 0.04, 0.98);
     vec3 baseLut = texture2D(uSpectrumLut, vec2(lutU, 0.5)).rgb;
 
     vec3 colWhiteHot   = vec3(1.00, 0.97, 0.88);
@@ -412,14 +521,20 @@ const ACCRETION_FRAGMENT_SHADER = `
       baseLut = mix(vec3(0.06, 0.16, 0.42), vec3(0.84, 0.95, 1.0), lutU);
     } else if (spectralMode == 3) {
       baseLut = mix(vec3(0.95, 0.34, 0.08), vec3(0.22, 0.82, 1.0), clamp(approachCos * 0.5 + 0.5, 0.0, 1.0)) * (0.42 + 0.58 * diskFilaments);
+    } else if (uAccretionState > 0.5) {
+      vec3 activeThermal = computeActiveThermalSpectrum(normR, flux, diskFilaments);
+      baseLut = mix(baseLut * activeThermal, activeThermal, 0.78);
     } else {
       baseLut = mix(baseLut * physicalColorGradient, physicalColorGradient, 0.52);
     }
 
     float bloomMult = max(0.0, uBloomIntensity);
-    float whiteCoreGlow = smoothstep(0.24, 0.0, normR) * (0.50 + 0.50 * diskFilaments) * dopplerBoost * (0.35 + 0.65 * bloomMult);
-    vec3 diskColor = baseLut * (0.85 + (1.15 + 0.80 * bloomMult) * flux) + vec3(1.0, 0.94, 0.78) * whiteCoreGlow * (0.75 + 0.55 * bloomMult);
-    float diskAlpha = clamp(pow(radialProfile, 0.68) * (0.62 + 0.38 * diskFilaments) * min(1.30, dopplerBoost) * (0.85 + 0.18 * min(2.0, bloomMult)), 0.0, 0.98);
+    float whiteCoreGlow = smoothstep(mix(0.24, 0.32, uAccretionState), 0.0, normR) * (0.50 + 0.50 * diskFilaments) * dopplerBoost * (0.35 + 0.65 * bloomMult) * mix(1.0, 1.65, uAccretionState);
+    vec3 coreTone = (spectralMode == 2) ? vec3(0.88, 0.97, 1.0) : vec3(1.0, 0.96, 0.84);
+    vec3 diskColor = baseLut * (0.85 + (1.15 + 0.80 * bloomMult) * flux) + coreTone * whiteCoreGlow * (0.75 + 0.55 * bloomMult);
+    float baseAlpha = clamp(pow(radialProfile, 0.68) * (0.62 + 0.38 * diskFilaments) * min(1.30, dopplerBoost) * (0.85 + 0.18 * min(2.0, bloomMult)) * mix(1.0, 1.2, uAccretionState), 0.0, 0.98);
+    float stratumWeight = (absLayer > 0.01) ? (verticalDensityFalloff * 0.62) : 1.0;
+    float diskAlpha = clamp(baseAlpha * stratumWeight * unfurlMask * smoothstep(0.02, 0.16, uExpansionProgress), 0.0, 0.98);
 
     vec3 tonemappedColor = acesFilm(diskColor * (1.05 + 0.23 * bloomMult));
     if (uPulseStrength > 0.001) {
@@ -466,6 +581,8 @@ const LENSING_FRAGMENT_SHADER = `
   uniform float uTime;
   uniform float uDiskStyle;
   uniform float uBloomIntensity;
+  uniform float uAccretionState;
+  uniform float uExpansionProgress;
 
   varying vec2 vUv;
   varying vec3 vWorldPos;
@@ -483,9 +600,34 @@ const LENSING_FRAGMENT_SHADER = `
     return clamp((r * (a * r + b)) / (r * (c * r + d) + e), 0.0, 1.0);
   }
 
-  // Evaluates accretion disk density & emission at equatorial crossing hitXZ without any atan/atan2 discontinuity
+  // High-energy thermal blackbody color progression for Active Accretion State:
+  // Burns incandescent white-hot at the inner core, transitions to bright gold, and tapers to deep red at the outer edges
+  vec3 computeActiveThermalSpectrum(float normR, float boostedFlux, float filaments) {
+    float radialHeat = pow(clamp(1.0 - normR, 0.0, 1.0), 0.82);
+    float fluxHeat = clamp(boostedFlux / (1.25 + boostedFlux * 0.30), 0.0, 1.0);
+    float T = clamp(mix(radialHeat, fluxHeat, 0.42) + (1.0 - normR) * 0.24 + (filaments - 0.5) * 0.08, 0.0, 1.0);
+
+    vec3 colDeepRed    = vec3(0.54, 0.03, 0.008);
+    vec3 colCrimson    = vec3(0.88, 0.15, 0.02);
+    vec3 colAmberFire  = vec3(0.98, 0.45, 0.06);
+    vec3 colBrightGold = vec3(1.00, 0.82, 0.24);
+    vec3 colWhiteHot   = vec3(1.00, 0.99, 0.94);
+
+    if (T > 0.76) {
+      return mix(colBrightGold, colWhiteHot, smoothstep(0.76, 0.94, T));
+    } else if (T > 0.48) {
+      return mix(colAmberFire, colBrightGold, smoothstep(0.48, 0.76, T));
+    } else if (T > 0.22) {
+      return mix(colCrimson, colAmberFire, smoothstep(0.22, 0.48, T));
+    } else {
+      return mix(colDeepRed, colCrimson, smoothstep(0.0, 0.22, T));
+    }
+  }
+
+  // Evaluates accretion disk density & emission at equatorial/volumetric crossing hitXZ without any atan/atan2 discontinuity
   void sampleEquatorialDisk(
     vec2 hitXZ,
+    float verticalY,
     vec3 rayDir,
     float rHit,
     float r_horizon,
@@ -498,13 +640,13 @@ const LENSING_FRAGMENT_SHADER = `
     outColor = vec3(0.0);
     outAlpha = 0.0;
 
-    if (rHit <= r_horizon || rHit < rIn || rHit > rOut) {
+    if (uExpansionProgress < 0.02 || rHit <= r_horizon || rHit < rIn || rHit > rOut) {
       return;
     }
 
     vec2 unitDir = hitXZ / max(0.0001, rHit);
     float omega = 3.2 / (pow(rHit, 1.35) + 0.15 * spin);
-    float twist = uTime * omega * 1.5 - 1.35 * log(max(0.1, rHit / rIn));
+    float twist = uTime * omega * 1.5 - 1.35 * log(max(0.1, rHit / rIn)) + verticalY * 0.45 * uAccretionState;
     float ct = cos(twist);
     float st = sin(twist);
     vec2 rotDir = vec2(unitDir.x * ct - unitDir.y * st, unitDir.x * st + unitDir.y * ct);
@@ -512,11 +654,12 @@ const LENSING_FRAGMENT_SHADER = `
     float cos2Phi = rotDir.x * rotDir.x - rotDir.y * rotDir.y;
     float sin2Phi = 2.0 * rotDir.x * rotDir.y;
 
-    float turbA = snoise(rotDir * (rHit * 0.55) + vec2(uTime * 0.12, -uTime * 0.10)) * 0.5 + 0.5;
-    float turbB = snoise(rotDir * (rHit * 1.20) - vec2(uTime * 0.16, uTime * 0.14)) * 0.5 + 0.5;
+    float turbScale = mix(1.0, 1.35, uAccretionState);
+    float turbA = snoise(rotDir * (rHit * 0.55 * turbScale) + vec2(uTime * 0.12, -uTime * 0.10 + verticalY * 0.35)) * 0.5 + 0.5;
+    float turbB = snoise(rotDir * (rHit * 1.20 * turbScale) - vec2(uTime * 0.16, uTime * 0.14 - verticalY * 0.45)) * 0.5 + 0.5;
 
-    float band1 = sin(rHit * 4.4 - uTime * 1.8 + cos2Phi * 1.15 + (turbA - 0.5) * 2.0) * 0.5 + 0.5;
-    float band2 = cos(rHit * 8.8 - uTime * 2.5 + sin2Phi * 0.85 + (turbB - 0.5) * 1.5) * 0.5 + 0.5;
+    float band1 = sin(rHit * 4.4 * turbScale - uTime * 1.8 + cos2Phi * 1.15 + (turbA - 0.5) * (2.0 + 0.65 * uAccretionState) + verticalY * 1.2) * 0.5 + 0.5;
+    float band2 = cos(rHit * 8.8 * turbScale - uTime * 2.5 + sin2Phi * 0.85 + (turbB - 0.5) * (1.5 + 0.55 * uAccretionState) - verticalY * 0.9) * 0.5 + 0.5;
     float plasmaBands = pow(mix(band1, band2, 0.42), 1.25);
     float diskFilaments = clamp(mix(turbA, plasmaBands, 0.72), 0.14, 1.0);
 
@@ -534,14 +677,23 @@ const LENSING_FRAGMENT_SHADER = `
     );
 
     float normR = clamp((rHit - rIn) / (rOut - rIn), 0.0, 1.0);
+    float diskUnfurl = smoothstep(0.02, 0.96, uExpansionProgress);
+    float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.16), diskUnfurl + 0.02, normR);
+    if (unfurlMask <= 0.001) {
+      return;
+    }
+    float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.085, 2.0)) * sin(uExpansionProgress * 3.14159265) * 1.85;
+
     float innerTaper = smoothstep(rIn, rIn + 0.25, rHit);
     float corePeak = exp(-normR * 2.1);
     float sustainedBody = pow(max(0.0, 1.0 - normR * 0.68), 0.55);
     float outerTaper = 1.0 - smoothstep(0.72, 1.0, normR);
     float radialProfile = mix(sustainedBody, corePeak, 0.35) * innerTaper * outerTaper;
 
-    float accretionScale = 0.95 + 0.52 * clamp(uAccretionRate, 0.0, 2.5);
-    float innerCoreBoost = 1.0 + 1.65 * exp(-normR * 5.2);
+    // Constraint 2: Significantly boosted base emission multiplier in Active mode
+    float activeEmissionMult = mix(1.0, 2.40, uAccretionState) * (1.0 + ignitionWave);
+    float accretionScale = (0.95 + 0.52 * clamp(uAccretionRate, 0.0, 2.5)) * activeEmissionMult;
+    float innerCoreBoost = 1.0 + mix(1.65, 2.75, uAccretionState) * exp(-normR * 5.2);
     float flux = radialProfile * innerCoreBoost * (0.34 + 0.66 * diskFilaments) * dopplerBoost * accretionScale;
 
     float sonicRarefaction = 0.0;
@@ -556,7 +708,7 @@ const LENSING_FRAGMENT_SHADER = `
       sonicRarefaction = clamp(rarefactionTrough * uPulseStrength * innerTaper * outerTaper, 0.0, 0.88);
     }
 
-    float lutU = clamp(flux / (1.0 + flux * 0.42), 0.04, 0.94);
+    float lutU = clamp(flux / (1.0 + flux * 0.42), 0.04, 0.98);
     vec3 baseLut = texture2D(uSpectrumLut, vec2(lutU, 0.5)).rgb;
 
     vec3 colWhiteHot   = vec3(1.00, 0.97, 0.88);
@@ -579,14 +731,18 @@ const LENSING_FRAGMENT_SHADER = `
       baseLut = mix(vec3(0.06, 0.16, 0.42), vec3(0.84, 0.95, 1.0), lutU);
     } else if (uSpectralMode == 3) {
       baseLut = mix(vec3(0.95, 0.34, 0.08), vec3(0.22, 0.82, 1.0), clamp(approach * 0.5 + 0.5, 0.0, 1.0)) * (0.42 + 0.58 * diskFilaments);
+    } else if (uAccretionState > 0.5) {
+      vec3 activeThermal = computeActiveThermalSpectrum(normR, flux, diskFilaments);
+      baseLut = mix(baseLut * activeThermal, activeThermal, 0.78);
     } else {
       baseLut = mix(baseLut * physicalColorGradient, physicalColorGradient, 0.52);
     }
 
     float bloomMult = max(0.0, uBloomIntensity);
-    float whiteCoreGlow = smoothstep(0.24, 0.0, normR) * (0.50 + 0.50 * diskFilaments) * dopplerBoost * (0.35 + 0.65 * bloomMult);
-    outColor = baseLut * (0.85 + (1.15 + 0.80 * bloomMult) * flux) + vec3(1.0, 0.94, 0.78) * whiteCoreGlow * (0.75 + 0.55 * bloomMult);
-    outAlpha = clamp(pow(radialProfile, 0.68) * (0.62 + 0.38 * diskFilaments) * min(1.30, dopplerBoost) * (0.85 + 0.18 * min(2.0, bloomMult)), 0.0, 0.98);
+    float whiteCoreGlow = smoothstep(mix(0.24, 0.34, uAccretionState), 0.0, normR) * (0.50 + 0.50 * diskFilaments) * dopplerBoost * (0.35 + 0.65 * bloomMult) * mix(1.0, 1.65, uAccretionState);
+    vec3 coreTone = (uSpectralMode == 2) ? vec3(0.88, 0.97, 1.0) : vec3(1.0, 0.96, 0.84);
+    outColor = baseLut * (0.85 + (1.15 + 0.80 * bloomMult) * flux) + coreTone * whiteCoreGlow * (0.75 + 0.55 * bloomMult);
+    outAlpha = clamp(pow(radialProfile, 0.68) * (0.62 + 0.38 * diskFilaments) * min(1.30, dopplerBoost) * (0.85 + 0.18 * min(2.0, bloomMult)) * mix(1.0, 1.22, uAccretionState) * unfurlMask * smoothstep(0.02, 0.16, uExpansionProgress), 0.0, 0.98);
 
     if (uPulseStrength > 0.001) {
       float luma = dot(outColor, vec3(0.299, 0.587, 0.114));
@@ -624,18 +780,19 @@ const LENSING_FRAGMENT_SHADER = `
 
       float bloomMult = max(0.0, uBloomIntensity);
       float distFromHorizon = max(0.0, b - r_horizon);
-      float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(distFromHorizon / 0.06, 2.0)) * (0.65 + 0.55 * bloomMult);
-      float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow((distFromHorizon - 0.08) / 0.11, 2.0)) * (0.25 + 0.25 * bloomMult);
-      float photonBloom = (uIsStar > 0.5) ? 0.0 : exp(-distFromHorizon / (0.24 + 0.22 * bloomMult)) * 0.42 * bloomMult;
+      float activePhotonBoost = mix(1.0, 1.55, uAccretionState);
+      float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(distFromHorizon / 0.06, 2.0)) * (0.65 + 0.55 * bloomMult) * activePhotonBoost;
+      float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow((distFromHorizon - 0.08) / 0.11, 2.0)) * (0.25 + 0.25 * bloomMult) * activePhotonBoost;
+      float photonBloom = (uIsStar > 0.5) ? 0.0 : exp(-distFromHorizon / (0.24 + 0.22 * bloomMult)) * 0.42 * bloomMult * activePhotonBoost;
       float photonRing = photonRing1 + photonRing2 + photonBloom;
       vec3 photonColor = mix(vec3(1.0, 0.95, 0.85), vec3(1.0, 0.80, 0.38), spin * 0.5) * photonRing;
 
       vec3 lensedDiskColor = vec3(0.0);
       float lensedDiskAlpha = 0.0;
 
-      if (uShowDisk > 0.5 && uLensingActive > 0.5 && b >= r_horizon) {
+      if (uShowDisk > 0.5 && uLensingActive > 0.5 && uExpansionProgress > 0.02 && b >= r_horizon) {
         float rIn = mix(2.55, 1.45, spin * 0.75);
-        float rOut = 11.8;
+        float rOut = mix(11.8, 14.0, uAccretionState);
 
         // Analytical Einstein gravitational deflection of rays passing above and below the shadow
         // plus Schlieren sonic-boom refractive shock deflection at b ≈ uPulseRadius
@@ -648,11 +805,24 @@ const LENSING_FRAGMENT_SHADER = `
         vec3 inward = -normalize(pLocal);
         vec3 bentDir = normalize(rayDir + inward * sin(alpha));
 
-        if (abs(bentDir.y) > 0.015) {
-          float tCross = -pLocal.y / bentDir.y;
+        // In Active mode, rays near the equatorial limbs (where bentDir.y is small) still intersect the
+        // volumetrically thick vertical torus H(r) so the lensed arcs smoothly connect to the equatorial disk!
+        float effectiveBentY = bentDir.y;
+        if (uAccretionState > 0.5 && abs(effectiveBentY) < 0.22) {
+          effectiveBentY = (pLocal.y >= 0.0 ? -1.0 : 1.0) * mix(0.22, abs(effectiveBentY), abs(effectiveBentY) / 0.22);
+        }
+
+        if (abs(effectiveBentY) > 0.015) {
+          float tCross = -pLocal.y / effectiveBentY;
           if (tCross > 0.0) {
             vec3 hitPos = pLocal + bentDir * tCross;
             float rHit = length(hitPos.xz);
+            if (uAccretionState > 0.5) {
+              // Blend limb radial coordinate so equatorial ansae smoothly bridge into the main equatorial torus
+              float limbBlend = exp(-abs(pLocal.y) * 1.35);
+              rHit = mix(rHit, b, limbBlend * 0.65);
+            }
+
             if (rHit >= rIn && rHit <= rOut) {
               vec2 unitDir = hitPos.xz / max(0.0001, rHit);
               float omega = 3.2 / (pow(rHit, 1.45) + 0.15 * spin);
@@ -664,10 +834,15 @@ const LENSING_FRAGMENT_SHADER = `
               float cos2Phi = rotDir.x * rotDir.x - rotDir.y * rotDir.y;
               float sin2Phi = 2.0 * rotDir.x * rotDir.y;
 
-              float turbA = snoise(rotDir * (rHit * 0.65) + vec2(uTime * 0.12, -uTime * 0.10)) * 0.5 + 0.5;
-              float band1 = sin(rHit * 5.2 - uTime * 1.8 + cos2Phi * 1.15 + (turbA - 0.5) * 1.8) * 0.5 + 0.5;
-              float band2 = cos(rHit * 10.4 - uTime * 2.4 + sin2Phi * 0.85) * 0.5 + 0.5;
+              float turbScale = mix(1.0, 1.35, uAccretionState);
+              float turbA = snoise(rotDir * (rHit * 0.65 * turbScale) + vec2(uTime * 0.12, -uTime * 0.10)) * 0.5 + 0.5;
+              float turbVertical = snoise(vec2(pLocal.x * 0.45 + uTime * 0.18, pLocal.y * 0.55 - uTime * 0.14)) * 0.5 + 0.5;
+              float band1 = sin(rHit * 5.2 * turbScale - uTime * 1.8 + cos2Phi * 1.15 + (turbA - 0.5) * (1.8 + 0.65 * uAccretionState)) * 0.5 + 0.5;
+              float band2 = cos(rHit * 10.4 * turbScale - uTime * 2.4 + sin2Phi * 0.85 + (turbVertical - 0.5) * 1.2 * uAccretionState) * 0.5 + 0.5;
               float diskFilaments = mix(turbA, mix(band1, band2, 0.45), 0.65);
+              if (uAccretionState > 0.5) {
+                diskFilaments = mix(diskFilaments, turbVertical, 0.28);
+              }
 
               float approach = clamp(uvCentered.x / max(0.001, length(uvCentered)), -1.0, 1.0);
               float beta = clamp(0.68 / sqrt(max(0.75, rHit - 0.4)), 0.05, 0.78);
@@ -675,13 +850,27 @@ const LENSING_FRAGMENT_SHADER = `
               float dopplerBoost = pow(clamp(dopplerFactor, 0.35, 2.35), 2.1);
 
               float normR = clamp((rHit - rIn) / (rOut - rIn), 0.0, 1.0);
-              float innerTaper = smoothstep(rIn, rIn + 0.45, rHit);
-              float outerTaper = 1.0 - smoothstep(rOut - 2.4, rOut, rHit);
-              float radialProfile = pow(1.0 - normR, 1.25) * innerTaper * outerTaper;
+              float diskUnfurl = smoothstep(0.02, 0.96, uExpansionProgress);
+              float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.16), diskUnfurl + 0.02, normR);
+              float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.085, 2.0)) * sin(uExpansionProgress * 3.14159265) * 1.85;
 
-              // Smoothly mask near the equatorial plane so the 3D mainDiskMesh renders the primary disk without overlap
-              float archMask = smoothstep(0.18, 0.85, abs(pLocal.y));
-              float flux = radialProfile * (0.28 + 0.72 * diskFilaments) * dopplerBoost * (0.65 + 0.45 * uAccretionRate);
+              float innerTaper = smoothstep(rIn, rIn + mix(0.45, 0.28, uAccretionState), rHit);
+              float outerTaper = 1.0 - smoothstep(rOut - mix(2.4, 3.2, uAccretionState), rOut, rHit);
+              float radialProfile = pow(1.0 - normR, mix(1.25, 0.92, uAccretionState)) * innerTaper * outerTaper;
+
+              // Constraint 1: In Quiescent mode, archMask masks near the equatorial plane for the razor-thin disk.
+              // In Active mode, drastically increase vertical Y-axis density scale & falloff so the lensed arcs
+              // smoothly and continuously connect to the main equatorial disk!
+              float quiescentArchMask = smoothstep(0.18, 0.85, abs(pLocal.y));
+              float scaleHeightY = 1.25 + 0.32 * max(0.0, b - rIn);
+              float yTurbOffset = (turbVertical - 0.5) * 0.65;
+              float activeVolumetricEnvelope = exp(-pow(max(0.0, abs(pLocal.y + yTurbOffset) - 0.35) / scaleHeightY, 1.45));
+              float activeArchMask = mix(0.78, 1.0, smoothstep(0.0, 0.45, abs(pLocal.y))) * clamp(activeVolumetricEnvelope * 1.15, 0.0, 1.0);
+              float archMask = mix(quiescentArchMask, activeArchMask, uAccretionState) * unfurlMask * smoothstep(0.02, 0.16, uExpansionProgress);
+
+              // Constraint 2: Significantly increase base emission intensity in Active mode
+              float activeEmissionMult = mix(1.0, 2.45, uAccretionState) * (1.0 + ignitionWave);
+              float flux = radialProfile * (0.28 + 0.72 * diskFilaments) * dopplerBoost * (0.65 + 0.45 * uAccretionRate) * activeEmissionMult;
               float sonicRarefaction = 0.0;
               float sonicCompression = 0.0;
               if (uPulseStrength > 0.001) {
@@ -692,7 +881,7 @@ const LENSING_FRAGMENT_SHADER = `
                 sonicCompression = clamp((leadFront + tailFront) * uPulseStrength * innerTaper * outerTaper, 0.0, 1.0);
                 sonicRarefaction = clamp(rarefactionTrough * uPulseStrength * innerTaper * outerTaper, 0.0, 0.88);
               }
-              float lutU = clamp(flux * 0.65, 0.02, 0.98);
+              float lutU = clamp(flux * 0.65, 0.02, 0.99);
               vec3 baseLut = texture2D(uSpectrumLut, vec2(lutU, 0.5)).rgb;
 
               if (uSpectralMode == 1) {
@@ -701,11 +890,25 @@ const LENSING_FRAGMENT_SHADER = `
                 baseLut = mix(vec3(0.06, 0.16, 0.42), vec3(0.84, 0.95, 1.0), lutU);
               } else if (uSpectralMode == 3) {
                 baseLut = mix(vec3(0.95, 0.34, 0.08), vec3(0.22, 0.82, 1.0), clamp(approach * 0.5 + 0.5, 0.0, 1.0)) * (0.42 + 0.58 * diskFilaments);
+              } else if (uAccretionState > 0.5) {
+                vec3 activeThermal = computeActiveThermalSpectrum(normR, flux, diskFilaments);
+                baseLut = mix(baseLut, activeThermal, 0.85);
               }
 
-              float innerArchBloom = exp(-normR * 3.0) * bloomMult * 0.55 * dopplerBoost;
-              lensedDiskColor = (baseLut * (0.48 + (0.75 + 0.60 * bloomMult) * flux) + vec3(1.0, 0.88, 0.56) * innerArchBloom) * archMask;
-              lensedDiskAlpha = clamp(radialProfile * (0.48 + 0.52 * diskFilaments) * min(1.4, dopplerBoost) * (0.82 + 0.22 * min(2.0, bloomMult)), 0.0, 0.97) * archMask;
+              float innerArchBloom = exp(-normR * mix(3.0, 3.8, uAccretionState)) * max(0.45, bloomMult) * mix(0.55, 1.25, uAccretionState) * dopplerBoost;
+              vec3 coreTone = (uSpectralMode == 2)
+                ? vec3(0.88, 0.97, 1.0)
+                : (uSpectralMode == 3)
+                ? mix(vec3(1.0, 0.65, 0.35), vec3(0.75, 0.95, 1.0), clamp(approach * 0.5 + 0.5, 0.0, 1.0))
+                : mix(vec3(1.0, 0.88, 0.56), vec3(1.0, 0.99, 0.94), uAccretionState);
+
+              lensedDiskColor = (baseLut * (0.48 + (0.75 + 0.60 * bloomMult) * flux) + coreTone * innerArchBloom) * archMask;
+              if (uAccretionState > 0.5 && uSpectralMode == 0) {
+                vec3 activeThermal = computeActiveThermalSpectrum(normR, flux, diskFilaments);
+                float outerRedMask = smoothstep(0.52, 0.92, normR);
+                lensedDiskColor = mix(lensedDiskColor, activeThermal * (0.75 + 0.55 * radialProfile) * archMask, outerRedMask * 0.68);
+              }
+              lensedDiskAlpha = clamp(radialProfile * (0.48 + 0.52 * diskFilaments) * min(1.4, dopplerBoost) * (0.82 + 0.22 * min(2.0, bloomMult)) * mix(1.0, 1.28, uAccretionState), 0.0, 0.98) * archMask;
               if (uPulseStrength > 0.001) {
                 float luma = dot(lensedDiskColor, vec3(0.299, 0.587, 0.114));
                 vec3 neutralShock = mix(vec3(luma * 0.72), vec3(0.52, 0.55, 0.60) * archMask, 0.35);
@@ -732,7 +935,7 @@ const LENSING_FRAGMENT_SHADER = `
     // Volumetric Raymarched Mode (uDiskStyle >= 0.5):
     float r_horizon = (uIsStar > 0.5) ? 0.0 : mix(1.95, 1.62, spin * 0.45);
     float rIn = mix(2.38, 1.92, spin * 0.55);
-    float rOut = 15.6;
+    float rOut = mix(15.6, 16.4, uAccretionState);
 
     vec3 viewZ = normalize(uCameraPos - uBlackHolePos);
     vec3 planeOffset = (vWorldPos - uBlackHolePos) / max(0.01, uScale);
@@ -793,27 +996,54 @@ const LENSING_FRAGMENT_SHADER = `
         break;
       }
 
-      if (uShowDisk > 0.5 && ((pos.y >= 0.0 && nextPos.y < 0.0) || (pos.y <= 0.0 && nextPos.y > 0.0))) {
-        float denom = abs(pos.y) + abs(nextPos.y);
-        float frac = denom > 1e-6 ? abs(pos.y) / denom : 0.5;
-        vec3 hitPos = mix(pos, nextPos, frac);
-        float rHit = length(hitPos);
+      if (uShowDisk > 0.5) {
+        // Quiescent Mode: Exact equatorial razor-thin sheet crossing
+        bool crossedEquator = (pos.y >= 0.0 && nextPos.y < 0.0) || (pos.y <= 0.0 && nextPos.y > 0.0);
+        if (crossedEquator) {
+          float denom = abs(pos.y) + abs(nextPos.y);
+          float frac = denom > 1e-6 ? abs(pos.y) / denom : 0.5;
+          vec3 hitPos = mix(pos, nextPos, frac);
+          float rHit = length(hitPos);
 
-        if (rHit < r_horizon) {
-          accumColor = vec3(0.0);
-          accumAlpha = 1.0;
-          hitHorizon = true;
-          break;
+          if (rHit < r_horizon) {
+            accumColor = vec3(0.0);
+            accumAlpha = 1.0;
+            hitHorizon = true;
+            break;
+          }
+
+          vec3 sampleCol;
+          float sampleAlpha;
+          sampleEquatorialDisk(hitPos.xz, 0.0, nextDir, rHit, r_horizon, rIn, rOut, spin, sampleCol, sampleAlpha);
+
+          if (sampleAlpha > 0.001) {
+            float weight = (1.0 - accumAlpha) * sampleAlpha;
+            accumColor += sampleCol * weight;
+            accumAlpha += weight;
+          }
         }
 
-        vec3 sampleCol;
-        float sampleAlpha;
-        sampleEquatorialDisk(hitPos.xz, nextDir, rHit, r_horizon, rIn, rOut, spin, sampleCol, sampleAlpha);
-
-        if (sampleAlpha > 0.001) {
-          float weight = (1.0 - accumAlpha) * sampleAlpha;
-          accumColor += sampleCol * weight;
-          accumAlpha += weight;
+        // Active Mode: True 3D Volumetric Y-Axis Torus Integration along the curved geodesic ray
+        if (uAccretionState > 0.5 && accumAlpha < 0.97) {
+          vec3 midPos = 0.5 * (pos + nextPos);
+          float rCyl = length(midPos.xz);
+          if (rCyl >= rIn && rCyl <= rOut) {
+            float scaleHeightY = 0.46 + 0.22 * (rCyl - rIn);
+            vec2 uDir = midPos.xz / max(0.0001, rCyl);
+            float yBillow = sin(rCyl * 2.7 - uTime * 1.9 + (uDir.x * uDir.x - uDir.y * uDir.y) * 1.8) * 0.22 * scaleHeightY;
+            float absY = abs(midPos.y - yBillow);
+            if (absY < scaleHeightY * 2.2) {
+              float vertDensity = exp(-pow(absY / scaleHeightY, 1.50));
+              if (vertDensity > 0.025) {
+                vec3 volCol;
+                float volAlpha;
+                sampleEquatorialDisk(midPos.xz, midPos.y / scaleHeightY, nextDir, rCyl, r_horizon, rIn, rOut, spin, volCol, volAlpha);
+                float stepWeight = (1.0 - accumAlpha) * clamp(volAlpha * vertDensity * stepSize * 0.58, 0.0, 0.65);
+                accumColor += volCol * stepWeight;
+                accumAlpha += stepWeight;
+              }
+            }
+          }
         }
       }
 
@@ -828,9 +1058,10 @@ const LENSING_FRAGMENT_SHADER = `
 
     float bloomMult = max(0.0, uBloomIntensity);
     float distFromHorizon = max(0.0, minRayR - r_horizon);
-    float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(distFromHorizon / 0.055, 2.0)) * (0.65 + 0.55 * bloomMult);
-    float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow((distFromHorizon - 0.07) / 0.10, 2.0)) * (0.25 + 0.25 * bloomMult);
-    float photonBloom = (uIsStar > 0.5) ? 0.0 : exp(-distFromHorizon / (0.24 + 0.22 * bloomMult)) * 0.42 * bloomMult;
+    float activePhotonBoost = mix(1.0, 1.50, uAccretionState);
+    float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(distFromHorizon / 0.055, 2.0)) * (0.65 + 0.55 * bloomMult) * activePhotonBoost;
+    float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow((distFromHorizon - 0.07) / 0.10, 2.0)) * (0.25 + 0.25 * bloomMult) * activePhotonBoost;
+    float photonBloom = (uIsStar > 0.5) ? 0.0 : exp(-distFromHorizon / (0.24 + 0.22 * bloomMult)) * 0.42 * bloomMult * activePhotonBoost;
     float photonRing = photonRing1 + photonRing2 + photonBloom;
     vec3 photonColor = mix(vec3(1.0, 0.96, 0.86), vec3(1.0, 0.80, 0.35), spin * 0.45) * photonRing;
 
@@ -844,6 +1075,90 @@ const LENSING_FRAGMENT_SHADER = `
 
     float outAlpha = clamp(max(accumAlpha, max(clamp(photonRing, 0.0, 0.98), einsteinGlow)), 0.0, 1.0) * quadFade;
     gl_FragColor = vec4(tonemapped, outAlpha);
+  }
+`;
+
+// 3b. Compact Quantum-Gravity Singularity Seed Ball Shader (Initial compressed state before expansion)
+const SINGULARITY_BALL_VERTEX_SHADER = `
+  varying vec3 vNormalVec;
+  varying vec3 vViewDir;
+  varying vec3 vLocalPos;
+
+  void main() {
+    vLocalPos = position;
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vNormalVec = normalize(mat3(modelMatrix) * normal);
+    vViewDir = normalize(cameraPosition - worldPos.xyz);
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`;
+
+const SINGULARITY_BALL_FRAGMENT_SHADER = `
+  uniform float uTime;
+  uniform float uOpacity;
+  uniform int uSpectralMode;
+  varying vec3 vNormalVec;
+  varying vec3 vViewDir;
+  varying vec3 vLocalPos;
+
+` + GLSL_SIMPLEX_NOISE + `
+
+  void main() {
+    if (uOpacity <= 0.001) discard;
+    float ndv = clamp(dot(normalize(vNormalVec), normalize(vViewDir)), 0.0, 1.0);
+
+    // Swirling high-energy quantum-horizon plasma filaments on the singularity limb
+    vec2 limbUv = vLocalPos.xy * 3.2 + vec2(uTime * 0.95, -uTime * 0.72);
+    float plasmaTurb = snoise(limbUv) * 0.5 + 0.5;
+    float fineRipple = sin(length(vLocalPos.xz) * 18.0 - uTime * 7.5 + plasmaTurb * 3.0) * 0.5 + 0.5;
+
+    // Deep pitch-black singularity shadow core in the interior (ndv > 0.42),
+    // surrounded by a razor-sharp incandescent photon-capture rim and outer corona
+    float horizonShadow = smoothstep(0.32, 0.52, ndv);
+    float photonRim = exp(-pow((ndv - 0.36) * 8.5, 2.0)) * (1.15 + 0.55 * plasmaTurb);
+    float outerCorona = pow(1.0 - ndv, 2.6) * (0.75 + 0.45 * fineRipple);
+
+    vec3 primaryGlow = vec3(1.0, 0.86, 0.48);
+    vec3 coreHot = vec3(1.0, 0.99, 0.94);
+    if (uSpectralMode == 2) {
+      primaryGlow = vec3(0.38, 0.78, 1.0);
+      coreHot = vec3(0.90, 0.98, 1.0);
+    } else if (uSpectralMode == 3) {
+      primaryGlow = mix(vec3(0.98, 0.42, 0.14), vec3(0.28, 0.85, 1.0), clamp(vLocalPos.x * 0.8 + 0.5, 0.0, 1.0));
+    }
+
+    vec3 rimColor = mix(primaryGlow, coreHot, clamp(photonRim * 0.75, 0.0, 1.0)) * (photonRim * 1.45 + outerCorona * 0.95);
+    vec3 finalRgb = mix(rimColor, vec3(0.0, 0.0, 0.0), horizonShadow);
+    float alpha = clamp((horizonShadow + photonRim + outerCorona * 0.85) * uOpacity, 0.0, 1.0);
+    gl_FragColor = vec4(finalRgb, alpha);
+  }
+`;
+
+const SINGULARITY_HALO_FRAGMENT_SHADER = `
+  uniform float uTime;
+  uniform float uOpacity;
+  uniform int uSpectralMode;
+  varying vec2 vUv;
+
+  void main() {
+    if (uOpacity <= 0.001) discard;
+    vec2 p = (vUv - 0.5) * 2.0;
+    float r = length(p);
+    if (r > 1.0) discard;
+
+    // Tightly coiled nascent micro-photon ring and gravitational lensing shimmer around the small singularity ball
+    float innerShadow = 1.0 - smoothstep(0.18, 0.25, r);
+    float photonRing = exp(-pow((r - 0.26) * 18.0, 2.0)) * 1.35;
+    float secondRing = exp(-pow((r - 0.36) * 11.0, 2.0)) * 0.55;
+    float angle = atan(p.y, p.x);
+    float spiralWisp = (0.5 + 0.5 * sin(angle * 3.0 + r * 16.0 - uTime * 5.2)) * exp(-max(0.0, r - 0.24) * 4.5);
+    float haloFalloff = exp(-max(0.0, r - 0.24) * 4.2) * (0.45 + 0.35 * spiralWisp);
+
+    vec3 tint = (uSpectralMode == 2) ? vec3(0.45, 0.84, 1.0) : vec3(1.0, 0.82, 0.42);
+    vec3 col = mix(tint, vec3(1.0, 0.99, 0.94), clamp(photonRing, 0.0, 1.0)) * (photonRing + secondRing + haloFalloff);
+    col = mix(col, vec3(0.0), innerShadow);
+    float alpha = clamp((innerShadow * 0.95 + photonRing * 0.90 + secondRing * 0.55 + haloFalloff * 0.65) * (1.0 - smoothstep(0.75, 1.0, r)) * uOpacity, 0.0, 0.98);
+    gl_FragColor = vec4(col, alpha);
   }
 `;
 
@@ -926,7 +1241,20 @@ export class BlackHoleSceneController {
   private eventHorizonMesh!: THREE.Mesh;
   private accretionDiskGroup = new THREE.Group();
   private accretionDiskMat!: THREE.ShaderMaterial;
+  private activeDiskVolumeGroup = new THREE.Group();
   private ergosphereGroup = new THREE.Group();
+
+  // Compressed Singularity Seed Ball & Expansion Animation subsystem
+  private singularitySeedGroup = new THREE.Group();
+  private singularityCoreMesh!: THREE.Mesh;
+  private singularityCoreMat!: THREE.ShaderMaterial;
+  private singularityHaloMesh!: THREE.Mesh;
+  private singularityHaloMat!: THREE.ShaderMaterial;
+  private isSingularityCollapsed = true;
+  private expansionProgress = 0.0;
+  private targetExpansionProgress = 0.0;
+  private lastWellExpansionProgress = -1.0;
+  private pointerDownPos = new THREE.Vector2();
 
   // Spacetime Well Manifold
   private spacetimeWellMesh!: THREE.Mesh;
@@ -962,8 +1290,6 @@ export class BlackHoleSceneController {
   // Relativistic Gravitational Lensing Shader Mesh (Interstellar Gargantua ray-marched distortion)
   private gravitationalLensMesh!: THREE.Mesh;
   private gravitationalLensMat!: THREE.ShaderMaterial;
-
-
 
   // Panoramic Soothing Cosmic Sky Dome
   private cosmicSkyDomeMesh!: THREE.Mesh;
@@ -1031,11 +1357,11 @@ export class BlackHoleSceneController {
   private onFeatureSelect?: (feature: InspectedFeature | null) => void;
   private onTrajectoryCreated?: (traj: GeodesicTrajectory) => void;
   private onHoverCoordsChange?: (coords: { rRs: number; phiDeg: number; redshiftZ: number } | null) => void;
+  private onSingularityStateChange?: (isCollapsed: boolean) => void;
 
   private params: BlackHoleParams;
   private settings: VisualizerSettings = { ...DEFAULT_VISUALIZER_SETTINGS };
   private showSingularityInAnatomy = false;
-
 
   constructor(
     container: HTMLElement,
@@ -1044,6 +1370,7 @@ export class BlackHoleSceneController {
       onFeatureSelect?: (feature: InspectedFeature | null) => void;
       onTrajectoryCreated?: (traj: GeodesicTrajectory) => void;
       onHoverCoordsChange?: (coords: { rRs: number; phiDeg: number; redshiftZ: number } | null) => void;
+      onSingularityStateChange?: (isCollapsed: boolean) => void;
     }
   ) {
     this.container = container;
@@ -1051,6 +1378,7 @@ export class BlackHoleSceneController {
     this.onFeatureSelect = callbacks?.onFeatureSelect;
     this.onTrajectoryCreated = callbacks?.onTrajectoryCreated;
     this.onHoverCoordsChange = callbacks?.onHoverCoordsChange;
+    this.onSingularityStateChange = callbacks?.onSingularityStateChange;
 
     // 1. Initialize WebGLRenderer with Software-WebGL Guard & ACES Filmic Color Pipeline
     this.renderer = new THREE.WebGLRenderer({
@@ -1129,6 +1457,7 @@ export class BlackHoleSceneController {
 
     // Event listeners
     window.addEventListener('resize', this.handleResize);
+    this.renderer.domElement.addEventListener('pointerdown', this.handlePointerDown);
     this.renderer.domElement.addEventListener('pointermove', this.handlePointerMove);
     this.renderer.domElement.addEventListener('click', this.handleCanvasClick);
 
@@ -1188,6 +1517,47 @@ export class BlackHoleSceneController {
     } satisfies InspectedFeature;
     this.blackHoleGroup.add(this.eventHorizonMesh);
 
+    // 1b. Initial Compressed Singularity Seed Ball (starts small at the origin and expands into the full black hole when clicked)
+    this.singularityCoreMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uOpacity: { value: 1.0 },
+        uSpectralMode: { value: 0 },
+      },
+      vertexShader: SINGULARITY_BALL_VERTEX_SHADER,
+      fragmentShader: SINGULARITY_BALL_FRAGMENT_SHADER,
+      transparent: true,
+      depthWrite: false,
+    });
+    this.singularityCoreMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.72, 64, 64),
+      this.singularityCoreMat
+    );
+    this.singularityCoreMesh.renderOrder = 14;
+    this.singularitySeedGroup.add(this.singularityCoreMesh);
+
+    this.singularityHaloMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uOpacity: { value: 1.0 },
+        uSpectralMode: { value: 0 },
+      },
+      vertexShader: LENSING_VERTEX_SHADER,
+      fragmentShader: SINGULARITY_HALO_FRAGMENT_SHADER,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      side: THREE.DoubleSide,
+    });
+    this.singularityHaloMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.4, 4.4),
+      this.singularityHaloMat
+    );
+    this.singularityHaloMesh.renderOrder = 13;
+    this.singularitySeedGroup.add(this.singularityHaloMesh);
+
+    this.blackHoleGroup.add(this.singularitySeedGroup);
+
     // 2. High-Fidelity 3D Relativistic Accretion Disk (Equatorial Plane)
     // Pre-calculate initial Doppler coefficients: (dopplerStrength, betaScale, gammaClamp, dopplerExponent)
     const initialDopplerCoeffs = new THREE.Vector4(
@@ -1221,6 +1591,8 @@ export class BlackHoleSceneController {
         uPulseStrength: { value: 0 },
         uDiskStyle: { value: this.settings.accretionDiskStyle === 'raymarched' ? 1.0 : 0.0 },
         uBloomIntensity: { value: this.settings.bloomIntensity },
+        uAccretionState: { value: this.params.accretionState === 'active' ? 1.0 : 0.0 },
+        uExpansionProgress: { value: this.expansionProgress },
       },
       vertexShader: ACCRETION_VERTEX_SHADER,
       fragmentShader: ACCRETION_FRAGMENT_SHADER,
@@ -1232,6 +1604,10 @@ export class BlackHoleSceneController {
 
     // 2. High-Fidelity 3D Relativistic Accretion Disk (Equatorial Ring Geometry)
     const diskPlaneGeo = new THREE.RingGeometry(1.02, 16.2, 160, 64);
+    const vertCount = diskPlaneGeo.attributes.position.count;
+    const midLayerAttr = new Float32Array(vertCount);
+    diskPlaneGeo.setAttribute('aVerticalLayer', new THREE.BufferAttribute(midLayerAttr, 1));
+
     const mainDiskMesh = new THREE.Mesh(diskPlaneGeo, this.accretionDiskMat);
     mainDiskMesh.rotation.x = -Math.PI / 2;
     mainDiskMesh.renderOrder = 1;
@@ -1244,6 +1620,22 @@ export class BlackHoleSceneController {
         'Superheated gas spiraling inwards toward the innermost stable circular orbit (ISCO), reaching millions of degrees and radiating across X-ray and optical spectra.',
     } satisfies InspectedFeature;
     this.accretionDiskGroup.add(mainDiskMesh);
+
+    // 2b. Volumetric 3D Vertical Torus Strata for Active Accretion Mode (Y-Axis Density Scale & Falloff)
+    this.activeDiskVolumeGroup = new THREE.Group();
+    const volumeLayers = [-0.95, -0.62, -0.32, 0.32, 0.62, 0.95];
+    for (const layerVal of volumeLayers) {
+      const layerGeo = new THREE.RingGeometry(1.05, 16.2, 128, 44);
+      const count = layerGeo.attributes.position.count;
+      const layerArr = new Float32Array(count).fill(layerVal);
+      layerGeo.setAttribute('aVerticalLayer', new THREE.BufferAttribute(layerArr, 1));
+      const layerMesh = new THREE.Mesh(layerGeo, this.accretionDiskMat);
+      layerMesh.rotation.x = -Math.PI / 2;
+      layerMesh.renderOrder = 2;
+      this.activeDiskVolumeGroup.add(layerMesh);
+    }
+    this.activeDiskVolumeGroup.visible = this.params.accretionState === 'active';
+    this.accretionDiskGroup.add(this.activeDiskVolumeGroup);
 
     this.blackHoleGroup.add(this.accretionDiskGroup);
 
@@ -1560,8 +1952,12 @@ export class BlackHoleSceneController {
     const isStar = this.params.objectCategory === 'star';
 
     // Truly deep and steep general-relativistic gravitational funnel:
-    // Plunges down deep into the cosmic abyss (18 to 48 units deep)
-    const wellDepth = (16.0 + (massSolar / 100) * 32.0) * depthMult;
+    // Starts as a subtle localized dimple when compressed in the small singularity ball state,
+    // and plunges deep into the cosmic abyss (18 to 48 units deep) as the black hole expands.
+    const expansionWellFactor = isStar
+      ? 1.0
+      : 0.05 + 0.95 * (1.0 - Math.pow(1.0 - this.expansionProgress, 2.5));
+    const wellDepth = (16.0 + (massSolar / 100) * 32.0) * depthMult * expansionWellFactor;
     const rs = 2.4 + (massSolar / 100) * 2.2;
 
     for (let i = 0; i < posAttr.count; i++) {
@@ -1635,6 +2031,7 @@ export class BlackHoleSceneController {
       wellMat.emissiveIntensity = 0.45;
       wellMat.opacity = 0.28 + this.pulseStrength * 0.12;
     }
+    this.lastWellExpansionProgress = this.expansionProgress;
   }
 
   private buildRelativisticLensingWarp() {
@@ -1661,6 +2058,8 @@ export class BlackHoleSceneController {
         uTime: { value: 0 },
         uDiskStyle: { value: this.settings.accretionDiskStyle === 'raymarched' ? 1.0 : 0.0 },
         uBloomIntensity: { value: this.settings.bloomIntensity },
+        uAccretionState: { value: this.params.accretionState === 'active' ? 1.0 : 0.0 },
+        uExpansionProgress: { value: this.expansionProgress },
       },
       vertexShader: LENSING_VERTEX_SHADER,
       fragmentShader: LENSING_FRAGMENT_SHADER,
@@ -2305,6 +2704,32 @@ export class BlackHoleSceneController {
     }
   }
 
+  public expandFromSingularity() {
+    if (!this.isSingularityCollapsed && this.targetExpansionProgress >= 0.99) return;
+    this.isSingularityCollapsed = false;
+    this.targetExpansionProgress = 1.0;
+    this.onSingularityStateChange?.(false);
+    this.triggerEventHorizonPulse(this.params.objectCategory);
+  }
+
+  public collapseToSingularity() {
+    this.isSingularityCollapsed = true;
+    this.targetExpansionProgress = 0.0;
+    this.onSingularityStateChange?.(true);
+  }
+
+  public replaySingularityExpansion() {
+    this.expansionProgress = 0.0;
+    this.isSingularityCollapsed = false;
+    this.targetExpansionProgress = 1.0;
+    this.onSingularityStateChange?.(false);
+    this.triggerEventHorizonPulse(this.params.objectCategory);
+  }
+
+  public getIsSingularityCollapsed(): boolean {
+    return this.isSingularityCollapsed;
+  }
+
   public updateParams(nextParams: BlackHoleParams, immediate = false) {
     const prevBackgroundTheme = this.params ? this.params.backgroundTheme : undefined;
     const massChanged =
@@ -2379,6 +2804,12 @@ export class BlackHoleSceneController {
 
     const isClassicDisk = this.settings.accretionDiskStyle !== 'raymarched';
     const diskStyleVal = isClassicDisk ? 0.0 : 1.0;
+    const isActiveAccretion = nextParams.accretionState === 'active';
+    const accretionStateVal = isActiveAccretion ? 1.0 : 0.0;
+
+    if (this.activeDiskVolumeGroup) {
+      this.activeDiskVolumeGroup.visible = isActiveAccretion;
+    }
 
     if (this.accretionDiskMat) {
       const dopplerStrength = nextParams.dopplerStrength;
@@ -2399,6 +2830,7 @@ export class BlackHoleSceneController {
         isStar ? 1.0 : 0.0
       );
       this.accretionDiskMat.uniforms.uDiskStyle.value = diskStyleVal;
+      this.accretionDiskMat.uniforms.uAccretionState.value = accretionStateVal;
 
       // In Classic mode, the 3D equatorial ring mesh renders directly; in Raymarched mode, the unified raymarcher renders it
       this.accretionDiskMat.colorWrite = isStar || isClassicDisk || !nextParams.gravitationalLensing;
@@ -2413,9 +2845,17 @@ export class BlackHoleSceneController {
       this.gravitationalLensMat.uniforms.uShowDisk.value = nextParams.layers.accretionDisk ? 1.0 : 0.0;
       this.gravitationalLensMat.uniforms.uIsStar.value = isStar ? 1.0 : 0.0;
       this.gravitationalLensMat.uniforms.uDiskStyle.value = diskStyleVal;
+      this.gravitationalLensMat.uniforms.uAccretionState.value = accretionStateVal;
       this.gravitationalLensMesh.visible = !isStar;
     }
 
+
+    if (this.singularityCoreMat) {
+      this.singularityCoreMat.uniforms.uSpectralMode.value = modeIndex;
+    }
+    if (this.singularityHaloMat) {
+      this.singularityHaloMat.uniforms.uSpectralMode.value = modeIndex;
+    }
 
     if (nextParams.backgroundTheme && (nextParams.backgroundTheme !== prevBackgroundTheme || immediate)) {
       this.setBackgroundTheme(nextParams.backgroundTheme);
@@ -2430,6 +2870,7 @@ export class BlackHoleSceneController {
       this.neutronStarGroup.visible = true;
       this.pulsarBeamsGroup.visible = nextParams.layers.pulsarBeams ?? true;
       this.magneticDipoleGroup.visible = nextParams.layers.magneticField ?? true;
+      if (this.singularitySeedGroup) this.singularitySeedGroup.visible = false;
     } else {
       this.eventHorizonMesh.visible = true;
       this.neutronStarGroup.visible = false;
@@ -2505,6 +2946,10 @@ export class BlackHoleSceneController {
     }
   };
 
+  private handlePointerDown = (e: PointerEvent) => {
+    this.pointerDownPos.set(e.clientX, e.clientY);
+  };
+
   private handlePointerMove = (e: PointerEvent) => {
     const now = performance.now();
     if (now - this.lastRaycastTime < 55) return;
@@ -2532,11 +2977,35 @@ export class BlackHoleSceneController {
   };
 
   private handleCanvasClick = (e: MouseEvent) => {
+    // Ignore drag-releases from camera orbiting
+    const dragDist = Math.hypot(e.clientX - this.pointerDownPos.x, e.clientY - this.pointerDownPos.y);
+    if (dragDist > 7) return;
+
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointerNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     this.pointerNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
+    const distToCenter = this.raycaster.ray.distanceToPoint(this.blackHoleGroup.position);
+    const isStar = this.params.objectCategory === 'star';
+
+    if (!isStar) {
+      if (this.isSingularityCollapsed) {
+        // Clicking the small singularity ball (or near center) triggers the expansion animation
+        if (distToCenter < Math.max(3.6, 2.2 * this.currentScale)) {
+          this.expandFromSingularity();
+          return;
+        }
+      } else {
+        // Clicking directly on the central black hole shadow collapses it back into the small singularity ball
+        // so the user can click the black hole again anytime to replay the expansion animation
+        if (distToCenter < 2.25 * this.currentScale) {
+          this.collapseToSingularity();
+          return;
+        }
+      }
+    }
+
     const hits = this.raycaster.intersectObjects(this.scene.children, true);
     for (const hit of hits) {
       if (hit.object.visible && hit.object.userData?.feature) {
@@ -2609,13 +3078,71 @@ export class BlackHoleSceneController {
       );
     }
 
-    // 2. Smooth Exponential Damping on Scale & Exploded Anatomy Separation
+    // 2. Smooth Exponential Damping on Scale, Singularity Expansion & Exploded Anatomy Separation
     this.currentScale = THREE.MathUtils.damp(this.currentScale, this.targetScale, 5.5, rawDelta);
     this.currentExploded = THREE.MathUtils.damp(this.currentExploded, this.targetExploded, 6.0, rawDelta);
 
-    this.eventHorizonMesh.scale.setScalar(this.currentScale);
-    this.accretionDiskGroup.scale.setScalar(this.currentScale);
+    const isStar = this.params.objectCategory === 'star';
+    if (isStar) {
+      this.expansionProgress = 1.0;
+    } else if (Math.abs(this.expansionProgress - this.targetExpansionProgress) > 0.0005) {
+      const stepDelta = simDelta > 0 ? simDelta : rawDelta;
+      if (this.targetExpansionProgress > this.expansionProgress) {
+        // Relativistic singularity expansion (0 -> 1 over ~1.4s)
+        this.expansionProgress = Math.min(1.0, this.expansionProgress + stepDelta * 0.72);
+      } else {
+        // Smooth gravitational collapse back to singularity ball (1 -> 0 over ~0.65s)
+        this.expansionProgress = Math.max(0.0, this.expansionProgress - stepDelta * 1.55);
+      }
+    } else {
+      this.expansionProgress = this.targetExpansionProgress;
+    }
+
+    // Relativistic ease-out with subtle horizon bounce
+    const expT = this.expansionProgress;
+    const easeOutCubic = 1.0 - Math.pow(1.0 - expT, 3.0);
+    const horizonBounce = Math.sin(expT * Math.PI) * (1.0 - expT) * 0.14;
+    const visualExpansion = isStar ? 1.0 : Math.min(1.08, Math.max(0.0, easeOutCubic + horizonBounce));
+    const effectiveScale = isStar
+      ? this.currentScale
+      : this.currentScale * THREE.MathUtils.lerp(0.08, 1.0, visualExpansion);
+
+    this.eventHorizonMesh.scale.setScalar(effectiveScale);
+    this.accretionDiskGroup.scale.setScalar(effectiveScale);
     this.neutronStarGroup.scale.setScalar(this.currentScale);
+
+    if (this.accretionDiskMat) {
+      this.accretionDiskMat.uniforms.uExpansionProgress.value = isStar ? 1.0 : this.expansionProgress;
+    }
+
+    // Update Small Singularity Ball (Seed State) visibility, pulsing scale, and shader uniforms
+    if (this.singularitySeedGroup) {
+      const showSeed = !isStar && this.expansionProgress < 0.68;
+      this.singularitySeedGroup.visible = showSeed;
+      if (showSeed) {
+        const seedFade = 1.0 - THREE.MathUtils.smoothstep(this.expansionProgress, 0.08, 0.58);
+        const pulseBeat = 1.0 + Math.sin(elapsed * 5.2) * 0.07 + Math.cos(elapsed * 11.3) * 0.035;
+        const ignitionSwell = 1.0 + Math.sin(Math.min(1.0, this.expansionProgress * 2.2) * Math.PI) * 0.85;
+        const baseSeedScale = Math.max(0.55, Math.min(1.15, Math.sqrt(this.currentScale) * 0.65));
+        this.singularitySeedGroup.scale.setScalar(baseSeedScale * pulseBeat * ignitionSwell);
+
+        if (this.singularityCoreMat) {
+          this.singularityCoreMat.uniforms.uTime.value = elapsed;
+          this.singularityCoreMat.uniforms.uOpacity.value = seedFade;
+        }
+        if (this.singularityHaloMat) {
+          this.singularityHaloMat.uniforms.uTime.value = elapsed;
+          this.singularityHaloMat.uniforms.uOpacity.value = seedFade;
+        }
+        if (this.singularityHaloMesh) {
+          this.singularityHaloMesh.quaternion.copy(this.camera.quaternion);
+        }
+      }
+    }
+
+    if (Math.abs(this.expansionProgress - this.lastWellExpansionProgress) > 0.002) {
+      this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
+    }
 
     this.ergosphereGroup.position.y = this.currentExploded * 3.8;
     const wellBaseY = -Math.max(6.8, 4.15 * this.currentScale);
@@ -2627,9 +3154,9 @@ export class BlackHoleSceneController {
     const metrics = computeRelativisticMetrics(this.params);
     this.ergosphereGroup.rotation.y += simDelta * (0.4 + metrics.frameDraggingOmega * 4.5);
     this.ergosphereGroup.scale.set(
-      this.currentScale * (1.0 + 0.22 * this.params.spin),
-      this.currentScale * (1.0 - 0.14 * this.params.spin),
-      this.currentScale * (1.0 + 0.22 * this.params.spin)
+      effectiveScale * (1.0 + 0.22 * this.params.spin),
+      effectiveScale * (1.0 - 0.14 * this.params.spin),
+      effectiveScale * (1.0 + 0.22 * this.params.spin)
     );
 
     // 4. Pulsar Lighthouse Beams & Magnetic Field Rotation
@@ -2867,13 +3394,14 @@ export class BlackHoleSceneController {
     // 12. Update Gravitational Lensing billboard to face camera and align with black hole
     if (this.gravitationalLensMesh && this.gravitationalLensMat) {
       this.gravitationalLensMesh.quaternion.copy(this.camera.quaternion);
-      this.gravitationalLensMesh.scale.setScalar(this.currentScale);
+      this.gravitationalLensMesh.scale.setScalar(effectiveScale);
       this.gravitationalLensMat.uniforms.uCameraPos.value.copy(this.camera.position);
       this.gravitationalLensMat.uniforms.uBlackHolePos.value.copy(this.blackHoleGroup.position);
-      this.gravitationalLensMat.uniforms.uScale.value = this.currentScale;
+      this.gravitationalLensMat.uniforms.uScale.value = effectiveScale;
       this.gravitationalLensMat.uniforms.uTime.value = elapsed;
-      this.gravitationalLensMat.uniforms.uPulseRadius.value = this.pulseRadius / this.currentScale;
+      this.gravitationalLensMat.uniforms.uPulseRadius.value = this.pulseRadius / Math.max(0.05, effectiveScale);
       this.gravitationalLensMat.uniforms.uPulseStrength.value = this.pulseStrength;
+      this.gravitationalLensMat.uniforms.uExpansionProgress.value = isStar ? 1.0 : this.expansionProgress;
     }
 
     // 13. Relativistic Audio Modulation: Camera Proximity & Gravitational Time Dilation
@@ -3236,6 +3764,7 @@ export class BlackHoleSceneController {
     cancelAnimationFrame(this.frameId);
     clearTimeout(this.frameId);
     window.removeEventListener('resize', this.handleResize);
+    this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown);
     this.renderer.domElement.removeEventListener('pointermove', this.handlePointerMove);
     this.renderer.domElement.removeEventListener('click', this.handleCanvasClick);
     this.renderer.domElement.removeEventListener('dblclick', this.handleCanvasDoubleClick);
@@ -3243,6 +3772,10 @@ export class BlackHoleSceneController {
     this.gravitationalLensMesh?.geometry?.dispose();
     this.gravitationalLensMat?.dispose();
     this.accretionDiskMat?.dispose();
+    this.singularityCoreMesh?.geometry?.dispose();
+    this.singularityCoreMat?.dispose();
+    this.singularityHaloMesh?.geometry?.dispose();
+    this.singularityHaloMat?.dispose();
     this.motionBlurRenderTarget?.dispose();
     this.postMaterial?.dispose();
     this.postQuad?.geometry?.dispose();

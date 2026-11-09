@@ -33,6 +33,8 @@ export const BACKGROUND_THEMES: Record<BackgroundThemeId, BackgroundThemeDef> = 
   },
 };
 
+export type AccretionState = 'quiescent' | 'active';
+
 export interface BlackHoleParams {
   /** Object category: black hole or compact star remnant */
   objectCategory: ObjectCategory;
@@ -48,6 +50,8 @@ export interface BlackHoleParams {
   spin: number;
   /** Eddington accretion rate ratio m_dot in [0.05, 2.0] */
   accretionRate: number;
+  /** Physical geometry & emission state of the accretion disk: razor-thin quiescent vs. thick volumetric active */
+  accretionState?: AccretionState;
   /** Observer inclination angle in degrees [5, 88] */
   inclinationDeg: number;
   /** Subtle relativistic Doppler boost intensity in [0, 1.0] */

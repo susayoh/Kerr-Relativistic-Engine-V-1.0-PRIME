@@ -48,6 +48,7 @@ const DEFAULT_PARAMS: BlackHoleParams = {
   gravitationalLensing: true, // Authentic spacetime gravitational lensing deflection
   trueCosmicScale: false,
   spectralMode: 'blackbody',
+  accretionState: 'quiescent',
   layers: {
     accretionDisk: true,
     ergosphereCage: false, // Toggled off automatically by default
@@ -78,6 +79,7 @@ export default function App() {
   const [isBackgroundModalOpen, setIsBackgroundModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
+  const [isSingularityCollapsed, setIsSingularityCollapsed] = useState<boolean>(true);
 
   const isAnatomyVisible = params.layers.anatomyLines ?? false;
   const handleToggleAnatomyVisible = useCallback(() => {
@@ -184,16 +186,17 @@ export default function App() {
         relativisticAudio.triggerGeodesicPing(traj.outcome);
       },
       onHoverCoordsChange: (coords) => setHoverCoords(coords),
+      onSingularityStateChange: (collapsed) => {
+        setIsSingularityCollapsed(collapsed);
+        if (!collapsed) {
+          relativisticAudio.triggerAccretionShockPulse(false);
+        }
+      },
     });
     sceneControllerRef.current = controller;
     setControllerInstance(controller);
 
-    const initPulseTimer = setTimeout(() => {
-      controller.triggerEventHorizonPulse('black_hole');
-    }, 350);
-
     return () => {
-      clearTimeout(initPulseTimer);
       controller.dispose();
       sceneControllerRef.current = null;
       setControllerInstance(null);
@@ -252,8 +255,12 @@ export default function App() {
       },
     }));
 
-    // Trigger visual 'event horizon pulse' animation rippling outward from the center
-    sceneControllerRef.current?.triggerEventHorizonPulse(found.category);
+    // Expand from singularity ball (or trigger pulse for compact stars)
+    if (found.category === 'black_hole') {
+      sceneControllerRef.current?.replaySingularityExpansion();
+    } else {
+      sceneControllerRef.current?.triggerEventHorizonPulse(found.category);
+    }
     relativisticAudio.triggerAccretionShockPulse(found.category === 'star');
   }, []);
 
@@ -486,6 +493,25 @@ export default function App() {
           </div>
         )}
 
+        {/* Interactive Singularity Ball Prompt (Displayed when compressed as a small singularity ball) */}
+        {!isCleanMode && !isStar && isSingularityCollapsed && (
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+            <button
+              type="button"
+              onClick={() => sceneControllerRef.current?.expandFromSingularity()}
+              className="group flex items-center gap-2.5 px-4 py-2 rounded-xl bg-[#050811]/90 hover:bg-[#0a1022] border border-amber-500/40 hover:border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.2)] transition-all cursor-pointer"
+            >
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-400" />
+              </span>
+              <span className="font-mono text-xs font-semibold text-amber-200 group-hover:text-white tracking-wide">
+                Singularity Seed — Click the black hole to expand
+              </span>
+            </button>
+          </div>
+        )}
+
         {/* Clean Mode Floating Restore UI & Export Snapshot Buttons (Unobtrusive Bottom-Right Corner) */}
         {isCleanMode && (
           <div className="absolute bottom-5 right-5 z-30 pointer-events-auto flex items-center gap-2">
@@ -582,6 +608,10 @@ export default function App() {
         onClose={() => setIsSettingsModalOpen(false)}
         settings={settings}
         onUpdateSettings={setSettings}
+        accretionState={params.accretionState || 'quiescent'}
+        onChangeAccretionState={(nextState) =>
+          setParams((prev) => ({ ...prev, accretionState: nextState }))
+        }
         onResetPhysics={handleResetParams}
       />
     </div>

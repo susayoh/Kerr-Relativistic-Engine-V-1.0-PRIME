@@ -426,9 +426,54 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               </div>
             </div>
 
-            {/* Bottom Sub-Strip: Gravitational Lensing Toggle + Doppler Beaming Slider + Telemetry */}
+            {/* Bottom Sub-Strip: Accretion State + Gravitational Lensing Toggle + Doppler Beaming Slider + Telemetry */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center pt-1.5 border-t border-neutral-800/80 text-xs">
-              <div className="sm:col-span-4 flex items-center gap-1.5">
+              {/* Accretion State: Quiescent vs Active */}
+              <div className="sm:col-span-4 flex items-center justify-between gap-1.5 px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-md">
+                <span className="text-[11px] font-mono text-neutral-400 whitespace-nowrap flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-amber-400/90" />
+                  <span>Accretion State:</span>
+                </span>
+                <div className="flex items-center gap-1">
+                  {(
+                    [
+                      { id: 'quiescent', label: 'Quiescent' },
+                      { id: 'active', label: 'Active' },
+                    ] as const
+                  ).map((mode) => {
+                    const isSelected = (params.accretionState || 'quiescent') === mode.id;
+                    return (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={() =>
+                          onChangeParams((prev) => ({
+                            ...prev,
+                            accretionState: mode.id,
+                          }))
+                        }
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border transition-colors cursor-pointer ${
+                          isSelected
+                            ? mode.id === 'active'
+                              ? 'bg-amber-500/20 text-amber-200 border-amber-400/70 font-bold shadow-sm'
+                              : 'bg-neutral-800 text-amber-300 border-neutral-700 font-bold'
+                            : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-neutral-200'
+                        }`}
+                        title={
+                          mode.id === 'active'
+                            ? 'Active State: Volumetrically thick, turbulent MHD torus with high-energy thermal emission and smoothly connected lensed arcs'
+                            : 'Quiescent State: Razor-thin equatorial Novikov-Thorne disk'
+                        }
+                      >
+                        {mode.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Gravitational Lensing Toggle */}
+              <div className="sm:col-span-3 flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() =>
@@ -446,16 +491,16 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 >
                   <span className="flex items-center gap-1">
                     <Sparkles className="w-3 h-3 text-amber-400/90" />
-                    <span>Lensing Shader:</span>
+                    <span>Lensing:</span>
                   </span>
                   <span className="font-mono font-bold text-[10px] uppercase">
-                    {params.gravitationalLensing ? 'Double Arch (On)' : 'Off'}
+                    {params.gravitationalLensing ? 'On' : 'Off'}
                   </span>
                 </button>
               </div>
 
               {/* Doppler strength scrubber */}
-              <div className="sm:col-span-4 flex items-center gap-2 px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-md">
+              <div className="sm:col-span-3 flex items-center gap-1.5 px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-md">
                 <span className="text-[11px] font-mono text-neutral-400 whitespace-nowrap">Doppler:</span>
                 <input
                   type="range"
@@ -477,10 +522,10 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               </div>
 
               {/* Spacetime horizon telemetry */}
-              <div className="sm:col-span-4 flex items-center justify-between sm:justify-end gap-2 px-2 py-1 text-[11px] font-mono text-neutral-400 bg-neutral-950 border border-neutral-800 rounded-md">
-                <span>ISCO: <strong className="text-neutral-200 font-semibold">{metrics.iscoProgradeRg.toFixed(2)} Rg</strong></span>
+              <div className="sm:col-span-2 flex items-center justify-between sm:justify-end gap-1.5 px-2 py-1 text-[10px] font-mono text-neutral-400 bg-neutral-950 border border-neutral-800 rounded-md whitespace-nowrap">
+                <span>ISCO <strong className="text-neutral-200 font-semibold">{metrics.iscoProgradeRg.toFixed(1)}</strong></span>
                 <span>·</span>
-                <span>r_ph: <strong className="text-amber-300/90 font-semibold">{metrics.photonSphereRg.toFixed(2)} Rg</strong></span>
+                <span>r_ph <strong className="text-amber-300/90 font-semibold">{metrics.photonSphereRg.toFixed(1)}</strong></span>
               </div>
             </div>
           </div>
@@ -489,39 +534,84 @@ export const ControlDock: React.FC<ControlDockProps> = ({
         {/* TAB 2: LAYERS, SPECTRAL FILTERS & BACKGROUND GRID */}
         {activeTab === 'spectral' && (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
-            {/* Cell 1: Observatory Spectral Band (Cols 1-3) */}
-            <div className="md:col-span-3 flex flex-col gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
-              <span className="text-[11px] font-mono text-neutral-400 uppercase tracking-wider">
-                Spectral Filter
-              </span>
-              <div className="grid grid-cols-2 gap-1 mt-0.5">
-                {(
-                  [
-                    { id: 'blackbody', label: 'Optical' },
-                    { id: 'eht230ghz', label: 'EHT 230GHz' },
-                    { id: 'xray', label: 'Chandra' },
-                    { id: 'doppler', label: 'Doppler' },
-                  ] as const
-                ).map((mode) => (
-                  <button
-                    key={mode.id}
-                    type="button"
-                    onClick={() =>
-                      onChangeParams((prev) => ({ ...prev, spectralMode: mode.id }))
-                    }
-                    className={`px-2 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap cursor-pointer text-center ${
-                      params.spectralMode === mode.id
-                        ? 'bg-neutral-800 text-amber-300 font-medium border-neutral-700 shadow-sm'
-                        : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
-                    }`}
-                  >
-                    {mode.label}
-                  </button>
-                ))}
+            {/* Cell 1: Observatory Spectral Band & Independent Accretion State (Cols 1-3) */}
+            <div className="md:col-span-3 flex flex-col justify-between gap-1.5 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
+              <div>
+                <span className="text-[11px] font-mono text-neutral-400 uppercase tracking-wider block">
+                  Spectral Filter
+                </span>
+                <div className="grid grid-cols-2 gap-1 mt-1">
+                  {(
+                    [
+                      { id: 'blackbody', label: 'Optical' },
+                      { id: 'eht230ghz', label: 'EHT 230GHz' },
+                      { id: 'xray', label: 'Chandra' },
+                      { id: 'doppler', label: 'Doppler' },
+                    ] as const
+                  ).map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() =>
+                        onChangeParams((prev) => ({ ...prev, spectralMode: mode.id }))
+                      }
+                      className={`px-2 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap cursor-pointer text-center ${
+                        params.spectralMode === mode.id
+                          ? 'bg-neutral-800 text-amber-300 font-medium border-neutral-700 shadow-sm'
+                          : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
+                      }`}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Independent Physical Geometry Setting: Accretion State */}
+              <div className="pt-1.5 border-t border-neutral-800/80">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider">
+                    Accretion State
+                  </span>
+                  <span className="text-[9px] font-mono text-neutral-500">
+                    Geometry
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 mt-1">
+                  {(
+                    [
+                      { id: 'quiescent', label: 'Quiescent' },
+                      { id: 'active', label: 'Active' },
+                    ] as const
+                  ).map((stateMode) => {
+                    const isSelected = (params.accretionState || 'quiescent') === stateMode.id;
+                    return (
+                      <button
+                        key={stateMode.id}
+                        type="button"
+                        onClick={() =>
+                          onChangeParams((prev) => ({
+                            ...prev,
+                            accretionState: stateMode.id,
+                          }))
+                        }
+                        className={`px-2 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap cursor-pointer text-center ${
+                          isSelected
+                            ? stateMode.id === 'active'
+                              ? 'bg-amber-500/20 text-amber-200 border-amber-400/70 font-semibold shadow-sm'
+                              : 'bg-neutral-800 text-amber-300 font-medium border-neutral-700 shadow-sm'
+                            : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
+                        }`}
+                      >
+                        {stateMode.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            {/* Cell 2: Exploded Vertical Lift (Cols 4-5) */}
+            {/* Cell 2: Exploded Vertical Lift (Cols 4-6) */}
             <div className="md:col-span-3 flex flex-col justify-between gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-neutral-300 font-medium">Exploded View</span>
