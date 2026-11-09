@@ -340,12 +340,14 @@ const ACCRETION_FRAGMENT_SHADER = `
       float dopplerBoost = pow(clamp(dopplerFactor, 0.35, 2.35), uDopplerCoeffs.w);
 
       float normR = clamp((r - rIn) / (rOut - rIn), 0.0, 1.0);
-      float diskUnfurl = smoothstep(0.02, 0.96, uExpansionProgress);
-      float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.16), diskUnfurl + 0.02, normR);
+      float shockGrowth = 1.0 - pow(1.0 - clamp(uExpansionProgress, 0.0, 1.0), 2.6);
+      float diskUnfurl = smoothstep(0.0, 0.92, shockGrowth);
+      float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.18), diskUnfurl + 0.03, normR);
       if (unfurlMask <= 0.001) {
         discard;
       }
-      float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.085, 2.0)) * sin(uExpansionProgress * 3.14159265) * 1.85;
+      // Shockwave-coupled leading rim compression as the disk grows outward with the shockwave
+      float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.09, 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
 
       float innerTaper = smoothstep(rIn, rIn + mix(0.42, 0.28, uAccretionState), r);
       float outerTaper = 1.0 - smoothstep(rOut - mix(2.2, 3.2, uAccretionState), rOut, r);
@@ -468,12 +470,13 @@ const ACCRETION_FRAGMENT_SHADER = `
     );
 
     float normR = clamp((r - rIn) / (rOut - rIn), 0.0, 1.0);
-    float diskUnfurl = smoothstep(0.02, 0.96, uExpansionProgress);
-    float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.16), diskUnfurl + 0.02, normR);
+    float shockGrowth = 1.0 - pow(1.0 - clamp(uExpansionProgress, 0.0, 1.0), 2.6);
+    float diskUnfurl = smoothstep(0.0, 0.92, shockGrowth);
+    float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.18), diskUnfurl + 0.03, normR);
     if (unfurlMask <= 0.001) {
       discard;
     }
-    float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.085, 2.0)) * sin(uExpansionProgress * 3.14159265) * 1.85;
+    float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.09, 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
 
     float innerTaper = smoothstep(rIn, rIn + 0.25, r);
     float corePeak = exp(-normR * 2.1);
@@ -677,12 +680,13 @@ const LENSING_FRAGMENT_SHADER = `
     );
 
     float normR = clamp((rHit - rIn) / (rOut - rIn), 0.0, 1.0);
-    float diskUnfurl = smoothstep(0.02, 0.96, uExpansionProgress);
-    float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.16), diskUnfurl + 0.02, normR);
+    float shockGrowth = 1.0 - pow(1.0 - clamp(uExpansionProgress, 0.0, 1.0), 2.6);
+    float diskUnfurl = smoothstep(0.0, 0.92, shockGrowth);
+    float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.18), diskUnfurl + 0.03, normR);
     if (unfurlMask <= 0.001) {
       return;
     }
-    float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.085, 2.0)) * sin(uExpansionProgress * 3.14159265) * 1.85;
+    float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.09, 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
 
     float innerTaper = smoothstep(rIn, rIn + 0.25, rHit);
     float corePeak = exp(-normR * 2.1);
@@ -850,9 +854,10 @@ const LENSING_FRAGMENT_SHADER = `
               float dopplerBoost = pow(clamp(dopplerFactor, 0.35, 2.35), 2.1);
 
               float normR = clamp((rHit - rIn) / (rOut - rIn), 0.0, 1.0);
-              float diskUnfurl = smoothstep(0.02, 0.96, uExpansionProgress);
-              float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.16), diskUnfurl + 0.02, normR);
-              float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.085, 2.0)) * sin(uExpansionProgress * 3.14159265) * 1.85;
+              float shockGrowth = 1.0 - pow(1.0 - clamp(uExpansionProgress, 0.0, 1.0), 2.6);
+              float diskUnfurl = smoothstep(0.0, 0.92, shockGrowth);
+              float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.18), diskUnfurl + 0.03, normR);
+              float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.09, 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
 
               float innerTaper = smoothstep(rIn, rIn + mix(0.45, 0.28, uAccretionState), rHit);
               float outerTaper = 1.0 - smoothstep(rOut - mix(2.4, 3.2, uAccretionState), rOut, rHit);
@@ -1517,7 +1522,7 @@ export class BlackHoleSceneController {
     } satisfies InspectedFeature;
     this.blackHoleGroup.add(this.eventHorizonMesh);
 
-    // 1b. Initial Compressed Singularity Seed Ball (starts small at the origin and expands into the full black hole when clicked)
+    // 1b. Initial Compressed Singularity Seed Ball (starts small at the origin and grows directly into the black hole along with the shockwave)
     this.singularityCoreMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
@@ -1529,8 +1534,10 @@ export class BlackHoleSceneController {
       transparent: true,
       depthWrite: false,
     });
+    // Radius 2.26 matches the local event horizon shadow radius r_horizon so the small ball
+    // scales up in 1:1 geometric lockstep with the event horizon shadow as effectiveScale grows!
     this.singularityCoreMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.72, 64, 64),
+      new THREE.SphereGeometry(2.26, 64, 64),
       this.singularityCoreMat
     );
     this.singularityCoreMesh.renderOrder = 14;
@@ -1550,7 +1557,7 @@ export class BlackHoleSceneController {
       side: THREE.DoubleSide,
     });
     this.singularityHaloMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(4.4, 4.4),
+      new THREE.PlaneGeometry(8.8, 8.8),
       this.singularityHaloMat
     );
     this.singularityHaloMesh.renderOrder = 13;
@@ -1953,12 +1960,14 @@ export class BlackHoleSceneController {
 
     // Truly deep and steep general-relativistic gravitational funnel:
     // Starts as a subtle localized dimple when compressed in the small singularity ball state,
-    // and plunges deep into the cosmic abyss (18 to 48 units deep) as the black hole expands.
-    const expansionWellFactor = isStar
+    // and plunges deep into the cosmic abyss (18 to 48 units deep) along with the expanding shockwave.
+    const shockGrowth = isStar
       ? 1.0
-      : 0.05 + 0.95 * (1.0 - Math.pow(1.0 - this.expansionProgress, 2.5));
+      : 1.0 - Math.pow(1.0 - Math.min(1.0, Math.max(0.0, this.expansionProgress)), 2.6);
+    const expansionWellFactor = isStar ? 1.0 : 0.04 + 0.96 * shockGrowth;
     const wellDepth = (16.0 + (massSolar / 100) * 32.0) * depthMult * expansionWellFactor;
-    const rs = 2.4 + (massSolar / 100) * 2.2;
+    const baseRs = 2.4 + (massSolar / 100) * 2.2;
+    const rs = isStar ? baseRs : baseRs * (0.18 + 0.82 * shockGrowth);
 
     for (let i = 0; i < posAttr.count; i++) {
       const x = posAttr.getX(i);
@@ -1986,14 +1995,14 @@ export class BlackHoleSceneController {
 
       // Authentic Kerr frame-dragging vortex spiral (Lense-Thirring effect)
       const angle = Math.atan2(z, x);
-      const frameDragSpiral = spin * 0.45 * Math.sin(angle * 2.0 + r * 0.28) * Math.exp(-r * 0.1);
+      const frameDragSpiral = spin * 0.45 * Math.sin(angle * 2.0 + r * 0.28) * Math.exp(-r * 0.1) * shockGrowth;
 
       // Dynamic Event Horizon Pulse: Dense Multi-Ring Concentric Gravitational Wave Train on the Gravity Well
       let pulseWave = 0.0;
       if (this.pulseStrength > 0.005) {
-        // Wavefront radius in local manifold coordinates (travels from throat r = 2.5 out to r = 62 across the entire 130x130 grid)
-        const frontR = 2.5 + Math.pow(this.pulseProgress, 0.82) * 59.5;
-        const innerTap = Math.min(1.0, Math.max(0.0, (r - 1.6) / 2.2));
+        // Wavefront radius in local manifold coordinates (erupts from small singularity ball r = 0.35 out to r = 62 across the entire 130x130 grid)
+        const frontR = 0.35 + Math.pow(this.pulseProgress, 0.78) * 61.5;
+        const innerTap = Math.min(1.0, Math.max(0.0, (r - 0.30) / 1.6));
         // Smooth step cutoff ahead of the expanding wavefront
         const leadingEdge = 1.0 / (1.0 + Math.exp((r - frontR) * 1.6));
         // Sustained wave-train envelope behind the wavefront so 10-14 concentric ripples undulate across the well at once
@@ -2665,17 +2674,31 @@ export class BlackHoleSceneController {
   }
 
   public triggerEventHorizonPulse(category?: 'black_hole' | 'star') {
+    const isStar = (category || this.params.objectCategory) === 'star';
+
+    // If triggering a pulse while the black hole is in its small singularity ball state,
+    // automatically grow it into the full black hole along with the shockwave!
+    if (!isStar && this.isSingularityCollapsed) {
+      this.isSingularityCollapsed = false;
+      this.expansionProgress = 0.0;
+      this.targetExpansionProgress = 1.0;
+      this.onSingularityStateChange?.(false);
+    }
+
     this.isPulseActive = true;
     this.pulseProgress = 0.0;
     this.pulseStrength = 1.0;
-    this.pulseRadius = 1.75 * this.currentScale;
+    const minSeedWorldScale = 0.11;
+    const startScale = isStar
+      ? this.currentScale
+      : THREE.MathUtils.lerp(minSeedWorldScale, this.currentScale, this.expansionProgress);
+    this.pulseRadius = 2.26 * startScale;
 
     // Trigger Sonic Boom Camera Screen Shake recoil
     this.shakeIntensity = 1.0;
     this.shakeElapsed = 0.0;
 
     // Achromatic neutral slate/silver sonic boom tone (no bright colors)
-    const isStar = (category || this.params.objectCategory) === 'star';
     this.pulseColor.set(isStar ? 0x94a3b8 : 0x8a94a6);
 
     if (this.primaryPulseMesh) {
@@ -2706,6 +2729,7 @@ export class BlackHoleSceneController {
 
   public expandFromSingularity() {
     if (!this.isSingularityCollapsed && this.targetExpansionProgress >= 0.99) return;
+    this.expansionProgress = 0.0;
     this.isSingularityCollapsed = false;
     this.targetExpansionProgress = 1.0;
     this.onSingularityStateChange?.(false);
@@ -2715,6 +2739,17 @@ export class BlackHoleSceneController {
   public collapseToSingularity() {
     this.isSingularityCollapsed = true;
     this.targetExpansionProgress = 0.0;
+    this.isPulseActive = false;
+    this.pulseStrength = 0.0;
+    if (this.primaryPulseMesh) this.primaryPulseMesh.visible = false;
+    if (this.secondaryPulseMesh) this.secondaryPulseMesh.visible = false;
+    if (this.tertiaryPulseMesh) this.tertiaryPulseMesh.visible = false;
+    for (const extra of this.extraPulseRippleMeshes) {
+      extra.mesh.visible = false;
+    }
+    if (this.gravitationalWaveShellMesh) this.gravitationalWaveShellMesh.visible = false;
+    if (this.horizonFlashMesh) this.horizonFlashMesh.visible = false;
+    if (this.accretionDiskMat) this.accretionDiskMat.uniforms.uPulseStrength.value = 0.0;
     this.onSingularityStateChange?.(true);
   }
 
@@ -2961,6 +2996,18 @@ export class BlackHoleSceneController {
 
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
     const ray = this.raycaster.ray;
+
+    // Show interactive pointer cursor when hovering over the clickable singularity ball / black hole center
+    if (this.params.objectCategory !== 'star') {
+      const distToOrigin = ray.distanceToPoint(this.blackHoleGroup.position);
+      const hitRadius = this.isSingularityCollapsed
+        ? Math.max(3.8, 1.8 * this.currentScale)
+        : 2.25 * this.currentScale;
+      this.renderer.domElement.style.cursor = distToOrigin < hitRadius ? 'pointer' : 'crosshair';
+    } else {
+      this.renderer.domElement.style.cursor = 'crosshair';
+    }
+
     if (Math.abs(ray.direction.y) > 0.001) {
       const t = -ray.origin.y / ray.direction.y;
       if (t > 0 && t < 80) {
@@ -3083,29 +3130,30 @@ export class BlackHoleSceneController {
     this.currentExploded = THREE.MathUtils.damp(this.currentExploded, this.targetExploded, 6.0, rawDelta);
 
     const isStar = this.params.objectCategory === 'star';
+    const minSeedWorldScale = 0.11; // Small singularity ball initial scale (~0.25 world units radius)
+
     if (isStar) {
       this.expansionProgress = 1.0;
     } else if (Math.abs(this.expansionProgress - this.targetExpansionProgress) > 0.0005) {
       const stepDelta = simDelta > 0 ? simDelta : rawDelta;
       if (this.targetExpansionProgress > this.expansionProgress) {
-        // Relativistic singularity expansion (0 -> 1 over ~1.4s)
-        this.expansionProgress = Math.min(1.0, this.expansionProgress + stepDelta * 0.72);
+        // Grow from the small singularity ball in 1:1 lockstep with the shockwave duration!
+        this.expansionProgress = Math.min(1.0, this.expansionProgress + stepDelta / this.pulseDuration);
       } else {
-        // Smooth gravitational collapse back to singularity ball (1 -> 0 over ~0.65s)
-        this.expansionProgress = Math.max(0.0, this.expansionProgress - stepDelta * 1.55);
+        // Smooth gravitational collapse back to the small singularity ball
+        this.expansionProgress = Math.max(0.0, this.expansionProgress - stepDelta * 1.65);
       }
     } else {
       this.expansionProgress = this.targetExpansionProgress;
     }
 
-    // Relativistic ease-out with subtle horizon bounce
+    // Unified shockwave & singularity growth curve:
+    // Both the black hole scale and the shockwave front follow the exact same relativistic blast curve
     const expT = this.expansionProgress;
-    const easeOutCubic = 1.0 - Math.pow(1.0 - expT, 3.0);
-    const horizonBounce = Math.sin(expT * Math.PI) * (1.0 - expT) * 0.14;
-    const visualExpansion = isStar ? 1.0 : Math.min(1.08, Math.max(0.0, easeOutCubic + horizonBounce));
+    const shockGrowth = isStar ? 1.0 : 1.0 - Math.pow(1.0 - expT, 2.6);
     const effectiveScale = isStar
       ? this.currentScale
-      : this.currentScale * THREE.MathUtils.lerp(0.08, 1.0, visualExpansion);
+      : THREE.MathUtils.lerp(minSeedWorldScale, this.currentScale, shockGrowth);
 
     this.eventHorizonMesh.scale.setScalar(effectiveScale);
     this.accretionDiskGroup.scale.setScalar(effectiveScale);
@@ -3115,16 +3163,15 @@ export class BlackHoleSceneController {
       this.accretionDiskMat.uniforms.uExpansionProgress.value = isStar ? 1.0 : this.expansionProgress;
     }
 
-    // Update Small Singularity Ball (Seed State) visibility, pulsing scale, and shader uniforms
+    // Update Small Singularity Ball (grows directly into the black hole event horizon along with effectiveScale)
     if (this.singularitySeedGroup) {
-      const showSeed = !isStar && this.expansionProgress < 0.68;
+      const showSeed = !isStar && this.expansionProgress < 0.82;
       this.singularitySeedGroup.visible = showSeed;
       if (showSeed) {
-        const seedFade = 1.0 - THREE.MathUtils.smoothstep(this.expansionProgress, 0.08, 0.58);
-        const pulseBeat = 1.0 + Math.sin(elapsed * 5.2) * 0.07 + Math.cos(elapsed * 11.3) * 0.035;
-        const ignitionSwell = 1.0 + Math.sin(Math.min(1.0, this.expansionProgress * 2.2) * Math.PI) * 0.85;
-        const baseSeedScale = Math.max(0.55, Math.min(1.15, Math.sqrt(this.currentScale) * 0.65));
-        this.singularitySeedGroup.scale.setScalar(baseSeedScale * pulseBeat * ignitionSwell);
+        const seedFade = 1.0 - THREE.MathUtils.smoothstep(shockGrowth, 0.18, 0.78);
+        const idlePulse = (1.0 - shockGrowth) * (Math.sin(elapsed * 5.2) * 0.06 + Math.cos(elapsed * 11.3) * 0.03);
+        // Scales directly with effectiveScale so the small singularity ball physically grows into the black hole!
+        this.singularitySeedGroup.scale.setScalar(effectiveScale * (1.0 + idlePulse));
 
         if (this.singularityCoreMat) {
           this.singularityCoreMat.uniforms.uTime.value = elapsed;
@@ -3168,9 +3215,10 @@ export class BlackHoleSceneController {
       this.neutronStarMesh.rotation.y = this.pulsarRotationAngle * 0.8;
     }
 
-    // 4b. Relativistic Sonic Boom Animation (Achromatic N-Wave ShockFront & Accretion Rarefaction)
-    if (this.isPulseActive && simDelta > 0) {
-      this.pulseProgress += simDelta / this.pulseDuration;
+    // 4b. Relativistic Sonic Boom Animation (Shockwave starts at the small singularity ball and grows outward with the black hole)
+    const pulseStepDelta = simDelta > 0 ? simDelta : (!this.isSingularityCollapsed && this.expansionProgress < 1.0 ? rawDelta : 0);
+    if (this.isPulseActive && pulseStepDelta > 0) {
+      this.pulseProgress += pulseStepDelta / this.pulseDuration;
       if (this.pulseProgress >= 1.0) {
         this.isPulseActive = false;
         this.pulseProgress = 1.0;
@@ -3186,34 +3234,35 @@ export class BlackHoleSceneController {
         this.accretionDiskMat.uniforms.uPulseStrength.value = 0.0;
         this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
       } else {
-        // Supersonic N-wave blast expansion decelerating across the accretion plane
-        const ease = 1.0 - Math.pow(1.0 - this.pulseProgress, 3.2);
-        this.pulseStrength = Math.pow(1.0 - this.pulseProgress, 1.5);
-        const startR = 1.75 * this.currentScale;
-        const maxShockRadius = 22.0 * this.currentScale;
+        // Synchronized N-wave blast expansion: starts at the small singularity ball (2.26 * minSeedWorldScale ≈ 0.25)
+        // and expands outward in lockstep with the growing black hole and unfurling accretion disk
+        const ease = 1.0 - Math.pow(1.0 - this.pulseProgress, 2.6);
+        this.pulseStrength = Math.pow(1.0 - this.pulseProgress, 1.45);
+        const startR = isStar ? 1.75 * this.currentScale : 2.26 * minSeedWorldScale;
+        const maxShockRadius = 18.5 * this.currentScale;
         this.pulseRadius = THREE.MathUtils.lerp(startR, maxShockRadius, ease);
 
-        // Update accretion disk sonic-boom rarefaction & compression uniforms
-        this.accretionDiskMat.uniforms.uPulseRadius.value = this.pulseRadius / this.currentScale;
+        // Update accretion disk sonic-boom rarefaction & compression uniforms in local effectiveScale space
+        this.accretionDiskMat.uniforms.uPulseRadius.value = this.pulseRadius / Math.max(0.05, effectiveScale);
         this.accretionDiskMat.uniforms.uPulseStrength.value = this.pulseStrength;
-        this.accretionDiskMat.uniforms.uDiskParams.value.w = this.params.objectCategory === 'star' ? 1.0 : 0.0;
+        this.accretionDiskMat.uniforms.uDiskParams.value.w = isStar ? 1.0 : 0.0;
 
-        // Primary sonic shockwave ring expansion & fade
+        // Primary leading sonic shockwave ring riding on the outer growing boundary of the accretion disk
         this.primaryPulseMesh.visible = true;
         this.primaryPulseMesh.scale.set(this.pulseRadius, this.pulseRadius, this.pulseRadius);
-        (this.primaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.78;
+        (this.primaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.82;
 
-        // Secondary trailing N-wave shock ring
-        const secondaryR = Math.max(startR, this.pulseRadius * 0.74);
+        // Secondary trailing N-wave shock ring coupled to the expanding mid-disk
+        const secondaryR = Math.max(startR, this.pulseRadius * 0.76);
         this.secondaryPulseMesh.visible = true;
         this.secondaryPulseMesh.scale.set(secondaryR, secondaryR, secondaryR);
-        (this.secondaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.52;
+        (this.secondaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.56;
 
-        // Tertiary acoustic reverberation ring
-        const tertiaryR = Math.max(startR, this.pulseRadius * 0.50);
+        // Tertiary acoustic ring riding right along the growing Event Horizon shadow boundary
+        const horizonShockR = Math.max(startR, 2.35 * effectiveScale);
         this.tertiaryPulseMesh.visible = true;
-        this.tertiaryPulseMesh.scale.set(tertiaryR, tertiaryR, tertiaryR);
-        (this.tertiaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.35;
+        this.tertiaryPulseMesh.scale.set(horizonShockR, horizonShockR, horizonShockR);
+        (this.tertiaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.48;
 
         // Additional concentric pressure ripple rings
         for (const extra of this.extraPulseRippleMeshes) {
@@ -3224,24 +3273,24 @@ export class BlackHoleSceneController {
             this.pulseStrength * extra.opacityWeight;
         }
 
-        // 3D Spherical Sonic Boom Mach Shell
-        const gwShellR = THREE.MathUtils.lerp(startR, maxShockRadius * 1.18, ease);
+        // 3D Spherical Sonic Boom Mach Shell expanding outward from the small singularity ball
+        const gwShellR = THREE.MathUtils.lerp(startR, maxShockRadius * 1.12, ease);
         this.gravitationalWaveShellMesh.visible = true;
         this.gravitationalWaveShellMesh.scale.set(gwShellR, gwShellR, gwShellR);
-        (this.gravitationalWaveShellMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.55;
+        (this.gravitationalWaveShellMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.58;
 
-        // Brief neutral condensation vapor release at the causal boundary (no bright flash)
-        if (this.pulseProgress < 0.18) {
-          const burstT = this.pulseProgress / 0.18;
-          const burstScale = THREE.MathUtils.lerp(1.0, 1.65, burstT) * this.currentScale;
+        // Boundary pressure-condensation shell hugging the growing event horizon sphere as it inflates
+        if (this.pulseProgress < 0.65) {
+          const burstT = this.pulseProgress / 0.65;
+          const burstScale = 1.25 * effectiveScale;
           this.horizonFlashMesh.visible = true;
           this.horizonFlashMesh.scale.set(burstScale, burstScale, burstScale);
-          (this.horizonFlashMesh.material as THREE.MeshBasicMaterial).opacity = (1.0 - burstT) * 0.18;
+          (this.horizonFlashMesh.material as THREE.MeshBasicMaterial).opacity = (1.0 - burstT) * 0.22;
         } else {
           this.horizonFlashMesh.visible = false;
         }
 
-        // Ripple the spacetime well manifold in real-time
+        // Ripple and plunge the spacetime well manifold in real-time with the shockwave
         this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
       }
     }

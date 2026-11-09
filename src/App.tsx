@@ -501,10 +501,7 @@ export default function App() {
               onClick={() => sceneControllerRef.current?.expandFromSingularity()}
               className="group flex items-center gap-2.5 px-4 py-2 rounded-xl bg-[#050811]/90 hover:bg-[#0a1022] border border-amber-500/40 hover:border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.2)] transition-all cursor-pointer"
             >
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-400" />
-              </span>
+              <span className="inline-flex rounded-full h-2.5 w-2.5 bg-amber-400" />
               <span className="font-mono text-xs font-semibold text-amber-200 group-hover:text-white tracking-wide">
                 Singularity Seed — Click the black hole to expand
               </span>
@@ -561,7 +558,11 @@ export default function App() {
             onToggleAudio={handleToggleAudio}
             onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
             onTriggerPulse={() => {
-              sceneControllerRef.current?.triggerEventHorizonPulse(params.objectCategory);
+              if (params.objectCategory === 'black_hole') {
+                sceneControllerRef.current?.replaySingularityExpansion();
+              } else {
+                sceneControllerRef.current?.triggerEventHorizonPulse(params.objectCategory);
+              }
               relativisticAudio.triggerAccretionShockPulse(params.objectCategory === 'star');
             }}
           />
