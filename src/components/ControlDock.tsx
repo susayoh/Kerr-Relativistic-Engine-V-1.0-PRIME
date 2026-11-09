@@ -269,9 +269,9 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               type="button"
               onClick={onTriggerPulse}
               className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-300 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
-              title="Trigger Event Horizon Pulse (Accretion Shockwave)"
+              title="Trigger Relativistic Sonic Boom (N-Wave Pressure Shock)"
             >
-              <Waves className="w-3 h-3 text-amber-400" />
+              <Waves className="w-3 h-3 text-slate-300" />
               <span>Pulse</span>
             </button>
 

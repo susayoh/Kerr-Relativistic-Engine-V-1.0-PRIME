@@ -35,6 +35,7 @@ export interface VisualizerSettings {
   alwaysShowSingularity: boolean;
   nakedDistortionIntensity: number;
   motionBlurEnabled: boolean;
+  screenShakeEnabled: boolean;
   cameraFov: number;
   autoRotate: boolean;
   autoRotateSpeed: number;
@@ -52,6 +53,7 @@ export const DEFAULT_VISUALIZER_SETTINGS: VisualizerSettings = {
   alwaysShowSingularity: false,
   nakedDistortionIntensity: 1.25,
   motionBlurEnabled: true,
+  screenShakeEnabled: true,
   cameraFov: 46,
   autoRotate: false,
   autoRotateSpeed: 0.6,
@@ -70,6 +72,9 @@ const _vec3D = new THREE.Vector3();
 const _vec3E = new THREE.Vector3();
 const _camRight = new THREE.Vector3();
 const _camUp = new THREE.Vector3();
+const _savedCamPos = new THREE.Vector3();
+const _savedCamTarget = new THREE.Vector3();
+const _shakeOffset = new THREE.Vector3();
 const _mat4 = new THREE.Matrix4();
 const _quat = new THREE.Quaternion();
 const _quatA = new THREE.Quaternion();
@@ -270,16 +275,16 @@ const ACCRETION_FRAGMENT_SHADER = `
 
       float flux = radialProfile * (0.30 + 0.70 * diskFilaments) * dopplerBoost * (0.65 + 0.45 * accretionRate);
 
+      float sonicRarefaction = 0.0;
+      float sonicCompression = 0.0;
       if (uPulseStrength > 0.001) {
-        float c1 = exp(-pow((r - uPulseRadius) / 0.42, 2.0));
-        float c2 = exp(-pow((r - uPulseRadius * 0.85) / 0.46, 2.0)) * 0.82;
-        float c3 = exp(-pow((r - uPulseRadius * 0.70) / 0.50, 2.0)) * 0.68;
-        float c4 = exp(-pow((r - uPulseRadius * 0.56) / 0.54, 2.0)) * 0.54;
-        float c5 = exp(-pow((r - uPulseRadius * 0.42) / 0.58, 2.0)) * 0.40;
-        float c6 = exp(-pow((r - uPulseRadius * 0.28) / 0.62, 2.0)) * 0.28;
-        float fineWave = (0.5 + 0.5 * cos((r - uPulseRadius) * 5.2)) * exp(-abs(r - uPulseRadius * 0.68) * 0.32) * 0.55;
-        float totalRipple = c1 + c2 + c3 + c4 + c5 + c6 + fineWave;
-        flux += totalRipple * uPulseStrength * 1.55 * innerTaper * outerTaper;
+        float dShock = r - uPulseRadius;
+        float leadFront = exp(-pow(dShock / 0.32, 2.0));
+        float tailFront = exp(-pow((dShock + 1.35) / 0.42, 2.0)) * 0.65;
+        float rarefactionTrough = exp(-pow((dShock + 0.62) / 0.52, 2.0));
+        float acousticWake = sin(dShock * 5.8) * exp(-abs(dShock + 1.1) * 0.42) * step(dShock, 0.15) * 0.25;
+        sonicCompression = clamp((leadFront + tailFront + max(0.0, acousticWake)) * uPulseStrength * innerTaper * outerTaper, 0.0, 1.0);
+        sonicRarefaction = clamp(rarefactionTrough * uPulseStrength * innerTaper * outerTaper, 0.0, 0.88);
       }
 
       float lutU = clamp(flux * 0.65, 0.02, 0.98);
@@ -299,6 +304,16 @@ const ACCRETION_FRAGMENT_SHADER = `
       vec3 diskColor = baseLut * (0.48 + (0.75 + 0.60 * bloomMult) * flux) + bloomGlow;
       float bloomAlphaBoost = 0.82 + 0.22 * min(2.0, bloomMult);
       float diskAlpha = clamp(radialProfile * (0.52 + 0.48 * diskFilaments) * min(1.4, dopplerBoost) * bloomAlphaBoost, 0.0, 0.98);
+
+      if (uPulseStrength > 0.001) {
+        // Sonic boom N-wave: dark evacuated decompression cavity + desaturated neutral grey shock front (no bright colors)
+        float luma = dot(diskColor, vec3(0.299, 0.587, 0.114));
+        vec3 neutralShock = mix(vec3(luma * 0.72), vec3(0.52, 0.55, 0.60), 0.35);
+        diskColor = mix(diskColor, neutralShock, sonicCompression * 0.78);
+        diskColor *= (1.0 - sonicRarefaction * 0.76);
+        diskAlpha = clamp(diskAlpha * (1.0 - sonicRarefaction * 0.42 + sonicCompression * 0.15), 0.0, 0.98);
+      }
+
       gl_FragColor = vec4(diskColor, diskAlpha);
       return;
     }
@@ -362,16 +377,16 @@ const ACCRETION_FRAGMENT_SHADER = `
     float innerCoreBoost = 1.0 + 1.65 * exp(-normR * 5.2);
     float flux = radialProfile * innerCoreBoost * (0.34 + 0.66 * diskFilaments) * dopplerBoost * accretionScale;
 
+    float sonicRarefaction = 0.0;
+    float sonicCompression = 0.0;
     if (uPulseStrength > 0.001) {
-      float c1 = exp(-pow((r - uPulseRadius) / 0.45, 2.0));
-      float c2 = exp(-pow((r - uPulseRadius * 0.85) / 0.50, 2.0)) * 0.82;
-      float c3 = exp(-pow((r - uPulseRadius * 0.70) / 0.55, 2.0)) * 0.68;
-      float c4 = exp(-pow((r - uPulseRadius * 0.56) / 0.60, 2.0)) * 0.54;
-      float c5 = exp(-pow((r - uPulseRadius * 0.42) / 0.65, 2.0)) * 0.40;
-      float c6 = exp(-pow((r - uPulseRadius * 0.28) / 0.70, 2.0)) * 0.28;
-      float fineWave = (0.5 + 0.5 * cos((r - uPulseRadius) * 5.2)) * exp(-abs(r - uPulseRadius * 0.68) * 0.30) * 0.55;
-      float totalShock = (c1 + c2 + c3 + c4 + c5 + c6 + fineWave) * uPulseStrength;
-      flux += totalShock * 1.35 * innerTaper * outerTaper;
+      float dShock = r - uPulseRadius;
+      float leadFront = exp(-pow(dShock / 0.35, 2.0));
+      float tailFront = exp(-pow((dShock + 1.40) / 0.45, 2.0)) * 0.65;
+      float rarefactionTrough = exp(-pow((dShock + 0.65) / 0.55, 2.0));
+      float acousticWake = sin(dShock * 5.6) * exp(-abs(dShock + 1.15) * 0.40) * step(dShock, 0.15) * 0.25;
+      sonicCompression = clamp((leadFront + tailFront + max(0.0, acousticWake)) * uPulseStrength * innerTaper * outerTaper, 0.0, 1.0);
+      sonicRarefaction = clamp(rarefactionTrough * uPulseStrength * innerTaper * outerTaper, 0.0, 0.88);
     }
 
     float lutU = clamp(flux / (1.0 + flux * 0.42), 0.04, 0.94);
@@ -407,6 +422,13 @@ const ACCRETION_FRAGMENT_SHADER = `
     float diskAlpha = clamp(pow(radialProfile, 0.68) * (0.62 + 0.38 * diskFilaments) * min(1.30, dopplerBoost) * (0.85 + 0.18 * min(2.0, bloomMult)), 0.0, 0.98);
 
     vec3 tonemappedColor = acesFilm(diskColor * (1.05 + 0.23 * bloomMult));
+    if (uPulseStrength > 0.001) {
+      float luma = dot(tonemappedColor, vec3(0.299, 0.587, 0.114));
+      vec3 neutralShock = mix(vec3(luma * 0.72), vec3(0.52, 0.55, 0.60), 0.35);
+      tonemappedColor = mix(tonemappedColor, neutralShock, sonicCompression * 0.78);
+      tonemappedColor *= (1.0 - sonicRarefaction * 0.76);
+      diskAlpha = clamp(diskAlpha * (1.0 - sonicRarefaction * 0.42 + sonicCompression * 0.15), 0.0, 0.98);
+    }
     gl_FragColor = vec4(tonemappedColor, diskAlpha);
   }
 `;
@@ -522,15 +544,16 @@ const LENSING_FRAGMENT_SHADER = `
     float innerCoreBoost = 1.0 + 1.65 * exp(-normR * 5.2);
     float flux = radialProfile * innerCoreBoost * (0.34 + 0.66 * diskFilaments) * dopplerBoost * accretionScale;
 
+    float sonicRarefaction = 0.0;
+    float sonicCompression = 0.0;
     if (uPulseStrength > 0.001) {
-      float c1 = exp(-pow((rHit - uPulseRadius) / 0.45, 2.0));
-      float c2 = exp(-pow((rHit - uPulseRadius * 0.85) / 0.50, 2.0)) * 0.82;
-      float c3 = exp(-pow((rHit - uPulseRadius * 0.70) / 0.55, 2.0)) * 0.68;
-      float c4 = exp(-pow((rHit - uPulseRadius * 0.56) / 0.60, 2.0)) * 0.54;
-      float c5 = exp(-pow((rHit - uPulseRadius * 0.42) / 0.65, 2.0)) * 0.40;
-      float c6 = exp(-pow((rHit - uPulseRadius * 0.28) / 0.70, 2.0)) * 0.28;
-      float fineWave = (0.5 + 0.5 * cos((rHit - uPulseRadius) * 5.2)) * exp(-abs(rHit - uPulseRadius * 0.68) * 0.30) * 0.55;
-      flux += (c1 + c2 + c3 + c4 + c5 + c6 + fineWave) * uPulseStrength * 1.35 * innerTaper * outerTaper;
+      float dShock = rHit - uPulseRadius;
+      float leadFront = exp(-pow(dShock / 0.35, 2.0));
+      float tailFront = exp(-pow((dShock + 1.40) / 0.45, 2.0)) * 0.65;
+      float rarefactionTrough = exp(-pow((dShock + 0.65) / 0.55, 2.0));
+      float acousticWake = sin(dShock * 5.6) * exp(-abs(dShock + 1.15) * 0.40) * step(dShock, 0.15) * 0.25;
+      sonicCompression = clamp((leadFront + tailFront + max(0.0, acousticWake)) * uPulseStrength * innerTaper * outerTaper, 0.0, 1.0);
+      sonicRarefaction = clamp(rarefactionTrough * uPulseStrength * innerTaper * outerTaper, 0.0, 0.88);
     }
 
     float lutU = clamp(flux / (1.0 + flux * 0.42), 0.04, 0.94);
@@ -564,6 +587,14 @@ const LENSING_FRAGMENT_SHADER = `
     float whiteCoreGlow = smoothstep(0.24, 0.0, normR) * (0.50 + 0.50 * diskFilaments) * dopplerBoost * (0.35 + 0.65 * bloomMult);
     outColor = baseLut * (0.85 + (1.15 + 0.80 * bloomMult) * flux) + vec3(1.0, 0.94, 0.78) * whiteCoreGlow * (0.75 + 0.55 * bloomMult);
     outAlpha = clamp(pow(radialProfile, 0.68) * (0.62 + 0.38 * diskFilaments) * min(1.30, dopplerBoost) * (0.85 + 0.18 * min(2.0, bloomMult)), 0.0, 0.98);
+
+    if (uPulseStrength > 0.001) {
+      float luma = dot(outColor, vec3(0.299, 0.587, 0.114));
+      vec3 neutralShock = mix(vec3(luma * 0.72), vec3(0.52, 0.55, 0.60), 0.35);
+      outColor = mix(outColor, neutralShock, sonicCompression * 0.78);
+      outColor *= (1.0 - sonicRarefaction * 0.76);
+      outAlpha = clamp(outAlpha * (1.0 - sonicRarefaction * 0.42 + sonicCompression * 0.15), 0.0, 0.98);
+    }
   }
 
   void main() {
@@ -607,7 +638,13 @@ const LENSING_FRAGMENT_SHADER = `
         float rOut = 11.8;
 
         // Analytical Einstein gravitational deflection of rays passing above and below the shadow
-        float alpha = clamp((2.1 * r_horizon) / (b + 0.12), 0.0, 1.48);
+        // plus Schlieren sonic-boom refractive shock deflection at b ≈ uPulseRadius
+        float shockRefraction = 0.0;
+        if (uPulseStrength > 0.001) {
+          float dWave = b - uPulseRadius;
+          shockRefraction = -dWave * exp(-pow(dWave / 0.55, 2.0)) * uPulseStrength * 0.38;
+        }
+        float alpha = clamp((2.1 * r_horizon) / (b + 0.12) + shockRefraction, 0.0, 1.48);
         vec3 inward = -normalize(pLocal);
         vec3 bentDir = normalize(rayDir + inward * sin(alpha));
 
@@ -645,14 +682,15 @@ const LENSING_FRAGMENT_SHADER = `
               // Smoothly mask near the equatorial plane so the 3D mainDiskMesh renders the primary disk without overlap
               float archMask = smoothstep(0.18, 0.85, abs(pLocal.y));
               float flux = radialProfile * (0.28 + 0.72 * diskFilaments) * dopplerBoost * (0.65 + 0.45 * uAccretionRate);
+              float sonicRarefaction = 0.0;
+              float sonicCompression = 0.0;
               if (uPulseStrength > 0.001) {
-                float c1 = exp(-pow((rHit - uPulseRadius) / 0.45, 2.0));
-                float c2 = exp(-pow((rHit - uPulseRadius * 0.84) / 0.50, 2.0)) * 0.80;
-                float c3 = exp(-pow((rHit - uPulseRadius * 0.68) / 0.55, 2.0)) * 0.64;
-                float c4 = exp(-pow((rHit - uPulseRadius * 0.52) / 0.60, 2.0)) * 0.48;
-                float c5 = exp(-pow((rHit - uPulseRadius * 0.36) / 0.65, 2.0)) * 0.34;
-                float fineWave = (0.5 + 0.5 * cos((rHit - uPulseRadius) * 5.0)) * exp(-abs(rHit - uPulseRadius * 0.68) * 0.32) * 0.50;
-                flux += (c1 + c2 + c3 + c4 + c5 + fineWave) * uPulseStrength * 1.35 * innerTaper * outerTaper;
+                float dShock = rHit - uPulseRadius;
+                float leadFront = exp(-pow(dShock / 0.35, 2.0));
+                float tailFront = exp(-pow((dShock + 1.35) / 0.45, 2.0)) * 0.65;
+                float rarefactionTrough = exp(-pow((dShock + 0.62) / 0.52, 2.0));
+                sonicCompression = clamp((leadFront + tailFront) * uPulseStrength * innerTaper * outerTaper, 0.0, 1.0);
+                sonicRarefaction = clamp(rarefactionTrough * uPulseStrength * innerTaper * outerTaper, 0.0, 0.88);
               }
               float lutU = clamp(flux * 0.65, 0.02, 0.98);
               vec3 baseLut = texture2D(uSpectrumLut, vec2(lutU, 0.5)).rgb;
@@ -668,6 +706,13 @@ const LENSING_FRAGMENT_SHADER = `
               float innerArchBloom = exp(-normR * 3.0) * bloomMult * 0.55 * dopplerBoost;
               lensedDiskColor = (baseLut * (0.48 + (0.75 + 0.60 * bloomMult) * flux) + vec3(1.0, 0.88, 0.56) * innerArchBloom) * archMask;
               lensedDiskAlpha = clamp(radialProfile * (0.48 + 0.52 * diskFilaments) * min(1.4, dopplerBoost) * (0.82 + 0.22 * min(2.0, bloomMult)), 0.0, 0.97) * archMask;
+              if (uPulseStrength > 0.001) {
+                float luma = dot(lensedDiskColor, vec3(0.299, 0.587, 0.114));
+                vec3 neutralShock = mix(vec3(luma * 0.72), vec3(0.52, 0.55, 0.60) * archMask, 0.35);
+                lensedDiskColor = mix(lensedDiskColor, neutralShock, sonicCompression * 0.78);
+                lensedDiskColor *= (1.0 - sonicRarefaction * 0.76);
+                lensedDiskAlpha = clamp(lensedDiskAlpha * (1.0 - sonicRarefaction * 0.42 + sonicCompression * 0.15), 0.0, 0.97);
+              }
             }
           }
         }
@@ -938,7 +983,7 @@ export class BlackHoleSceneController {
   private microlensStarPhase = 0.0;
   private microlensStarSpeed = 0.22;
 
-  // Event Horizon Pulse & Accretion Disturbance subsystem
+  // Event Horizon Sonic Boom & Accretion Shockwave subsystem
   private eventHorizonPulseGroup = new THREE.Group();
   private primaryPulseMesh!: THREE.Mesh;
   private secondaryPulseMesh!: THREE.Mesh;
@@ -948,10 +993,15 @@ export class BlackHoleSceneController {
   private horizonFlashMesh!: THREE.Mesh;
   private isPulseActive = false;
   private pulseProgress = 0.0;
-  private pulseDuration = 3.2;
+  private pulseDuration = 2.45;
   private pulseStrength = 0.0;
   private pulseRadius = 1.75;
-  private pulseColor = new THREE.Color(0xfbbf24);
+  private pulseColor = new THREE.Color(0x94a3b8);
+
+  // Sonic Boom Camera Screen Shake state
+  private shakeIntensity = 0.0;
+  private shakeElapsed = 0.0;
+  private shakeDuration = 1.65;
 
   // Damped state variables
   private currentScale = 1.0;
@@ -1227,13 +1277,16 @@ export class BlackHoleSceneController {
   private buildEventHorizonPulseSystem() {
     this.eventHorizonPulseGroup = new THREE.Group();
 
-    // Primary shockwave ring (expands across equatorial accretion plane)
-    const ringGeo = new THREE.RingGeometry(0.85, 1.45, 96);
+    // Primary sonic boom shockwave ring (expands across equatorial accretion plane)
+    const ringGeo = new THREE.RingGeometry(0.78, 1.48, 96);
     ringGeo.rotateX(-Math.PI / 2);
 
+    // Achromatic N-wave Sonic Boom Shader:
+    // Sharp leading Mach compression edge (muted silver-slate condensation mist)
+    // followed immediately by a dark rarefaction / decompression shadow cavity (zero bright colors)
     const pulseShaderMat = new THREE.ShaderMaterial({
       uniforms: {
-        uColor: { value: new THREE.Color(0xfbbf24) },
+        uColor: { value: new THREE.Color(0x94a3b8) },
         uOpacity: { value: 0.0 },
       },
       vertexShader: `
@@ -1249,18 +1302,27 @@ export class BlackHoleSceneController {
         varying vec2 vUv;
         void main() {
           float radial = length(vUv - 0.5) * 2.0;
-          float dist = abs(radial - 0.85);
-          float ring = exp(-pow(dist * 7.0, 2.0));
-          // Concentric harmonic sub-ripples inside each shockwave ring
-          float subRipples = (0.55 + 0.45 * cos((radial - 0.85) * 42.0)) * exp(-pow(dist * 4.5, 2.0));
-          // Bright, incandescent core line with soft plasma aura
-          float coreLine = exp(-pow(dist * 22.0, 2.0));
-          vec3 finalRgb = mix(uColor, vec3(1.0, 0.98, 0.88), coreLine * 0.75 + subRipples * 0.25);
-          gl_FragColor = vec4(finalRgb, (ring * 0.75 + subRipples * 0.55 + coreLine * 0.85) * uOpacity);
+          // Signed offset relative to outer Mach shock front at radial = 0.90
+          float delta = radial - 0.90;
+          // Razor-sharp leading Mach compression front (Prandtl-Glauert condensation cone edge)
+          float leadShock = exp(-pow(delta * 26.0, 2.0));
+          // Deep dark rarefaction / decompression trough right behind the leading shock front
+          float rarefaction = exp(-pow((delta + 0.09) * 11.5, 2.0));
+          // Secondary trailing recovery Mach wave (N-wave tail)
+          float tailShock = exp(-pow((delta + 0.20) * 18.0, 2.0)) * 0.55;
+          // Subtle acoustic pressure striations inside the shock wake
+          float wakeRipples = (0.5 + 0.5 * cos(delta * 58.0)) * exp(-pow((delta + 0.11) * 7.5, 2.0)) * 0.30;
+
+          vec3 compressionTone = mix(uColor, vec3(0.72, 0.75, 0.80), 0.45) * 0.78;
+          vec3 rarefactionTone = vec3(0.01, 0.015, 0.025);
+          float compWeight = clamp(leadShock + tailShock + wakeRipples, 0.0, 1.0);
+          vec3 finalRgb = mix(rarefactionTone, compressionTone, compWeight / max(0.001, compWeight + rarefaction * 0.95));
+          float alpha = clamp(leadShock * 0.62 + rarefaction * 0.58 + tailShock * 0.36 + wakeRipples * 0.22, 0.0, 0.85) * uOpacity;
+          gl_FragColor = vec4(finalRgb, alpha);
         }
       `,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
@@ -1269,7 +1331,7 @@ export class BlackHoleSceneController {
     this.primaryPulseMesh.visible = false;
     this.eventHorizonPulseGroup.add(this.primaryPulseMesh);
 
-    // Secondary trailing harmonic shockwave ring
+    // Secondary trailing harmonic sonic shockwave ring
     const secondaryMat = pulseShaderMat.clone();
     this.secondaryPulseMesh = new THREE.Mesh(ringGeo.clone(), secondaryMat);
     this.secondaryPulseMesh.visible = false;
@@ -1281,13 +1343,13 @@ export class BlackHoleSceneController {
     this.tertiaryPulseMesh.visible = false;
     this.eventHorizonPulseGroup.add(this.tertiaryPulseMesh);
 
-    // Additional concentric reverberation ripple rings (7 total expanding shockwave rings)
+    // Additional concentric acoustic pressure ripple rings
     const extraRatios = [
-      { ratio: 0.90, opacityWeight: 0.82 },
-      { ratio: 0.78, opacityWeight: 0.70 },
-      { ratio: 0.62, opacityWeight: 0.55 },
-      { ratio: 0.36, opacityWeight: 0.34 },
-      { ratio: 0.24, opacityWeight: 0.24 },
+      { ratio: 0.88, opacityWeight: 0.68 },
+      { ratio: 0.74, opacityWeight: 0.52 },
+      { ratio: 0.58, opacityWeight: 0.38 },
+      { ratio: 0.36, opacityWeight: 0.24 },
+      { ratio: 0.22, opacityWeight: 0.16 },
     ];
     this.extraPulseRippleMeshes = [];
     for (const def of extraRatios) {
@@ -1298,11 +1360,11 @@ export class BlackHoleSceneController {
       this.extraPulseRippleMeshes.push({ mesh, ratio: def.ratio, opacityWeight: def.opacityWeight });
     }
 
-    // 3D Quadrupole Gravitational Wave Shell (spherical expanding ripple propagating at c)
+    // 3D Spherical Sonic Boom Mach Wavefront Shell (achromatic Prandtl-Glauert vapor/pressure boundary)
     const shellGeo = new THREE.SphereGeometry(1.0, 48, 32);
     const shellMat = new THREE.ShaderMaterial({
       uniforms: {
-        uColor: { value: new THREE.Color(0xfbbf24) },
+        uColor: { value: new THREE.Color(0x94a3b8) },
         uOpacity: { value: 0.0 },
         uTime: { value: 0.0 },
       },
@@ -1321,19 +1383,20 @@ export class BlackHoleSceneController {
         varying vec3 vNormalVec;
         varying vec3 vPos;
         void main() {
-          // Quadrupole radiation pattern (sin^2 theta cos 2 phi)
           float theta = acos(clamp(vPos.y, -1.0, 1.0));
-          float phi = atan(vPos.z, vPos.x);
-          float quadrupole = pow(sin(theta), 2.0) * (0.65 + 0.35 * cos(phi * 2.0));
-          
-          // Fresnel rim glow
-          float fresnel = pow(1.0 - abs(vNormalVec.z), 2.5);
-          float alpha = fresnel * quadrupole * uOpacity;
-          gl_FragColor = vec4(uColor, alpha);
+          float equatorialFocus = pow(sin(theta), 1.4);
+          // Sharp grazing-angle Mach shock rim + inner dark rarefaction band
+          float viewCos = abs(vNormalVec.z);
+          float outerRim = exp(-pow(viewCos * 5.2, 2.0));
+          float innerTrough = exp(-pow((viewCos - 0.24) * 7.5, 2.0));
+          vec3 rimColor = mix(uColor, vec3(0.68, 0.72, 0.77), 0.5) * 0.65;
+          vec3 rgb = mix(vec3(0.02, 0.025, 0.04), rimColor, outerRim / max(0.001, outerRim + innerTrough));
+          float alpha = (outerRim * 0.42 + innerTrough * 0.28) * equatorialFocus * uOpacity;
+          gl_FragColor = vec4(rgb, alpha);
         }
       `,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
@@ -1341,13 +1404,14 @@ export class BlackHoleSceneController {
     this.gravitationalWaveShellMesh.visible = false;
     this.eventHorizonPulseGroup.add(this.gravitationalWaveShellMesh);
 
-    // Horizon flash burst sphere (brief incandescent flash at the causal boundary)
+    // Subtle neutral boundary pressure-condensation shell (no bright flash)
     const burstGeo = new THREE.SphereGeometry(1.85, 32, 32);
     const burstMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
+      color: 0x8892a0,
       transparent: true,
       opacity: 0.0,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
+      depthWrite: false,
     });
     this.horizonFlashMesh = new THREE.Mesh(burstGeo, burstMat);
     this.horizonFlashMesh.visible = false;
@@ -1568,8 +1632,8 @@ export class BlackHoleSceneController {
 
     if (this.spacetimeWellMesh) {
       const wellMat = this.spacetimeWellMesh.material as THREE.MeshStandardMaterial;
-      wellMat.emissiveIntensity = 0.45 + this.pulseStrength * 0.55;
-      wellMat.opacity = 0.28 + this.pulseStrength * 0.20;
+      wellMat.emissiveIntensity = 0.45;
+      wellMat.opacity = 0.28 + this.pulseStrength * 0.12;
     }
   }
 
@@ -2015,7 +2079,14 @@ export class BlackHoleSceneController {
         const impactB = Math.max(rs * 0.9, starDist * sinAngle);
 
         // Einstein deflection displacement: α ≈ 2 Rs / b
-        const deflectionFactor = Math.min(7.5, einsteinRadiusSq / (impactB + 0.35));
+        let deflectionFactor = Math.min(7.5, einsteinRadiusSq / (impactB + 0.35));
+
+        // Sonic Boom Schlieren Optical Shock Refraction: stars passing through the expanding shockwave ripple radially
+        if (this.pulseStrength > 0.005) {
+          const dShock = impactB - this.pulseRadius;
+          const shockKick = -dShock * Math.exp(-(dShock * dShock) / Math.max(0.4, 0.85 * this.currentScale)) * this.pulseStrength * 1.45;
+          deflectionFactor += shockKick;
+        }
 
         // Transverse outward unit vector from black hole center to star in view plane
         _vec3C.crossVectors(_vec3B, starDir).crossVectors(_vec3C, _vec3B).normalize();
@@ -2200,8 +2271,13 @@ export class BlackHoleSceneController {
     this.pulseStrength = 1.0;
     this.pulseRadius = 1.75 * this.currentScale;
 
+    // Trigger Sonic Boom Camera Screen Shake recoil
+    this.shakeIntensity = 1.0;
+    this.shakeElapsed = 0.0;
+
+    // Achromatic neutral slate/silver sonic boom tone (no bright colors)
     const isStar = (category || this.params.objectCategory) === 'star';
-    this.pulseColor.set(isStar ? 0x38bdf8 : 0xfbbf24);
+    this.pulseColor.set(isStar ? 0x94a3b8 : 0x8a94a6);
 
     if (this.primaryPulseMesh) {
       this.primaryPulseMesh.visible = true;
@@ -2565,7 +2641,7 @@ export class BlackHoleSceneController {
       this.neutronStarMesh.rotation.y = this.pulsarRotationAngle * 0.8;
     }
 
-    // 4b. Event Horizon Pulse Animation (Accretion Disk Disturbance & Shockwave Ripple)
+    // 4b. Relativistic Sonic Boom Animation (Achromatic N-Wave ShockFront & Accretion Rarefaction)
     if (this.isPulseActive && simDelta > 0) {
       this.pulseProgress += simDelta / this.pulseDuration;
       if (this.pulseProgress >= 1.0) {
@@ -2583,36 +2659,36 @@ export class BlackHoleSceneController {
         this.accretionDiskMat.uniforms.uPulseStrength.value = 0.0;
         this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
       } else {
-        // High-energy blast, decelerating outward with reverberating echoes
-        const ease = 1.0 - Math.pow(1.0 - this.pulseProgress, 2.8);
-        this.pulseStrength = Math.pow(1.0 - this.pulseProgress, 1.6);
+        // Supersonic N-wave blast expansion decelerating across the accretion plane
+        const ease = 1.0 - Math.pow(1.0 - this.pulseProgress, 3.2);
+        this.pulseStrength = Math.pow(1.0 - this.pulseProgress, 1.5);
         const startR = 1.75 * this.currentScale;
         const maxShockRadius = 22.0 * this.currentScale;
         this.pulseRadius = THREE.MathUtils.lerp(startR, maxShockRadius, ease);
 
-        // Update accretion disk disturbance shader uniforms
+        // Update accretion disk sonic-boom rarefaction & compression uniforms
         this.accretionDiskMat.uniforms.uPulseRadius.value = this.pulseRadius / this.currentScale;
         this.accretionDiskMat.uniforms.uPulseStrength.value = this.pulseStrength;
         this.accretionDiskMat.uniforms.uDiskParams.value.w = this.params.objectCategory === 'star' ? 1.0 : 0.0;
 
-        // Primary shockwave ring expansion & fade
+        // Primary sonic shockwave ring expansion & fade
         this.primaryPulseMesh.visible = true;
         this.primaryPulseMesh.scale.set(this.pulseRadius, this.pulseRadius, this.pulseRadius);
-        (this.primaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.95;
+        (this.primaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.78;
 
-        // Secondary harmonic echo ring
-        const secondaryR = Math.max(startR, this.pulseRadius * 0.72);
+        // Secondary trailing N-wave shock ring
+        const secondaryR = Math.max(startR, this.pulseRadius * 0.74);
         this.secondaryPulseMesh.visible = true;
         this.secondaryPulseMesh.scale.set(secondaryR, secondaryR, secondaryR);
-        (this.secondaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.65;
+        (this.secondaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.52;
 
-        // Tertiary reverberation ring
-        const tertiaryR = Math.max(startR, this.pulseRadius * 0.48);
+        // Tertiary acoustic reverberation ring
+        const tertiaryR = Math.max(startR, this.pulseRadius * 0.50);
         this.tertiaryPulseMesh.visible = true;
         this.tertiaryPulseMesh.scale.set(tertiaryR, tertiaryR, tertiaryR);
-        (this.tertiaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.45;
+        (this.tertiaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.35;
 
-        // Additional concentric ripple rings
+        // Additional concentric pressure ripple rings
         for (const extra of this.extraPulseRippleMeshes) {
           const ringR = Math.max(startR, this.pulseRadius * extra.ratio);
           extra.mesh.visible = true;
@@ -2621,19 +2697,19 @@ export class BlackHoleSceneController {
             this.pulseStrength * extra.opacityWeight;
         }
 
-        // 3D Quadrupole Gravitational Wave Shell (expands spherically at c)
-        const gwShellR = THREE.MathUtils.lerp(startR, maxShockRadius * 1.2, ease);
+        // 3D Spherical Sonic Boom Mach Shell
+        const gwShellR = THREE.MathUtils.lerp(startR, maxShockRadius * 1.18, ease);
         this.gravitationalWaveShellMesh.visible = true;
         this.gravitationalWaveShellMesh.scale.set(gwShellR, gwShellR, gwShellR);
-        (this.gravitationalWaveShellMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.70;
+        (this.gravitationalWaveShellMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.55;
 
-        // Horizon flash burst decay at the causal boundary
-        if (this.pulseProgress < 0.28) {
-          const burstT = this.pulseProgress / 0.28;
-          const burstScale = THREE.MathUtils.lerp(1.0, 1.55, burstT) * this.currentScale;
+        // Brief neutral condensation vapor release at the causal boundary (no bright flash)
+        if (this.pulseProgress < 0.18) {
+          const burstT = this.pulseProgress / 0.18;
+          const burstScale = THREE.MathUtils.lerp(1.0, 1.65, burstT) * this.currentScale;
           this.horizonFlashMesh.visible = true;
           this.horizonFlashMesh.scale.set(burstScale, burstScale, burstScale);
-          (this.horizonFlashMesh.material as THREE.MeshBasicMaterial).opacity = (1.0 - burstT) * 0.9;
+          (this.horizonFlashMesh.material as THREE.MeshBasicMaterial).opacity = (1.0 - burstT) * 0.18;
         } else {
           this.horizonFlashMesh.visible = false;
         }
@@ -2725,26 +2801,7 @@ export class BlackHoleSceneController {
 
     this.controls.update();
 
-    // 10. Update Gravitational Lensing billboard to face camera and align with black hole
-    if (this.gravitationalLensMesh && this.gravitationalLensMat) {
-      this.gravitationalLensMesh.quaternion.copy(this.camera.quaternion);
-      this.gravitationalLensMesh.scale.setScalar(this.currentScale);
-      this.gravitationalLensMat.uniforms.uCameraPos.value.copy(this.camera.position);
-      this.gravitationalLensMat.uniforms.uBlackHolePos.value.copy(this.blackHoleGroup.position);
-      this.gravitationalLensMat.uniforms.uScale.value = this.currentScale;
-      this.gravitationalLensMat.uniforms.uTime.value = elapsed;
-      this.gravitationalLensMat.uniforms.uPulseRadius.value = this.pulseRadius / this.currentScale;
-      this.gravitationalLensMat.uniforms.uPulseStrength.value = this.pulseStrength;
-    }
-
-    // 12. Relativistic Audio Modulation: Camera Proximity & Gravitational Time Dilation
-    const camDist = this.camera.position.length();
-    const rs = 1.75 * this.currentScale;
-    const distanceRs = Math.max(1.05, camDist / rs);
-    const timeDilation = Math.sqrt(Math.max(0.01, 1.0 - 1.0 / distanceRs));
-    relativisticAudio.updateCameraProximity(distanceRs, timeDilation);
-
-    // 13. Camera Angular Velocity & Relativistic Motion Blur
+    // 10.Relativistic Camera Angular Velocity & Motion Blur (measured before transient screen shake)
     const dot = Math.min(1.0, Math.max(-1.0, this.camera.quaternion.dot(this.prevCamQuat)));
     const angleDiff = 2.0 * Math.acos(Math.abs(dot));
     const camAngularSpeed = rawDelta > 0.0001 ? angleDiff / rawDelta : 0.0;
@@ -2759,6 +2816,72 @@ export class BlackHoleSceneController {
     this.camMotionVelocity.set(velX, velY);
     this.prevCamQuat.copy(this.camera.quaternion);
 
+    // 11. Sonic Boom Screen Shake (Non-destructive transient camera recoil & seismic aftershock; pauses when simDelta === 0)
+    const camDist = this.camera.position.length();
+    let appliedShake = false;
+    if (this.shakeIntensity > 0.001 && simDelta > 0) {
+      this.shakeElapsed += simDelta;
+      if (this.shakeElapsed >= this.shakeDuration) {
+        this.shakeIntensity = 0.0;
+      } else {
+        const t = this.shakeElapsed;
+        const normT = t / this.shakeDuration;
+        // Double-peaked N-wave sonic boom envelope: initial front blast + secondary tail thump + seismic decay
+        const primaryBlast = Math.exp(-t * 7.5);
+        const tailThump = 0.72 * Math.exp(-Math.pow((t - 0.19) / 0.075, 2.0));
+        const seismicRumble = 0.38 * Math.pow(1.0 - normT, 2.2) * Math.sin(t * 14.0);
+        const envelope = primaryBlast + tailThump + Math.abs(seismicRumble);
+
+        if (this.settings.screenShakeEnabled) {
+          _savedCamPos.copy(this.camera.position);
+          _savedCamTarget.copy(this.controls.target);
+
+          _camRight.setFromMatrixColumn(this.camera.matrixWorld, 0).normalize();
+          _camUp.setFromMatrixColumn(this.camera.matrixWorld, 1).normalize();
+          _vec3A.subVectors(this.controls.target, this.camera.position).normalize();
+
+          const scaleAmp = Math.max(0.18, camDist * 0.016) * envelope;
+          const shakeX =
+            (Math.sin(t * 145.0) * 0.55 + Math.cos(t * 89.0) * 0.35 + Math.sin(t * 37.0) * 0.25) *
+            scaleAmp;
+          const shakeY =
+            (Math.cos(t * 162.0) * 0.55 + Math.sin(t * 103.0) * 0.35 + Math.cos(t * 41.0) * 0.25) *
+            scaleAmp;
+          const shakeZ = Math.sin(t * 118.0) * scaleAmp * 0.45;
+
+          _shakeOffset
+            .set(0, 0, 0)
+            .addScaledVector(_camRight, shakeX)
+            .addScaledVector(_camUp, shakeY)
+            .addScaledVector(_vec3A, shakeZ);
+
+          this.camera.position.add(_shakeOffset);
+          this.controls.target.addScaledVector(_shakeOffset, 0.85);
+          this.camera.lookAt(this.controls.target);
+          this.camera.updateMatrixWorld();
+          appliedShake = true;
+        }
+      }
+    }
+
+    // 12. Update Gravitational Lensing billboard to face camera and align with black hole
+    if (this.gravitationalLensMesh && this.gravitationalLensMat) {
+      this.gravitationalLensMesh.quaternion.copy(this.camera.quaternion);
+      this.gravitationalLensMesh.scale.setScalar(this.currentScale);
+      this.gravitationalLensMat.uniforms.uCameraPos.value.copy(this.camera.position);
+      this.gravitationalLensMat.uniforms.uBlackHolePos.value.copy(this.blackHoleGroup.position);
+      this.gravitationalLensMat.uniforms.uScale.value = this.currentScale;
+      this.gravitationalLensMat.uniforms.uTime.value = elapsed;
+      this.gravitationalLensMat.uniforms.uPulseRadius.value = this.pulseRadius / this.currentScale;
+      this.gravitationalLensMat.uniforms.uPulseStrength.value = this.pulseStrength;
+    }
+
+    // 13. Relativistic Audio Modulation: Camera Proximity & Gravitational Time Dilation
+    const rs = 1.75 * this.currentScale;
+    const distanceRs = Math.max(1.05, camDist / rs);
+    const timeDilation = Math.sqrt(Math.max(0.01, 1.0 - 1.0 / distanceRs));
+    relativisticAudio.updateCameraProximity(distanceRs, timeDilation);
+
     if (this.settings.motionBlurEnabled && this.camMotionBlurStrength > 0.012 && this.motionBlurRenderTarget && this.postMaterial) {
       this.postMaterial.uniforms.uStrength.value = this.camMotionBlurStrength;
       this.postMaterial.uniforms.uVelocity.value.copy(this.camMotionVelocity);
@@ -2768,6 +2891,14 @@ export class BlackHoleSceneController {
       this.renderer.render(this.postScene, this.postCamera);
     } else {
       this.renderer.render(this.scene, this.camera);
+    }
+
+    // Restore unshaken camera state so OrbitControls never drifts
+    if (appliedShake) {
+      this.camera.position.copy(_savedCamPos);
+      this.controls.target.copy(_savedCamTarget);
+      this.camera.lookAt(this.controls.target);
+      this.camera.updateMatrixWorld();
     }
 
     if (isSoftwareGl) {

@@ -163,23 +163,55 @@ class RelativisticAudioEngine {
   public triggerAccretionShockPulse(isStar = false) {
     if (!this.ctx || this.isMuted || !this.masterGain) return;
     const now = this.ctx.currentTime;
+
+    // 1. Deep N-Wave Sub-Bass Sonic Boom Thump
     const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const subGain = this.ctx.createGain();
 
     osc.type = isStar ? 'triangle' : 'sine';
-    const startFreq = isStar ? 180 : 95;
-    const endFreq = isStar ? 42 : 32;
+    const startFreq = isStar ? 135 : 88;
+    const endFreq = isStar ? 28 : 22;
 
     osc.frequency.setValueAtTime(startFreq, now);
-    osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.55);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.65);
 
-    gain.gain.setValueAtTime(0.24, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+    subGain.gain.setValueAtTime(0.001, now);
+    subGain.gain.linearRampToValueAtTime(0.34, now + 0.018);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
 
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    osc.connect(subGain);
+    subGain.connect(this.ctx.destination);
     osc.start(now);
-    osc.stop(now + 0.7);
+    osc.stop(now + 0.78);
+
+    // 2. Supersonic Pressure-Front Broadband Shock Crack (Low-passed Noise Burst)
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.45);
+    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      const t = i / bufferSize;
+      // N-wave double-shock envelope
+      const nWave = Math.exp(-t * 14.0) + 0.45 * Math.exp(-Math.pow((t - 0.16) / 0.06, 2.0));
+      data[i] = (Math.random() * 2.0 - 1.0) * nWave;
+    }
+
+    const noiseSource = this.ctx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+
+    const shockFilter = this.ctx.createBiquadFilter();
+    shockFilter.type = 'lowpass';
+    shockFilter.frequency.setValueAtTime(isStar ? 420 : 280, now);
+    shockFilter.frequency.exponentialRampToValueAtTime(45, now + 0.4);
+    shockFilter.Q.value = 1.8;
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.28, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.44);
+
+    noiseSource.connect(shockFilter);
+    shockFilter.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+    noiseSource.start(now);
   }
 
   public dispose() {

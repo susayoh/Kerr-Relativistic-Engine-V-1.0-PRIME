@@ -338,6 +338,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between gap-4 pt-2 border-t border-neutral-900">
               <div>
                 <div className="text-neutral-100 font-medium text-xs">
+                  Sonic Boom Screen Shake
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed mt-0.5">
+                  Applies physical camera recoil and seismic aftershock vibration when triggering a sonic boom pulse.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSetting('screenShakeEnabled')}
+                className={`w-11 h-6 rounded-full transition-colors p-0.5 shrink-0 cursor-pointer border ${
+                  settings.screenShakeEnabled
+                    ? 'bg-emerald-500/30 border-emerald-400/70'
+                    : 'bg-neutral-900 border-neutral-700'
+                }`}
+              >
+                <div
+                  className={`w-4.5 h-4.5 rounded-full transition-transform ${
+                    settings.screenShakeEnabled
+                      ? 'translate-x-5 bg-emerald-300'
+                      : 'translate-x-0 bg-neutral-500'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 pt-2 border-t border-neutral-900">
+              <div>
+                <div className="text-neutral-100 font-medium text-xs">
                   Auto-Rotate Camera Mode (Y-Axis Orbit)
                 </div>
                 <p className="text-[11px] text-neutral-400 leading-relaxed mt-0.5">
