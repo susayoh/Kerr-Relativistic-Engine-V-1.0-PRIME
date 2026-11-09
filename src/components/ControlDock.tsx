@@ -16,6 +16,9 @@ import {
   Trash2,
   Volume2,
   VolumeX,
+  Maximize2,
+  Zap,
+  Waves,
 } from 'lucide-react';
 import {
   ARCHETYPE_DEFINITIONS,
@@ -23,6 +26,9 @@ import {
   BlackHoleParams,
   DerivedRelativisticMetrics,
   GeodesicTrajectory,
+  ObjectCategory,
+  BackgroundThemeId,
+  BACKGROUND_THEMES,
 } from '../physics/gravitationalPhysics';
 import { CameraPresetId } from '../scene/BlackHoleScene';
 
@@ -42,6 +48,8 @@ interface ControlDockProps {
   lastTrajectory: GeodesicTrajectory | null;
   audioEnabled: boolean;
   onToggleAudio: () => void;
+  onOpenCosmicScaleModal: () => void;
+  onTriggerPulse: () => void;
 }
 
 type DockTab = 'spacetime' | 'spectral' | 'camera' | 'geodesics';
@@ -62,14 +70,23 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   lastTrajectory,
   audioEnabled,
   onToggleAudio,
+  onOpenCosmicScaleModal,
+  onTriggerPulse,
 }) => {
   const [activeTab, setActiveTab] = useState<DockTab>('spacetime');
   const [impactB, setImpactB] = useState<number>(2.4);
+  const [selectedCategory, setSelectedCategory] = useState<ObjectCategory>(params.objectCategory || 'black_hole');
 
   const activePreset =
     ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
 
   const isPaused = params.timeScale === 0;
+  const isStar = params.objectCategory === 'star';
+  const isTon618 = activePresetId === 'ton618';
+
+  const categoryFilteredPresets = ASTROPHYSICAL_PRESETS.filter(
+    (p) => p.category === selectedCategory
+  );
 
   return (
     <div
@@ -80,7 +97,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
           : 'translate(-50%, 0)',
       }}
     >
-      {/* Top Collapse / Expand Handle (Cinema / Zen Mode Drawer Toggle) */}
+      {/* Top Collapse / Expand Handle */}
       <div className="flex justify-center">
         <button
           type="button"
@@ -102,7 +119,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
         </button>
       </div>
 
-      {/* Main Dock Panel (Smart minimalistic glass surface) */}
+      {/* Main Dock Panel */}
       <div className="bg-[#060912]/92 backdrop-blur-md border border-slate-800/80 rounded-xl shadow-2xl p-3 sm:p-3.5">
         {/* Top Row: Mode Tabs + Quick Transport & Telemetry Summary */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 mb-2.5 border-b border-slate-800/70">
@@ -158,17 +175,22 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             </button>
           </div>
 
-          {/* Unboxed Telemetry Readout + Transport Action Buttons */}
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 text-xs font-mono tabular-nums">
-              <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${ARCHETYPE_DEFINITIONS[activePreset.archetype].badgeBg}`}>
-                {activePreset.name} · {activePreset.plainMassExplanation}
-              </span>
-              <span aria-hidden="true" className="text-slate-600">·</span>
-              <span className="text-slate-400">
-                dτ/dt <strong className="text-emerald-400">{(1 / metrics.probeTimeDilationFactor).toFixed(3)}</strong>
-              </span>
-            </div>
+          {/* Quick Cosmic Scale Trigger + Transport Action Buttons */}
+          <div className="flex items-center gap-2">
+            {/* Real Size Explorer Button */}
+            <button
+              type="button"
+              onClick={onOpenCosmicScaleModal}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border transition-all cursor-pointer ${
+                isTon618
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 hover:bg-amber-500/30'
+                  : 'bg-[#0f172a] text-cyan-300 border-cyan-800/80 hover:bg-cyan-950/60'
+              }`}
+              title="Explore Real Astronomical Scale (Neutron Star vs TON 618 vs Solar System)"
+            >
+              <Maximize2 className="w-3 h-3 text-amber-400" />
+              <span>Real Cosmic Scale</span>
+            </button>
 
             <div className="flex items-center gap-1">
               <button
@@ -184,6 +206,16 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               >
                 {isPaused ? <Play className="w-3 h-3 text-amber-400" /> : <Pause className="w-3 h-3 text-amber-400" />}
                 <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onTriggerPulse}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-amber-300 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/50 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                title="Trigger Event Horizon Pulse (Accretion Shockwave Ripple)"
+              >
+                <Waves className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                <span className="hidden sm:inline">Pulse</span>
               </button>
 
               <button
@@ -211,48 +243,120 @@ export const ControlDock: React.FC<ControlDockProps> = ({
           </div>
         </div>
 
-        {/* Smart Archetype Quick Selector Strip */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-2.5 border-b border-slate-800/50 text-xs scrollbar-none">
-          <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-amber-400" />
-            <span className="hidden sm:inline">Targets:</span>
-          </span>
-          {ASTROPHYSICAL_PRESETS.map((preset) => {
-            const isCurrent = activePresetId === preset.id;
-            const isTon618 = preset.id === 'ton618';
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => onSelectPreset(preset.id)}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                  isCurrent
-                    ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                    : isTon618
-                    ? 'bg-amber-950/40 text-amber-300 border border-amber-500/40 hover:bg-amber-900/40'
-                    : 'bg-[#0a0f1d] text-slate-300 border border-slate-800 hover:text-white hover:border-slate-700'
-                }`}
-                title={`${preset.name}: ${preset.solarEquivalence}`}
-              >
-                {isTon618 && <Sparkles className="w-3 h-3 text-amber-400" />}
-                <span>{preset.name}</span>
-                <span className="text-[10px] opacity-75 font-mono">
-                  {preset.archetype === 'ultramassive' ? 'UMBH' : preset.archetype === 'primordial' ? 'PBH' : preset.archetype === 'supermassive' ? 'SMBH' : preset.archetype === 'intermediate' ? 'IMBH' : 'Stellar'}
-                </span>
-              </button>
-            );
-          })}
+        {/* Category Switcher & Targets Strip */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mb-2.5 border-b border-slate-800/50 text-xs">
+          {/* Object Category Tabs */}
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider mr-1">
+              Category:
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCategory('black_hole');
+                if (activePreset.category !== 'black_hole') {
+                  onSelectPreset('ton618');
+                }
+              }}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-all cursor-pointer ${
+                selectedCategory === 'black_hole'
+                  ? 'bg-purple-950/80 text-purple-200 border border-purple-500/60 font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Black Holes (7)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCategory('star');
+                if (activePreset.category !== 'star') {
+                  onSelectPreset('psr_b1919');
+                }
+              }}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                selectedCategory === 'star'
+                  ? 'bg-emerald-950/80 text-emerald-200 border border-emerald-500/60 font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Zap className="w-3 h-3 text-emerald-400" />
+              <span>Compact Stars (2)</span>
+            </button>
+          </div>
+
+          {/* Filtered Preset Target Buttons */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+            {categoryFilteredPresets.map((preset) => {
+              const isCurrent = activePresetId === preset.id;
+              const isCurrentTon = preset.id === 'ton618';
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => onSelectPreset(preset.id)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                    isCurrent
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                      : isCurrentTon
+                      ? 'bg-amber-950/40 text-amber-300 border border-amber-500/40 hover:bg-amber-900/40'
+                      : preset.category === 'star'
+                      ? 'bg-emerald-950/30 text-emerald-300 border border-emerald-800/60 hover:bg-emerald-900/40'
+                      : 'bg-[#0a0f1d] text-slate-300 border border-slate-800 hover:text-white hover:border-slate-700'
+                  }`}
+                  title={`${preset.name}: ${preset.solarEquivalence}`}
+                >
+                  {isCurrentTon && <Sparkles className="w-3 h-3 text-amber-400" />}
+                  <span>{preset.name}</span>
+                  <span className="text-[10px] opacity-75 font-mono">
+                    {preset.archetype === 'ultramassive'
+                      ? 'UMBH'
+                      : preset.archetype === 'neutron_star'
+                      ? 'Pulsar'
+                      : preset.archetype === 'magnetar'
+                      ? 'Magnetar'
+                      : preset.archetype === 'primordial'
+                      ? 'PBH'
+                      : preset.archetype === 'supermassive'
+                      ? 'SMBH'
+                      : preset.archetype === 'intermediate'
+                      ? 'IMBH'
+                      : 'Stellar'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* TAB 1: Spacetime & Accretion Disk Parameters */}
+        {/* TON 618 Scale Explainer Banner (When TON 618 is active) */}
+        {isTon618 && (
+          <div className="mb-2.5 px-3 py-1.5 bg-gradient-to-r from-amber-950/50 via-[#0e1422] to-[#0a0f1d] border border-amber-500/40 rounded-lg flex items-center justify-between text-xs text-slate-200">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>
+                <strong>TON 618 Mass:</strong> 66 Billion Suns (66,000,000,000 M☉) · 390 Billion km horizon (2,600 AU).
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenCosmicScaleModal}
+              className="text-amber-300 underline hover:text-amber-200 text-[11px] font-semibold shrink-0 cursor-pointer"
+            >
+              Why 100 Suns slider? Click for True Scale Explorer →
+            </button>
+          </div>
+        )}
+
+        {/* TAB 1: Spacetime, Deep Gravity Well & Accretion Parameters */}
         {activeTab === 'spacetime' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            {/* Mass Slider with Plain-English Solar Mass Explanations */}
+            {/* Mass Slider */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-300 font-medium flex items-center gap-1">
                   <Scale className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Mass Scale</span>
+                  <span>{isStar ? 'Stellar Mass' : 'Black Hole Mass'}</span>
                 </span>
                 <span className="font-mono tabular-nums text-slate-100 font-bold">
                   {params.massSolar.toFixed(1)} <span className="text-amber-400 font-sans text-[11px]">Suns (M☉)</span>
@@ -260,7 +364,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               </div>
               <input
                 type="range"
-                min={5}
+                min={isStar ? 1.4 : 5}
                 max={100}
                 step={0.5}
                 value={params.massSolar}
@@ -270,15 +374,48 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 className="sci-slider w-full"
               />
               <div className="flex items-center justify-between text-[11px] text-slate-400">
-                <span title="1 Solar Mass = Weight of our Sun (~333,000 Earths)">1 M☉ = 1 Sun (~333k Earths)</span>
-                <span className="font-mono text-cyan-400">r₊ {metrics.eventHorizonKm.toFixed(0)} km</span>
+                <span>{isStar ? '1.4 TOV Limit' : '1 M☉ = 1 Sun'}</span>
+                <span className="font-mono text-cyan-400">
+                  {isStar ? 'Crust 20 km' : `r₊ ${metrics.eventHorizonKm.toFixed(0)} km`}
+                </span>
+              </div>
+            </div>
+
+            {/* Gravity Well Depth Multiplier (Plunging Deep Funnel) */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-300 font-medium flex items-center gap-1">
+                  <Compass className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Gravity Well Depth</span>
+                </span>
+                <span className="font-mono tabular-nums text-cyan-300 font-semibold">
+                  {(params.wellDepthMultiplier || 2.2).toFixed(1)}× <span className="text-slate-500">Plunge</span>
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0.8}
+                max={3.5}
+                step={0.1}
+                value={params.wellDepthMultiplier || 2.2}
+                onChange={(e) =>
+                  onChangeParams((prev) => ({
+                    ...prev,
+                    wellDepthMultiplier: parseFloat(e.target.value),
+                  }))
+                }
+                className="sci-slider w-full"
+              />
+              <div className="flex justify-between text-[11px] font-mono text-slate-500">
+                <span>Shallow</span>
+                <span>{isStar ? 'Crust Basin' : 'Abyssal Throat'}</span>
               </div>
             </div>
 
             {/* Kerr Spin Parameter Slider */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Kerr Spin (a*)</span>
+                <span className="text-slate-400">{isStar ? 'Rotation Rate' : 'Kerr Spin (a*)'}</span>
                 <span className="font-mono tabular-nums text-amber-400 font-semibold">
                   {params.spin.toFixed(3)} <span className="text-slate-500">cJ/GM²</span>
                 </span>
@@ -295,15 +432,15 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 className="sci-slider w-full"
               />
               <div className="flex justify-between text-[11px] font-mono text-slate-500">
-                <span>0.0 Schwarzschild</span>
-                <span>0.998 Thorne Limit</span>
+                <span>0.0 Static</span>
+                <span>{isStar ? 'Millisecond Period' : '0.998 Thorne Limit'}</span>
               </div>
             </div>
 
-            {/* Accretion Rate Slider */}
+            {/* Accretion / Radiation Rate Slider */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Accretion Flux (ṁ)</span>
+                <span className="text-slate-400">{isStar ? 'Stellar Wind Flux' : 'Accretion Flux (ṁ)'}</span>
                 <span className="font-mono tabular-nums text-slate-100 font-semibold">
                   {params.accretionRate.toFixed(2)} <span className="text-slate-500">Ṁ_Edd</span>
                 </span>
@@ -324,35 +461,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               />
               <div className="flex justify-between text-[11px] font-mono text-slate-500">
                 <span>T_max {(metrics.peakDiskTempK / 1e6).toFixed(1)} MK</span>
-                <span>MRI Turbulence</span>
-              </div>
-            </div>
-
-            {/* Relativistic Doppler Beaming */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Doppler Boost (Planck Shift)</span>
-                <span className="font-mono tabular-nums text-amber-400 font-semibold">
-                  {(params.dopplerStrength * 100).toFixed(0)}%
-                </span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={1.0}
-                step={0.05}
-                value={params.dopplerStrength}
-                onChange={(e) =>
-                  onChangeParams((prev) => ({
-                    ...prev,
-                    dopplerStrength: parseFloat(e.target.value),
-                  }))
-                }
-                className="sci-slider w-full"
-              />
-              <div className="flex justify-between text-[11px] font-mono text-slate-500">
-                <span>Natural Planckian</span>
-                <span>Relativistic D³</span>
+                <span>Plasma Flow</span>
               </div>
             </div>
           </div>
@@ -361,10 +470,10 @@ export const ControlDock: React.FC<ControlDockProps> = ({
         {/* TAB 2: Spectral Band & Anatomical Layer Toggles */}
         {activeTab === 'spectral' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
-            {/* Spectral Band Selector (4 cols) */}
-            <div className="lg:col-span-5 flex flex-col gap-1.5">
-              <span className="text-xs text-slate-400">Observatory Spectral Filter</span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            {/* Spectral Band Selector */}
+            <div className="lg:col-span-4 flex flex-col gap-1.5">
+              <span className="text-xs text-slate-400">Observatory Filter</span>
+              <div className="grid grid-cols-2 gap-1.5">
                 {(
                   [
                     { id: 'blackbody', label: 'Optical BB' },
@@ -391,7 +500,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               </div>
             </div>
 
-            {/* Exploded Layer Separation Slider (3 cols) */}
+            {/* Exploded Layer Separation Slider */}
             <div className="lg:col-span-3 flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-400">Exploded Anatomy</span>
@@ -414,44 +523,201 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 className="sci-slider w-full"
               />
               <span className="text-[11px] text-slate-500 font-mono">
-                Separates Ergosphere, Disk & Well
+                Vertical Manifold Lift
               </span>
             </div>
 
-            {/* Composite Sub-Layer Visibility Toggles (4 cols) */}
-            <div className="lg:col-span-4 flex flex-col gap-1.5">
+            {/* Composite Sub-Layer Visibility Toggles */}
+            <div className="lg:col-span-5 flex flex-col gap-1.5">
               <span className="text-xs text-slate-400">Anatomical Subsystem Layers</span>
               <div className="flex flex-wrap gap-1.5">
-                {(
-                  [
-                    { key: 'accretionDisk', label: 'Accretion Disk' },
-                    { key: 'ergosphereCage', label: 'Ergosphere' },
-                    { key: 'spacetimeGrid', label: 'Spacetime Well' },
-                    { key: 'orbitalStars', label: 'S-Star Cluster' },
-                    { key: 'geodesicRays', label: 'Photon Rays' },
-                  ] as const
-                ).map((item) => {
-                  const active = params.layers[item.key];
-                  return (
+                {/* Accretion Disk */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      layers: { ...prev.layers, accretionDisk: !prev.layers.accretionDisk },
+                    }))
+                  }
+                  className={`px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    params.layers.accretionDisk
+                      ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600/70'
+                      : 'bg-[#111827] text-slate-500 border-slate-800'
+                  }`}
+                >
+                  Accretion Disk
+                </button>
+
+                {/* Spacetime Grid */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      layers: { ...prev.layers, spacetimeGrid: !prev.layers.spacetimeGrid },
+                    }))
+                  }
+                  className={`px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    params.layers.spacetimeGrid
+                      ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600/70'
+                      : 'bg-[#111827] text-slate-500 border-slate-800'
+                  }`}
+                >
+                  Spacetime Well
+                </button>
+
+                {/* S-Stars */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      layers: { ...prev.layers, orbitalStars: !prev.layers.orbitalStars },
+                    }))
+                  }
+                  className={`px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    params.layers.orbitalStars
+                      ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600/70'
+                      : 'bg-[#111827] text-slate-500 border-slate-800'
+                  }`}
+                >
+                  Orbiting Stars
+                </button>
+
+                {/* Photon Geodesic Rays */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      layers: { ...prev.layers, geodesicRays: !prev.layers.geodesicRays },
+                    }))
+                  }
+                  className={`px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    params.layers.geodesicRays
+                      ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600/70'
+                      : 'bg-[#111827] text-slate-500 border-slate-800'
+                  }`}
+                >
+                  Photon Rays
+                </button>
+
+                {/* Ergosphere (Toggled off automatically by default) */}
+                {!isStar && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onChangeParams((prev) => ({
+                        ...prev,
+                        layers: { ...prev.layers, ergosphereCage: !prev.layers.ergosphereCage },
+                      }))
+                    }
+                    className={`px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                      params.layers.ergosphereCage
+                        ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600/70'
+                        : 'bg-[#111827] text-slate-500 border-slate-800'
+                    }`}
+                    title="Frame-Dragging Static Limit boundary (Off by default)"
+                  >
+                    Ergosphere {params.layers.ergosphereCage ? '(On)' : '(Off)'}
+                  </button>
+                )}
+
+                {/* Star-specific layers: Pulsar Beams & Magnetic Field */}
+                {isStar && (
+                  <>
                     <button
-                      key={item.key}
                       type="button"
                       onClick={() =>
                         onChangeParams((prev) => ({
                           ...prev,
                           layers: {
                             ...prev.layers,
-                            [item.key]: !prev.layers[item.key],
+                            pulsarBeams: !(prev.layers.pulsarBeams ?? true),
                           },
                         }))
                       }
                       className={`px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                        active
-                          ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600/70'
-                          : 'bg-[#111827] text-slate-500 border-slate-800 hover:text-slate-300'
+                        params.layers.pulsarBeams ?? true
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/70'
+                          : 'bg-[#111827] text-slate-500 border-slate-800'
                       }`}
                     >
-                      {item.label}
+                      Pulsar Beams
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onChangeParams((prev) => ({
+                          ...prev,
+                          layers: {
+                            ...prev.layers,
+                            magneticField: !(prev.layers.magneticField ?? true),
+                          },
+                        }))
+                      }
+                      className={`px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                        params.layers.magneticField ?? true
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/70'
+                          : 'bg-[#111827] text-slate-500 border-slate-800'
+                      }`}
+                    >
+                      Dipole Magnetic Field
+                    </button>
+                  </>
+                )}
+
+                {/* Anatomy Guide Lines Toggle matching PMF IAS Poster */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      layers: {
+                        ...prev.layers,
+                        anatomyLines: !(prev.layers.anatomyLines ?? true),
+                      },
+                    }))
+                  }
+                  className={`px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    params.layers.anatomyLines ?? true
+                      ? 'bg-amber-950/80 text-amber-300 border-amber-600/70 font-semibold'
+                      : 'bg-[#111827] text-slate-500 border-slate-800'
+                  }`}
+                  title="Toggle dynamic leader lines and descriptions from the infographic"
+                >
+                  Anatomy Guide Lines
+                </button>
+              </div>
+            </div>
+
+            {/* Cosmic Background Environment Selection */}
+            <div className="lg:col-span-12 flex flex-col gap-1.5 pt-2 border-t border-slate-800/60">
+              <span className="text-xs text-slate-400">
+                Cosmic Background Environment (Anti-Glare / Eye Strain Relief)
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.values(BACKGROUND_THEMES).map((theme) => {
+                  const isActive = (params.backgroundTheme || 'galactic_core') === theme.id;
+                  return (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      onClick={() =>
+                        onChangeParams((prev) => ({
+                          ...prev,
+                          backgroundTheme: theme.id,
+                        }))
+                      }
+                      className={`px-2.5 py-1 text-xs font-medium rounded border transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                        isActive
+                          ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-sm'
+                          : 'bg-[#111827] text-slate-300 border-slate-800 hover:text-white hover:border-slate-700'
+                      }`}
+                      title={theme.tagline}
+                    >
+                      {theme.name.split(' (')[0]}
                     </button>
                   );
                 })}
@@ -460,175 +726,95 @@ export const ControlDock: React.FC<ControlDockProps> = ({
           </div>
         )}
 
-        {/* TAB 3: Camera Choreography & Orbiting S-Stars */}
+        {/* TAB 3: Camera Presets */}
         {activeTab === 'camera' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
-            {/* Camera Viewpoint Presets (6 cols) */}
-            <div className="lg:col-span-6 flex flex-col gap-1.5">
-              <span className="text-xs text-slate-400">Relativistic Camera Perspectives</span>
-              <div className="flex flex-wrap gap-1.5">
-                {(
-                  [
-                    { id: 'equatorial', label: 'Equatorial Plane' },
-                    { id: 'grazing', label: 'Grazing Horizon' },
-                    { id: 'polar', label: 'Top-Down Polar' },
-                    { id: 'well', label: 'Spacetime Funnel' },
-                    { id: 'star', label: 'Lock to Star S2' },
-                  ] as const
-                ).map((cam) => (
-                  <button
-                    key={cam.id}
-                    type="button"
-                    onClick={() => onSelectCamera(cam.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                      activeCamera === cam.id
-                        ? 'bg-amber-500 text-slate-950 border-amber-400 font-semibold'
-                        : 'bg-[#111827] text-slate-300 border-slate-800 hover:border-slate-600'
-                    }`}
-                  >
-                    <Compass className="w-3.5 h-3.5" />
-                    <span>{cam.label}</span>
-                  </button>
-                ))}
-              </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs text-slate-400 mr-1">Observatory Viewports:</span>
+              {(
+                [
+                  { id: 'equatorial', label: 'Equatorial View' },
+                  { id: 'polar', label: 'Polar Axis' },
+                  { id: 'grazing', label: 'Grazing Disk' },
+                  { id: 'well', label: 'Deep Gravity Well' },
+                  { id: 'star', label: 'Follow Orbiting Star' },
+                ] as const
+              ).map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => onSelectCamera(preset.id)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                    activeCamera === preset.id
+                      ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-sm'
+                      : 'bg-[#111827] text-slate-300 border-slate-800 hover:text-white'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
             </div>
 
-            {/* Star S2 Orbital Radius Scrubber (3 cols) */}
-            <div className="lg:col-span-3 flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Star S2 Orbit (r / Rₛ)</span>
-                <span className="font-mono tabular-nums text-cyan-400 font-semibold">
-                  {params.probeRadiusRs.toFixed(2)} Rₛ
-                </span>
-              </div>
-              <input
-                type="range"
-                min={1.25}
-                max={6.5}
-                step={0.05}
-                value={params.probeRadiusRs}
-                onChange={(e) =>
-                  onChangeParams((prev) => ({
-                    ...prev,
-                    probeRadiusRs: parseFloat(e.target.value),
-                  }))
-                }
-                className="sci-slider w-full"
-              />
-              <div className="flex justify-between text-[11px] font-mono text-slate-500">
-                <span>v/c = {(metrics.probeOrbitalBeta * 100).toFixed(1)}%</span>
-                <span>z = +{metrics.probeRedshiftZ.toFixed(3)}</span>
-              </div>
-            </div>
-
-            {/* Simulation Time Multiplier (3 cols) */}
-            <div className="lg:col-span-3 flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Coordinate Time Rate</span>
-                <span className="font-mono tabular-nums text-slate-100 font-semibold">
-                  {params.timeScale.toFixed(2)}×
-                </span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={2.5}
-                step={0.05}
-                value={params.timeScale}
-                onChange={(e) =>
-                  onChangeParams((prev) => ({
-                    ...prev,
-                    timeScale: parseFloat(e.target.value),
-                  }))
-                }
-                className="sci-slider w-full"
-              />
-              <div className="flex justify-between text-[11px] font-mono text-slate-500">
-                <span>Paused</span>
-                <span>Relativistic Warp</span>
-              </div>
-            </div>
+            {/* True Cosmic Scale Visualizer Toggle */}
+            <button
+              type="button"
+              onClick={() =>
+                onChangeParams((prev) => ({
+                  ...prev,
+                  trueCosmicScale: !prev.trueCosmicScale,
+                }))
+              }
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                params.trueCosmicScale
+                  ? 'bg-amber-500 text-slate-950 border-amber-400'
+                  : 'bg-[#0f172a] text-slate-300 border-slate-800 hover:text-white'
+              }`}
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>Gargantuan Proportions: {params.trueCosmicScale ? 'ON' : 'OFF'}</span>
+            </button>
           </div>
         )}
 
-        {/* TAB 4: Interactive Null Geodesic Photon Launcher */}
+        {/* TAB 4: Geodesic Photon Launcher */}
         {activeTab === 'geodesics' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
-            <div className="lg:col-span-4 flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Impact Parameter (b / R_g)</span>
-                <span className="font-mono tabular-nums text-amber-400 font-semibold">
-                  {impactB >= 0 ? `+${impactB.toFixed(2)}` : impactB.toFixed(2)} R_g
-                </span>
-              </div>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex-1 w-full flex items-center gap-3">
+              <span className="text-xs text-slate-400 whitespace-nowrap">
+                Impact Parameter (b):
+              </span>
               <input
                 type="range"
-                min={-6.5}
-                max={6.5}
-                step={0.05}
+                min={-6.0}
+                max={6.0}
+                step={0.1}
                 value={impactB}
                 onChange={(e) => setImpactB(parseFloat(e.target.value))}
-                className="sci-slider w-full"
+                className="sci-slider flex-1"
               />
-              <div className="flex justify-between text-[11px] font-mono text-slate-500">
-                <span>|b| &lt; 2.1 Captured</span>
-                <span>b_crit ≈ 2.38 R_g</span>
-              </div>
+              <span className="font-mono text-xs text-amber-300 font-bold tabular-nums w-12 text-right">
+                {impactB.toFixed(1)} Rs
+              </span>
             </div>
 
-            <div className="lg:col-span-4 flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => onLaunchPhoton(impactB)}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-950 bg-amber-500 hover:bg-amber-400 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md bg-cyan-600 hover:bg-cyan-500 text-white transition-colors cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>Fire Test Photon</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onLaunchPhoton(2.38)}
-                className="px-3 py-2 text-xs font-medium text-amber-300 bg-amber-950/60 hover:bg-amber-900/70 border border-amber-700/60 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                Critical Orbit (b_c)
+                <span>Fire Photon Ray</span>
               </button>
 
               <button
                 type="button"
                 onClick={onClearPhotons}
-                className="flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-slate-300 bg-[#111827] hover:bg-slate-800 border border-slate-700 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                title="Clear All Geodesic Rays"
+                className="p-1.5 text-slate-400 hover:text-rose-400 bg-slate-900 border border-slate-800 rounded-md transition-colors cursor-pointer"
+                title="Clear all active photon trajectories"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Clear</span>
               </button>
-            </div>
-
-            <div className="lg:col-span-4 flex flex-col gap-1 text-xs font-mono">
-              <div className="text-slate-400">
-                Tip: Double-click anywhere in the 3D space to fire a photon ray at that coordinate.
-              </div>
-              {lastTrajectory && (
-                <div className="text-slate-200 flex items-center gap-2">
-                  <span>Last Ray (b={lastTrajectory.impactParameterB.toFixed(2)}):</span>
-                  <span
-                    className={
-                      lastTrajectory.outcome === 'captured'
-                        ? 'text-rose-400 font-semibold'
-                        : lastTrajectory.outcome === 'critical-orbit'
-                        ? 'text-amber-400 font-semibold'
-                        : 'text-cyan-400 font-semibold'
-                    }
-                  >
-                    {lastTrajectory.outcome === 'captured'
-                      ? '✖ Captured by Horizon'
-                      : lastTrajectory.outcome === 'critical-orbit'
-                      ? '▲ Photon Sphere Grazing'
-                      : '● Gravitationally Deflected'}
-                  </span>
-                </div>
-              )}
             </div>
           </div>
         )}

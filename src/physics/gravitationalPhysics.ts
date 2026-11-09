@@ -1,5 +1,76 @@
+export type ObjectCategory = 'black_hole' | 'star';
+
+export type BackgroundThemeId =
+  | 'galactic_core'
+  | 'cosmic_nebula'
+  | 'stellar_nursery'
+  | 'soothing_void'
+  | 'slate_minimal';
+
+export interface BackgroundThemeDef {
+  id: BackgroundThemeId;
+  name: string;
+  tagline: string;
+  bgColor: number;
+  fogColor: number;
+  fogDensity: number;
+  badgeBg: string;
+}
+
+export const BACKGROUND_THEMES: Record<BackgroundThemeId, BackgroundThemeDef> = {
+  galactic_core: {
+    id: 'galactic_core',
+    name: 'Galactic Center (Milky Way)',
+    tagline: 'Warm golden dust lane & soft stellar bulge — comfortable & cinematic',
+    bgColor: 0x0a0705,
+    fogColor: 0x0a0705,
+    fogDensity: 0.0035,
+    badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  },
+  cosmic_nebula: {
+    id: 'cosmic_nebula',
+    name: 'Deep Cosmic Nebula (Teal & Indigo)',
+    tagline: 'Calm oceanic space nebula with soothing ethereal hues',
+    bgColor: 0x040810,
+    fogColor: 0x040810,
+    fogDensity: 0.0035,
+    badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+  },
+  stellar_nursery: {
+    id: 'stellar_nursery',
+    name: 'Orion Stellar Nursery (Violet)',
+    tagline: 'Soft lavender & magenta diffuse ionized gas clouds',
+    bgColor: 0x08040d,
+    fogColor: 0x08040d,
+    fogDensity: 0.0038,
+    badgeBg: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+  },
+  soothing_void: {
+    id: 'soothing_void',
+    name: 'Quiet Velvet Space (Anti-Glare)',
+    tagline: 'Gentle low-contrast deep space — designed to eliminate eye strain',
+    bgColor: 0x030407,
+    fogColor: 0x030407,
+    fogDensity: 0.0045,
+    badgeBg: 'bg-slate-700/30 text-slate-300 border-slate-600/40',
+  },
+  slate_minimal: {
+    id: 'slate_minimal',
+    name: 'Scientific Slate (Clean Studio)',
+    tagline: 'Uniform soft dark charcoal background for maximum clarity',
+    bgColor: 0x080a10,
+    fogColor: 0x080a10,
+    fogDensity: 0.003,
+    badgeBg: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+  },
+};
+
 export interface BlackHoleParams {
-  /** Mass multiplier in log10 solar masses or relative scale (1 to 100 solar masses base scale for 3D visual radius) */
+  /** Object category: black hole or compact star remnant */
+  objectCategory: ObjectCategory;
+  /** Active background cosmic environment theme */
+  backgroundTheme: BackgroundThemeId;
+  /** Mass multiplier in log10 solar masses or normalized scale (1 to 100 solar masses base scale for 3D visual geometry) */
   massSolar: number;
   /** Dimensionless Kerr spin parameter a* in [0, 0.998] */
   spin: number;
@@ -15,6 +86,12 @@ export interface BlackHoleParams {
   explodedSeparation: number;
   /** Simulation time multiplier [0, 3.0] */
   timeScale: number;
+  /** Gravity well depth multiplier [0.5, 3.5] for plunge depth */
+  wellDepthMultiplier: number;
+  /** Enable authentic background starfield gravitational lensing deflection */
+  gravitationalLensing: boolean;
+  /** True cosmic scale mode: expands TON 618 and colossal black holes to their majestic cosmological proportions */
+  trueCosmicScale: boolean;
   /** Spectral imaging band */
   spectralMode: 'blackbody' | 'eht230ghz' | 'xray' | 'doppler';
   /** Visibility toggles for composite layers */
@@ -24,6 +101,9 @@ export interface BlackHoleParams {
     spacetimeGrid: boolean;
     orbitalStars: boolean;
     geodesicRays: boolean;
+    pulsarBeams?: boolean;
+    magneticField?: boolean;
+    anatomyLines?: boolean;
   };
 }
 
@@ -32,10 +112,13 @@ export type BlackHoleArchetype =
   | 'supermassive'
   | 'intermediate'
   | 'stellar'
-  | 'primordial';
+  | 'primordial'
+  | 'neutron_star'
+  | 'magnetar';
 
 export interface ArchetypeDefinition {
   id: BlackHoleArchetype;
+  category: ObjectCategory;
   name: string;
   tagline: string;
   massRangeDisplay: string;
@@ -50,6 +133,7 @@ export interface ArchetypeDefinition {
 export const ARCHETYPE_DEFINITIONS: Record<BlackHoleArchetype, ArchetypeDefinition> = {
   ultramassive: {
     id: 'ultramassive',
+    category: 'black_hole',
     name: 'Ultramassive Black Hole (UMBH)',
     tagline: 'The absolute titans of the cosmos (>10 Billion Suns)',
     massRangeDisplay: '> 10 Billion Solar Masses (10¹⁰ to ~10¹¹ M☉)',
@@ -62,6 +146,7 @@ export const ARCHETYPE_DEFINITIONS: Record<BlackHoleArchetype, ArchetypeDefiniti
   },
   supermassive: {
     id: 'supermassive',
+    category: 'black_hole',
     name: 'Supermassive Black Hole (SMBH)',
     tagline: 'Galactic gravitational anchors (Millions to Billions of Suns)',
     massRangeDisplay: '100,000 to 10 Billion Solar Masses',
@@ -74,6 +159,7 @@ export const ARCHETYPE_DEFINITIONS: Record<BlackHoleArchetype, ArchetypeDefiniti
   },
   intermediate: {
     id: 'intermediate',
+    category: 'black_hole',
     name: 'Intermediate-Mass Black Hole (IMBH)',
     tagline: 'The elusive cosmic "missing link" (100 to 100,000 Suns)',
     massRangeDisplay: '100 to 100,000 Solar Masses',
@@ -86,6 +172,7 @@ export const ARCHETYPE_DEFINITIONS: Record<BlackHoleArchetype, ArchetypeDefiniti
   },
   stellar: {
     id: 'stellar',
+    category: 'black_hole',
     name: 'Stellar-Mass Black Hole',
     tagline: 'Collapsed graves of ancient giant stars (3 to ~100 Suns)',
     massRangeDisplay: '3 to ~100 Solar Masses',
@@ -98,6 +185,7 @@ export const ARCHETYPE_DEFINITIONS: Record<BlackHoleArchetype, ArchetypeDefiniti
   },
   primordial: {
     id: 'primordial',
+    category: 'black_hole',
     name: 'Primordial Black Hole (PBH)',
     tagline: 'Ancient Big Bang relics from the first microsecond',
     massRangeDisplay: '< 1 Solar Mass (Microscopic up to Earth / Planet mass)',
@@ -108,177 +196,375 @@ export const ARCHETYPE_DEFINITIONS: Record<BlackHoleArchetype, ArchetypeDefiniti
     examples: ['PBH-Earth (1.0 Earth Mass)', 'Asteroid-Mass PBH (10¹⁵ kg)'],
     badgeBg: 'bg-pink-500/20 text-pink-300 border-pink-500/40',
   },
+  neutron_star: {
+    id: 'neutron_star',
+    category: 'star',
+    name: 'Neutron Star / Pulsar',
+    tagline: 'Ultra-dense atomic remnant crushed beyond electron degeneracy (1.4 - 2.1 Suns in 20 km)',
+    massRangeDisplay: '1.4 to 2.1 Solar Masses (Tolman-Oppenheimer-Volkoff limit)',
+    sunsComparison: '1.4 to 2.1 Suns packed into a sphere just 20 km across (size of Manhattan). 1 teaspoon weighs 1 Billion Tons!',
+    typicalDiameter: '20 to 24 kilometers across (physical solid crust, NO event horizon)',
+    formationMechanism: 'Supernova core collapse of 8-20 M☉ stars; halted by neutron degeneracy pressure.',
+    hawkingEvaporationTime: 'Stable against Hawking evaporation (baryonic matter remnant)',
+    examples: ['PSR B1919+21 (Jocelyn Bell Pulsar)', 'Crab Pulsar (PSR B0531+21)', 'Vela Pulsar'],
+    badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+  },
+  magnetar: {
+    id: 'magnetar',
+    category: 'star',
+    name: 'Magnetar',
+    tagline: 'Hyper-magnetized neutron star possessing 10¹⁵ Gauss magnetic fields',
+    massRangeDisplay: '1.5 to 2.3 Solar Masses',
+    sunsComparison: '2 Suns with the strongest magnetic field in the universe (1,000 trillion times Earth\'s field).',
+    typicalDiameter: '20 to 22 kilometers across',
+    formationMechanism: 'Rapid-convective dynamo amplification in newly born protoneutron stars with millisecond spin periods.',
+    hawkingEvaporationTime: 'Decays magnetically over ~10,000 years into ordinary pulsar',
+    examples: ['SGR 1806-20', '1E 1048.1-5937', 'SGR 1935+2154'],
+    badgeBg: 'bg-teal-500/20 text-teal-300 border-teal-500/40',
+  },
 };
 
 export interface AstrophysicalPreset {
   id: string;
   name: string;
+  category: ObjectCategory;
   designation: string;
   classification: string;
   archetype: BlackHoleArchetype;
   distanceLightYears: string;
+  trueMassSolar: number;
   realMassSolarDisplay: string;
   plainMassExplanation: string;
   solarEquivalence: string;
+  trueDiameterKm: number;
   horizonDiameterKmDisplay: string;
+  scaleNote: string;
   params: Partial<BlackHoleParams>;
   description: string;
 }
 
 export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
+  // --- BLACK HOLES ---
   {
     id: 'ton618',
     name: 'TON 618',
+    category: 'black_hole',
     designation: 'Tonantzintla 618 · Hyperluminous Quasar',
     classification: 'Ultramassive Black Hole',
     archetype: 'ultramassive',
     distanceLightYears: '18.2 × 10⁹ ly (z = 2.219)',
+    trueMassSolar: 66000000000, // 66 Billion M☉
     realMassSolarDisplay: '66.0 × 10⁹ M☉',
     plainMassExplanation: '66 Billion Suns (66,000,000,000 Suns)',
     solarEquivalence: 'Equal to 66 Billion stars identical to our Sun. 1 Solar Mass (M☉) = 333,000 Earths. TON 618 is wider than 40 Solar Systems side-by-side!',
+    trueDiameterKm: 390000000000, // 390 Billion km (~2,600 AU)
     horizonDiameterKmDisplay: '390 Billion km (~2,600 AU)',
+    scaleNote: 'Normalized in standard 3D viewport so you can see it alongside stellar targets. In real life, TON 618 is 32× larger than Pluto\'s entire orbit and 19.5 million times larger than a stellar black hole!',
     params: {
+      objectCategory: 'black_hole',
       massSolar: 100,
       spin: 0.98,
       accretionRate: 1.95,
       inclinationDeg: 58,
       dopplerStrength: 0.65,
       probeRadiusRs: 3.6,
+      wellDepthMultiplier: 2.8,
       spectralMode: 'blackbody',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false, // Ergosphere toggled off automatically by default
+        spacetimeGrid: true,
+        orbitalStars: true,
+        geodesicRays: true,
+      },
     },
-    description: 'The largest known black hole in the observable universe, weighing 66 billion Suns. Its event horizon spans 390 billion km, powering a hyperluminous quasar that outshines 140 trillion Suns.',
+    description: 'The largest known black hole in the observable universe, weighing 66 billion Suns. Its event horizon spans 390 billion km (2,600 AU), powering a hyperluminous quasar that outshines 140 trillion Suns.',
   },
   {
     id: 'sgra',
     name: 'Sagittarius A*',
+    category: 'black_hole',
     designation: 'Sgr A* · Galactic Center',
     classification: 'Supermassive Kerr',
     archetype: 'supermassive',
     distanceLightYears: '26,670 ly',
+    trueMassSolar: 4300000, // 4.3 Million M☉
     realMassSolarDisplay: '4.30 × 10⁶ M☉',
     plainMassExplanation: '4.3 Million Suns (4,300,000 Suns)',
     solarEquivalence: 'Equal to 4.3 Million Suns compressed into a region smaller than Mercury\'s orbit around the Sun.',
+    trueDiameterKm: 25600000,
     horizonDiameterKmDisplay: '25.6 Million km (~0.17 AU)',
+    scaleNote: 'Fits comfortably within the inner Solar System (orbit of Mercury).',
     params: {
+      objectCategory: 'black_hole',
       massSolar: 43,
       spin: 0.90,
       accretionRate: 0.85,
       inclinationDeg: 78,
       dopplerStrength: 0.55,
       probeRadiusRs: 3.4,
+      wellDepthMultiplier: 2.2,
       spectralMode: 'blackbody',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: true,
+        geodesicRays: true,
+      },
     },
     description: 'Supermassive black hole at the dynamical center of the Milky Way, imaged by the Event Horizon Telescope and tracked via orbiting S-stars.',
   },
   {
     id: 'm87',
     name: 'M87* (Powehi)',
+    category: 'black_hole',
     designation: 'NGC 4486 · Virgo A Core',
     classification: 'Supermassive Elliptical',
     archetype: 'supermassive',
     distanceLightYears: '53.49 × 10⁶ ly',
+    trueMassSolar: 6500000000, // 6.5 Billion M☉
     realMassSolarDisplay: '6.50 × 10⁹ M☉',
     plainMassExplanation: '6.5 Billion Suns (6,500,000,000 Suns)',
     solarEquivalence: 'Equal to 6.5 Billion Suns. Large enough that our entire Solar System out to Pluto would easily fit inside.',
+    trueDiameterKm: 38400000000,
     horizonDiameterKmDisplay: '38.4 Billion km (~256 AU)',
+    scaleNote: 'Larger than the entire Solar System; Pluto orbits at ~40 AU while M87* horizon is 256 AU wide.',
     params: {
+      objectCategory: 'black_hole',
       massSolar: 65,
       spin: 0.94,
       accretionRate: 1.45,
       inclinationDeg: 63,
       dopplerStrength: 0.65,
       probeRadiusRs: 4.0,
+      wellDepthMultiplier: 2.5,
       spectralMode: 'eht230ghz',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: true,
+        geodesicRays: true,
+      },
     },
     description: 'Colossal active galactic nucleus in the Virgo cluster, the first black hole ever directly imaged in human history.',
   },
   {
     id: 'hlx1',
     name: 'HLX-1',
+    category: 'black_hole',
     designation: 'ESO 243-49 HLX-1 · Off-Center Core',
     classification: 'Intermediate-Mass Black Hole',
     archetype: 'intermediate',
     distanceLightYears: '290 × 10⁶ ly',
+    trueMassSolar: 20000, // 20 Thousand M☉
     realMassSolarDisplay: '2.00 × 10⁴ M☉',
     plainMassExplanation: '20,000 Suns (20 Thousand Suns)',
     solarEquivalence: 'Equal to 20,000 Suns. The elusive cosmic "missing link" between stellar remnants and galactic monsters.',
+    trueDiameterKm: 118000,
     horizonDiameterKmDisplay: '118,000 km (size of Saturn)',
+    scaleNote: 'Roughly the physical diameter of the planet Saturn.',
     params: {
+      objectCategory: 'black_hole',
       massSolar: 50,
       spin: 0.75,
       accretionRate: 1.15,
       inclinationDeg: 70,
       dopplerStrength: 0.55,
       probeRadiusRs: 3.2,
+      wellDepthMultiplier: 1.8,
       spectralMode: 'xray',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: true,
+        geodesicRays: true,
+      },
     },
     description: 'Premier candidate for an intermediate-mass black hole, likely the remnant stripped nucleus of a consumed dwarf galaxy.',
   },
   {
     id: 'cygx1',
     name: 'Cygnus X-1',
+    category: 'black_hole',
     designation: 'HDE 226868 · High-Mass Binary',
     classification: 'Stellar-Mass Kerr',
     archetype: 'stellar',
     distanceLightYears: '7,200 ly',
+    trueMassSolar: 21.2,
     realMassSolarDisplay: '21.2 M☉',
     plainMassExplanation: '21.2 Suns (21 Suns)',
     solarEquivalence: '21 times the mass of our Sun crushed into a sphere just 125 km across (the size of a small state).',
+    trueDiameterKm: 125,
     horizonDiameterKmDisplay: '125 km',
+    scaleNote: 'Spans the size of a metropolitan region or small country.',
     params: {
+      objectCategory: 'black_hole',
       massSolar: 21.2,
       spin: 0.998,
       accretionRate: 1.75,
       inclinationDeg: 82,
       dopplerStrength: 0.70,
       probeRadiusRs: 2.2,
+      wellDepthMultiplier: 1.5,
       spectralMode: 'xray',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: true,
+        geodesicRays: true,
+      },
     },
     description: 'Near-maximal spinning stellar-mass black hole accreting stellar wind from companion blue supergiant star HDE 226868.',
   },
   {
     id: 'gw150914',
     name: 'GW150914 Remnant',
+    category: 'black_hole',
     designation: 'LIGO O1 Merger Event',
     classification: 'Stellar-Mass Post-Merger',
     archetype: 'stellar',
     distanceLightYears: '1.30 × 10⁹ ly',
+    trueMassSolar: 62.0,
     realMassSolarDisplay: '62.0 M☉',
     plainMassExplanation: '62.0 Suns (62 Suns)',
     solarEquivalence: '62 Suns. Formed by the violent collision of two black holes that converted 3 full Suns of mass into gravitational ripples.',
+    trueDiameterKm: 366,
     horizonDiameterKmDisplay: '366 km',
+    scaleNote: 'Roughly the driving distance between New York City and Washington, D.C.',
     params: {
+      objectCategory: 'black_hole',
       massSolar: 62.0,
       spin: 0.68,
       accretionRate: 0.45,
       inclinationDeg: 45,
       dopplerStrength: 0.50,
       probeRadiusRs: 3.1,
+      wellDepthMultiplier: 1.9,
       spectralMode: 'doppler',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: true,
+        geodesicRays: true,
+      },
     },
     description: 'First direct gravitational-wave detection remnant formed by the inspiral and ringdown of 36 M☉ and 29 M☉ black holes.',
   },
   {
     id: 'pbh_earth',
     name: 'PBH-Earth',
+    category: 'black_hole',
     designation: 'Hypothetical Big Bang Micro-Relic',
     classification: 'Primordial Black Hole',
     archetype: 'primordial',
     distanceLightYears: 'Local Universe Candidate',
+    trueMassSolar: 0.000003, // 1 Earth Mass
     realMassSolarDisplay: '3.00 × 10⁻⁶ M☉ (1 Earth Mass)',
     plainMassExplanation: '1 Earth Mass (0.000003 Suns)',
     solarEquivalence: 'The entire mass of planet Earth (~6 × 10²⁴ kg) compressed down to the size of a coin (1.8 cm across).',
+    trueDiameterKm: 0.000018, // 1.8 cm
     horizonDiameterKmDisplay: '0.000018 km (1.8 cm / coin-size)',
+    scaleNote: 'Fits in the palm of your hand, yet possesses the gravitational pull of the entire Earth.',
     params: {
+      objectCategory: 'black_hole',
       massSolar: 10,
       spin: 0.15,
       accretionRate: 0.35,
       inclinationDeg: 40,
       dopplerStrength: 0.40,
       probeRadiusRs: 2.8,
+      wellDepthMultiplier: 1.2,
       spectralMode: 'doppler',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: true,
+        geodesicRays: true,
+      },
     },
     description: 'Hypothetical primordial black hole forged directly from dense fluctuations during the Big Bang. An Earth-mass black hole has an event horizon just 1.8 cm wide!',
+  },
+
+  // --- COMPACT STARS & REMNANTS ---
+  {
+    id: 'psr_b1919',
+    name: 'PSR B1919+21 (Pulsar)',
+    category: 'star',
+    designation: 'CP 1919 · Jocelyn Bell Pulsar',
+    classification: 'Radio Pulsar (Neutron Star)',
+    archetype: 'neutron_star',
+    distanceLightYears: '2,283 ly',
+    trueMassSolar: 1.4,
+    realMassSolarDisplay: '1.40 M☉',
+    plainMassExplanation: '1.4 Suns in a 20 km City Footprint',
+    solarEquivalence: '1.4 times our Sun\'s mass packed into a solid sphere just 20 km across. Density is 100 trillion times that of water. Notice: it has a solid physical crust and NO event horizon!',
+    trueDiameterKm: 20,
+    horizonDiameterKmDisplay: '20 km (Physical Crust Surface)',
+    scaleNote: 'Size of a single city like Manhattan or San Francisco. Its gravitational well curves steeply, but bottoms out at the physical crust rather than plunging to a singularity.',
+    params: {
+      objectCategory: 'star',
+      massSolar: 14,
+      spin: 0.45,
+      accretionRate: 0.60,
+      inclinationDeg: 65,
+      dopplerStrength: 0.45,
+      probeRadiusRs: 4.5,
+      wellDepthMultiplier: 1.6,
+      spectralMode: 'blackbody',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: true,
+        geodesicRays: true,
+        pulsarBeams: true,
+        magneticField: true,
+      },
+    },
+    description: 'The historic first pulsar ever discovered in 1967 by Jocelyn Bell Burnell. A rapidly spinning magnetized neutron star whose sweeping radio lighthouse beams create rhythmic periodic pulses every 1.337 seconds.',
+  },
+  {
+    id: 'magnetar_sgr',
+    name: 'SGR 1806-20 (Magnetar)',
+    category: 'star',
+    designation: 'Soft Gamma Repeater · Extreme Magnetar',
+    classification: 'Ultra-Magnetized Compact Star',
+    archetype: 'magnetar',
+    distanceLightYears: '50,000 ly',
+    trueMassSolar: 2.0,
+    realMassSolarDisplay: '2.00 M☉',
+    plainMassExplanation: '2.0 Suns · 10¹⁵ Gauss Magnetic Power',
+    solarEquivalence: '2 full Suns compressed into a 22 km crystalline iron shell, wrapped in a magnetic field strong enough to tear atoms apart from thousands of kilometers away.',
+    trueDiameterKm: 22,
+    horizonDiameterKmDisplay: '22 km (Solid Ultra-Dense Crust)',
+    scaleNote: 'Possesses the strongest magnetic field in the known universe (100 billion Tesla). In 2004, a single starquake on SGR 1806-20 released more energy in 0.1s than our Sun emits in 150,000 years.',
+    params: {
+      objectCategory: 'star',
+      massSolar: 20,
+      spin: 0.35,
+      accretionRate: 0.95,
+      inclinationDeg: 72,
+      dopplerStrength: 0.50,
+      probeRadiusRs: 4.8,
+      wellDepthMultiplier: 1.8,
+      spectralMode: 'xray',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: true,
+        geodesicRays: true,
+        pulsarBeams: true,
+        magneticField: true,
+      },
+    },
+    description: 'The most violently magnetized object known to humanity. Starquakes in its rigid crystalline crust trigger colossal magnetic reconnections and giant gamma-ray flares.',
   },
 ];
 
@@ -307,6 +593,12 @@ export interface DerivedRelativisticMetrics {
   peakDiskTempK: number;
   /** Hawking radiation temperature in nanokelvin */
   hawkingTempNanoK: number;
+  /** Compact object category */
+  objectCategory: ObjectCategory;
+  /** Whether the object has a solid physical surface (star) or an event horizon (black hole) */
+  hasPhysicalSurface: boolean;
+  /** Surface radius in km (for stars) */
+  physicalSurfaceKm: number;
 }
 
 /**
@@ -314,8 +606,9 @@ export interface DerivedRelativisticMetrics {
  * using Bardeen-Press-Teukolsky (1972) analytical equations.
  */
 export function computeRelativisticMetrics(params: BlackHoleParams): DerivedRelativisticMetrics {
-  const M = Math.max(5, params.massSolar);
+  const M = Math.max(1.4, params.massSolar);
   const a = Math.min(0.998, Math.max(0, params.spin));
+  const isStar = params.objectCategory === 'star';
 
   // 1 Solar Mass gravitational radius Rg = GM/c^2 ≈ 1.476625 km; Schwarzschild Rs = 2 * Rg ≈ 2.95325 km
   const rgKm = 1.476625 * M;
@@ -324,6 +617,9 @@ export function computeRelativisticMetrics(params: BlackHoleParams): DerivedRela
   // Kerr outer event horizon: r_+ / Rg = 1 + sqrt(1 - a^2)
   const eventHorizonRg = 1.0 + Math.sqrt(Math.max(0, 1.0 - a * a));
   const eventHorizonKm = eventHorizonRg * rgKm;
+
+  // Physical surface radius for a neutron star (~10-12 km radius, greater than its Schwarzschild radius)
+  const physicalSurfaceKm = isStar ? Math.max(10.0, schwarzschildRadiusKm * 1.85) : 0;
 
   // Bardeen, Press & Teukolsky (1972) ISCO formula for prograde equatorial orbit:
   const oneMinusA2 = Math.max(1e-6, 1.0 - a * a);
@@ -369,6 +665,9 @@ export function computeRelativisticMetrics(params: BlackHoleParams): DerivedRela
     probeOrbitalBeta,
     peakDiskTempK,
     hawkingTempNanoK,
+    objectCategory: params.objectCategory,
+    hasPhysicalSurface: isStar,
+    physicalSurfaceKm,
   };
 }
 
@@ -476,7 +775,7 @@ export function computeNullGeodesic(
   const bCrit = Math.sqrt(27) * rg * (1.0 - 0.18 * spin); // critical impact parameter
 
   const points: Array<{ x: number; y: number; z: number }> = [];
-  const startX = -26.0;
+  const startX = -28.0;
   const startZ = impactParameterB;
   const r0 = Math.hypot(startX, startZ);
 
@@ -484,13 +783,13 @@ export function computeNullGeodesic(
   let z = startZ;
   let y = inclinationOffsetY;
 
-  // Initial velocity unit vector pointing +X toward the black hole
+  // Initial velocity unit vector pointing +X toward the central object
   let vx = 1.0;
   let vz = 0.0;
   let vy = -inclinationOffsetY * 0.03;
 
   const dt = 0.14;
-  const maxSteps = 340;
+  const maxSteps = 360;
   let outcome: 'captured' | 'scattered' | 'critical-orbit' = 'scattered';
 
   for (let i = 0; i < maxSteps; i++) {
@@ -501,7 +800,7 @@ export function computeNullGeodesic(
       outcome = 'captured';
       break;
     }
-    if (r > r0 * 1.15 && i > 40) {
+    if (r > r0 * 1.25 && i > 40) {
       outcome = 'scattered';
       break;
     }
@@ -527,7 +826,7 @@ export function computeNullGeodesic(
     const speed = Math.hypot(vx, vy, vz) || 1;
     vx /= speed;
     vy /= speed;
-    vz /= speed;
+    vy /= speed;
 
     x += vx * dt;
     y += vy * dt;

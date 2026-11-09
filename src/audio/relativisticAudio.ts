@@ -113,6 +113,28 @@ class RelativisticAudioEngine {
     osc.stop(now + 0.4);
   }
 
+  public triggerAccretionShockPulse(isStar = false) {
+    if (!this.ctx || this.isMuted || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = isStar ? 'triangle' : 'sine';
+    const startFreq = isStar ? 180 : 95;
+    const endFreq = isStar ? 42 : 32;
+
+    osc.frequency.setValueAtTime(startFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.55);
+
+    gain.gain.setValueAtTime(0.24, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.7);
+  }
+
   public dispose() {
     if (this.ctx) {
       this.ctx.close();
