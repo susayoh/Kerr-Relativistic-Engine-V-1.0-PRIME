@@ -30,7 +30,7 @@ export const isSoftwareGl = (() => {
   }
 })();
 
-export type CameraPresetId = 'equatorial' | 'polar' | 'grazing' | 'probe' | 'well';
+export type CameraPresetId = 'equatorial' | 'polar' | 'grazing' | 'star' | 'well';
 
 export interface InspectedFeature {
   title: string;
@@ -39,6 +39,32 @@ export interface InspectedFeature {
   description: string;
 }
 
+export interface OverheadTelemetryData {
+  probeX: number;
+  probeZ: number;
+  probeRadiusRs: number;
+  probeRadiusRg: number;
+  probeAngleDeg: number;
+  probeAngleRad: number;
+  probeOrbitalBeta: number;
+  probeTimeDilationFactor: number;
+  probeRedshiftZ: number;
+  eventHorizonRs: number;
+  photonSphereRs: number;
+  iscoRs: number;
+  ergosphereRs: number;
+  accretionInnerRs: number;
+  accretionOuterRs: number;
+  spin: number;
+  geodesics: Array<{
+    colorHex: number;
+    outcome: string;
+    points: Array<{ x: number; z: number }>;
+    currentPos: { x: number; z: number };
+  }>;
+}
+
+// Realistic 3D Relativistic Accretion Disk Shader with Continuous Doppler Beaming & MRI Turbulence
 const ACCRETION_VERTEX_SHADER = `
   varying vec2 vUv;
   varying vec3 vWorldPos;
@@ -58,7 +84,6 @@ const ACCRETION_FRAGMENT_SHADER = `
   uniform float uSpin;
   uniform float uAccretionRate;
   uniform float uDopplerStrength;
-  uniform float uIscoRatio;
   uniform int uSpectralMode;
   uniform sampler2D uSpectrumLut;
 
@@ -66,166 +91,134 @@ const ACCRETION_FRAGMENT_SHADER = `
   varying vec3 vWorldPos;
   varying vec3 vLocalPos;
 
-  float hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
-  }
-
-  float noise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(
-      mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
-      mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
-      u.y
-    );
+  // High-performance 2D Simplex Noise for fine plasma filaments
+  vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+  float snoise(vec2 v) {
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+             -0.577350269189626, 0.024390243902439);
+    vec2 i  = floor(v + dot(v, C.yy) );
+    vec2 x0 = v -   i + dot(i, C.xx);
+    vec2 i1  = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod(i, 289.0);
+    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+      + i.x + vec3(0.0, i1.x, 1.0 ));
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+    m = m*m ;
+    m = m*m ;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+    vec3 g;
+    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
   }
 
   float fbm(vec2 p) {
     float v = 0.0;
     float a = 0.5;
-    mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
-    for (int i = 0; i < 4; i++) {
-      v += a * noise(p);
-      p = rot * p * 2.05;
+    mat2 rot = mat2(0.87, 0.48, -0.48, 0.87);
+    for (int i = 0; i < 5; i++) {
+      v += a * (snoise(p) * 0.5 + 0.5);
+      p = rot * p * 2.15;
       a *= 0.5;
     }
     return v;
   }
 
   void main() {
-    // Disk geometry lies in XZ plane (local XY before rotation, or radial distance from center)
     float r = length(vLocalPos.xy);
-    float innerRadius = mix(2.55, 1.38, uSpin * 0.88);
-    float outerRadius = 11.8;
+    float horizonRadius = mix(1.75, 1.08, uSpin * 0.72);
+    float iscoRadius = mix(2.65, 1.45, uSpin * 0.88);
+    float outerRadius = 12.2;
 
-    if (r < innerRadius || r > outerRadius) {
+    if (r < horizonRadius || r > outerRadius) {
       discard;
     }
 
-    float normR = clamp((r - innerRadius) / (outerRadius - innerRadius), 0.0, 1.0);
     float angle = atan(vLocalPos.y, vLocalPos.x);
 
-    // Relativistic Keplerian differential rotation speed: omega ~ r^(-1.5)
-    float omega = 3.8 / (pow(r, 1.35) + 0.15 * uSpin);
-    float spiralAngle = angle + uTime * omega + 4.8 / (r - innerRadius + 0.65);
+    // Relativistic Keplerian differential shear omega ~ r^(-1.5)
+    float omega = 3.6 / (pow(r, 1.42) + 0.12 * uSpin);
+    float spiralAngle = angle + uTime * omega + 4.2 / (max(0.2, r - iscoRadius + 0.55));
 
-    // Magneto-rotational instability (MRI) spiral filaments
-    vec2 spiralCoord = vec2(r * 1.45, spiralAngle * 2.0);
-    float turbulence = fbm(spiralCoord + vec2(uTime * 0.35, -uTime * 0.6));
-    float fineRings = sin(r * 7.5 - uTime * 2.4 + turbulence * 4.5) * 0.5 + 0.5;
-    float filament = mix(turbulence, fineRings, 0.35);
+    // Multi-scale Magneto-Rotational Instability (MRI) filaments
+    vec2 spiralCoord = vec2(r * 1.6, spiralAngle * 2.2);
+    float turbulence = fbm(spiralCoord + vec2(uTime * 0.25, -uTime * 0.45));
+    float fineRings = sin(r * 8.5 - uTime * 2.8 + turbulence * 3.5) * 0.5 + 0.5;
+    float filaments = mix(turbulence, fineRings, 0.32);
 
-    // Relativistic Doppler beaming:
-    // Tangent velocity direction in world XZ plane
-    vec3 worldNormal = normalize(vWorldPos);
+    // Relativistic Kinematics:
+    // Orbital velocity v/c in Kerr spacetime
+    float beta = clamp(0.72 / sqrt(max(1.08, r - 0.75 + 0.25 * uSpin)), 0.05, 0.78);
+    float gamma = inversesqrt(max(0.12, 1.0 - beta * beta));
+
+    // Tangent velocity unit vector in world space
     vec3 tangentDir = normalize(vec3(-vWorldPos.z, 0.0, vWorldPos.x));
     vec3 viewDir = normalize(cameraPosition - vWorldPos);
     float approachCos = dot(tangentDir, viewDir);
 
-    // Orbital beta = v/c increases near inner ISCO
-    float beta = clamp(0.68 / sqrt(max(1.05, r - 0.8)), 0.08, 0.78);
-    float gamma = inversesqrt(max(0.15, 1.0 - beta * beta));
-    float dopplerFactor = 1.0 / (gamma * (1.0 - beta * approachCos * 0.72 * uDopplerStrength));
-    float beamingBoost = pow(clamp(dopplerFactor, 0.35, 2.2), 2.4);
+    // Continuous Relativistic Doppler Factor: D = 1 / [gamma * (1 - beta * cos theta)]
+    float dopplerFactor = 1.0 / (gamma * (1.0 - beta * approachCos * 0.85 * uDopplerStrength));
 
-    // Novikov-Thorne radial temperature profile T(r) ~ r^(-3/4) * (1 - sqrt(r_in/r))^(1/4)
-    float innerTaper = smoothstep(innerRadius, innerRadius + 0.38, r);
-    float outerTaper = 1.0 - smoothstep(outerRadius - 3.2, outerRadius, r);
-    float radialFlux = pow(1.0 - normR, 1.65) * innerTaper * outerTaper;
+    // Continuous, elegant Doppler flux boost (subtle and physically authentic, no ugly harsh neon split)
+    float dopplerBoost = mix(1.0, pow(clamp(dopplerFactor, 0.45, 2.4), 2.2), clamp(uDopplerStrength, 0.0, 1.0));
 
-    float intensity = radialFlux * (0.45 + 0.95 * filament) * beamingBoost * (0.55 + 0.65 * uAccretionRate);
+    // Novikov-Thorne radial temperature profile with inner plunging decay
+    float normR = clamp((r - iscoRadius) / (outerRadius - iscoRadius), 0.0, 1.0);
+    float mainDiskFlux = pow(1.0 - normR, 1.55) * smoothstep(iscoRadius - 0.1, iscoRadius + 0.45, r);
+    float outerFalloff = 1.0 - smoothstep(outerRadius - 2.8, outerRadius, r);
 
-    // Sample spectral palette
-    float lutCoord = clamp(intensity * 0.62, 0.02, 0.98);
-    vec3 baseColor = texture2D(uSpectrumLut, vec2(lutCoord, 0.5)).rgb;
+    // Inner plunging region between Horizon and ISCO: matter free-falls into horizon
+    float plungeMask = (1.0 - smoothstep(horizonRadius, iscoRadius, r)) * smoothstep(horizonRadius, horizonRadius + 0.15, r);
+    float plungeSpiral = sin(angle * 3.0 + uTime * 6.5 + 8.0 / max(0.1, r - horizonRadius + 0.2)) * 0.5 + 0.5;
+    float plungeFlux = plungeMask * (0.35 + 0.65 * plungeSpiral) * 0.55;
 
-    // Spectral Mode overrides
+    float totalFlux = (mainDiskFlux + plungeFlux) * outerFalloff * (0.55 + 0.85 * filaments);
+    float intensity = totalFlux * dopplerBoost * (0.65 + 0.55 * uAccretionRate);
+
+    // Physical Blackbody Color Spectrum:
+    // Approaching wing gets hotter (bright incandescent white-gold), receding wing gets cooler (warm deep amber)
+    float effTempRatio = clamp(intensity * (0.75 + 0.35 * dopplerFactor), 0.02, 1.4);
+    vec3 baseColor = texture2D(uSpectrumLut, vec2(clamp(effTempRatio * 0.68, 0.02, 0.98), 0.5)).rgb;
+
+    // Spectral mode adjustments
     if (uSpectralMode == 1) {
-      // EHT 230 GHz Interferometric Sub-mm Ring Palette
-      vec3 ehtDark = vec3(0.18, 0.02, 0.0);
-      vec3 ehtMid = vec3(0.92, 0.32, 0.03);
-      vec3 ehtHot = vec3(1.0, 0.92, 0.55);
+      // EHT 230 GHz Sub-mm palette
+      vec3 ehtDark = vec3(0.14, 0.02, 0.01);
+      vec3 ehtMid = vec3(0.95, 0.38, 0.04);
+      vec3 ehtHot = vec3(1.0, 0.94, 0.65);
       baseColor = mix(ehtDark, ehtMid, clamp(intensity * 0.85, 0.0, 1.0));
-      baseColor = mix(baseColor, ehtHot, clamp((intensity - 0.75) * 1.1, 0.0, 1.0));
+      baseColor = mix(baseColor, ehtHot, clamp((intensity - 0.7) * 1.2, 0.0, 1.0));
     } else if (uSpectralMode == 2) {
-      // Chandra High-Energy X-Ray Spectroscopy
-      vec3 xCold = vec3(0.05, 0.12, 0.45);
-      vec3 xMid = vec3(0.15, 0.68, 0.98);
+      // Chandra X-Ray palette
+      vec3 xDark = vec3(0.04, 0.12, 0.35);
+      vec3 xMid = vec3(0.18, 0.65, 0.98);
       vec3 xHot = vec3(0.92, 0.98, 1.0);
-      baseColor = mix(xCold, xMid, clamp(intensity * 0.85, 0.0, 1.0));
-      baseColor = mix(baseColor, xHot, clamp((intensity - 0.65) * 1.2, 0.0, 1.0));
+      baseColor = mix(xDark, xMid, clamp(intensity * 0.85, 0.0, 1.0));
+      baseColor = mix(baseColor, xHot, clamp((intensity - 0.6) * 1.3, 0.0, 1.0));
     } else if (uSpectralMode == 3) {
-      // Relativistic Redshift / Blueshift Velocity Map
-      vec3 recedeRed = vec3(0.95, 0.16, 0.22);
-      vec3 neutralGold = vec3(0.95, 0.78, 0.25);
-      vec3 approachBlue = vec3(0.12, 0.82, 1.0);
-      float shiftT = clamp(approachCos * 0.5 * uDopplerStrength + 0.5, 0.0, 1.0);
-      baseColor = mix(recedeRed, neutralGold, smoothstep(0.0, 0.5, shiftT));
-      baseColor = mix(baseColor, approachBlue, smoothstep(0.5, 1.0, shiftT));
-      baseColor *= (0.45 + 0.85 * filament) * radialFlux * 1.6;
-    } else {
-      // Standard Bolometric Blackbody with subtle relativistic blue/red tint
-      vec3 blueTint = vec3(0.76, 0.90, 1.0);
-      vec3 redTint = vec3(1.0, 0.42, 0.18);
-      vec3 dopplerTint = mix(redTint, blueTint, clamp(approachCos * 0.5 * uDopplerStrength + 0.5, 0.0, 1.0));
-      baseColor = mix(baseColor, baseColor * dopplerTint * 1.25, 0.55 * clamp(uDopplerStrength, 0.0, 1.0));
+      // Smooth Doppler velocity map (smooth, non-garish)
+      vec3 recedeAmber = vec3(0.95, 0.42, 0.12);
+      vec3 neutralGold = vec3(0.98, 0.82, 0.35);
+      vec3 approachCyan = vec3(0.25, 0.85, 1.0);
+      float shiftT = clamp(approachCos * 0.48 * uDopplerStrength + 0.5, 0.0, 1.0);
+      vec3 dopplerRgb = mix(recedeAmber, neutralGold, smoothstep(0.0, 0.5, shiftT));
+      dopplerRgb = mix(dopplerRgb, approachCyan, smoothstep(0.5, 1.0, shiftT));
+      baseColor = mix(baseColor, dopplerRgb, 0.6) * intensity;
     }
 
-    // Photon ring ultra-hot inner edge
-    float photonEdge = exp(-pow((r - innerRadius - 0.18) / 0.22, 2.0)) * 1.35;
-    baseColor += vec3(1.0, 0.93, 0.80) * photonEdge * uAccretionRate;
+    // Brilliant thin Einstein Photon Ring right at photon orbit
+    float photonSphereR = mix(2.05, 1.35, uSpin * 0.7);
+    float photonRingGlow = exp(-pow((r - photonSphereR) / 0.14, 2.0)) * 1.85 * (0.6 + 0.4 * dopplerBoost);
+    baseColor += vec3(1.0, 0.96, 0.85) * photonRingGlow * (0.7 + 0.5 * uAccretionRate);
 
-    float alpha = clamp(innerTaper * outerTaper * (0.28 + 0.72 * filament) * min(1.3, intensity + 0.25), 0.0, 0.96);
+    float alpha = clamp(totalFlux * (0.45 + 0.55 * filaments) * min(1.4, intensity + 0.3), 0.0, 0.98);
     gl_FragColor = vec4(baseColor, alpha);
-  }
-`;
-
-const LENSED_HALO_FRAGMENT_SHADER = `
-  uniform float uTime;
-  uniform float uSpin;
-  uniform float uAccretionRate;
-  uniform float uDopplerStrength;
-  uniform float uLensingStrength;
-  uniform int uSpectralMode;
-
-  varying vec2 vUv;
-  varying vec3 vLocalPos;
-  varying vec3 vWorldPos;
-
-  void main() {
-    if (uLensingStrength <= 0.02) discard;
-
-    float r = length(vLocalPos.xy);
-    float ringCenter = mix(2.45, 1.65, uSpin * 0.65);
-    float ringWidth = 1.65 * uLensingStrength;
-
-    float radialBand = exp(-pow((r - ringCenter) / max(0.25, ringWidth), 2.0));
-    float secondaryPhotonRing = exp(-pow((r - (ringCenter * 0.84)) / 0.11, 2.0)) * 1.6;
-
-    float angle = atan(vLocalPos.y, vLocalPos.x);
-    float swirl = sin(angle * 6.0 - uTime * 3.2 + r * 4.0) * 0.25 + 0.75;
-
-    // Asymmetric Doppler brightness across left/right side of lensed arch
-    float dopplerAsym = 1.0 + 0.55 * uDopplerStrength * cos(angle);
-
-    float totalGlow = (radialBand * swirl + secondaryPhotonRing) * dopplerAsym * uAccretionRate * uLensingStrength;
-    if (totalGlow < 0.03) discard;
-
-    vec3 haloColor = vec3(1.0, 0.68, 0.28);
-    if (uSpectralMode == 1) {
-      haloColor = vec3(0.98, 0.42, 0.08);
-    } else if (uSpectralMode == 2) {
-      haloColor = vec3(0.38, 0.82, 1.0);
-    } else if (uSpectralMode == 3) {
-      haloColor = mix(vec3(0.95, 0.22, 0.28), vec3(0.18, 0.85, 1.0), cos(angle) * 0.5 + 0.5);
-    } else {
-      haloColor = mix(vec3(1.0, 0.52, 0.18), vec3(0.85, 0.94, 1.0), clamp(cos(angle) * 0.45 * uDopplerStrength + 0.4, 0.0, 1.0));
-    }
-
-    vec3 finalRgb = haloColor * totalGlow * 1.15 + vec3(1.0, 0.96, 0.88) * secondaryPhotonRing * 0.7;
-    float alpha = clamp(totalGlow * 0.78, 0.0, 0.92);
-    gl_FragColor = vec4(finalRgb, alpha);
   }
 `;
 
@@ -245,15 +238,18 @@ export class BlackHoleSceneController {
   private photonRingMesh!: THREE.Mesh;
   private accretionDiskGroup = new THREE.Group();
   private accretionDiskMat!: THREE.ShaderMaterial;
-  private lensedHaloGroup = new THREE.Group();
-  private lensedHaloMat!: THREE.ShaderMaterial;
-  private jetsGroup = new THREE.Group();
   private ergosphereGroup = new THREE.Group();
   private spacetimeWellMesh!: THREE.Mesh;
-  private spacetimeWellGeo!: THREE.PlaneGeometry;
-  private orbitalProbeGroup = new THREE.Group();
+  private spacetimeWellGeo!: THREE.BufferGeometry;
+  private orbitalStarsGroup = new THREE.Group();
   private starfieldInstanced!: THREE.InstancedMesh;
   private geodesicGroup = new THREE.Group();
+
+  // Primary Orbiting Star S2 representation
+  private starS2Mesh!: THREE.Mesh;
+  private starS2GlowMesh!: THREE.Mesh;
+  private starOrbitTrail!: THREE.Line;
+  private companionStars: Array<{ mesh: THREE.Mesh; semiMajor: number; inclination: number; phase: number; speed: number }> = [];
 
   // Animated photon pulses along geodesic trajectories
   private activeGeodesicPulses: Array<{
@@ -269,13 +265,13 @@ export class BlackHoleSceneController {
   private targetScale = 1.0;
   private currentExploded = 0.0;
   private targetExploded = 0.0;
-  private probeOrbitAngle = 0.8;
+  private starOrbitAngle = 0.8;
 
   // Camera transition state
   private cameraTransitionActive = false;
   private targetCamPos = new THREE.Vector3(0, 6.8, 19.5);
   private targetCamLook = new THREE.Vector3(0, 0, 0);
-  private followProbeMode = false;
+  private followStarMode = false;
 
   // Raycasting for interactive feature inspection & double-click photon launch
   private raycaster = new THREE.Raycaster();
@@ -310,19 +306,19 @@ export class BlackHoleSceneController {
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 1.15;
     this.renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = !isSoftwareGl;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
     container.appendChild(this.renderer.domElement);
 
-    // 2. Scene & Exponential Horizon Fog
+    // 2. Scene & Deep Space Horizon Fog
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x05070d);
-    this.scene.fog = new THREE.FogExp2(0x05070d, 0.0065);
+    this.scene.background = new THREE.Color(0x04060b);
+    this.scene.fog = new THREE.FogExp2(0x04060b, 0.0055);
 
-    // 3. Mandatory Studio Environment Reflection (RoomEnvironment + PMREMGenerator)
+    // 3. Mandatory Studio Environment Reflection
     const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     pmremGenerator.dispose();
@@ -335,55 +331,51 @@ export class BlackHoleSceneController {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = !isSoftwareGl;
     this.controls.dampingFactor = 0.06;
-    this.controls.maxDistance = 58;
-    this.controls.minDistance = 3.6;
+    this.controls.maxDistance = 64;
+    this.controls.minDistance = 3.2;
     this.controls.target.set(0, 0, 0);
 
-    // Cancel scripted camera transition when user manually drags OrbitControls
     this.controls.addEventListener('start', () => {
       this.cameraTransitionActive = false;
-      this.followProbeMode = false;
+      this.followStarMode = false;
     });
 
-    // Configure Raycaster to inspect Layer 1 interactive telemetry nodes
     this.raycaster.layers.set(1);
 
-    // 5. Build 3-Point Studio & Astrophysical Lighting Rig
+    // 5. Build 3-Point Astrophysical Lighting Rig
     this.setupLightingRig();
 
-    // 6. Build Composite 10-Part Relativistic Black Hole & Observatory Scene
+    // 6. Build Composite Relativistic Black Hole & Nuclear Star Cluster Scene
     this.buildCompositeBlackHole();
-    this.buildSpacetimeWellGrid();
-    this.buildOrbitalProbeAssembly();
-    this.buildInstancedStarfield();
+    this.buildSpacetimeWellManifold();
+    this.buildOrbitingStarCluster();
+    this.buildInstancedDeepStarfield();
 
     this.scene.add(this.blackHoleGroup);
     this.scene.add(this.geodesicGroup);
 
-    // Seed 3 initial illustrative null geodesic photon rays (Captured, Critical Photon Sphere, Deflected)
+    // Seed representative null geodesic photon rays
     this.seedInitialGeodesics();
 
     // Apply initial parameters
     this.updateParams(initialParams, true);
 
-    // Pre-warm shaders on GPU
     if (!isSoftwareGl) {
       this.renderer.compile(this.scene, this.camera);
     }
 
-    // Bind events
+    // Event listeners
     window.addEventListener('resize', this.handleResize);
     this.renderer.domElement.addEventListener('pointermove', this.handlePointerMove);
     this.renderer.domElement.addEventListener('click', this.handleCanvasClick);
     this.renderer.domElement.addEventListener('dblclick', this.handleCanvasDoubleClick);
 
-    // Start render loop
     this.startLoop();
   }
 
   private setupLightingRig() {
-    // Warm Directional Key Light (simulating intense inner accretion disk illumination)
-    const keyLight = new THREE.DirectionalLight(0xffcf87, 2.6);
+    // Warm Key Light from inner accretion flow
+    const keyLight = new THREE.DirectionalLight(0xffdf9e, 2.8);
     keyLight.position.set(12, 16, 10);
     keyLight.castShadow = !isSoftwareGl;
     keyLight.shadow.mapSize.width = 1024;
@@ -395,16 +387,14 @@ export class BlackHoleSceneController {
     keyLight.shadow.camera.right = d;
     keyLight.shadow.camera.top = d;
     keyLight.shadow.camera.bottom = -d;
-    keyLight.shadow.bias = -0.0005;
-    keyLight.shadow.normalBias = 0.02;
     this.scene.add(keyLight);
 
-    // Cool Sky/Ground Hemisphere Fill Light
-    const hemiFill = new THREE.HemisphereLight(0x38bdf8, 0x0f172a, 0.85);
+    // Cool Sky/Ground Fill Light
+    const hemiFill = new THREE.HemisphereLight(0x60a5fa, 0x070b14, 0.9);
     this.scene.add(hemiFill);
 
-    // Relativistic Rim / Backlight
-    const rimLight = new THREE.DirectionalLight(0x60a5fa, 1.4);
+    // Relativistic Rim Light
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
     rimLight.position.set(-14, -8, -12);
     this.scene.add(rimLight);
   }
@@ -415,12 +405,14 @@ export class BlackHoleSceneController {
     canvas.height = 32;
     const ctx = canvas.getContext('2d')!;
     const grad = ctx.createLinearGradient(0, 0, 512, 0);
-    grad.addColorStop(0.0, '#120309');
-    grad.addColorStop(0.18, '#5a0f1d');
-    grad.addColorStop(0.42, '#c83e12');
-    grad.addColorStop(0.68, '#f59e0b');
-    grad.addColorStop(0.86, '#fef08a');
-    grad.addColorStop(1.0, '#e0f2fe');
+    // Smooth Planck thermodynamic blackbody temperature gradient (Infrared -> Red -> Gold -> White -> Blue-white)
+    grad.addColorStop(0.0, '#0a0305');
+    grad.addColorStop(0.15, '#3b0d11');
+    grad.addColorStop(0.35, '#8f280a');
+    grad.addColorStop(0.55, '#d97706');
+    grad.addColorStop(0.75, '#fbbf24');
+    grad.addColorStop(0.88, '#fef3c7');
+    grad.addColorStop(1.0, '#dbeafe');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 512, 32);
 
@@ -431,40 +423,10 @@ export class BlackHoleSceneController {
     return texture;
   }
 
-  private createProceduralProbeHullTexture(): THREE.CanvasTexture {
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 256;
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = '#d97706';
-    ctx.fillRect(0, 0, 256, 256);
-
-    // Multi-layer insulation (MLI) gold foil quilting grid
-    ctx.strokeStyle = '#92400e';
-    ctx.lineWidth = 2;
-    for (let i = 0; i <= 256; i += 32) {
-      ctx.beginPath();
-      ctx.moveTo(i, 0);
-      ctx.lineTo(i, 256);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, i);
-      ctx.lineTo(256, i);
-      ctx.stroke();
-    }
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
-    return texture;
-  }
-
   private buildCompositeBlackHole() {
     const spectrumLut = this.createProceduralSpectrumTexture();
 
-    // PART 1: Event Horizon Shadow Core (Schwarzschild/Kerr Black Hole Shadow)
+    // 1. Central Event Horizon Shadow Core (Schwarzschild / Kerr Causal Boundary)
     const horizonGeo = new THREE.SphereGeometry(1.75, 64, 64);
     const horizonMat = new THREE.ShaderMaterial({
       vertexShader: `
@@ -482,8 +444,8 @@ export class BlackHoleSceneController {
         varying vec3 vWorldPos;
         void main() {
           vec3 viewDir = normalize(cameraPosition - vWorldPos);
-          float fresnel = pow(1.0 - max(0.0, dot(viewDir, vNormal)), 4.2);
-          vec3 rimGlow = vec3(1.0, 0.58, 0.16) * fresnel * 0.75;
+          float fresnel = pow(1.0 - max(0.0, dot(viewDir, vNormal)), 5.0);
+          vec3 rimGlow = vec3(1.0, 0.65, 0.22) * fresnel * 0.85;
           gl_FragColor = vec4(rimGlow, 1.0);
         }
       `,
@@ -492,39 +454,38 @@ export class BlackHoleSceneController {
     this.eventHorizonMesh.layers.enable(1);
     this.eventHorizonMesh.userData.feature = {
       title: 'Event Horizon (r₊)',
-      subtitle: 'Causal Boundary of No Return',
+      subtitle: 'Kerr Spacetime Causal Boundary',
       formula: 'r₊ = (GM/c²)[1 + √(1 - a*²)]',
       description:
-        'The null hypersurface where escape velocity equals the speed of light c. Inside r₊, all future-directed timelike and null worldlines point inward toward the singularity.',
+        'The null hypersurface boundary of no return. Within r₊, escape velocity exceeds c and all timelike geodesics terminate at the central ring singularity.',
     } satisfies InspectedFeature;
     this.blackHoleGroup.add(this.eventHorizonMesh);
 
-    // PART 2: Photon Sphere Critical Ring (r_ph)
-    const photonGeo = new THREE.TorusGeometry(2.05, 0.045, 24, 128);
+    // 2. Brilliant Caustic Photon Sphere Ring (r_ph)
+    const photonGeo = new THREE.TorusGeometry(2.05, 0.04, 24, 128);
     const photonMat = new THREE.MeshBasicMaterial({
-      color: 0xfef08a,
+      color: 0xfef3c7,
       transparent: true,
-      opacity: 0.88,
+      opacity: 0.92,
     });
     this.photonRingMesh = new THREE.Mesh(photonGeo, photonMat);
     this.photonRingMesh.layers.enable(1);
     this.photonRingMesh.userData.feature = {
-      title: 'Photon Sphere & Critical Curve',
-      subtitle: 'Unstable Bound Null Orbits',
-      formula: 'r_ph = 2(GM/c²)[1 + cos(⅔ arccos(-a*))]',
+      title: 'Einstein Photon Ring (r_ph)',
+      subtitle: 'Unstable Bound Null Geodesics',
+      formula: 'b_crit = √27 GM/c² · r_ph = 2(GM/c²)[1 + cos(⅔ arccos(-a*))]',
       description:
-        'Grazing photons skimming at the critical impact parameter b_c = √27 GM/c² orbit the black hole multiple times before escaping to form the bright Einstein photon ring.',
+        'Grazing photons orbit the black hole multiple times before escaping to distant observers, producing the thin, razor-sharp caustic photon ring imaged by the Event Horizon Telescope.',
     } satisfies InspectedFeature;
     this.blackHoleGroup.add(this.photonRingMesh);
 
-    // PART 3: Primary Equatorial Relativistic Accretion Disk (Double-layered for volumetric thickness)
+    // 3. High-Fidelity 3D Relativistic Accretion Disk (Multi-Layered with Warping & Plunging Flow)
     this.accretionDiskMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
         uSpin: { value: this.params.spin },
         uAccretionRate: { value: this.params.accretionRate },
         uDopplerStrength: { value: this.params.dopplerStrength },
-        uIscoRatio: { value: 1.0 },
         uSpectralMode: { value: 0 },
         uSpectrumLut: { value: spectrumLut },
       },
@@ -536,132 +497,40 @@ export class BlackHoleSceneController {
       blending: THREE.AdditiveBlending,
     });
 
-    const diskPlaneGeo = new THREE.PlaneGeometry(24, 24, 64, 64);
+    // Primary Equatorial Disk Sheet
+    const diskPlaneGeo = new THREE.PlaneGeometry(25, 25, 80, 80);
     const mainDiskMesh = new THREE.Mesh(diskPlaneGeo, this.accretionDiskMat);
     mainDiskMesh.rotation.x = -Math.PI / 2;
     mainDiskMesh.layers.enable(1);
     mainDiskMesh.userData.feature = {
       title: 'Relativistic Accretion Disk (ISCO)',
-      subtitle: 'Novikov-Thorne Magnetohydrodynamic Plasma',
-      formula: 'D = [γ(1 - β cos θ)]⁻¹ · T(r) ∝ r⁻³ᐟ⁴',
+      subtitle: 'Magnetohydrodynamic Plasma & Differential Shear',
+      formula: 'T(r) ∝ r⁻³ᐟ⁴ [1 - √(r_in/r)]¹ᐟ⁴ · D = [γ(1 - β cos θ)]⁻¹',
       description:
-        'Differential Keplerian shear heats infalling plasma to >10⁷ K. Relativistic Doppler beaming brightens and blueshifts the approaching wing while dimming the receding wing.',
+        'Keplerian shear drives viscous magneto-rotational instability (MRI), heating plasma to millions of degrees. Continuous relativistic Doppler beaming smoothly illuminates approaching plasma.',
     } satisfies InspectedFeature;
     this.accretionDiskGroup.add(mainDiskMesh);
 
-    // Secondary slightly tilted corona sheet for 3D volumetric thickness
-    const coronaDiskMesh = new THREE.Mesh(diskPlaneGeo, this.accretionDiskMat);
-    coronaDiskMesh.rotation.x = -Math.PI / 2 + 0.035;
-    coronaDiskMesh.position.y = 0.06;
-    this.accretionDiskGroup.add(coronaDiskMesh);
+    // Secondary slightly warped vertical corona layers for authentic 3D volumetric thickness
+    const corona1 = new THREE.Mesh(diskPlaneGeo, this.accretionDiskMat);
+    corona1.rotation.x = -Math.PI / 2 + 0.025;
+    corona1.position.y = 0.05;
+    const corona2 = new THREE.Mesh(diskPlaneGeo, this.accretionDiskMat);
+    corona2.rotation.x = -Math.PI / 2 - 0.025;
+    corona2.position.y = -0.05;
+    this.accretionDiskGroup.add(corona1, corona2);
     this.blackHoleGroup.add(this.accretionDiskGroup);
 
-    // PART 4: Gravitationally Lensed Upper & Lower Accretion Halo Arch
-    this.lensedHaloMat = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0 },
-        uSpin: { value: this.params.spin },
-        uAccretionRate: { value: this.params.accretionRate },
-        uDopplerStrength: { value: this.params.dopplerStrength },
-        uLensingStrength: { value: this.params.lensingStrength },
-        uSpectralMode: { value: 0 },
-      },
-      vertexShader: ACCRETION_VERTEX_SHADER,
-      fragmentShader: LENSED_HALO_FRAGMENT_SHADER,
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
-    });
-
-    const haloGeo = new THREE.PlaneGeometry(13.5, 13.5, 32, 32);
-    const haloMesh = new THREE.Mesh(haloGeo, this.lensedHaloMat);
-    this.lensedHaloGroup.add(haloMesh);
-    this.blackHoleGroup.add(this.lensedHaloGroup);
-
-    // PART 5: Relativistic Bipolar Astrophysical Jets (Blandford-Znajek Mechanism)
-    const jetConeGeo = new THREE.ConeGeometry(1.35, 14.5, 32, 24, true);
-    jetConeGeo.translate(0, 7.25, 0);
-    const jetMat = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0 },
-        uSpin: { value: this.params.spin },
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform float uTime;
-        uniform float uSpin;
-        varying vec2 vUv;
-        void main() {
-          float axialFade = smoothstep(0.0, 0.18, vUv.y) * (1.0 - smoothstep(0.35, 1.0, vUv.y));
-          float helix = sin(vUv.x * 25.1327 - uTime * 6.5 + vUv.y * 14.0) * 0.5 + 0.5;
-          float core = sin(vUv.x * 12.566 + uTime * 4.0) * 0.3 + 0.7;
-          float alpha = axialFade * (0.25 + 0.75 * helix * core) * uSpin * 0.65;
-          vec3 col = mix(vec3(0.14, 0.55, 0.98), vec3(0.75, 0.92, 1.0), helix);
-          gl_FragColor = vec4(col, alpha);
-        }
-      `,
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
-    });
-
-    const northJet = new THREE.Mesh(jetConeGeo, jetMat);
-    northJet.position.y = 1.4;
-    northJet.layers.enable(1);
-    northJet.userData.feature = {
-      title: 'Blandford-Znajek Relativistic Jet',
-      subtitle: 'Frame-Dragged Magnetospheric Collimation',
-      formula: 'P_BZ ∝ B² r₊² (a*)² c',
-      description:
-        'Twisted poloidal magnetic field lines threading the rotating ergosphere extract rotational energy from the Kerr black hole, launching collimated Lorentz-boosted plasma jets along the spin axis.',
-    } satisfies InspectedFeature;
-
-    const southJet = new THREE.Mesh(jetConeGeo, jetMat);
-    southJet.rotation.x = Math.PI;
-    southJet.position.y = -1.4;
-
-    // Helical magnetic flux tube ribbons wrapping the polar jets
-    for (let sign of [1, -1]) {
-      const curvePts: THREE.Vector3[] = [];
-      for (let i = 0; i <= 60; i++) {
-        const t = i / 60;
-        const y = sign * (1.5 + t * 12.0);
-        const radius = 0.22 + t * 0.95;
-        const theta = t * Math.PI * 6 * sign;
-        curvePts.push(new THREE.Vector3(Math.cos(theta) * radius, y, Math.sin(theta) * radius));
-      }
-      const helixCurve = new THREE.CatmullRomCurve3(curvePts);
-      const tubeGeo = new THREE.TubeGeometry(helixCurve, 64, 0.025, 8, false);
-      const tubeMat = new THREE.MeshBasicMaterial({
-        color: 0x38bdf8,
-        transparent: true,
-        opacity: 0.45,
-        blending: THREE.AdditiveBlending,
-      });
-      this.jetsGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
-    }
-
-    this.jetsGroup.add(northJet, southJet);
-    this.blackHoleGroup.add(this.jetsGroup);
-
-    // PART 6: Ergosphere & Lense-Thirring Frame-Dragging Geodesic Cage
-    const ergoGeo = new THREE.SphereGeometry(2.35, 28, 18);
-    ergoGeo.scale(1.18, 0.78, 1.18); // Oblate spheroid touching r+ at poles and 2M at equator
+    // 4. Kerr Ergosphere & Lense-Thirring Frame-Dragging Geodesic Spheroid
+    const ergoGeo = new THREE.SphereGeometry(2.35, 32, 20);
+    ergoGeo.scale(1.18, 0.78, 1.18);
     const ergoMat = new THREE.MeshStandardMaterial({
       color: 0x06b6d4,
-      emissive: 0x0891b2,
-      emissiveIntensity: 0.55,
+      emissive: 0x0284c7,
+      emissiveIntensity: 0.5,
       wireframe: true,
       transparent: true,
-      opacity: 0.26,
+      opacity: 0.24,
       roughness: 0.3,
       metalness: 0.8,
     });
@@ -672,48 +541,55 @@ export class BlackHoleSceneController {
       subtitle: 'Static Limit Surface (g_tt = 0)',
       formula: 'r_ergo(θ) = (GM/c²)[1 + √(1 - a*² cos²θ)]',
       description:
-        'Between the static limit r_ergo and the outer event horizon r₊, Lense-Thirring frame dragging sweeps spacetime faster than light relative to distant stars, forcing all matter to co-rotate with the black hole.',
+        'Between the static limit and the event horizon, frame dragging forces all matter and light to rotate along with the black hole, enabling energy extraction via the Penrose process.',
     } satisfies InspectedFeature;
     this.ergosphereGroup.add(ergoMesh);
     this.blackHoleGroup.add(this.ergosphereGroup);
   }
 
-  private buildSpacetimeWellGrid() {
-    // PART 7: Deformable 3D Flamm's Paraboloid Spacetime Embedding Diagram
-    this.spacetimeWellGeo = new THREE.PlaneGeometry(34, 34, 68, 68);
+  private buildSpacetimeWellManifold() {
+    // High-Precision Polar Geodesic Spacetime Manifold (Concentric rings + radial geodesic spokes)
+    const radialSegments = 72;
+    const ringSegments = 48;
+    const outerRadius = 18.5;
+    const innerRadius = 1.35;
+
+    // Use RingGeometry with high radial definition for smooth Flamm's paraboloid funnel
+    this.spacetimeWellGeo = new THREE.RingGeometry(innerRadius, outerRadius, radialSegments, ringSegments);
     this.spacetimeWellGeo.rotateX(-Math.PI / 2);
 
-    const gridMat = new THREE.MeshStandardMaterial({
+    const wellMat = new THREE.MeshStandardMaterial({
       color: 0x0ea5e9,
       emissive: 0x0369a1,
-      emissiveIntensity: 0.45,
+      emissiveIntensity: 0.52,
       wireframe: true,
       transparent: true,
-      opacity: 0.32,
-      roughness: 0.6,
-      metalness: 0.3,
+      opacity: 0.38,
+      roughness: 0.4,
+      metalness: 0.7,
       polygonOffset: true,
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
     });
 
-    this.spacetimeWellMesh = new THREE.Mesh(this.spacetimeWellGeo, gridMat);
+    this.spacetimeWellMesh = new THREE.Mesh(this.spacetimeWellGeo, wellMat);
     this.spacetimeWellMesh.position.y = -3.2;
     this.spacetimeWellMesh.layers.enable(1);
     this.spacetimeWellMesh.userData.feature = {
-      title: "Flamm's Paraboloid Embedding Grid",
-      subtitle: 'Spatial Curvature Cross-Section',
-      formula: 'dz/dr = √(Rs / (r - Rs)) · z(r) = 2√(Rs(r - Rs))',
+      title: "Flamm's Paraboloid Spacetime Manifold",
+      subtitle: 'General Relativistic Equatorial Embedding',
+      formula: 'z(r) = -2√(Rs(r - Rs)) · g_rr = (1 - Rs/r)⁻¹',
       description:
-        'Visualizes intrinsic equatorial spatial curvature in the Schwarzschild/Kerr metric. Higher black hole mass deepens the gravitational potential funnel.',
+        'Exact geometric embedding diagram illustrating equatorial spatial curvature. Geodesic coordinate spokes vortex inward following Kerr frame-dragging.',
     } satisfies InspectedFeature;
     this.scene.add(this.spacetimeWellMesh);
-    this.deformSpacetimeGrid(this.params.massSolar, this.params.spin);
+
+    this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
   }
 
-  private deformSpacetimeGrid(massSolar: number, spin: number) {
+  private deformSpacetimeWell(massSolar: number, spin: number) {
     const posAttr = this.spacetimeWellGeo.attributes.position as THREE.BufferAttribute;
-    const wellDepth = 2.8 + (massSolar / 100) * 5.2;
+    const wellDepth = 3.6 + (massSolar / 100) * 5.8;
     const rs = 1.6 + (massSolar / 100) * 1.1;
 
     for (let i = 0; i < posAttr.count; i++) {
@@ -721,172 +597,122 @@ export class BlackHoleSceneController {
       const z = posAttr.getZ(i);
       const r = Math.hypot(x, z);
 
-      // Smooth relativistic funnel profile
-      const funnel = -wellDepth / Math.sqrt(Math.max(0.55, (r * r) / (rs * rs) + 0.45));
-      // Subtle frame-dragging spiral ripple in grid elevation
+      // Flamm's paraboloid spatial curvature funnel
+      const funnel = -wellDepth / Math.sqrt(Math.max(0.42, (r * r) / (rs * rs) + 0.38));
+
+      // Kerr Lense-Thirring frame-dragging vortex spiral
       const angle = Math.atan2(z, x);
-      const twist = spin * 0.22 * Math.sin(angle * 2 + r * 0.6) * Math.exp(-r * 0.12);
-      posAttr.setY(i, funnel + twist);
+      const frameDragSpiral = spin * 0.32 * Math.sin(angle * 3.0 + r * 0.55) * Math.exp(-r * 0.14);
+
+      posAttr.setY(i, funnel + frameDragSpiral);
     }
     posAttr.needsUpdate = true;
     this.spacetimeWellGeo.computeVertexNormals();
   }
 
-  private buildOrbitalProbeAssembly() {
-    // PART 8: 7-Part Composite Procedural Relativistic Telemetry Spacecraft ("Horizons-IX Probe")
-    const foilTexture = this.createProceduralProbeHullTexture();
-
-    // 1. Primary Octagonal Bus Hull (Brushed Gold Multi-Layer Insulation with anisotropy)
-    const hullGeo = new THREE.CylinderGeometry(0.28, 0.34, 0.55, 8);
-    hullGeo.computeTangents();
-    const goldFoilMat = new THREE.MeshPhysicalMaterial({
-      color: 0xf59e0b,
-      map: foilTexture,
-      metalness: 0.92,
-      roughness: 0.22,
-      anisotropy: 0.8,
-      clearcoat: 0.4,
+  private buildOrbitingStarCluster() {
+    // Primary Target: Relativistic S-Star S2 (The famous B-type star orbiting Sgr A* used to test GR!)
+    const starS2Geo = new THREE.SphereGeometry(0.32, 24, 24);
+    const starS2Mat = new THREE.MeshBasicMaterial({
+      color: 0x93c5fd, // B-type blue-white star
     });
-    const hullMesh = new THREE.Mesh(hullGeo, goldFoilMat);
-    hullMesh.castShadow = !isSoftwareGl;
-    this.orbitalProbeGroup.add(hullMesh);
+    this.starS2Mesh = new THREE.Mesh(starS2Geo, starS2Mat);
 
-    // 2. Secondary Parabolic High-Gain Telemetry Dish (LatheGeometry)
-    const lathePoints: THREE.Vector2[] = [];
-    for (let i = 0; i <= 10; i++) {
-      const r = (i / 10) * 0.48;
-      const y = 0.28 + r * r * 0.65;
-      lathePoints.push(new THREE.Vector2(r, y));
-    }
-    const dishGeo = new THREE.LatheGeometry(lathePoints, 24);
-    const titaniumMat = new THREE.MeshStandardMaterial({
-      color: 0xe2e8f0,
-      metalness: 0.85,
-      roughness: 0.48, // >= 0.25 roughness delta from hull
-    });
-    const dishMesh = new THREE.Mesh(dishGeo, titaniumMat);
-    this.orbitalProbeGroup.add(dishMesh);
-
-    // 3. Dish Feed Receiver Tripod Spike
-    const spikeGeo = new THREE.ConeGeometry(0.04, 0.35, 12);
-    spikeGeo.translate(0, 0.48, 0);
-    const darkCarbonMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      metalness: 0.4,
-      roughness: 0.75,
-    });
-    const spikeMesh = new THREE.Mesh(spikeGeo, darkCarbonMat);
-    this.orbitalProbeGroup.add(spikeMesh);
-
-    // 4 & 5. Port & Starboard Radiator / Solar Array Wings (ExtrudeGeometry with bevel)
-    const wingShape = new THREE.Shape();
-    wingShape.moveTo(0, -0.14);
-    wingShape.lineTo(0.95, -0.10);
-    wingShape.lineTo(0.95, 0.10);
-    wingShape.lineTo(0, 0.14);
-    wingShape.closePath();
-
-    const wingGeo = new THREE.ExtrudeGeometry(wingShape, {
-      depth: 0.025,
-      bevelEnabled: true,
-      bevelSize: 0.01,
-      bevelThickness: 0.01,
-      bevelSegments: 2,
-    });
-    const solarPanelMat = new THREE.MeshPhysicalMaterial({
-      color: 0x0284c7,
-      emissive: 0x0369a1,
-      emissiveIntensity: 0.25,
-      metalness: 0.65,
-      roughness: 0.15,
-      clearcoat: 0.8,
-    });
-
-    const leftWing = new THREE.Mesh(wingGeo, solarPanelMat);
-    leftWing.position.set(0.26, 0, 0);
-    const rightWing = new THREE.Mesh(wingGeo, solarPanelMat);
-    rightWing.rotation.y = Math.PI;
-    rightWing.position.set(-0.26, 0, 0);
-    this.orbitalProbeGroup.add(leftWing, rightWing);
-
-    // 6. Optical Gravity-Gradiometer Sensor Dome (Transmissive Sapphire Crystal with software-GL fallback)
-    const domeGeo = new THREE.SphereGeometry(0.16, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.6);
-    const crystalMat = new THREE.MeshPhysicalMaterial({
-      color: 0x38bdf8,
-      transmission: isSoftwareGl ? 0 : 0.92,
+    // Glowing stellar corona aura
+    const auraGeo = new THREE.SphereGeometry(0.68, 20, 20);
+    const auraMat = new THREE.MeshBasicMaterial({
+      color: 0x60a5fa,
       transparent: true,
-      opacity: isSoftwareGl ? 0.45 : 1.0,
-      ior: 1.76,
-      thickness: 0.8,
-      roughness: 0.08,
-      metalness: 0.05,
-      clearcoat: 1.0,
-      depthWrite: false,
-    });
-    const domeMesh = new THREE.Mesh(domeGeo, crystalMat);
-    domeMesh.rotation.x = Math.PI;
-    domeMesh.position.y = -0.26;
-    domeMesh.renderOrder = 4;
-    this.orbitalProbeGroup.add(domeMesh);
-
-    // 7. Relativistic Hall-Effect Ion Thruster Plume Accent
-    const plumeGeo = new THREE.ConeGeometry(0.11, 0.45, 16);
-    plumeGeo.rotateX(Math.PI / 2);
-    plumeGeo.translate(0, 0, -0.45);
-    const plumeMat = new THREE.MeshBasicMaterial({
-      color: 0x22d3ee,
-      transparent: true,
-      opacity: 0.78,
+      opacity: 0.45,
       blending: THREE.AdditiveBlending,
     });
-    const plumeMesh = new THREE.Mesh(plumeGeo, plumeMat);
-    this.orbitalProbeGroup.add(plumeMesh);
+    this.starS2GlowMesh = new THREE.Mesh(auraGeo, auraMat);
+    this.starS2Mesh.add(this.starS2GlowMesh);
 
-    // Enable raycasting inspection on all probe parts
-    this.orbitalProbeGroup.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        child.layers.enable(1);
-        child.userData.feature = {
-          title: 'Horizons-IX Geodesic Telemetry Probe',
-          subtitle: 'Relativistic Clock & Redshift Beacon',
-          formula: 'dτ = dt √(1 - Rs/r - v²/c²)',
-          description:
-            'Tracks real-time gravitational time dilation and frame-dragging precession. As the probe orbits closer to the photon sphere, its onboard atomic clock ticks markedly slower than a distant observer.',
-        } satisfies InspectedFeature;
-      }
+    this.starS2Mesh.layers.enable(1);
+    this.starS2Mesh.userData.feature = {
+      title: 'Star S2 (Relativistic Stellar Tracer)',
+      subtitle: 'Galactic Center S-Star Cluster',
+      formula: 'dτ = dt √(1 - Rs/r - v²/c²) · Δφ_GR = 6πGM / [c² a(1 - e²)]',
+      description:
+        'B-type main-sequence star orbiting in the extreme relativistic gravitational field of the supermassive black hole. Tracking S2 provided the first direct confirmation of gravitational redshift and Schwarzschild orbital precession.',
+    } satisfies InspectedFeature;
+
+    this.orbitalStarsGroup.add(this.starS2Mesh);
+
+    // Precessing orbital path trail for S2
+    const trailPoints: THREE.Vector3[] = [];
+    const trailSegments = 120;
+    for (let i = 0; i <= trailSegments; i++) {
+      const theta = (i / trailSegments) * Math.PI * 2;
+      const r = this.params.probeRadiusRs * 1.75;
+      trailPoints.push(new THREE.Vector3(Math.cos(theta) * r, 0, -Math.sin(theta) * r));
+    }
+    const trailGeo = new THREE.BufferGeometry().setFromPoints(trailPoints);
+    const trailMat = new THREE.LineBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.35,
     });
+    this.starOrbitTrail = new THREE.Line(trailGeo, trailMat);
+    this.orbitalStarsGroup.add(this.starOrbitTrail);
 
-    this.scene.add(this.orbitalProbeGroup);
+    // Companion S-Stars (S38, S55, S62) orbiting at distinct inclinations and radii
+    const companionDefs = [
+      { name: 'Star S38 (A-Type)', color: 0xfef08a, semiMajor: 5.6, inclination: 0.32, speed: 0.65 },
+      { name: 'Star S55 (F-Type)', color: 0xffd2a1, semiMajor: 7.4, inclination: -0.45, speed: 0.48 },
+      { name: 'Star S62 (Extreme Eccentric)', color: 0x93c5fd, semiMajor: 4.2, inclination: 0.62, speed: 0.88 },
+    ];
+
+    for (const def of companionDefs) {
+      const compGeo = new THREE.SphereGeometry(0.24, 16, 16);
+      const compMat = new THREE.MeshBasicMaterial({ color: def.color });
+      const compMesh = new THREE.Mesh(compGeo, compMat);
+      compMesh.layers.enable(1);
+      compMesh.userData.feature = {
+        title: def.name,
+        subtitle: 'Nuclear Cluster Companion Star',
+        formula: 'T_orb ∝ a_semi^(3/2)',
+        description:
+          'High-velocity star orbiting within the central parsec of the black hole, experiencing frame dragging and gravitational redshift.',
+      } satisfies InspectedFeature;
+
+      this.companionStars.push({
+        mesh: compMesh,
+        semiMajor: def.semiMajor,
+        inclination: def.inclination,
+        phase: Math.random() * Math.PI * 2,
+        speed: def.speed,
+      });
+      this.orbitalStarsGroup.add(compMesh);
+    }
+
+    this.scene.add(this.orbitalStarsGroup);
   }
 
-  private buildInstancedStarfield() {
-    // PART 9: Instanced Background Starfield (1,400 stars with blackbody stellar classification)
-    const starCount = 1400;
-    const starGeo = new THREE.OctahedronGeometry(0.14, 1);
-    const starMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-    });
-
+  private buildInstancedDeepStarfield() {
+    // 2,200 High-Density Celestial Stars with Harvard Spectral Classification
+    const starCount = 2200;
+    const starGeo = new THREE.OctahedronGeometry(0.16, 1);
+    const starMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     this.starfieldInstanced = new THREE.InstancedMesh(starGeo, starMat, starCount);
 
-    // Harvard spectral classification colors (O, B, A, F, G, K, M)
     const spectralPalette = [
-      0x9bb0ff, // O-type blue giant
+      0x9bb0ff, // O-type deep blue
       0xaabfff, // B-type blue-white
       0xcad7ff, // A-type white
-      0xf8f7ff, // F-type yellow-white
-      0xfff4ea, // G-type solar yellow
+      0xf8f7ff, // F-type pale yellow
+      0xfff4ea, // G-type solar
       0xffd2a1, // K-type orange
-      0xffcc6f, // M-type red dwarf
+      0xffcc6f, // M-type red
     ];
 
     for (let i = 0; i < starCount; i++) {
-      // Distribute on spherical shell between r = 65 and r = 175
       const u = Math.random();
       const v = Math.random();
       const theta = u * 2.0 * Math.PI;
       const phi = Math.acos(2.0 * v - 1.0);
-      const radius = 68 + Math.random() * 105;
+      const radius = 60 + Math.random() * 125;
 
       _vec3A.set(
         radius * Math.sin(phi) * Math.cos(theta),
@@ -894,8 +720,7 @@ export class BlackHoleSceneController {
         radius * Math.cos(phi)
       );
 
-      // Apply ±15% (and varied magnitude) scale variation
-      const scale = 0.55 + Math.random() * 1.15;
+      const scale = 0.45 + Math.random() * 1.35;
       _vec3B.set(scale, scale, scale);
       _quat.identity();
       _mat4.compose(_vec3A, _quat, _vec3B);
@@ -915,10 +740,9 @@ export class BlackHoleSceneController {
   }
 
   private seedInitialGeodesics() {
-    // Launch 3 representative photon trajectories: grazing critical orbit, gravitational scatter, and capture
-    this.launchPhotonGeodesic(2.38, 0.2, true); // Critical photon sphere grazing
-    this.launchPhotonGeodesic(4.15, -0.35, true); // Gravitational deflection
-    this.launchPhotonGeodesic(1.15, 0.0, true); // Event horizon capture
+    this.launchPhotonGeodesic(2.38, 0.2, true);
+    this.launchPhotonGeodesic(4.15, -0.35, true);
+    this.launchPhotonGeodesic(1.15, 0.0, true);
   }
 
   public launchPhotonGeodesic(impactParameterB: number, yOffset = 0, silent = false): GeodesicTrajectory {
@@ -932,15 +756,13 @@ export class BlackHoleSceneController {
     const lineMat = new THREE.LineBasicMaterial({
       color: traj.colorHex,
       transparent: true,
-      opacity: 0.72,
+      opacity: 0.75,
     });
     const line = new THREE.Line(lineGeo, lineMat);
     this.geodesicGroup.add(line);
 
-    const pulseGeo = new THREE.SphereGeometry(0.16, 16, 16);
-    const pulseMat = new THREE.MeshBasicMaterial({
-      color: traj.colorHex,
-    });
+    const pulseGeo = new THREE.SphereGeometry(0.18, 16, 16);
+    const pulseMat = new THREE.MeshBasicMaterial({ color: traj.colorHex });
     const pulseMesh = new THREE.Mesh(pulseGeo, pulseMat);
     pulseMesh.position.copy(vecPoints[0]);
     this.geodesicGroup.add(pulseMesh);
@@ -953,7 +775,6 @@ export class BlackHoleSceneController {
       speed: 28.0,
     });
 
-    // Keep maximum 8 active geodesic trajectories to prevent visual clutter
     while (this.activeGeodesicPulses.length > 8) {
       const oldest = this.activeGeodesicPulses.shift();
       if (oldest) {
@@ -989,7 +810,6 @@ export class BlackHoleSceneController {
 
     this.params = nextParams;
 
-    // Scale visual radius subtly with mass (0.78x to 1.38x) so changes are physically tangible
     this.targetScale = 0.78 + (nextParams.massSolar / 100) * 0.62;
     this.targetExploded = nextParams.explodedSeparation;
 
@@ -998,7 +818,6 @@ export class BlackHoleSceneController {
       this.currentExploded = this.targetExploded;
     }
 
-    // Update shader uniforms
     const modeIndex =
       nextParams.spectralMode === 'eht230ghz'
         ? 1
@@ -1013,35 +832,30 @@ export class BlackHoleSceneController {
     this.accretionDiskMat.uniforms.uDopplerStrength.value = nextParams.dopplerStrength;
     this.accretionDiskMat.uniforms.uSpectralMode.value = modeIndex;
 
-    this.lensedHaloMat.uniforms.uSpin.value = nextParams.spin;
-    this.lensedHaloMat.uniforms.uAccretionRate.value = nextParams.accretionRate;
-    this.lensedHaloMat.uniforms.uDopplerStrength.value = nextParams.dopplerStrength;
-    this.lensedHaloMat.uniforms.uLensingStrength.value = nextParams.lensingStrength;
-    this.lensedHaloMat.uniforms.uSpectralMode.value = modeIndex;
-
-    this.jetsGroup.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      if (mesh.isMesh && (mesh.material as THREE.ShaderMaterial).uniforms?.uSpin) {
-        (mesh.material as THREE.ShaderMaterial).uniforms.uSpin.value = nextParams.spin;
-      }
-    });
-
     // Layer visibilities
     this.accretionDiskGroup.visible = nextParams.layers.accretionDisk;
-    this.lensedHaloGroup.visible = nextParams.layers.lensedHalo;
-    this.jetsGroup.visible = nextParams.layers.relativisticJets && nextParams.spin > 0.05;
     this.ergosphereGroup.visible = nextParams.layers.ergosphereCage;
     this.spacetimeWellMesh.visible = nextParams.layers.spacetimeGrid;
-    this.orbitalProbeGroup.visible = nextParams.layers.orbitalProbe;
+    this.orbitalStarsGroup.visible = nextParams.layers.orbitalStars;
     this.geodesicGroup.visible = nextParams.layers.geodesicRays;
 
+    // Update S2 orbital trail radius
+    const trailPoints: THREE.Vector3[] = [];
+    const trailSegments = 120;
+    const r = nextParams.probeRadiusRs * 1.75 * this.targetScale;
+    for (let i = 0; i <= trailSegments; i++) {
+      const theta = (i / trailSegments) * Math.PI * 2;
+      trailPoints.push(new THREE.Vector3(Math.cos(theta) * r, 0, -Math.sin(theta) * r));
+    }
+    this.starOrbitTrail.geometry.setFromPoints(trailPoints);
+
     if (massChanged) {
-      this.deformSpacetimeGrid(nextParams.massSolar, nextParams.spin);
+      this.deformSpacetimeWell(nextParams.massSolar, nextParams.spin);
     }
   }
 
   public setCameraPreset(preset: CameraPresetId) {
-    this.followProbeMode = preset === 'probe';
+    this.followStarMode = preset === 'star';
     this.cameraTransitionActive = true;
 
     const incRad = THREE.MathUtils.degToRad(this.params.inclinationDeg);
@@ -1060,11 +874,10 @@ export class BlackHoleSceneController {
         this.targetCamLook.set(1.2, 0.2, 0);
         break;
       case 'well':
-        this.targetCamPos.set(14.5, -5.2, 16.5);
-        this.targetCamLook.set(0, -3.5, 0);
+        this.targetCamPos.set(14.5, -5.8, 16.5);
+        this.targetCamLook.set(0, -3.8, 0);
         break;
-      case 'probe':
-        // Handled dynamically in tick() to track the orbiting probe
+      case 'star':
         break;
     }
   }
@@ -1080,14 +893,13 @@ export class BlackHoleSceneController {
 
   private handlePointerMove = (e: PointerEvent) => {
     const now = performance.now();
-    if (now - this.lastRaycastTime < 55) return; // Throttle raycasting for zero frame drops
+    if (now - this.lastRaycastTime < 55) return;
     this.lastRaycastTime = now;
 
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointerNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     this.pointerNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-    // Project onto equatorial plane Y=0 for live Schwarzschild/Kerr coordinate readout
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
     const ray = this.raycaster.ray;
     if (Math.abs(ray.direction.y) > 0.001) {
@@ -1121,7 +933,6 @@ export class BlackHoleSceneController {
   };
 
   private handleCanvasDoubleClick = (e: MouseEvent) => {
-    // Double-clicking anywhere in space fires a test photon geodesic at that impact parameter!
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointerNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     this.pointerNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1168,13 +979,6 @@ export class BlackHoleSceneController {
 
     // 1. Advance Shader Uniform Clocks
     this.accretionDiskMat.uniforms.uTime.value = elapsed;
-    this.lensedHaloMat.uniforms.uTime.value = elapsed;
-    this.jetsGroup.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      if (mesh.isMesh && (mesh.material as THREE.ShaderMaterial).uniforms?.uTime) {
-        (mesh.material as THREE.ShaderMaterial).uniforms.uTime.value = elapsed;
-      }
-    });
 
     // 2. Smooth Exponential Damping on Black Hole Mass Scale & Exploded Anatomy Separation
     this.currentScale = THREE.MathUtils.damp(this.currentScale, this.targetScale, 5.5, rawDelta);
@@ -1183,19 +987,13 @@ export class BlackHoleSceneController {
     this.eventHorizonMesh.scale.setScalar(this.currentScale);
     this.photonRingMesh.scale.setScalar(this.currentScale);
     this.accretionDiskGroup.scale.setScalar(this.currentScale);
-    this.lensedHaloGroup.scale.setScalar(this.currentScale);
 
-    // Exploded view vertical separation of anatomical structures
     this.ergosphereGroup.position.y = this.currentExploded * 3.8;
-    this.accretionDiskGroup.position.y = 0;
     this.spacetimeWellMesh.position.y = -3.2 - this.currentExploded * 3.6;
-    this.jetsGroup.position.y = this.currentExploded * 1.6;
 
-    // 3. Billboard Lensed Accretion Halo & Photon Ring toward Camera
-    this.lensedHaloGroup.lookAt(this.camera.position);
     this.photonRingMesh.lookAt(this.camera.position);
 
-    // 4. Lense-Thirring Frame-Dragging Rotation of Ergosphere Cage
+    // 3. Lense-Thirring Frame-Dragging Rotation
     const metrics = computeRelativisticMetrics(this.params);
     this.ergosphereGroup.rotation.y += simDelta * (0.4 + metrics.frameDraggingOmega * 4.5);
     this.ergosphereGroup.scale.set(
@@ -1204,22 +1002,29 @@ export class BlackHoleSceneController {
       this.currentScale * (1.0 + 0.22 * this.params.spin)
     );
 
-    // 5. Advance Orbital Telemetry Probe along Relativistic Geodesic Orbit
+    // 4. Advance Orbiting Star S2 along Relativistic Orbit
     const orbitSceneRadius = this.params.probeRadiusRs * 1.75 * this.currentScale;
     const angularSpeed = (1.65 * metrics.probeOrbitalBeta) / Math.max(1.5, this.params.probeRadiusRs * 0.45);
-    this.probeOrbitAngle += simDelta * angularSpeed;
+    this.starOrbitAngle += simDelta * angularSpeed;
 
-    const probeX = Math.cos(this.probeOrbitAngle) * orbitSceneRadius;
-    const probeZ = -Math.sin(this.probeOrbitAngle) * orbitSceneRadius;
-    const probeY = Math.sin(this.probeOrbitAngle * 2.0) * 0.28 * this.params.spin;
-    this.orbitalProbeGroup.position.set(probeX, probeY, probeZ);
-    // Orient probe tangent to its orbital velocity vector
-    _vec3C.set(
-      probeX - Math.sin(this.probeOrbitAngle),
-      probeY,
-      probeZ - Math.cos(this.probeOrbitAngle)
-    );
-    this.orbitalProbeGroup.lookAt(_vec3C);
+    const starX = Math.cos(this.starOrbitAngle) * orbitSceneRadius;
+    const starZ = -Math.sin(this.starOrbitAngle) * orbitSceneRadius;
+    const starY = Math.sin(this.starOrbitAngle * 2.0) * 0.22 * this.params.spin;
+    this.starS2Mesh.position.set(starX, starY, starZ);
+
+    // Gentle star corona pulsation
+    const starPulse = 1.0 + Math.sin(elapsed * 4.0) * 0.12;
+    this.starS2GlowMesh.scale.setScalar(starPulse);
+
+    // 5. Advance Companion S-Stars in Nuclear Cluster
+    for (const comp of this.companionStars) {
+      comp.phase += simDelta * (0.45 * comp.speed);
+      const rComp = comp.semiMajor * 1.75 * this.currentScale;
+      const cx = Math.cos(comp.phase) * rComp;
+      const cz = Math.sin(comp.phase) * rComp;
+      const cy = Math.sin(comp.phase) * Math.sin(comp.inclination) * rComp * 0.45;
+      comp.mesh.position.set(cx, cy, cz);
+    }
 
     // 6. Advance Geodesic Photon Pulses
     for (const item of this.activeGeodesicPulses) {
@@ -1234,11 +1039,11 @@ export class BlackHoleSceneController {
       item.mesh.position.lerpVectors(p0, p1, frac);
     }
 
-    // 7. Smooth Camera Preset Interpolation or Probe Follow Mode
-    if (this.followProbeMode) {
-      _vec3A.set(probeX * 1.32, probeY + 1.8, probeZ * 1.32);
+    // 7. Smooth Camera Preset Interpolation or Star Follow Mode
+    if (this.followStarMode) {
+      _vec3A.set(starX * 1.35, starY + 2.0, starZ * 1.35);
       this.camera.position.lerp(_vec3A, 1 - Math.exp(-5.0 * rawDelta));
-      this.controls.target.lerp(this.orbitalProbeGroup.position, 1 - Math.exp(-7.0 * rawDelta));
+      this.controls.target.lerp(this.starS2Mesh.position, 1 - Math.exp(-7.0 * rawDelta));
     } else if (this.cameraTransitionActive) {
       const factor = 1 - Math.exp(-5.5 * rawDelta);
       this.camera.position.lerp(this.targetCamPos, factor);
@@ -1261,6 +1066,59 @@ export class BlackHoleSceneController {
   private startLoop() {
     this.clock.start();
     this.frameId = requestAnimationFrame(this.tick);
+  }
+
+  public getOverheadTelemetry(): OverheadTelemetryData {
+    const metrics = computeRelativisticMetrics(this.params);
+    const starR = this.params.probeRadiusRs;
+    const starAngle = this.starOrbitAngle;
+    const starX = Math.cos(starAngle) * starR;
+    const starZ = -Math.sin(starAngle) * starR;
+    const starAngleDeg = ((Math.atan2(starZ, starX) * 180 / Math.PI) + 360) % 360;
+
+    const eventHorizonRs = metrics.eventHorizonRg * 0.5;
+    const photonSphereRs = metrics.photonSphereRg * 0.5;
+    const iscoRs = metrics.iscoProgradeRg * 0.5;
+    const ergosphereRs = 1.0;
+    const accretionInnerRs = iscoRs;
+    const accretionOuterRs = 5.8;
+
+    const scale = Math.max(0.1, 1.75 * this.currentScale);
+    const geodesics = this.activeGeodesicPulses.map((item) => {
+      const lineMat = item.line.material as THREE.LineBasicMaterial;
+      return {
+        outcome: lineMat.color.getHexString(),
+        colorHex: lineMat.color.getHex(),
+        points: item.points.map((p) => ({
+          x: p.x / scale,
+          z: p.z / scale,
+        })),
+        currentPos: {
+          x: item.mesh.position.x / scale,
+          z: item.mesh.position.z / scale,
+        },
+      };
+    });
+
+    return {
+      probeX: starX,
+      probeZ: starZ,
+      probeRadiusRs: starR,
+      probeRadiusRg: starR * 2,
+      probeAngleDeg: starAngleDeg,
+      probeAngleRad: starAngle,
+      probeOrbitalBeta: metrics.probeOrbitalBeta,
+      probeTimeDilationFactor: metrics.probeTimeDilationFactor,
+      probeRedshiftZ: metrics.probeRedshiftZ,
+      eventHorizonRs,
+      photonSphereRs,
+      iscoRs,
+      ergosphereRs,
+      accretionInnerRs,
+      accretionOuterRs,
+      spin: this.params.spin,
+      geodesics,
+    };
   }
 
   public captureSnapshotDataUrl(): string {

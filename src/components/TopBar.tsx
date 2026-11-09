@@ -25,7 +25,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         }}
         className="font-display text-lg font-bold tracking-tight text-slate-100 whitespace-nowrap shrink-0"
       >
-        black hole interactive vis
+        Black Hole Interactive Visualizer
       </a>
 
       {/* Zone 2: 4-5 concise single-line navigation links */}

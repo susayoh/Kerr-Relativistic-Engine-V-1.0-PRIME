@@ -139,7 +139,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               }`}
             >
               <Camera className="w-3.5 h-3.5" />
-              <span>Camera & Probe</span>
+              <span>Camera & Stars</span>
             </button>
             <button
               type="button"
@@ -218,7 +218,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
 
         {/* TAB 1: Spacetime & Accretion Disk Parameters */}
         {activeTab === 'spacetime' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Mass Slider */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs">
@@ -300,15 +300,15 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             {/* Relativistic Doppler Beaming */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Doppler Beaming</span>
-                <span className="font-mono tabular-nums text-cyan-400 font-semibold">
+                <span className="text-slate-400">Doppler Boost (Planck Shift)</span>
+                <span className="font-mono tabular-nums text-amber-400 font-semibold">
                   {(params.dopplerStrength * 100).toFixed(0)}%
                 </span>
               </div>
               <input
                 type="range"
                 min={0}
-                max={1.5}
+                max={1.0}
                 step={0.05}
                 value={params.dopplerStrength}
                 onChange={(e) =>
@@ -320,36 +320,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 className="sci-slider w-full"
               />
               <div className="flex justify-between text-[11px] font-mono text-slate-500">
-                <span>Symmetric</span>
+                <span>Natural Planckian</span>
                 <span>Relativistic D³</span>
-              </div>
-            </div>
-
-            {/* Gravitational Lensing Halo */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Einstein Lensing</span>
-                <span className="font-mono tabular-nums text-slate-100 font-semibold">
-                  {(params.lensingStrength * 100).toFixed(0)}%
-                </span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={1.5}
-                step={0.05}
-                value={params.lensingStrength}
-                onChange={(e) =>
-                  onChangeParams((prev) => ({
-                    ...prev,
-                    lensingStrength: parseFloat(e.target.value),
-                  }))
-                }
-                className="sci-slider w-full"
-              />
-              <div className="flex justify-between text-[11px] font-mono text-slate-500">
-                <span>r_ph {metrics.photonSphereRg.toFixed(2)} R_g</span>
-                <span>Bent Halo</span>
               </div>
             </div>
           </div>
@@ -422,11 +394,9 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 {(
                   [
                     { key: 'accretionDisk', label: 'Accretion Disk' },
-                    { key: 'lensedHalo', label: 'Lensed Arch' },
-                    { key: 'relativisticJets', label: 'Polar Jets' },
                     { key: 'ergosphereCage', label: 'Ergosphere' },
-                    { key: 'spacetimeGrid', label: 'Gravity Well' },
-                    { key: 'orbitalProbe', label: 'Probe' },
+                    { key: 'spacetimeGrid', label: 'Spacetime Well' },
+                    { key: 'orbitalStars', label: 'S-Star Cluster' },
                     { key: 'geodesicRays', label: 'Photon Rays' },
                   ] as const
                 ).map((item) => {
@@ -459,7 +429,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
           </div>
         )}
 
-        {/* TAB 3: Camera Choreography & Orbital Telemetry Probe */}
+        {/* TAB 3: Camera Choreography & Orbiting S-Stars */}
         {activeTab === 'camera' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
             {/* Camera Viewpoint Presets (6 cols) */}
@@ -470,9 +440,9 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   [
                     { id: 'equatorial', label: 'Equatorial Plane' },
                     { id: 'grazing', label: 'Grazing Horizon' },
-                    { id: 'polar', label: 'North Polar Jet' },
+                    { id: 'polar', label: 'Top-Down Polar' },
                     { id: 'well', label: 'Spacetime Funnel' },
-                    { id: 'probe', label: 'Lock to Probe' },
+                    { id: 'star', label: 'Lock to Star S2' },
                   ] as const
                 ).map((cam) => (
                   <button
@@ -492,10 +462,10 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               </div>
             </div>
 
-            {/* Probe Orbital Radius Scrubber (3 cols) */}
+            {/* Star S2 Orbital Radius Scrubber (3 cols) */}
             <div className="lg:col-span-3 flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">Probe Orbit (r / Rₛ)</span>
+                <span className="text-slate-400">Star S2 Orbit (r / Rₛ)</span>
                 <span className="font-mono tabular-nums text-cyan-400 font-semibold">
                   {params.probeRadiusRs.toFixed(2)} Rₛ
                 </span>

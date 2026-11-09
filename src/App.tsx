@@ -20,25 +20,24 @@ import { relativisticAudio } from './audio/relativisticAudio';
 import { TopBar } from './components/TopBar';
 import { ControlDock } from './components/ControlDock';
 import { PhysicsModal } from './components/PhysicsModal';
+import { OverheadMapWidget } from './components/OverheadMapWidget';
+import { TimeDilationDisplay } from './components/TimeDilationDisplay';
 
 const DEFAULT_PARAMS: BlackHoleParams = {
   massSolar: 43,
   spin: 0.90,
   accretionRate: 0.85,
   inclinationDeg: 78,
-  dopplerStrength: 1.0,
-  lensingStrength: 1.0,
+  dopplerStrength: 0.55,
   probeRadiusRs: 3.4,
   explodedSeparation: 0.0,
   timeScale: 1.0,
   spectralMode: 'blackbody',
   layers: {
     accretionDisk: true,
-    lensedHalo: true,
-    relativisticJets: true,
     ergosphereCage: true,
     spacetimeGrid: true,
-    orbitalProbe: true,
+    orbitalStars: true,
     geodesicRays: true,
   },
 };
@@ -46,6 +45,7 @@ const DEFAULT_PARAMS: BlackHoleParams = {
 export default function App() {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const sceneControllerRef = useRef<BlackHoleSceneController | null>(null);
+  const [controllerInstance, setControllerInstance] = useState<BlackHoleSceneController | null>(null);
 
   const [params, setParams] = useState<BlackHoleParams>(DEFAULT_PARAMS);
   const [activePresetId, setActivePresetId] = useState<string>('sgra');
@@ -83,10 +83,12 @@ export default function App() {
       onHoverCoordsChange: (coords) => setHoverCoords(coords),
     });
     sceneControllerRef.current = controller;
+    setControllerInstance(controller);
 
     return () => {
       controller.dispose();
       sceneControllerRef.current = null;
+      setControllerInstance(null);
       relativisticAudio.dispose();
     };
   }, []);
@@ -174,59 +176,85 @@ export default function App() {
           className="absolute inset-0 w-full h-full cursor-crosshair"
         />
 
-        {/* Minimal Top-Left Astrophysical Target Specification Badge (Unobstructed Center) */}
-        <div className="absolute top-4 left-6 z-10 pointer-events-none max-w-sm">
-          <div className="text-xs font-mono text-slate-400">
-            <span>{activePreset.designation}</span>
-            <span className="mx-1.5" aria-hidden="true">·</span>
-            <span>{activePreset.classification}</span>
-          </div>
-          <h1 className="font-display text-2xl font-bold text-slate-100 tracking-tight mt-0.5">
-            {activePreset.name}
-          </h1>
-          <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-slate-400 mt-1 tabular-nums">
-            <span>Mass {activePreset.realMassSolarDisplay}</span>
-            <span aria-hidden="true">·</span>
-            <span>Dist {activePreset.distanceLightYears}</span>
-            <span aria-hidden="true">·</span>
-            <span>Spin a* {params.spin.toFixed(3)}</span>
-          </div>
-          {hoverCoords && (
-            <div className="mt-2 text-[11px] font-mono text-cyan-300/90 tabular-nums">
-              Cursor Geodesic: r = {hoverCoords.rRs.toFixed(2)} Rₛ · φ = {hoverCoords.phiDeg.toFixed(0)}° · z = +{hoverCoords.redshiftZ.toFixed(3)}
+        {/* Left HUD Column: Astrophysical Target Specification + Real-Time Time Dilation Monitor */}
+        <div className="absolute top-4 left-6 z-10 flex flex-col items-start gap-3 pointer-events-none max-w-sm">
+          {/* Target Spec Badge */}
+          <div className="pointer-events-none">
+            <div className="text-xs font-mono text-slate-400">
+              <span>{activePreset.designation}</span>
+              <span className="mx-1.5" aria-hidden="true">·</span>
+              <span>{activePreset.classification}</span>
             </div>
-          )}
+            <h1 className="font-display text-2xl font-bold text-slate-100 tracking-tight mt-0.5">
+              {activePreset.name}
+            </h1>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-slate-400 mt-1 tabular-nums">
+              <span>Mass {activePreset.realMassSolarDisplay}</span>
+              <span aria-hidden="true">·</span>
+              <span>Dist {activePreset.distanceLightYears}</span>
+              <span aria-hidden="true">·</span>
+              <span>Spin a* {params.spin.toFixed(3)}</span>
+            </div>
+            {hoverCoords && (
+              <div className="mt-2 text-[11px] font-mono text-cyan-300/90 tabular-nums">
+                Cursor Geodesic: r = {hoverCoords.rRs.toFixed(2)} Rₛ · φ = {hoverCoords.phiDeg.toFixed(0)}° · z = +{hoverCoords.redshiftZ.toFixed(3)}
+              </div>
+            )}
+          </div>
+
+          {/* Real-Time Local Time Dilation Display (dt/dτ) */}
+          <div className="pointer-events-auto">
+            <TimeDilationDisplay
+              probeRadiusRs={params.probeRadiusRs}
+              spin={params.spin}
+              timeScale={params.timeScale}
+              onSetProbeRadius={(newRadius) =>
+                setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
+              }
+            />
+          </div>
         </div>
 
-        {/* Interactive Click-to-Inspect Feature Popover (Only visible when user clicks a 3D subsystem) */}
-        {inspectedFeature && (
-          <div className="absolute top-4 right-6 z-20 w-80 bg-[#080c16]/95 border border-slate-800 rounded-lg p-3.5 shadow-xl pointer-events-auto">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="text-[11px] font-mono text-amber-400">
-                  {inspectedFeature.subtitle}
+        {/* Right HUD Column: Interactive Feature Card + 2D Overhead Map Widget */}
+        <div className="absolute top-4 right-6 z-20 flex flex-col items-end gap-3 pointer-events-auto">
+          {/* Interactive Click-to-Inspect Feature Popover (Only visible when user clicks a 3D subsystem) */}
+          {inspectedFeature && (
+            <div className="w-80 bg-[#080c16]/95 border border-slate-800 rounded-lg p-3.5 shadow-xl pointer-events-auto">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-[11px] font-mono text-amber-400">
+                    {inspectedFeature.subtitle}
+                  </div>
+                  <h3 className="font-display text-sm font-bold text-slate-100 mt-0.5">
+                    {inspectedFeature.title}
+                  </h3>
                 </div>
-                <h3 className="font-display text-sm font-bold text-slate-100 mt-0.5">
-                  {inspectedFeature.title}
-                </h3>
+                <button
+                  type="button"
+                  onClick={() => setInspectedFeature(null)}
+                  className="p-1 text-slate-400 hover:text-slate-100 rounded cursor-pointer"
+                  aria-label="Close inspection card"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setInspectedFeature(null)}
-                className="p-1 text-slate-400 hover:text-slate-100 rounded cursor-pointer"
-                aria-label="Close inspection card"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+              <div className="mt-2 px-2 py-1 bg-[#0d1322] border border-slate-800/90 rounded font-mono text-xs text-cyan-300">
+                {inspectedFeature.formula}
+              </div>
+              <p className="mt-2 text-xs text-slate-300 leading-relaxed">
+                {inspectedFeature.description}
+              </p>
             </div>
-            <div className="mt-2 px-2 py-1 bg-[#0d1322] border border-slate-800/90 rounded font-mono text-xs text-cyan-300">
-              {inspectedFeature.formula}
-            </div>
-            <p className="mt-2 text-xs text-slate-300 leading-relaxed">
-              {inspectedFeature.description}
-            </p>
-          </div>
-        )}
+          )}
+
+          {/* 2D Overhead Map Widget: Top-Down Black Hole View & Real-Time Probe Tracking */}
+          <OverheadMapWidget
+            sceneController={controllerInstance || sceneControllerRef.current}
+            onSetProbeRadius={(newRadius) =>
+              setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
+            }
+          />
+        </div>
 
         {/* Unified Collapsible Bottom Control Dock */}
         <ControlDock

@@ -7,11 +7,9 @@ export interface BlackHoleParams {
   accretionRate: number;
   /** Observer inclination angle in degrees [5, 88] */
   inclinationDeg: number;
-  /** Doppler beaming intensity in [0, 1.5] */
+  /** Subtle relativistic Doppler boost intensity in [0, 1.0] */
   dopplerStrength: number;
-  /** Gravitational lensing strength in [0, 1.5] */
-  lensingStrength: number;
-  /** Orbital probe distance in units of Schwarzschild radii (r / Rs) [1.6, 12.0] */
+  /** Orbiting star tracer distance in units of Schwarzschild radii (r / Rs) [1.4, 10.0] */
   probeRadiusRs: number;
   /** Exploded vertical separation of anatomical layers [0, 1] */
   explodedSeparation: number;
@@ -22,11 +20,9 @@ export interface BlackHoleParams {
   /** Visibility toggles for composite layers */
   layers: {
     accretionDisk: boolean;
-    lensedHalo: boolean;
-    relativisticJets: boolean;
     ergosphereCage: boolean;
     spacetimeGrid: boolean;
-    orbitalProbe: boolean;
+    orbitalStars: boolean;
     geodesicRays: boolean;
   };
 }
@@ -55,12 +51,11 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       spin: 0.90,
       accretionRate: 0.85,
       inclinationDeg: 78,
-      dopplerStrength: 1.0,
-      lensingStrength: 1.0,
+      dopplerStrength: 0.55,
       probeRadiusRs: 3.4,
       spectralMode: 'blackbody',
     },
-    description: 'Supermassive black hole at the dynamical center of the Milky Way, imaged by the Event Horizon Telescope collaboration.',
+    description: 'Supermassive black hole at the dynamical center of the Milky Way, imaged by the Event Horizon Telescope collaboration and tracked via orbiting S-stars.',
   },
   {
     id: 'm87',
@@ -74,12 +69,11 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       spin: 0.94,
       accretionRate: 1.45,
       inclinationDeg: 63,
-      dopplerStrength: 1.15,
-      lensingStrength: 1.15,
+      dopplerStrength: 0.65,
       probeRadiusRs: 4.0,
       spectralMode: 'eht230ghz',
     },
-    description: 'Colossal active galactic nucleus powering a 5,000-light-year relativistic plasma jet via the Blandford-Znajek mechanism.',
+    description: 'Colossal active galactic nucleus powering a 5,000-light-year relativistic collimated plasma jet via the Blandford-Znajek mechanism.',
   },
   {
     id: 'cygx1',
@@ -93,8 +87,7 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       spin: 0.998,
       accretionRate: 1.75,
       inclinationDeg: 82,
-      dopplerStrength: 1.35,
-      lensingStrength: 1.05,
+      dopplerStrength: 0.70,
       probeRadiusRs: 2.2,
       spectralMode: 'xray',
     },
@@ -112,8 +105,7 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       spin: 0.68,
       accretionRate: 0.45,
       inclinationDeg: 45,
-      dopplerStrength: 0.8,
-      lensingStrength: 1.2,
+      dopplerStrength: 0.50,
       probeRadiusRs: 3.1,
       spectralMode: 'doppler',
     },
@@ -182,12 +174,10 @@ export function computeRelativisticMetrics(params: BlackHoleParams): DerivedRela
 
   // Probe position in Rg (since probeRadiusRs is in units of Rs = 2 Rg)
   const probeRg = Math.max(eventHorizonRg * 1.08, params.probeRadiusRs * 2.0);
-  const metricTerm = Math.max(0.02, 1.0 - 2.0 / probeRg);
-  const probeTimeDilationFactor = 1.0 / Math.sqrt(metricTerm);
-  const probeRedshiftZ = probeTimeDilationFactor - 1.0;
-
-  // Relativistic circular orbital velocity v/c in Kerr metric:
-  const probeOrbitalBeta = Math.min(0.92, 1.0 / Math.sqrt(Math.max(1.2, probeRg - 1.0 + a)));
+  const detailedDilation = computeDetailedTimeDilation(params.probeRadiusRs, a);
+  const probeTimeDilationFactor = detailedDilation.dt_dtau;
+  const probeRedshiftZ = detailedDilation.redshiftZ;
+  const probeOrbitalBeta = detailedDilation.orbitalBeta;
 
   // Peak Novikov-Thorne inner disk temperature (scaled for visual telemetry in K)
   const peakDiskTempK = Math.round(
@@ -210,6 +200,86 @@ export function computeRelativisticMetrics(params: BlackHoleParams): DerivedRela
     probeOrbitalBeta,
     peakDiskTempK,
     hawkingTempNanoK,
+  };
+}
+
+export interface DetailedTimeDilationMetrics {
+  /** Local coordinate time dilation factor dt/dτ relative to asymptotic observer (dt/dτ ≥ 1) */
+  dt_dtau: number;
+  /** Proper time rate dτ/dt (speed of probe clock relative to distant observer, dτ/dt ≤ 1) */
+  dtau_dt: number;
+  /** Static gravitational potential component: (dt/dτ)_grav = 1 / √(1 - 2/r_Rg) */
+  gravitationalFactor: number;
+  /** Special relativistic kinematic component: Lorentz factor γ = 1 / √(1 - β²) */
+  kinematicFactor: number;
+  /** Orbital velocity as fraction of speed of light (v/c = β) */
+  orbitalBeta: number;
+  /** Relativistic gravitational redshift z = (dt/dτ) - 1 */
+  redshiftZ: number;
+  /** Current radius in Schwarzschild radii (r / Rs) */
+  probeRadiusRs: number;
+  /** Current radius in gravitational radii (r / Rg) */
+  probeRadiusRg: number;
+  /** Formatted human-readable equivalence string */
+  humanEquivalence: string;
+}
+
+export function computeDetailedTimeDilation(
+  probeRadiusRs: number,
+  spin: number
+): DetailedTimeDilationMetrics {
+  const a = Math.min(0.998, Math.max(0, spin));
+  const eventHorizonRg = 1.0 + Math.sqrt(Math.max(0, 1.0 - a * a));
+  const probeRg = Math.max(eventHorizonRg * 1.02, probeRadiusRs * 2.0);
+
+  // 1. Static gravitational metric factor: g_00 = 1 - 2/r
+  const g00 = Math.max(0.001, 1.0 - 2.0 / probeRg);
+  const gravitationalFactor = 1.0 / Math.sqrt(g00);
+
+  // 2. Relativistic Keplerian orbital velocity v/c in Kerr spacetime
+  const orbitalBeta = Math.min(0.95, 1.0 / Math.sqrt(Math.max(1.15, probeRg - 1.0 + a)));
+  const kinematicFactor = 1.0 / Math.sqrt(Math.max(0.01, 1.0 - orbitalBeta * orbitalBeta));
+
+  // 3. Exact Kerr circular equatorial geodesic time dilation:
+  // dt/dτ = (r^(3/2) + a) / √(r³ - 3r² + 2a r^(3/2))
+  const r15 = Math.pow(probeRg, 1.5);
+  const num = r15 + a;
+  const denomSq = Math.pow(probeRg, 3) - 3.0 * Math.pow(probeRg, 2) + 2.0 * a * r15;
+
+  let dt_dtau: number;
+  if (denomSq > 0.002) {
+    dt_dtau = Math.max(1.0, num / Math.sqrt(denomSq));
+  } else {
+    dt_dtau = Math.max(1.0, gravitationalFactor * kinematicFactor);
+  }
+
+  dt_dtau = Math.min(99.99, dt_dtau);
+  const dtau_dt = 1.0 / dt_dtau;
+  const redshiftZ = dt_dtau - 1.0;
+
+  let humanEquivalence = '';
+  if (dt_dtau < 1.05) {
+    humanEquivalence = '1.0 hr on probe ≈ 1.0 hr for distant observer (weak field)';
+  } else if (dt_dtau < 2.0) {
+    const mins = Math.round((dt_dtau - 1.0) * 60);
+    humanEquivalence = `1 hr on probe = 1 hr ${mins} min for distant observer`;
+  } else if (dt_dtau < 24.0) {
+    humanEquivalence = `1 hr on probe = ${dt_dtau.toFixed(2)} hrs for distant observer`;
+  } else {
+    const days = (dt_dtau / 24).toFixed(1);
+    humanEquivalence = `1 hr on probe = ${days} days for distant observer (extreme field)`;
+  }
+
+  return {
+    dt_dtau,
+    dtau_dt,
+    gravitationalFactor,
+    kinematicFactor,
+    orbitalBeta,
+    redshiftZ,
+    probeRadiusRs,
+    probeRadiusRg: probeRg,
+    humanEquivalence,
   };
 }
 
