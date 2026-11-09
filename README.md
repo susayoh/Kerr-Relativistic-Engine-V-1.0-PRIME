@@ -9,7 +9,7 @@ An interactive real-time astrophysics simulation and WebGL raymarching engine mo
 ## Visual Overview
 
 ![Kerr Relativistic Engine](cosmic-vis-ton618-1794212230564.png)
-![Kerr Relativistic Engine](cosmic-vis-ton618-1794212343879.png)
+
 *Real-time raymarching visualization featuring an accretion disk with asymmetric Doppler beaming, an Einstein ring, and an embedding spacetime curvature grid.*
 
 ---
