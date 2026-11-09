@@ -607,6 +607,27 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 >
                   Anatomy Guide
                 </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      layers: {
+                        ...prev.layers,
+                        microlensingStar: !(prev.layers.microlensingStar ?? true),
+                      },
+                    }))
+                  }
+                  className={`col-span-2 px-2 py-1 text-xs rounded border transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                    params.layers.microlensingStar ?? true
+                      ? 'bg-neutral-800 text-cyan-300 font-medium border-neutral-700 shadow-sm'
+                      : 'bg-neutral-900 text-neutral-500 border-neutral-800'
+                  }`}
+                  title="Toggle Distant Background Star Microlensing Path & Relativistic Doublet Images"
+                >
+                  <Sparkles className="w-3 h-3 text-cyan-400" />
+                  <span>Microlensing Star (Paczyński Lensing)</span>
+                </button>
               </div>
             </div>
 

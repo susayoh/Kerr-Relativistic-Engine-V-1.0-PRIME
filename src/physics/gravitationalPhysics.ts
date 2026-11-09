@@ -114,6 +114,7 @@ export interface BlackHoleParams {
     pulsarBeams?: boolean;
     magneticField?: boolean;
     anatomyLines?: boolean;
+    microlensingStar?: boolean;
   };
 }
 

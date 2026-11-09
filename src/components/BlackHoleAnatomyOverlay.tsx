@@ -20,6 +20,7 @@ interface BlackHoleAnatomyOverlayProps {
   isVisible: boolean;
   onToggleVisible: () => void;
   onSelectPreset?: (presetId: string) => void;
+  isDockCollapsed?: boolean;
 }
 
 export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = ({
@@ -27,6 +28,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
   isVisible,
   onToggleVisible,
   onSelectPreset,
+  isDockCollapsed = false,
 }) => {
   const [anchors, setAnchors] = useState<AnatomyCalloutAnchor[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -156,7 +158,9 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
       <button
         type="button"
         onClick={onToggleVisible}
-        className="absolute bottom-20 left-4 sm:left-6 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/95 border border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-900 transition-all text-xs font-medium shadow-lg backdrop-blur-md cursor-pointer pointer-events-auto ring-1 ring-neutral-800/60"
+        className={`absolute left-4 sm:left-6 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/95 border border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-900 transition-all text-xs font-medium shadow-lg backdrop-blur-md cursor-pointer pointer-events-auto ring-1 ring-neutral-800/60 ${
+          isDockCollapsed ? 'bottom-12' : 'bottom-[48vh] sm:bottom-[44vh] md:bottom-24'
+        }`}
         title="Show Black Hole Anatomy & Discovery Guide"
       >
         <Eye className="w-3.5 h-3.5 text-amber-400/90" />
@@ -323,14 +327,18 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
         );
       })}
 
-      {/* Docked Anatomy & Discovery Guide HUD Card (Bottom-Left above Dock - completely clear of the central black hole) */}
+      {/* Docked Anatomy & Discovery Guide HUD Card (Bottom-Left above Dock - completely clear of controls) */}
       <div
         ref={cardRef}
-        className="absolute bottom-20 left-4 sm:left-6 pointer-events-auto z-25 w-[min(380px,calc(100vw-2.5rem))] transition-all duration-200"
+        className={`absolute left-4 sm:left-6 pointer-events-auto z-25 w-[min(380px,calc(100vw-2.5rem))] transition-all duration-200 ${
+          isDockCollapsed
+            ? 'bottom-12'
+            : 'bottom-[48vh] sm:bottom-[44vh] md:bottom-24'
+        }`}
       >
-        <div className="bg-black/95 border border-neutral-800 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden ring-1 ring-neutral-800/60">
+        <div className="bg-black/95 border border-neutral-800 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden ring-1 ring-neutral-800/60 max-h-[42vh] flex flex-col">
           {/* Header Bar */}
-          <div className="flex items-center justify-between px-3 py-2 bg-neutral-950 border-b border-neutral-800/80">
+          <div className="flex items-center justify-between px-3 py-2 bg-neutral-950 border-b border-neutral-800/80 shrink-0">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
               <h3 className="font-display text-xs font-bold uppercase tracking-wider text-amber-300">
@@ -393,7 +401,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
 
           {/* Body Content */}
           {!isPanelCollapsed && (
-            <div className="p-3.5 space-y-2.5">
+            <div className="p-3.5 space-y-2.5 overflow-y-auto">
               {activeTab === 'anatomy' && activeAnchor && (
                 <>
                   {/* Step Navigation Bar */}

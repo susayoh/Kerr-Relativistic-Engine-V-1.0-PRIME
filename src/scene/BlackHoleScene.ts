@@ -545,6 +545,17 @@ export class BlackHoleSceneController {
   // Accretion disk simulation time & uniform buffer state
   private accretionDiskSimTime = 0.0;
 
+  // Background Star Microlensing Simulation Subsystem
+  private microlensingGroup = new THREE.Group();
+  private microlensSourceStarMesh!: THREE.Mesh;
+  private microlensSourceGlowMesh!: THREE.Mesh;
+  private microlensPrimaryImageMesh!: THREE.Mesh;
+  private microlensSecondaryImageMesh!: THREE.Mesh;
+  private microlensEinsteinRingMesh!: THREE.Mesh;
+  private microlensPathTrail!: THREE.Line;
+  private microlensStarPhase = 0.0;
+  private microlensStarSpeed = 0.22;
+
   // Event Horizon Pulse & Accretion Disturbance subsystem
   private eventHorizonPulseGroup = new THREE.Group();
   private primaryPulseMesh!: THREE.Mesh;
@@ -660,6 +671,7 @@ export class BlackHoleSceneController {
     this.buildSpacetimeWellManifold();
     this.buildRelativisticLensingWarp();
     this.buildOrbitingStarCluster();
+    this.buildBackgroundMicrolensingStarSystem();
     this.buildInstancedDeepStarfield();
 
     this.scene.add(this.blackHoleGroup);
@@ -1259,6 +1271,113 @@ export class BlackHoleSceneController {
     this.scene.add(this.orbitalStarsGroup);
   }
 
+  private buildBackgroundMicrolensingStarSystem() {
+    this.microlensingGroup = new THREE.Group();
+
+    // 1. Unlensed Real Source Star (Moving behind the black hole on a distant celestial plane at z = -45)
+    const sourceGeo = new THREE.SphereGeometry(0.35, 16, 16);
+    const sourceMat = new THREE.MeshBasicMaterial({
+      color: 0x60a5fa, // Bright cyan/blue A-type giant
+      transparent: true,
+      opacity: 0.55,
+    });
+    this.microlensSourceStarMesh = new THREE.Mesh(sourceGeo, sourceMat);
+
+    const sourceAuraGeo = new THREE.SphereGeometry(0.75, 16, 16);
+    const sourceAuraMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.25,
+      blending: THREE.AdditiveBlending,
+    });
+    this.microlensSourceGlowMesh = new THREE.Mesh(sourceAuraGeo, sourceAuraMat);
+    this.microlensSourceStarMesh.add(this.microlensSourceGlowMesh);
+
+    this.microlensSourceStarMesh.layers.enable(1);
+    this.microlensSourceStarMesh.userData.feature = {
+      title: 'Distant Background Star (True Source Position)',
+      subtitle: 'Gravitational Microlensing Light Source',
+      formula: 'u = β / θ_E · A(u) = (u² + 2) / [u √(u² + 4)]',
+      description:
+        'A distant luminous star transiting behind the black hole. When unlensed, it appears as a faint point source. As it approaches alignment with the observer and black hole, gravitational deflection splits it into multiple magnified relativistic images.',
+    } satisfies InspectedFeature;
+    this.microlensingGroup.add(this.microlensSourceStarMesh);
+
+    // 2. Relativistic Primary Lensed Image (Magnified outer image)
+    const primaryGeo = new THREE.SphereGeometry(0.42, 24, 24);
+    const primaryMat = new THREE.MeshBasicMaterial({
+      color: 0x93c5fd,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+    });
+    this.microlensPrimaryImageMesh = new THREE.Mesh(primaryGeo, primaryMat);
+    this.microlensPrimaryImageMesh.layers.enable(1);
+    this.microlensPrimaryImageMesh.userData.feature = {
+      title: 'Lensed Primary Image (I₊)',
+      subtitle: 'Exterior Relativistic Lensed Image',
+      formula: 'θ₊ = ½ [β + √(β² + 4θ_E²)] · A₊ = ½ [(u² + 2) / (u √(u² + 4)) + 1]',
+      description:
+        'The outer magnified and warped image formed by light bending around the outside of the Einstein ring. As the star passes closer to the line of sight, this image brightens and stretches into an arc.',
+    } satisfies InspectedFeature;
+    this.microlensingGroup.add(this.microlensPrimaryImageMesh);
+
+    // 3. Relativistic Secondary Lensed Image (Magnified inverted inner image)
+    const secondaryGeo = new THREE.SphereGeometry(0.32, 24, 24);
+    const secondaryMat = new THREE.MeshBasicMaterial({
+      color: 0x60a5fa,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+    });
+    this.microlensSecondaryImageMesh = new THREE.Mesh(secondaryGeo, secondaryMat);
+    this.microlensSecondaryImageMesh.layers.enable(1);
+    this.microlensSecondaryImageMesh.userData.feature = {
+      title: 'Lensed Secondary Image (I₋)',
+      subtitle: 'Interior Relativistic Lensed Image',
+      formula: 'θ₋ = ½ [β - √(β² + 4θ_E²)] · A₋ = ½ [(u² + 2) / (u √(u² + 4)) - 1]',
+      description:
+        'The inner inverted image formed by rays deflected across the opposite limb of the gravitational well. When alignment is close to perfect, primary and secondary merge into a continuous circular Einstein ring.',
+    } satisfies InspectedFeature;
+    this.microlensingGroup.add(this.microlensSecondaryImageMesh);
+
+    // 4. Perfect Alignment Einstein Ring Arc
+    const ringGeo = new THREE.RingGeometry(1.65, 1.85, 64);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x93c5fd,
+      transparent: true,
+      opacity: 0.0,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    this.microlensEinsteinRingMesh = new THREE.Mesh(ringGeo, ringMat);
+    this.microlensingGroup.add(this.microlensEinsteinRingMesh);
+
+    // 5. Projected Celestial Transit Path Trail
+    const pathPoints: THREE.Vector3[] = [];
+    const steps = 80;
+    for (let s = 0; s <= steps; s++) {
+      const t = (s / steps) * 2 - 1; // -1 to 1
+      const x = t * 38;
+      const y = Math.sin(t * Math.PI * 0.75) * 3.5 + 2.0;
+      const z = -45;
+      pathPoints.push(new THREE.Vector3(x, y, z));
+    }
+    const pathGeo = new THREE.BufferGeometry().setFromPoints(pathPoints);
+    const pathMat = new THREE.LineDashedMaterial({
+      color: 0x38bdf8,
+      dashSize: 0.8,
+      gapSize: 0.5,
+      transparent: true,
+      opacity: 0.35,
+    });
+    this.microlensPathTrail = new THREE.Line(pathGeo, pathMat);
+    this.microlensPathTrail.computeLineDistances();
+    this.microlensingGroup.add(this.microlensPathTrail);
+
+    this.scene.add(this.microlensingGroup);
+  }
+
   private buildInstancedDeepStarfield() {
     const starCount = this.starfieldCount;
     const starGeo = new THREE.OctahedronGeometry(0.18, 1);
@@ -1355,6 +1474,99 @@ export class BlackHoleSceneController {
       this.starfieldInstanced.setMatrixAt(i, _mat4);
     }
     this.starfieldInstanced.instanceMatrix.needsUpdate = true;
+  }
+
+  /**
+   * Simulates a distant background star transiting behind the black hole.
+   * Computes authentic gravitational microlensing:
+   * - Paczyński magnification curve A(u) = (u² + 2) / [u √(u² + 4)]
+   * - Relativistic doublet image formation: θ± = ½ (u ± √(u² + 4)) θ_E
+   * - Continuous Einstein ring synthesis at close alignment (u < 0.25)
+   */
+  private updateBackgroundStarMicrolensing(simDelta: number) {
+    if (!this.microlensSourceStarMesh || !this.microlensingGroup) return;
+
+    const enabled = this.params.layers.microlensingStar !== false;
+    this.microlensingGroup.visible = enabled;
+    if (!enabled) return;
+
+    // Advance transit phase across celestial plane
+    this.microlensStarPhase += simDelta * this.microlensStarSpeed;
+    // Cyclic ping-pong transition along celestial transit path: [-1, 1]
+    const cycle = (Math.sin(this.microlensStarPhase) + 1.0) * 0.5; // [0, 1]
+    const t = cycle * 2.0 - 1.0; // [-1, 1]
+
+    // Celestial coordinates at distant plane z = -45
+    const sourceX = t * 34.0;
+    const sourceY = Math.sin(t * Math.PI * 0.75) * 3.2 + 1.8;
+    const sourceZ = -45.0;
+
+    this.microlensSourceStarMesh.position.set(sourceX, sourceY, sourceZ);
+
+    // Dynamic scale factor and Einstein radius
+    const rs = 1.75 * this.currentScale;
+    // Projected Einstein radius in scene units at z = 0 plane
+    const thetaE = Math.max(0.8, rs * 1.55);
+
+    // Compute line of sight from camera to black hole and project source star onto camera lens plane
+    const camPos = this.camera.position;
+    _vec3B.subVectors(this.controls.target, camPos).normalize(); // Look vector
+    _vec3A.subVectors(this.microlensSourceStarMesh.position, camPos); // Ray to source star
+    const starDist = _vec3A.length();
+    const starDir = _vec3A.normalize();
+
+    // Transverse projection vector relative to optical axis
+    _vec3C.crossVectors(_vec3B, starDir).crossVectors(_vec3C, _vec3B);
+    const transverseDist = _vec3C.length() * (starDist * 0.45);
+    const unitTransverse = _vec3C.normalize();
+
+    // Normalized impact parameter in units of Einstein radius: u = beta / theta_E
+    const u = Math.max(0.04, transverseDist / Math.max(0.1, thetaE));
+
+    // Paczyński Total Magnification: A(u) = (u² + 2) / [u √(u² + 4)]
+    const uSq = u * u;
+    const rootU = Math.sqrt(uSq + 4.0);
+    const totalMag = (uSq + 2.0) / (u * rootU);
+
+    // Individual Image Magnifications:
+    // A₊ = ½ (A + 1), A₋ = ½ (A - 1)
+    const magPlus = 0.5 * (totalMag + 1.0);
+    const magMinus = 0.5 * (totalMag - 1.0);
+
+    // Relativistic Image Angular Displacements:
+    // θ₊ = ½ [u + √(u² + 4)] θ_E (Outer magnified image)
+    // θ₋ = ½ [u - √(u² + 4)] θ_E (Inner inverted image on opposite limb)
+    const thetaPlus = 0.5 * (u + rootU) * thetaE;
+    const thetaMinus = 0.5 * (u - rootU) * thetaE;
+
+    // Position Primary Image (I₊) in front of the black hole
+    const posPlus = new THREE.Vector3().copy(this.blackHoleGroup.position).addScaledVector(unitTransverse, thetaPlus);
+    posPlus.z += 0.5; // Slight forward bias to remain crisply visible
+    this.microlensPrimaryImageMesh.position.copy(posPlus);
+
+    const scalePlus = Math.min(3.2, Math.max(0.35, Math.pow(magPlus, 0.42) * 0.45));
+    this.microlensPrimaryImageMesh.scale.set(scalePlus, scalePlus, scalePlus);
+    (this.microlensPrimaryImageMesh.material as THREE.MeshBasicMaterial).opacity = Math.min(1.0, 0.35 + magPlus * 0.18);
+
+    // Position Secondary Image (I₋) across the opposite limb
+    const posMinus = new THREE.Vector3().copy(this.blackHoleGroup.position).addScaledVector(unitTransverse, thetaMinus);
+    posMinus.z += 0.4;
+    this.microlensSecondaryImageMesh.position.copy(posMinus);
+
+    const scaleMinus = Math.min(2.4, Math.max(0.18, Math.pow(magMinus, 0.42) * 0.38));
+    this.microlensSecondaryImageMesh.scale.set(scaleMinus, scaleMinus, scaleMinus);
+    (this.microlensSecondaryImageMesh.material as THREE.MeshBasicMaterial).opacity = Math.min(0.95, magMinus * 0.22);
+
+    // Einstein Ring: When u < 0.42, light rays smear into a complete circular Einstein ring
+    if (this.microlensEinsteinRingMesh) {
+      this.microlensEinsteinRingMesh.quaternion.copy(this.camera.quaternion);
+      const ringScale = thetaE;
+      this.microlensEinsteinRingMesh.scale.set(ringScale, ringScale, ringScale);
+      const ringMat = this.microlensEinsteinRingMesh.material as THREE.MeshBasicMaterial;
+      const ringAlpha = Math.max(0.0, 1.0 - u / 0.42) * 0.75;
+      ringMat.opacity = ringAlpha;
+      this.microlensEinsteinRingMesh.visible = ringAlpha > 0.01;
+    }
   }
 
   private seedInitialGeodesics() {
@@ -1801,6 +2013,9 @@ export class BlackHoleSceneController {
     if (this.params.gravitationalLensing !== false) {
       this.updateGravitationalLensingOfStarfield();
     }
+
+    // 5b. Distant Background Star Gravitational Microlensing Simulation
+    this.updateBackgroundStarMicrolensing(simDelta);
 
     // 6. Advance Orbiting Star S2 along Relativistic Orbit
     const orbitSceneRadius = this.params.probeRadiusRs * 1.75 * this.currentScale;
@@ -2312,6 +2527,11 @@ export class BlackHoleSceneController {
     this.motionBlurRenderTarget?.dispose();
     this.postMaterial?.dispose();
     this.postQuad?.geometry?.dispose();
+    this.microlensSourceStarMesh?.geometry?.dispose();
+    this.microlensPrimaryImageMesh?.geometry?.dispose();
+    this.microlensSecondaryImageMesh?.geometry?.dispose();
+    this.microlensEinsteinRingMesh?.geometry?.dispose();
+    this.microlensPathTrail?.geometry?.dispose();
     this.renderer.dispose();
   }
 }

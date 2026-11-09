@@ -53,6 +53,7 @@ const DEFAULT_PARAMS: BlackHoleParams = {
     pulsarBeams: true,
     magneticField: true,
     anatomyLines: true,
+    microlensingStar: true,
   },
 };
 
@@ -234,6 +235,7 @@ export default function App() {
           isVisible={isAnatomyVisible}
           onToggleVisible={handleToggleAnatomyVisible}
           onSelectPreset={handleSelectPreset}
+          isDockCollapsed={isDockCollapsed}
         />
 
         {/* Left HUD Column: Astrophysical Target Specification + Real-Time Time Dilation Monitor */}
