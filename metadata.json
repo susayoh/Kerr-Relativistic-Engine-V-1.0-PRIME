@@ -1,0 +1,6 @@
+{
+  "name": "black hole interactive vis",
+  "description": "Interactive 3D relativistic black hole visualization featuring Kerr spacetime geodesics, Doppler-beamed accretion disk shaders, gravitational lensing, and live telemetry.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
