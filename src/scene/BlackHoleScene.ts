@@ -56,6 +56,8 @@ export interface VisualizerSettings {
   includeUiInExport: boolean;
   rapidAdjustmentRipples: boolean;
   accretionShockwaveEnabled: boolean;
+  secret1987Unlocked?: boolean;
+  secret1987Mode?: boolean;
 }
 
 export const isMobileDevice = (() => {
@@ -84,6 +86,8 @@ export const DEFAULT_VISUALIZER_SETTINGS: VisualizerSettings = {
   includeUiInExport: false,
   rapidAdjustmentRipples: true,
   accretionShockwaveEnabled: true,
+  secret1987Unlocked: false,
+  secret1987Mode: false,
 };
 
 
@@ -1912,6 +1916,7 @@ export class BlackHoleSceneController {
     this.buildOrbitingStarCluster();
     this.buildBackgroundMicrolensingStarSystem();
     this.buildInstancedDeepStarfield();
+    this.buildSecret1987System();
 
     this.scene.add(this.blackHoleGroup);
     this.scene.add(this.neutronStarGroup);
@@ -2700,6 +2705,77 @@ export class BlackHoleSceneController {
     this.neutronStarGroup.visible = false;
   }
 
+  private secret1987Group!: THREE.Group;
+  private secret1987EquatorialRing!: THREE.Group;
+  private secret1987NorthRing!: THREE.Mesh;
+  private secret1987SouthRing!: THREE.Mesh;
+
+  private buildSecret1987System() {
+    this.secret1987Group = new THREE.Group();
+    this.secret1987Group.visible = Boolean(this.settings.secret1987Mode);
+
+    // 1. SN 1987A Equatorial "Cosmic Pearl Necklace" Ring (24 glowing shocked-gas knots + golden torus)
+    this.secret1987EquatorialRing = new THREE.Group();
+    const eqTorusGeo = new THREE.TorusGeometry(6.8, 0.07, 16, 96);
+    eqTorusGeo.rotateX(Math.PI / 2);
+    const eqTorusMat = new THREE.MeshBasicMaterial({
+      color: 0xfbbf24,
+      transparent: true,
+      opacity: 0.72,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.secret1987EquatorialRing.add(new THREE.Mesh(eqTorusGeo, eqTorusMat));
+
+    const pearlCount = 24;
+    const pearlGeo = new THREE.SphereGeometry(0.22, 16, 16);
+    const pearlMat = new THREE.MeshBasicMaterial({
+      color: 0xfef08a,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    for (let i = 0; i < pearlCount; i++) {
+      const theta = (i / pearlCount) * Math.PI * 2;
+      const pearl = new THREE.Mesh(pearlGeo, pearlMat);
+      pearl.position.set(Math.cos(theta) * 6.8, 0, Math.sin(theta) * 6.8);
+      this.secret1987EquatorialRing.add(pearl);
+    }
+    this.secret1987Group.add(this.secret1987EquatorialRing);
+
+    // 2. SN 1987A Northern & Southern Bipolar Hourglass Rings
+    const outerRingGeo = new THREE.TorusGeometry(10.5, 0.085, 16, 112);
+    outerRingGeo.rotateX(Math.PI / 2);
+    const outerRingMat = new THREE.MeshBasicMaterial({
+      color: 0xe879f9,
+      transparent: true,
+      opacity: 0.65,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    this.secret1987NorthRing = new THREE.Mesh(outerRingGeo, outerRingMat);
+    this.secret1987NorthRing.position.set(0, 4.6, 0);
+    this.secret1987NorthRing.rotation.z = THREE.MathUtils.degToRad(26);
+    this.secret1987Group.add(this.secret1987NorthRing);
+
+    this.secret1987SouthRing = new THREE.Mesh(outerRingGeo, outerRingMat.clone());
+    this.secret1987SouthRing.position.set(0, -4.6, 0);
+    this.secret1987SouthRing.rotation.z = THREE.MathUtils.degToRad(-26);
+    this.secret1987Group.add(this.secret1987SouthRing);
+
+    this.secret1987Group.userData.feature = {
+      title: 'Protocol 1987 // SN 1987A Triple-Ring Nebula',
+      subtitle: 'Classified Supernova 1987A Circumstellar Hourglass Rings',
+      formula: 'SN 1987A (LMC · Feb 23, 1987) · E_ν ≈ 10⁵³ ergs',
+      description:
+        'Unlocked via Clearance Code 1987: Recreates the iconic glowing equatorial "Cosmic Pearl Necklace" and twin bipolar hourglass rings of Supernova 1987A.',
+    } satisfies InspectedFeature;
+
+    this.scene.add(this.secret1987Group);
+  }
+
   private buildBinaryAccretionSystem() {
     this.binarySystemGroup = new THREE.Group();
     this.binarySystemGroup.renderOrder = 15;
@@ -3038,8 +3114,17 @@ export class BlackHoleSceneController {
 
     if (this.spacetimeWellMesh) {
       const wellMat = this.spacetimeWellMesh.material as THREE.MeshStandardMaterial;
-      wellMat.emissiveIntensity = 0.45;
-      wellMat.opacity = 0.28 + this.pulseStrength * 0.12;
+      if (this.settings.secret1987Mode) {
+        wellMat.color.setHex(0xf59e0b);
+        wellMat.emissive.setHex(0xd946ef);
+        wellMat.emissiveIntensity = 0.72;
+        wellMat.opacity = 0.42 + this.pulseStrength * 0.14;
+      } else {
+        wellMat.color.setHex(0x06b6d4);
+        wellMat.emissive.setHex(0x0284c7);
+        wellMat.emissiveIntensity = 0.45;
+        wellMat.opacity = 0.28 + this.pulseStrength * 0.12;
+      }
     }
     this.lastWellExpansionProgress = this.expansionProgress;
   }
@@ -4334,6 +4419,15 @@ export class BlackHoleSceneController {
     this.eventHorizonMesh.scale.setScalar(effectiveScale);
     this.accretionDiskGroup.scale.setScalar(effectiveScale);
     this.neutronStarGroup.scale.setScalar(this.currentScale);
+    if (this.secret1987Group) {
+      this.secret1987Group.visible = Boolean(this.settings.secret1987Mode);
+      if (this.settings.secret1987Mode) {
+        this.secret1987Group.scale.setScalar(this.currentScale);
+        this.secret1987EquatorialRing.rotation.y += simDelta * 0.45;
+        this.secret1987NorthRing.rotation.y -= simDelta * 0.32;
+        this.secret1987SouthRing.rotation.y += simDelta * 0.32;
+      }
+    }
 
     // Update Binary Accretion System (Companion Star + Roche Lobe Overflow Plasma Stream)
     const isBinary = !isStar && this.params.systemCategory === 'binary';
@@ -5235,7 +5329,21 @@ export class BlackHoleSceneController {
   }
 
   public updateSettings(nextSettings: VisualizerSettings) {
+    const wasSecret1987 = Boolean(this.settings?.secret1987Mode);
     this.settings = { ...nextSettings };
+    const isSecret1987 = Boolean(nextSettings.secret1987Mode);
+
+    if (this.secret1987Group) {
+      this.secret1987Group.visible = isSecret1987;
+    }
+    if (isSecret1987 !== wasSecret1987) {
+      this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
+      if (isSecret1987) {
+        this.triggerAccretionShockwave(1.5, true);
+        this.spawnParameterRipple('mixed', 1.35);
+      }
+    }
+
     const isClassicDisk = nextSettings.accretionDiskStyle !== 'raymarched';
     const diskStyleVal = isClassicDisk ? 0.0 : 1.0;
     const isStar = isStellarCategory(this.params?.objectCategory);

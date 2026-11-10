@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Settings,
@@ -8,12 +8,19 @@ import {
   Sparkles,
   RotateCcw,
   Lock,
+  Unlock,
+  KeyRound,
+  ShieldAlert,
   Compass,
   Smartphone,
   Check,
   Vibrate,
   Download,
   Atom,
+  Music,
+  Play,
+  Pause,
+  Volume2,
 } from 'lucide-react';
 import {
   VisualizerSettings,
@@ -26,6 +33,7 @@ import {
   getActivePhysicsPresetId,
 } from '../physics/gravitationalPhysics';
 import { useHaptics } from '../hooks/useHaptics';
+import { trapQueenPlayer, TrapQueenPlayerState } from '../audio/trapQueenPlayer';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -51,10 +59,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSelectPhysicsPreset,
 }) => {
   const haptics = useHaptics({ enabled: settings.hapticsEnabled !== false });
+  const [secretPasswordInput, setSecretPasswordInput] = useState<string>('');
+  const [secretAuthError, setSecretAuthError] = useState<boolean>(false);
+  const [playerState, setPlayerState] = useState<TrapQueenPlayerState>(() =>
+    trapQueenPlayer.getState()
+  );
+
+  useEffect(() => {
+    return trapQueenPlayer.subscribe(setPlayerState);
+  }, []);
+
   const activePhysicsPresetId =
     typeof currentSpin === 'number' ? getActivePhysicsPresetId(currentSpin) : null;
 
   if (!isOpen) return null;
+
+  const handleVerifySecretPassword = (candidate?: string) => {
+    const code = (candidate ?? secretPasswordInput).trim();
+    if (code === '1987') {
+      haptics.success();
+      setSecretAuthError(false);
+      setSecretPasswordInput('');
+      onUpdateSettings((prev) => ({
+        ...prev,
+        secret1987Unlocked: true,
+        secret1987Mode: true,
+      }));
+    } else {
+      haptics.heavy();
+      setSecretAuthError(true);
+    }
+  };
 
   const toggleSetting = (key: keyof VisualizerSettings) => {
     haptics.light();
@@ -915,6 +950,278 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Section 7: Classified Super Secret Setting (Password: "1987") */}
+          <div
+            className={`rounded-xl p-4 space-y-3 border transition-all ${
+              settings.secret1987Unlocked
+                ? 'bg-gradient-to-r from-amber-950/45 via-fuchsia-950/35 to-neutral-950 border-amber-400/50 shadow-[0_0_24px_rgba(245,158,11,0.18)]'
+                : 'bg-neutral-950/95 border-rose-500/35'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider font-semibold">
+                {settings.secret1987Unlocked ? (
+                  <>
+                    <Unlock className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="text-amber-300">Classified Vault // Protocol 1987</span>
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="w-3.5 h-3.5 text-rose-400" />
+                    <span className="text-rose-300">Super Secret Setting (Password Protected)</span>
+                  </>
+                )}
+              </div>
+
+              <span
+                className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                  settings.secret1987Unlocked
+                    ? settings.secret1987Mode
+                      ? 'bg-amber-500/20 text-amber-200 border-amber-400/50'
+                      : 'bg-neutral-900 text-neutral-300 border-neutral-700'
+                    : 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                }`}
+              >
+                {settings.secret1987Unlocked
+                  ? settings.secret1987Mode
+                    ? '1987 OVERDRIVE ACTIVE'
+                    : 'UNLOCKED'
+                  : 'LOCKED'}
+              </span>
+            </div>
+
+            {!settings.secret1987Unlocked ? (
+              <div className="space-y-2.5 pt-1">
+                <p className="text-[11px] text-neutral-300 leading-relaxed">
+                  Enter the 4-digit classified clearance passcode to unlock the hidden experimental spacetime anomaly setting.
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={8}
+                    value={secretPasswordInput}
+                    onChange={(e) => {
+                      const nextVal = e.target.value;
+                      setSecretPasswordInput(nextVal);
+                      setSecretAuthError(false);
+                      if (nextVal.trim() === '1987') {
+                        handleVerifySecretPassword(nextVal);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleVerifySecretPassword();
+                      }
+                    }}
+                    placeholder="Enter 4-digit passcode..."
+                    aria-label="Secret Setting Passcode"
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-700 text-amber-200 font-mono text-xs tracking-widest placeholder:tracking-normal placeholder:text-neutral-500 outline-none focus:border-amber-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleVerifySecretPassword()}
+                    className="px-3.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/50 text-rose-200 font-mono text-xs font-semibold transition-colors cursor-pointer shrink-0"
+                  >
+                    Unlock
+                  </button>
+                </div>
+
+                {secretAuthError && (
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-rose-400 bg-rose-950/40 border border-rose-500/40 px-2.5 py-1.5 rounded-lg">
+                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                    <span>ACCESS DENIED — Invalid clearance code.</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between gap-4 p-3 rounded-lg bg-neutral-900/75 border border-amber-500/40">
+                  <div className="space-y-0.5 pr-2">
+                    <div className="text-xs font-bold text-amber-200 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Protocol 1987: SN 1987A Triple-Ring & Golden Synth Grid</span>
+                    </div>
+                    <div className="text-[11px] text-neutral-300 leading-snug">
+                      Unleashes the iconic glowing equatorial "Cosmic Pearl Necklace" and twin bipolar hourglass rings of Supernova 1987A, paired with a 1987 Golden-Magenta Cyber Spacetime Manifold and shockwave burst.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleSetting('secret1987Mode')}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      settings.secret1987Mode ? 'bg-amber-500' : 'bg-neutral-800'
+                    }`}
+                    aria-pressed={Boolean(settings.secret1987Mode)}
+                    aria-label="Toggle Protocol 1987 Secret Mode"
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        settings.secret1987Mode ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Vault Anthem Player: Trap Queen — Fetty Wap */}
+                <div className="p-3 rounded-lg bg-neutral-900/85 border border-fuchsia-500/40 space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-amber-400/50 bg-neutral-950 shrink-0 flex items-center justify-center">
+                        {playerState.artworkUrl ? (
+                          <img
+                            src={playerState.artworkUrl}
+                            alt="Fetty Wap - Trap Queen cover"
+                            className={`w-full h-full object-cover ${
+                              playerState.isPlaying ? 'scale-105 transition-transform duration-500' : ''
+                            }`}
+                          />
+                        ) : (
+                          <Music className="w-4 h-4 text-amber-300" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-white truncate">
+                            {playerState.trackTitle}
+                          </span>
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                            1738
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-mono text-fuchsia-300 truncate">
+                          {playerState.artistName} • Vault Anthem
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptics.medium();
+                        void trapQueenPlayer.togglePlay();
+                      }}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-mono text-xs font-bold transition-all cursor-pointer shrink-0 border ${
+                        playerState.isPlaying
+                          ? 'bg-amber-500 text-neutral-950 border-amber-300 shadow-[0_0_16px_rgba(245,158,11,0.45)]'
+                          : 'bg-fuchsia-500/20 hover:bg-fuchsia-500/30 text-amber-200 border-fuchsia-400/50'
+                      }`}
+                    >
+                      {playerState.isPlaying ? (
+                        <>
+                          <Pause className="w-3.5 h-3.5 fill-current" />
+                          <span>Pause Song</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Play Trap Queen</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Progress & Volume / Source Controls */}
+                  <div className="space-y-1.5 pt-1 border-t border-neutral-800/80">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => trapQueenPlayer.setMode('official')}
+                          className={`px-1.5 py-0.5 rounded border cursor-pointer transition-colors ${
+                            playerState.mode === 'official'
+                              ? 'bg-amber-500/20 border-amber-400/50 text-amber-200'
+                              : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-200'
+                          }`}
+                        >
+                          Full Song (3:42)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => trapQueenPlayer.setMode('synth1738')}
+                          className={`px-1.5 py-0.5 rounded border cursor-pointer transition-colors ${
+                            playerState.mode === 'synth1738'
+                              ? 'bg-fuchsia-500/20 border-fuchsia-400/50 text-fuchsia-200'
+                              : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-200'
+                          }`}
+                        >
+                          1738 Synth Beat
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Volume2 className="w-3 h-3 text-amber-300" />
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={playerState.volume}
+                          onChange={(e) =>
+                            trapQueenPlayer.setVolume(parseFloat(e.target.value))
+                          }
+                          aria-label="Trap Queen volume"
+                          className="w-16 accent-amber-400 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    {playerState.mode === 'official' && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] text-neutral-400 w-8">
+                          {Math.floor(playerState.currentTime / 60)}:
+                          {Math.floor(playerState.currentTime % 60)
+                            .toString()
+                            .padStart(2, '0')}
+                        </span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={Math.max(1, playerState.duration)}
+                          step={0.1}
+                          value={Math.min(playerState.currentTime, playerState.duration)}
+                          onChange={(e) =>
+                            trapQueenPlayer.seek(parseFloat(e.target.value))
+                          }
+                          aria-label="Seek Trap Queen track"
+                          className="flex-1 accent-fuchsia-400 cursor-pointer h-1"
+                        />
+                        <span className="font-mono text-[10px] text-neutral-400 w-8 text-right">
+                          {Math.floor(playerState.duration / 60)}:
+                          {Math.floor(playerState.duration % 60)
+                            .toString()
+                            .padStart(2, '0')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] font-mono text-neutral-400">
+                  <span className="text-amber-300/90">Clearance 1987 Verified</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptics.light();
+                      trapQueenPlayer.stopAndReset();
+                      onUpdateSettings((prev) => ({
+                        ...prev,
+                        secret1987Unlocked: false,
+                        secret1987Mode: false,
+                      }));
+                    }}
+                    className="flex items-center gap-1 text-neutral-400 hover:text-rose-300 transition-colors cursor-pointer"
+                  >
+                    <Lock className="w-3 h-3" />
+                    <span>Re-Lock Vault</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Modal Footer */}
@@ -922,7 +1229,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => onUpdateSettings(() => ({ ...DEFAULT_VISUALIZER_SETTINGS }))}
+              onClick={() => {
+                trapQueenPlayer.stopAndReset();
+                onUpdateSettings(() => ({ ...DEFAULT_VISUALIZER_SETTINGS }));
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white hover:border-neutral-700 transition-colors text-xs font-mono cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
