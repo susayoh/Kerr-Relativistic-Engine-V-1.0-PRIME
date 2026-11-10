@@ -52,6 +52,9 @@ export interface VisualizerSettings {
   showTimeDilation: boolean;
   showCursorTelemetry: boolean;
   showEventLog: boolean;
+  showMetricTelemetry: boolean;
+  kerrEngineEnabled: boolean;
+  kerrEngineTier: 'standard' | 'linear' | 'advanced' | 'ultra';
   phoneMode: boolean;
   hapticsEnabled: boolean;
   hapticsIntensity: number;
@@ -86,7 +89,10 @@ export const DEFAULT_VISUALIZER_SETTINGS: VisualizerSettings = {
   showOverheadMap: !isMobileDevice,
   showTimeDilation: false,
   showCursorTelemetry: !isMobileDevice,
-  showEventLog: true,
+  showEventLog: !isMobileDevice,
+  showMetricTelemetry: false,
+  kerrEngineEnabled: true,
+  kerrEngineTier: 'advanced',
   phoneMode: isMobileDevice,
   hapticsEnabled: true,
   hapticsIntensity: 1.0,

@@ -95,6 +95,9 @@ export interface UiTranslations {
   cursorReadoutLabel: string;
   eventLogTitle: string;
   eventLogLabel: string;
+  metricTelemetryTitle: string;
+  showMetricTelemetryTitle: string;
+  showMetricTelemetryDesc: string;
   visibleStatus: string;
   hiddenStatus: string;
   snapshotVideoSectionTitle: string;
@@ -186,6 +189,10 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     cursorReadoutLabel: 'Cursor Readout',
     eventLogTitle: 'Astrophysical Event Log',
     eventLogLabel: 'Event Log',
+    metricTelemetryTitle: 'Metric Tensor Telemetry',
+    showMetricTelemetryTitle: 'Show Metric Telemetry',
+    showMetricTelemetryDesc:
+      'Displays a real-time Boyer-Lindquist spacetime metric tensor (g_μν) evolution graph, ADM lapse readout, and Kretschmann curvature scalar overlay for advanced users.',
     visibleStatus: 'Visible',
     hiddenStatus: 'Hidden',
     snapshotVideoSectionTitle: 'Snapshot & Video Recording',
@@ -276,6 +283,10 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     cursorReadoutLabel: 'Cursor-Anzeige',
     eventLogTitle: 'Astrophysikalisches Ereignisprotokoll',
     eventLogLabel: 'Ereignisprotokoll',
+    metricTelemetryTitle: 'Metriktensor-Telemetrie',
+    showMetricTelemetryTitle: 'Show Metric Telemetry (Metrik-Telemetrie anzeigen)',
+    showMetricTelemetryDesc:
+      'Zeigt ein Echtzeit-Diagramm der Raumzeit-Metriktensor-Entwicklung (g_μν), ADM-Lapse und Kretschmann-Krümmungsinvariante für fortgeschrittene Nutzer.',
     visibleStatus: 'Sichtbar',
     hiddenStatus: 'Versteckt',
     snapshotVideoSectionTitle: 'Schnappschuss & Videoaufnahme',
@@ -366,6 +377,10 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     cursorReadoutLabel: 'カーソル計測',
     eventLogTitle: '天体物理イベントログ',
     eventLogLabel: 'イベントログ',
+    metricTelemetryTitle: '時空計量テンソル・テレメトリ',
+    showMetricTelemetryTitle: 'Show Metric Telemetry (計量テンソル波形を表示)',
+    showMetricTelemetryDesc:
+      '上級ユーザー向けに、ボイヤー・リンキスト座標系における時空計量テンソル (g_μν) のリアルタイム時間発展グラフとクレッチマン曲率不変量をオーバーレイ表示します。',
     visibleStatus: '表示中',
     hiddenStatus: '非表示',
     snapshotVideoSectionTitle: 'スナップショット＆動画録画',
@@ -456,6 +471,10 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     cursorReadoutLabel: 'Lectura del Cursor',
     eventLogTitle: 'Registro de Eventos Astrofísicos',
     eventLogLabel: 'Registro de Eventos',
+    metricTelemetryTitle: 'Telemetría del Tensor Métrico',
+    showMetricTelemetryTitle: 'Show Metric Telemetry (Mostrar Telemetría Métrica)',
+    showMetricTelemetryDesc:
+      'Muestra un gráfico en tiempo real de la evolución del tensor métrico del espacio-tiempo (g_μν) y el escalar de curvatura de Kretschmann para usuarios avanzados.',
     visibleStatus: 'Visible',
     hiddenStatus: 'Oculto',
     snapshotVideoSectionTitle: 'Capturas y Grabación de Video',
@@ -546,6 +565,10 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     cursorReadoutLabel: '光标实时读数',
     eventLogTitle: '天体物理事件日志',
     eventLogLabel: '事件日志',
+    metricTelemetryTitle: '时空度规张量遥测',
+    showMetricTelemetryTitle: 'Show Metric Telemetry (显示度规张量遥测图)',
+    showMetricTelemetryDesc:
+      '为高级用户叠加实时博耶-林德奎斯特时空度规张量 (g_μν) 演化波形图、ADM 流逝函数与克雷奇曼曲率标量读数。',
     visibleStatus: '显示',
     hiddenStatus: '隐藏',
     snapshotVideoSectionTitle: '截图导出与视频录制',

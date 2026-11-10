@@ -39,6 +39,14 @@ import {
   AstrophysicalLogEvent,
   AstrophysicalEventCategory,
 } from './components/EventLogOverlay';
+import { MetricTelemetryOverlay } from './components/MetricTelemetryOverlay';
+import {
+  KerrRelativityEngineModal,
+  KerrEngineLogViewerModal,
+  KerrEngineRunLog,
+  KerrEngineTierId,
+  generateKerrEngineCalculationRun,
+} from './components/KerrRelativityEngineModal';
 import { useHaptics, setGlobalHapticIntensity } from './hooks/useHaptics';
 import { TRANSLATIONS } from './i18n/translations';
 import { toPng, toCanvas } from 'html-to-image';
@@ -93,6 +101,15 @@ export default function App() {
   const [isCosmicScaleModalOpen, setIsCosmicScaleModalOpen] = useState<boolean>(false);
   const [isBackgroundModalOpen, setIsBackgroundModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [isKerrLogModalOpen, setIsKerrLogModalOpen] = useState<boolean>(false);
+  const [activeKerrTerminalRun, setActiveKerrTerminalRun] = useState<KerrEngineRunLog | null>(null);
+  const [kerrEngineLogs, setKerrEngineLogs] = useState<KerrEngineRunLog[]>(() => [
+    generateKerrEngineCalculationRun(
+      ASTROPHYSICAL_PRESETS[0],
+      DEFAULT_PARAMS,
+      DEFAULT_VISUALIZER_SETTINGS.kerrEngineTier
+    ),
+  ]);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
   const [isSingularityCollapsed, setIsSingularityCollapsed] = useState<boolean>(true);
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -117,7 +134,14 @@ export default function App() {
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobileScreen(window.innerWidth <= 768);
+      const mobile = window.innerWidth <= 768;
+      setIsMobileScreen((prevMobile) => {
+        if (!prevMobile && mobile) {
+          // Auto-turn off Event Log when entering phone viewport
+          setSettings((s) => (s.showEventLog ? { ...s, showEventLog: false } : s));
+        }
+        return mobile;
+      });
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -549,41 +573,91 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleToggleCleanMode, handleSetCleanMode, haptics]);
 
-  const handleSelectPreset = useCallback((presetId: string) => {
-    const found = ASTROPHYSICAL_PRESETS.find((p) => p.id === presetId);
-    if (!found) return;
-    setActivePresetId(found.id);
-    setParams((prev) => ({
-      ...prev,
-      ...found.params,
-      presetId: found.id,
-      trueMassSolar: found.trueMassSolar,
-      objectCategory: found.category,
-      // Ensure ergosphere, anatomy guide, and stars remain off when clicking a black hole
-      layers: {
-        ...prev.layers,
-        ...(found.params.layers || {}),
-        ergosphereCage: false,
-        orbitalStars: false,
-        microlensingStar: false,
-        geodesicRays: false,
-        anatomyLines: false,
-      },
-    }));
+  const handleCompleteKerrDeploy = useCallback(
+    (run: KerrEngineRunLog) => {
+      setActiveKerrTerminalRun(null);
+      const found =
+        ASTROPHYSICAL_PRESETS.find((p) => p.id === run.presetId) || ASTROPHYSICAL_PRESETS[0];
 
-    // Expand from singularity ball (or trigger pulse for compact/luminous stars)
-    if (found.category === 'black_hole') {
-      sceneControllerRef.current?.replaySingularityExpansion();
-    } else {
-      sceneControllerRef.current?.triggerEventHorizonPulse(found.category);
-    }
-    relativisticAudio.triggerAccretionShockPulse(isStellarCategory(found.category));
-    appendLogEvent(
-      'system',
-      `Target locked: ${found.name}`,
-      `${found.classification} · Mass: ${found.plainMassExplanation}`
-    );
-  }, [appendLogEvent]);
+      if (found.category === 'black_hole') {
+        sceneControllerRef.current?.replaySingularityExpansion();
+      } else {
+        sceneControllerRef.current?.triggerEventHorizonPulse(found.category);
+      }
+      relativisticAudio.triggerAccretionShockPulse(isStellarCategory(found.category));
+      appendLogEvent(
+        'metric',
+        `Kerr Relativity Engine [${run.tierName.toUpperCase()}] converged (${run.totalDurationMs} ms)`,
+        `${run.modelCode} · Cost: $${run.costUsd.toFixed(3)} · g_tt = ${run.summaryMetrics.g_tt.toFixed(3)}`
+      );
+    },
+    [appendLogEvent]
+  );
+
+  const handleTriggerManualKerrSolve = useCallback(
+    (tierOverride?: KerrEngineTierId) => {
+      const currentPreset =
+        ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
+      const tierToUse = tierOverride || settings.kerrEngineTier || 'advanced';
+      const run = generateKerrEngineCalculationRun(currentPreset, params, tierToUse);
+      setKerrEngineLogs((prev) => [run, ...prev.slice(0, 29)]);
+      setActiveKerrTerminalRun(run);
+    },
+    [activePresetId, params, settings.kerrEngineTier]
+  );
+
+  const handleSelectPreset = useCallback(
+    (presetId: string) => {
+      const found = ASTROPHYSICAL_PRESETS.find((p) => p.id === presetId);
+      if (!found) return;
+      setActivePresetId(found.id);
+
+      const nextParams: BlackHoleParams = {
+        ...params,
+        ...found.params,
+        presetId: found.id,
+        trueMassSolar: found.trueMassSolar,
+        objectCategory: found.category,
+        // Ensure ergosphere, anatomy guide, and stars remain off when clicking a black hole
+        layers: {
+          ...params.layers,
+          ...(found.params.layers || {}),
+          ergosphereCage: false,
+          orbitalStars: false,
+          microlensingStar: false,
+          geodesicRays: false,
+          anatomyLines: false,
+        },
+      };
+      setParams(nextParams);
+
+      const run = generateKerrEngineCalculationRun(
+        found,
+        nextParams,
+        settings.kerrEngineTier || 'advanced'
+      );
+      setKerrEngineLogs((prev) => [run, ...prev.slice(0, 29)]);
+
+      appendLogEvent(
+        'system',
+        `Target locked: ${found.name}`,
+        `${found.classification} · Mass: ${found.plainMassExplanation}`
+      );
+
+      // If Real-Time Kerr Relativity Engine pre-load terminal is enabled, stream calculation before deploying 3D expansion
+      if (settings.kerrEngineEnabled !== false) {
+        setActiveKerrTerminalRun(run);
+      } else {
+        if (found.category === 'black_hole') {
+          sceneControllerRef.current?.replaySingularityExpansion();
+        } else {
+          sceneControllerRef.current?.triggerEventHorizonPulse(found.category);
+        }
+        relativisticAudio.triggerAccretionShockPulse(isStellarCategory(found.category));
+      }
+    },
+    [appendLogEvent, params, settings.kerrEngineEnabled, settings.kerrEngineTier]
+  );
 
   const handleResetParams = useCallback(() => {
     const currentPreset =
@@ -1220,6 +1294,24 @@ export default function App() {
           </div>
         )}
 
+        {/* Top-Right Real-Time Spacetime Metric Tensor Evolution Overlay */}
+        {!isCleanMode && Boolean(settings.showMetricTelemetry) && (
+          <MetricTelemetryOverlay
+            params={params}
+            metrics={metrics}
+            sceneController={controllerInstance || sceneControllerRef.current}
+            hoverCoords={hoverCoords}
+            onChangeProbeRadius={(newRadius) =>
+              setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
+            }
+            onClose={() =>
+              setSettings((prev) => ({ ...prev, showMetricTelemetry: false }))
+            }
+            isPhoneMode={isPhone}
+            language={settings.language || 'en'}
+          />
+        )}
+
         {/* Bottom-Left Real-Time Astrophysical Event Log Overlay */}
         {!isCleanMode && settings.showEventLog !== false && (
           <EventLogOverlay
@@ -1332,6 +1424,35 @@ export default function App() {
         isRecording={isRecording}
         recordingSeconds={recordingSeconds}
         onToggleRecording={handleToggleRecording}
+        kerrEngineLogs={kerrEngineLogs}
+        onOpenKerrLogModal={() => setIsKerrLogModalOpen(true)}
+        onTriggerKerrCalculation={handleTriggerManualKerrSolve}
+      />
+
+      {/* Real-Time Kerr Relativity Engine Pre-Load Terminal Modal */}
+      <KerrRelativityEngineModal
+        activeRun={activeKerrTerminalRun}
+        onCompleteDeploy={handleCompleteKerrDeploy}
+        onOpenSettingsLog={() => {
+          setIsSettingsModalOpen(true);
+          setIsKerrLogModalOpen(true);
+        }}
+      />
+
+      {/* Full-Screen Kerr Relativity Engine Calculation & Billing Log Modal */}
+      <KerrEngineLogViewerModal
+        isOpen={isKerrLogModalOpen}
+        onClose={() => setIsKerrLogModalOpen(false)}
+        logs={kerrEngineLogs}
+        activeTierId={settings.kerrEngineTier || 'advanced'}
+        onSelectTier={(nextTier) =>
+          setSettings((prev) => ({
+            ...prev,
+            kerrEngineEnabled: true,
+            kerrEngineTier: nextTier,
+          }))
+        }
+        onRerunCalculation={() => handleTriggerManualKerrSolve()}
       />
     </div>
   );

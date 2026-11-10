@@ -24,6 +24,10 @@ import {
   Video,
   Square,
   Globe,
+  Terminal,
+  Cpu,
+  Zap,
+  DollarSign,
 } from 'lucide-react';
 import {
   VisualizerSettings,
@@ -38,6 +42,11 @@ import {
 import { useHaptics } from '../hooks/useHaptics';
 import { trapQueenPlayer, TrapQueenPlayerState } from '../audio/trapQueenPlayer';
 import { AppLanguage, LANGUAGE_OPTIONS, TRANSLATIONS } from '../i18n/translations';
+import {
+  KerrEngineTierId,
+  KERR_ENGINE_TIERS,
+  KerrEngineRunLog,
+} from './KerrRelativityEngineModal';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -52,6 +61,9 @@ interface SettingsModalProps {
   isRecording?: boolean;
   recordingSeconds?: number;
   onToggleRecording?: () => void;
+  kerrEngineLogs?: KerrEngineRunLog[];
+  onOpenKerrLogModal?: () => void;
+  onTriggerKerrCalculation?: (tierOverride?: KerrEngineTierId) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -67,6 +79,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   isRecording = false,
   recordingSeconds = 0,
   onToggleRecording,
+  kerrEngineLogs = [],
+  onOpenKerrLogModal,
+  onTriggerKerrCalculation,
 }) => {
   const haptics = useHaptics({
     enabled: settings.hapticsEnabled !== false,
@@ -74,6 +89,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   });
   const [secretPasswordInput, setSecretPasswordInput] = useState<string>('');
   const [secretAuthError, setSecretAuthError] = useState<boolean>(false);
+  const [isInlineKerrLogOpen, setIsInlineKerrLogOpen] = useState<boolean>(false);
+  const [selectedInlineLogIdx, setSelectedInlineLogIdx] = useState<number>(0);
   const [playerState, setPlayerState] = useState<TrapQueenPlayerState>(() =>
     trapQueenPlayer.getState()
   );
@@ -129,7 +146,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const nextPhoneMode = !prev.phoneMode;
       if (nextPhoneMode) {
         // Apply optimized mobile layout preset:
-        // compact view, wider FOV for vertical smartphone screens, hide cluttering desktop radar/left HUD,
+        // compact view, wider FOV for vertical smartphone screens, hide cluttering desktop radar/left HUD/event log,
         // disable heavy motion blur for smooth 60fps mobile GPU rendering
         return {
           ...prev,
@@ -137,6 +154,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           showLeftHud: false,
           showOverheadMap: false,
           showCursorTelemetry: false,
+          showEventLog: false,
+          showMetricTelemetry: false,
           cameraFov: 56,
           motionBlurEnabled: false,
         };
@@ -148,6 +167,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           showLeftHud: true,
           showOverheadMap: true,
           showCursorTelemetry: true,
+          showEventLog: true,
           cameraFov: 46,
         };
       }
@@ -262,7 +282,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <ul className="text-[11px] text-neutral-400 space-y-1 mt-2 font-mono">
                   <li className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                    <span>Hides bulky desktop telemetry panels & overhead radar for full viewport visibility</span>
+                    <span>Hides bulky desktop telemetry panels, overhead radar & event log for full viewport visibility</span>
                   </li>
                   <li className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
@@ -394,6 +414,334 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Section 0.5: Real-Time Kerr Relativity Engine Calculation (4 Flagship Compute Tiers & Log Viewer) */}
+          <div
+            data-testid="kerr-engine-settings-section"
+            className="bg-gradient-to-br from-[#090d1a] via-neutral-950 to-neutral-950 border border-amber-500/40 rounded-xl p-4 space-y-3.5 shadow-[0_0_25px_rgba(245,158,11,0.08)]"
+          >
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 text-amber-300 font-mono text-[11px] uppercase tracking-wider font-bold">
+                <Terminal className="w-4 h-4 text-amber-400" />
+                <span>Real-Time Kerr Relativity Engine Calculation</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="view-kerr-engine-log-btn"
+                  onClick={() => {
+                    haptics.light();
+                    setIsInlineKerrLogOpen((prev) => !prev);
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[10px] font-bold border transition-all cursor-pointer ${
+                    isInlineKerrLogOpen
+                      ? 'bg-amber-500 text-neutral-950 border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                      : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border-amber-500/40'
+                  }`}
+                >
+                  <Terminal className="w-3 h-3" />
+                  <span>{isInlineKerrLogOpen ? 'Hide Log' : `View Log (${kerrEngineLogs.length})`}</span>
+                </button>
+
+                {onOpenKerrLogModal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptics.light();
+                      onOpenKerrLogModal();
+                    }}
+                    className="px-2 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-cyan-300 font-mono text-[10px] font-semibold cursor-pointer transition-colors"
+                    title="Open Full-Screen Kerr Relativity Engine Audit Log"
+                  >
+                    Full Log
+                  </button>
+                )}
+
+                <span
+                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                    settings.kerrEngineEnabled !== false
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                  }`}
+                >
+                  {settings.kerrEngineEnabled !== false ? 'ENGINE ACTIVE' : 'BYPASSED'}
+                </span>
+              </div>
+            </div>
+
+            {/* Enable / Disable Pre-Load Kerr Relativity Engine Terminal */}
+            <div className="flex items-start justify-between gap-4 pt-1">
+              <div className="space-y-1">
+                <div className="text-neutral-100 font-semibold text-xs flex items-center gap-2 flex-wrap">
+                  <span>Pre-Load Kerr Relativity Engine Terminal</span>
+                  <span className="text-[10px] font-mono text-amber-300 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.2 rounded">
+                    {KERR_ENGINE_TIERS[settings.kerrEngineTier || 'advanced'].modelCode}
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Executes the <strong className="text-amber-200">Kerr Relativity Engine</strong> terminal before any black hole or star loads, streaming exact Boyer-Lindquist metric tensors (<span className="font-mono text-cyan-300">g_μν</span>), Christoffel symbols, ISCO roots, and radiative transfer telemetry. Calculation speed, tensor precision, and compute cost scale directly with your selected tier.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => toggleSetting('kerrEngineEnabled')}
+                className={`w-12 h-6.5 rounded-full transition-colors p-0.5 shrink-0 cursor-pointer border ${
+                  settings.kerrEngineEnabled !== false
+                    ? 'bg-amber-500/40 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                    : 'bg-neutral-900 border-neutral-700'
+                }`}
+                aria-pressed={settings.kerrEngineEnabled !== false}
+                aria-label="Toggle Real-Time Kerr Relativity Engine Calculation"
+              >
+                <div
+                  className={`w-5 h-5 rounded-full transition-transform ${
+                    settings.kerrEngineEnabled !== false
+                      ? 'translate-x-5.5 bg-amber-300'
+                      : 'translate-x-0 bg-neutral-500'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* 4 Flagship Compute Tiers Grid: Standard, Linear, Advanced, Ultra */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {(Object.keys(KERR_ENGINE_TIERS) as KerrEngineTierId[]).map((tierKey) => {
+                const tier = KERR_ENGINE_TIERS[tierKey];
+                const isSelected = (settings.kerrEngineTier || 'advanced') === tierKey;
+
+                return (
+                  <button
+                    key={tier.id}
+                    type="button"
+                    data-testid={`kerr-tier-${tier.id}`}
+                    onClick={() => {
+                      haptics.medium();
+                      onUpdateSettings((prev) => ({
+                        ...prev,
+                        kerrEngineEnabled: true,
+                        kerrEngineTier: tier.id,
+                      }));
+                    }}
+                    className={`relative p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-amber-500/15 border-amber-400/80 shadow-[0_0_20px_rgba(245,158,11,0.16)] ring-1 ring-amber-400/40 text-white'
+                        : 'bg-neutral-900/75 border-neutral-800/90 hover:border-neutral-700 text-neutral-300'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1.5 mb-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-display font-bold text-xs uppercase tracking-wider text-white">
+                            {tier.name}
+                          </span>
+                          <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold ${tier.badgeClass}`}>
+                            {tier.modelCode}
+                          </span>
+                          {isSelected && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-amber-500/25 text-amber-200 border border-amber-400/50">
+                              <Check className="w-2.5 h-2.5" /> ACTIVE
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-mono text-[10px] font-bold text-emerald-300 bg-emerald-950/70 border border-emerald-500/40 px-1.5 py-0.5 rounded shrink-0">
+                          {tier.monthlyPriceDisplay}
+                        </span>
+                      </div>
+
+                      <div className="text-[10px] font-mono text-amber-200/90 mb-1">
+                        {tier.tagline}
+                      </div>
+
+                      <p className="text-[10px] text-neutral-400 leading-snug">
+                        {tier.description}
+                      </p>
+                    </div>
+
+                    {/* Speed, Performance & Quality Benchmark Bars */}
+                    <div className="mt-2.5 pt-2 border-t border-neutral-800/80 space-y-1.5 font-mono text-[9px]">
+                      <div className="flex items-center justify-between text-neutral-300">
+                        <span className="flex items-center gap-1">
+                          <Zap className="w-2.5 h-2.5 text-amber-400" />
+                          {tier.tflopsDisplay} ({tier.expectedLatencyDisplay})
+                        </span>
+                        <span className="text-emerald-300">{tier.costPerSolveDisplay}</span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-16 text-neutral-400 uppercase text-[8px]">Speed</span>
+                          <div className="flex-1 h-1.5 bg-neutral-950 rounded-full overflow-hidden border border-neutral-800">
+                            <div
+                              className="h-full bg-amber-400 rounded-full"
+                              style={{ width: `${tier.speedScore}%` }}
+                            />
+                          </div>
+                          <span className="w-7 text-right text-amber-300">{tier.speedScore}%</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="w-16 text-neutral-400 uppercase text-[8px]">Perf</span>
+                          <div className="flex-1 h-1.5 bg-neutral-950 rounded-full overflow-hidden border border-neutral-800">
+                            <div
+                              className="h-full bg-cyan-400 rounded-full"
+                              style={{ width: `${tier.performanceScore}%` }}
+                            />
+                          </div>
+                          <span className="w-7 text-right text-cyan-300">{tier.performanceScore}%</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="w-16 text-neutral-400 uppercase text-[8px]">Quality</span>
+                          <div className="flex-1 h-1.5 bg-neutral-950 rounded-full overflow-hidden border border-neutral-800">
+                            <div
+                              className="h-full bg-purple-400 rounded-full"
+                              style={{ width: `${tier.qualityScore}%` }}
+                            />
+                          </div>
+                          <span className="w-7 text-right text-purple-300">{tier.qualityScore}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Action Bar: Test Run Engine Now + View Calculation Log */}
+            <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between gap-2 flex-wrap font-mono text-[10px]">
+              <div className="flex items-center gap-2 text-neutral-400">
+                <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>
+                  Session Solves: <strong className="text-white">{kerrEngineLogs.length}</strong> · Accrued Compute:{' '}
+                  <strong className="text-emerald-300">
+                    ${kerrEngineLogs.reduce((acc, r) => acc + r.costUsd, 0).toFixed(3)} USD
+                  </strong>
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.medium();
+                    setIsInlineKerrLogOpen((prev) => !prev);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-amber-200 font-semibold cursor-pointer transition-colors"
+                >
+                  {isInlineKerrLogOpen ? 'Collapse Calculation Log' : 'View Log in Settings'}
+                </button>
+
+                {onTriggerKerrCalculation && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptics.medium();
+                      onClose();
+                      onTriggerKerrCalculation(settings.kerrEngineTier || 'advanced');
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 font-bold cursor-pointer transition-colors"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>Launch Kerr Engine Terminal</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Inline Expandable Kerr Relativity Engine Calculation Log inside Settings */}
+            {isInlineKerrLogOpen && (
+              <div
+                data-testid="settings-inline-kerr-log"
+                className="mt-2 p-3 rounded-xl bg-[#03060c] border border-amber-500/40 space-y-2.5 font-mono text-[10px]"
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 text-amber-300 font-bold uppercase">
+                    <Terminal className="w-3.5 h-3.5" />
+                    <span>Kerr Relativity Engine — Calculation & Logic Log</span>
+                  </div>
+                  {kerrEngineLogs.length > 1 && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {kerrEngineLogs.slice(0, 5).map((rLog, idx) => (
+                        <button
+                          key={rLog.id}
+                          type="button"
+                          onClick={() => setSelectedInlineLogIdx(idx)}
+                          className={`px-2 py-0.5 rounded border text-[9px] cursor-pointer ${
+                            selectedInlineLogIdx === idx
+                              ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-bold'
+                              : 'bg-neutral-900 border-slate-800 text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {rLog.targetName} ({rLog.tierName})
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {kerrEngineLogs[selectedInlineLogIdx] || kerrEngineLogs[0] ? (
+                  (() => {
+                    const activeLog = kerrEngineLogs[selectedInlineLogIdx] || kerrEngineLogs[0];
+                    return (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2 rounded-lg bg-neutral-950 border border-slate-800/90 text-[9.5px]">
+                          <div>
+                            <span className="text-slate-500 block">TARGET</span>
+                            <strong className="text-white">{activeLog.targetName}</strong> ({activeLog.massSolarDisplay})
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block">ENGINE TIER</span>
+                            <strong className="text-amber-300">{activeLog.modelCode}</strong> ({activeLog.tflopsPeak} TF)
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block">METRIC TENSOR</span>
+                            <strong className="text-cyan-300">
+                              g_tt={activeLog.summaryMetrics.g_tt.toFixed(3)} · g_rr=+{activeLog.summaryMetrics.g_rr.toFixed(2)}
+                            </strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block">SOLVE TIME & COST</span>
+                            <strong className="text-emerald-300">
+                              {activeLog.totalDurationMs} ms · ${activeLog.costUsd.toFixed(3)}
+                            </strong>
+                          </div>
+                        </div>
+
+                        <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+                          {activeLog.steps.map((st) => (
+                            <div
+                              key={st.id}
+                              className="p-2 rounded-lg bg-neutral-950/90 border border-slate-800/80 space-y-1"
+                            >
+                              <div className="flex items-center justify-between text-[9px]">
+                                <span className="text-amber-300 font-bold">
+                                  [{st.stepNumber}/08 · {st.phase}] <span className="text-cyan-300">$ {st.command}</span>
+                                </span>
+                                <span className="text-emerald-400">{st.residual}</span>
+                              </div>
+                              <div className="px-2 py-1 rounded bg-[#050914] border border-slate-800/70 text-amber-200 text-[10px] overflow-x-auto">
+                                {st.equation}
+                              </div>
+                              <div className="text-[9.5px] text-slate-300">
+                                <strong className="text-purple-300">LOGIC:</strong> {st.logicDecision}
+                              </div>
+                              <div className="text-[9px] text-slate-400">{st.telemetry}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="py-4 text-center text-slate-400">
+                    No calculations logged yet. Load a black hole or star to populate the Kerr Relativity Engine log.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Section 1: Physics Presets (General Relativistic Configurations) */}
@@ -1080,6 +1428,61 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="font-semibold text-xs mt-0.5">
                   {settings.showEventLog !== false ? t.visibleStatus : t.hiddenStatus}
                 </div>
+              </button>
+            </div>
+
+            {/* Show Metric Telemetry Checkbox (Real-Time Spacetime Metric Tensor Evolution Overlay) */}
+            <div className="flex items-center justify-between gap-4 pt-3 border-t border-neutral-900">
+              <label
+                htmlFor="show-metric-telemetry-checkbox"
+                className="flex items-start gap-2.5 cursor-pointer select-none"
+              >
+                <input
+                  id="show-metric-telemetry-checkbox"
+                  type="checkbox"
+                  checked={Boolean(settings.showMetricTelemetry)}
+                  onChange={() => toggleSetting('showMetricTelemetry')}
+                  className="mt-0.5 h-4 w-4 rounded border-neutral-700 bg-neutral-900 accent-purple-400 cursor-pointer shrink-0"
+                />
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-neutral-100 font-medium text-xs">
+                      {t.showMetricTelemetryTitle}
+                    </span>
+                    <span
+                      className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold ${
+                        settings.showMetricTelemetry
+                          ? 'border-purple-500/40 bg-purple-500/15 text-purple-300'
+                          : 'border-neutral-700 bg-neutral-900 text-neutral-400'
+                      }`}
+                    >
+                      {settings.showMetricTelemetry ? 'LIVE g_μν' : 'OFF'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 leading-relaxed">
+                    {t.showMetricTelemetryDesc}
+                  </p>
+                </div>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => toggleSetting('showMetricTelemetry')}
+                className={`w-11 h-6 rounded-full transition-colors p-0.5 shrink-0 cursor-pointer border ${
+                  settings.showMetricTelemetry
+                    ? 'bg-purple-500/30 border-purple-400/70'
+                    : 'bg-neutral-900 border-neutral-700'
+                }`}
+                aria-pressed={Boolean(settings.showMetricTelemetry)}
+                aria-label="Toggle Show Metric Telemetry"
+              >
+                <div
+                  className={`w-4.5 h-4.5 rounded-full transition-transform ${
+                    settings.showMetricTelemetry
+                      ? 'translate-x-5 bg-purple-300'
+                      : 'translate-x-0 bg-neutral-500'
+                  }`}
+                />
               </button>
             </div>
           </div>
