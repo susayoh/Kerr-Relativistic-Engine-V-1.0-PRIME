@@ -63,12 +63,12 @@ input[type="range"].sci-slider::-webkit-slider-thumb:hover {
   }
 
   input[type="range"].sci-slider::-webkit-slider-thumb {
-    width: 22px;
-    height: 22px;
-    border-radius: 5px;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
     background: #f59e0b;
     border: 2px solid #78350f;
-    box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.45);
   }
 
   /* Prevent browser double-tap zoom delays on interactive UI elements */
@@ -76,3 +76,36 @@ input[type="range"].sci-slider::-webkit-slider-thumb:hover {
     touch-action: manipulation;
   }
 }
+
+/* Hide scrollbars cleanly while preserving scroll functionality */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Subtle dark scrollbar for modals and telemetry panels */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(71, 85, 105, 0.5) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(71, 85, 105, 0.5);
+  border-radius: 9999px;
+}
+

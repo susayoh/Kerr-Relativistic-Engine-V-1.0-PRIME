@@ -34,6 +34,7 @@ interface EventLogOverlayProps {
   isDockCollapsed: boolean;
   isPhoneMode?: boolean;
   language?: AppLanguage;
+  inlineStack?: boolean;
 }
 
 const CATEGORY_STYLES: Record<
@@ -84,6 +85,7 @@ export const EventLogOverlay: React.FC<EventLogOverlayProps> = ({
   isDockCollapsed,
   isPhoneMode = false,
   language = 'en',
+  inlineStack = false,
 }) => {
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -96,31 +98,33 @@ export const EventLogOverlay: React.FC<EventLogOverlayProps> = ({
     el.scrollTop = el.scrollHeight;
   }, [events, isMinimized]);
 
-  // Dynamic bottom offset so the bottom-left Event Log never overlaps the ControlDock
+  // Dynamic bottom offset when not stacked in Left HUD Column
   const bottomPositionClass = isDockCollapsed
     ? 'bottom-12 sm:bottom-14'
     : isPhoneMode
       ? 'bottom-[198px]'
-      : 'bottom-44 sm:bottom-48 2xl:bottom-4';
+      : 'bottom-40 sm:bottom-44 2xl:bottom-4';
 
   const latestEvent = events.length > 0 ? events[events.length - 1] : null;
 
   return (
     <div
-      className={`absolute left-2 sm:left-4 ${bottomPositionClass} z-20 pointer-events-auto transition-all duration-200 ease-out ${
-        isPhoneMode ? 'w-[240px]' : 'w-72 sm:w-80'
-      }`}
+      className={`${
+        inlineStack
+          ? 'relative z-20 pointer-events-auto transition-all duration-200 ease-out'
+          : `absolute left-2 sm:left-4 ${bottomPositionClass} z-20 pointer-events-auto transition-all duration-200 ease-out`
+      } ${isPhoneMode ? 'w-[210px]' : 'w-60'}`}
     >
       <div className="bg-[#050811]/95 border border-slate-800/85 rounded-xl shadow-2xl overflow-hidden">
         {/* Header Bar */}
-        <div className="px-3 py-2 border-b border-slate-800/80 bg-neutral-950/70 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="px-2.5 py-1.5 border-b border-slate-800/80 bg-neutral-950/70 flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5 min-w-0">
             <Terminal className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-slate-100 truncate">
+            <span className="font-mono text-[10.5px] font-bold uppercase tracking-wider text-slate-100 truncate">
               {t.eventLogTitle || 'Event Log'}
             </span>
             <span
-              className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-semibold border ${
+              className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-semibold border shrink-0 ${
                 isPaused
                   ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
                   : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
@@ -172,7 +176,7 @@ export const EventLogOverlay: React.FC<EventLogOverlayProps> = ({
         {isMinimized && latestEvent && (
           <div
             onClick={() => setIsMinimized(false)}
-            className="px-3 py-1.5 flex items-center gap-2 text-[10px] font-mono text-slate-300 hover:bg-neutral-900/60 cursor-pointer truncate"
+            className="px-2.5 py-1.5 flex items-center gap-1.5 text-[10px] font-mono text-slate-300 hover:bg-neutral-900/60 cursor-pointer truncate"
           >
             <span
               className={`w-1.5 h-1.5 rounded-full shrink-0 ${
@@ -188,8 +192,8 @@ export const EventLogOverlay: React.FC<EventLogOverlayProps> = ({
         {!isMinimized && (
           <div
             ref={scrollContainerRef}
-            className={`p-2.5 overflow-y-auto space-y-1.5 font-mono ${
-              isPhoneMode ? 'max-h-28' : 'max-h-36 sm:max-h-44'
+            className={`p-1.5 overflow-y-auto no-scrollbar space-y-1.5 font-mono ${
+              isPhoneMode ? 'max-h-20' : 'max-h-[76px] 2xl:max-h-28'
             }`}
           >
             {events.length === 0 ? (

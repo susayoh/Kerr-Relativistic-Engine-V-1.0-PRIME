@@ -112,7 +112,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
 
       // Coordinate scaling: map boundary corresponds to maxRs
       const maxRs = 7.0 / zoomLevel;
-      const pixelsPerRs = (w / 2 - 14) / maxRs;
+      const pixelsPerRs = (Math.min(w, h) / 2 - 10) / maxRs;
 
       // 1. Clear background
       ctx.fillStyle = '#000000';
@@ -153,8 +153,8 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Small range label on right horizontal axis
-        if (radPx + cx < w - 24 && radPx > 20) {
+        // Small range label on right horizontal axis (even rings only to avoid crowding)
+        if (r % 2 === 0 && radPx + cx < w - 22 && radPx > 14) {
           ctx.fillStyle = '#475569';
           ctx.font = '8px monospace';
           ctx.fillText(`${r}Rₛ`, cx + radPx + 2, cy - 2);
@@ -350,7 +350,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
       const x = e.clientX - rect.left - rect.width / 2;
       const y = e.clientY - rect.top - rect.height / 2;
       const maxRs = 7.0 / zoomLevel;
-      const pixelsPerRs = (rect.width / 2 - 14) / maxRs;
+      const pixelsPerRs = (Math.min(rect.width, rect.height) / 2 - 10) / maxRs;
       const distRs = Math.hypot(x, y) / pixelsPerRs;
 
       // Clamp probe distance within realistic orbital boundaries [1.25 Rs, 6.5 Rs]
@@ -368,7 +368,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
       const x = e.clientX - rect.left - rect.width / 2;
       const y = e.clientY - rect.top - rect.height / 2;
       const maxRs = 7.0 / zoomLevel;
-      const pixelsPerRs = (rect.width / 2 - 14) / maxRs;
+      const pixelsPerRs = (Math.min(rect.width, rect.height) / 2 - 10) / maxRs;
       const distRs = Math.hypot(x, y) / pixelsPerRs;
       setHoverRadius(parseFloat(distRs.toFixed(2)));
     },
@@ -380,15 +380,15 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
   }, []);
 
   return (
-    <div className="w-64 bg-black/95 border border-neutral-800 rounded-lg shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
+    <div className="w-60 bg-black/95 border border-neutral-800 rounded-lg shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between px-3 py-2 bg-neutral-950 border-b border-neutral-800/80">
+      <div className="flex items-center justify-between px-2.5 py-1.5 bg-neutral-950 border-b border-neutral-800/80">
         <div className="flex items-center gap-1.5">
           <Compass className="w-3.5 h-3.5 text-amber-400/90" />
-          <span className="font-display text-xs font-semibold tracking-wide text-neutral-200 uppercase">
+          <span className="font-display text-[11px] font-semibold tracking-wide text-neutral-200 uppercase">
             Overhead Radar
           </span>
-          <span className="text-[10px] text-neutral-500 font-mono">2D X-Z</span>
+          <span className="text-[9px] text-neutral-500 font-mono">2D X-Z</span>
         </div>
 
         <div className="flex items-center gap-1">
@@ -417,9 +417,9 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
 
       {/* Main Viewport and Telemetry */}
       {!isMinimized && (
-        <div className="p-2.5 flex flex-col gap-2">
+        <div className="p-2 flex flex-col gap-1.5">
           {/* 2D Canvas */}
-          <div className="relative w-full aspect-square bg-black rounded border border-neutral-800/80 overflow-hidden">
+          <div className="relative w-full h-32 2xl:h-40 bg-black rounded border border-neutral-800/80 overflow-hidden">
             <canvas
               ref={canvasRef}
               onClick={handleCanvasClick}
@@ -449,51 +449,51 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
 
           {/* Real-Time Telemetry Strip */}
           {telemetry.orbitalStarsVisible ? (
-            <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono tabular-nums bg-neutral-950 p-2 rounded border border-neutral-800/80">
+            <div className="grid grid-cols-2 gap-1 text-[10px] font-mono tabular-nums bg-neutral-950 px-2 py-1.5 rounded border border-neutral-800/80">
               <div>
-                <span className="text-neutral-500 block text-[9px] uppercase">Star S2 Radius</span>
+                <span className="text-neutral-500 block text-[8.5px] uppercase leading-tight">Star S2 Radius</span>
                 <span className="text-neutral-200 font-semibold">
-                  {telemetry.rRs.toFixed(2)} <span className="text-neutral-500 text-[10px]">Rₛ</span>
+                  {telemetry.rRs.toFixed(2)} <span className="text-neutral-500 text-[9px]">Rₛ</span>
                 </span>
-                <span className="text-neutral-500 text-[10px] ml-1">
+                <span className="text-neutral-500 text-[9px] ml-1">
                   ({telemetry.rRg.toFixed(2)} R_g)
                 </span>
               </div>
 
               <div>
-                <span className="text-neutral-500 block text-[9px] uppercase">Azimuth (φ)</span>
+                <span className="text-neutral-500 block text-[8.5px] uppercase leading-tight">Azimuth (φ)</span>
                 <span className="text-amber-300/90 font-semibold">
                   {telemetry.phiDeg.toFixed(1)}°
                 </span>
               </div>
 
               <div>
-                <span className="text-neutral-500 block text-[9px] uppercase">Orbital Speed</span>
+                <span className="text-neutral-500 block text-[8.5px] uppercase leading-tight">Orbital Speed</span>
                 <span className="text-neutral-200 font-semibold">
-                  {(telemetry.beta * 100).toFixed(1)}% <span className="text-neutral-500 text-[10px]">c</span>
+                  {(telemetry.beta * 100).toFixed(1)}% <span className="text-neutral-500 text-[9px]">c</span>
                 </span>
               </div>
 
               <div>
-                <span className="text-neutral-500 block text-[9px] uppercase">Clock Dilation</span>
+                <span className="text-neutral-500 block text-[8.5px] uppercase leading-tight">Clock Dilation</span>
                 <span className="text-neutral-200 font-semibold">
-                  {telemetry.timeDilation.toFixed(3)} <span className="text-neutral-500 text-[10px]">dτ/dt</span>
+                  {telemetry.timeDilation.toFixed(3)} <span className="text-neutral-500 text-[9px]">dτ/dt</span>
                 </span>
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono tabular-nums bg-neutral-950 p-2 rounded border border-neutral-800/80">
+            <div className="grid grid-cols-2 gap-1 text-[10px] font-mono tabular-nums bg-neutral-950 px-2 py-1.5 rounded border border-neutral-800/80">
               <div>
-                <span className="text-neutral-500 block text-[9px] uppercase">Horizon (r₊)</span>
+                <span className="text-neutral-500 block text-[8.5px] uppercase leading-tight">Horizon (r₊)</span>
                 <span className="text-amber-300/90 font-semibold">
-                  {telemetry.eventHorizonRs.toFixed(2)} <span className="text-neutral-500 text-[10px]">Rₛ</span>
+                  {telemetry.eventHorizonRs.toFixed(2)} <span className="text-neutral-500 text-[9px]">Rₛ</span>
                 </span>
               </div>
 
               <div>
-                <span className="text-neutral-500 block text-[9px] uppercase">ISCO Boundary</span>
+                <span className="text-neutral-500 block text-[8.5px] uppercase leading-tight">ISCO Boundary</span>
                 <span className="text-cyan-300/90 font-semibold">
-                  {telemetry.iscoRs.toFixed(2)} <span className="text-neutral-500 text-[10px]">Rₛ</span>
+                  {telemetry.iscoRs.toFixed(2)} <span className="text-neutral-500 text-[9px]">Rₛ</span>
                 </span>
               </div>
             </div>
@@ -503,3 +503,4 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
     </div>
   );
 };
+

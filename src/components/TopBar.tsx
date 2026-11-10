@@ -66,9 +66,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   const activePreset = ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
 
   return (
-    <header className="relative z-20 flex items-center justify-between gap-1.5 sm:gap-4 px-2 sm:px-5 py-1.5 sm:py-2.5 bg-[#05070d]/95 border-b border-neutral-800 overflow-x-auto no-scrollbar">
+    <header className="relative z-20 flex items-center justify-between gap-1.5 sm:gap-2 px-2 sm:px-3.5 py-1.5 sm:py-2 bg-[#05070d]/95 border-b border-neutral-800 overflow-x-auto no-scrollbar">
       {/* Zone 1: Smart Brand, Active Target Badge & System Category Dropdown */}
-      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         <a
           href="#top"
           onClick={(e) => {
@@ -81,7 +81,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           <span className={isPhoneMode ? 'hidden sm:inline' : 'inline'}>{t.brandVisualizer}</span>
         </a>
 
-        <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
+        <div className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
           <span className="text-neutral-200 font-semibold">{activePreset.name}</span>
           <span className="text-neutral-600">·</span>
           <span
@@ -124,7 +124,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       {/* Zone 2: Smart Quick Presets Nav */}
-      <nav className="hidden lg:flex items-center gap-1 text-xs font-medium text-neutral-400 py-0.5 px-1 bg-neutral-950 border border-neutral-800/90 rounded-lg overflow-x-auto no-scrollbar max-w-xl">
+      <nav className="hidden 2xl:flex items-center gap-1 text-xs font-medium text-neutral-400 py-0.5 px-1 bg-neutral-950 border border-neutral-800/90 rounded-lg overflow-x-auto no-scrollbar max-w-xl">
         {ASTROPHYSICAL_PRESETS.map((preset) => {
           const isActive = activePresetId === preset.id;
           const isTon618 = preset.id === 'ton618';
@@ -156,7 +156,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       </nav>
 
       {/* Zone 3: Actions */}
-      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <div className="flex items-center gap-1 shrink-0">
         {/* Side-by-Side Compare Mode Toggle */}
         {onToggleCompareMode && (
           <button
@@ -166,7 +166,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               haptics.medium();
               onToggleCompareMode();
             }}
-            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
+            className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
               isCompareMode
                 ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.25)] font-bold'
                 : 'bg-neutral-900 text-cyan-300 border-cyan-500/40 hover:text-white hover:bg-neutral-800 hover:border-cyan-400'
@@ -185,7 +185,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             haptics.medium();
             onToggleCleanMode?.();
           }}
-          className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border bg-amber-500/15 text-amber-200 border-amber-500/40 hover:text-white hover:bg-amber-500/25 hover:border-amber-400 shadow-sm"
+          className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border bg-amber-500/15 text-amber-200 border-amber-500/40 hover:text-white hover:bg-amber-500/25 hover:border-amber-400 shadow-sm"
           title="Hide all UI elements for an unobstructed clean view (Shortcut: C / ESC)"
         >
           <EyeOff className="w-3.5 h-3.5 text-amber-400" />
@@ -199,7 +199,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             haptics.light();
             onToggleAnatomyVisible();
           }}
-          className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
+          className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
             isAnatomyVisible
               ? 'bg-neutral-800 text-amber-300 border-neutral-700 shadow-sm'
               : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-neutral-200 hover:bg-neutral-850'
@@ -221,7 +221,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             haptics.light();
             onOpenBackgroundModal();
           }}
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-neutral-300 bg-neutral-900 border border-neutral-800 rounded-md hover:bg-neutral-800 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          className="hidden sm:flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-300 bg-neutral-900 border border-neutral-800 rounded-md hover:bg-neutral-800 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           title={`Active Background: ${BACKGROUND_THEMES[activeBackgroundTheme]?.name || 'Galactic Center'}`}
         >
           <Sun className="w-3.5 h-3.5 text-neutral-400" />
@@ -234,7 +234,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             haptics.light();
             onOpenCosmicScaleModal();
           }}
-          className="hidden md:flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-neutral-300 bg-neutral-900 border border-neutral-800 rounded-md hover:bg-neutral-800 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          className="hidden md:flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-300 bg-neutral-900 border border-neutral-800 rounded-md hover:bg-neutral-800 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           title="Open True Cosmic Scale Explorer (Why TON 618 is 66 Billion Suns)"
         >
           <Maximize2 className="w-3.5 h-3.5 text-neutral-400" />
@@ -247,7 +247,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             haptics.light();
             onOpenArchetypeModal();
           }}
-          className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-neutral-300 bg-neutral-900 border border-neutral-800 rounded-md hover:bg-neutral-800 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          className="hidden lg:flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-300 bg-neutral-900 border border-neutral-800 rounded-md hover:bg-neutral-800 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           title="Open Black Hole & Star Archetypes Guide"
         >
           <Layers className="w-3.5 h-3.5 text-neutral-400" />
@@ -261,7 +261,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               haptics.light();
               onOpenQuickGuideModal();
             }}
-            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium text-amber-200 bg-neutral-900 border border-amber-500/40 rounded-md hover:bg-neutral-800 hover:text-amber-100 hover:border-amber-400 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-200 bg-neutral-900 border border-amber-500/40 rounded-md hover:bg-neutral-800 hover:text-amber-100 hover:border-amber-400 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             title="Open Plain-English Physics Quick-Guide (Simple Analogies for Spin, Accretion Rate & Well Depth)"
           >
             <BookOpen className="w-3.5 h-3.5 text-amber-400" />
@@ -275,7 +275,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             haptics.light();
             onOpenTheoryModal();
           }}
-          className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-neutral-300 bg-neutral-900 border border-neutral-800 rounded-md hover:text-white hover:border-neutral-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          className="hidden xl:flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-300 bg-neutral-900 border border-neutral-800 rounded-md hover:text-white hover:border-neutral-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           title="View Kerr Spacetime Metrics & Relativistic Potential"
         >
           <Activity className="w-3.5 h-3.5 text-neutral-400" />
@@ -291,7 +291,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               haptics.light();
               onTogglePerfMonitor();
             }}
-            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
+            className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
               isPerfMonitorVisible
                 ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/50 font-semibold'
                 : 'bg-neutral-900 text-neutral-300 border-neutral-800 hover:text-white hover:bg-neutral-800'
@@ -314,7 +314,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             haptics.light();
             onOpenSettingsModal?.();
           }}
-          className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer border ${
+          className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer border ${
             isPhoneMode
               ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
               : 'bg-neutral-900 text-neutral-300 border-neutral-800 hover:bg-neutral-800 hover:text-amber-300 hover:border-neutral-700'
@@ -337,11 +337,11 @@ export const TopBar: React.FC<TopBarProps> = ({
             haptics.success();
             onExportSnapshot();
           }}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 text-xs font-semibold text-neutral-200 bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 hover:text-white rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          className="flex items-center gap-1 px-2 py-1 text-xs font-semibold text-neutral-200 bg-neutral-800 border border-neutral-700 hover:bg-neutral-700 hover:text-white rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           title="Export high-resolution PNG snapshot"
         >
           <Download className="w-3 h-3 text-amber-400/90" />
-          <span className="hidden sm:inline">{t.exportSnapshot}</span>
+          <span className="hidden 2xl:inline">{t.exportSnapshot}</span>
         </button>
 
         {onToggleRecording && (
@@ -351,7 +351,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               haptics.medium();
               onToggleRecording();
             }}
-            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 text-xs font-semibold rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
+            className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
               isRecording
                 ? 'bg-rose-500/25 border-rose-400 text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.4)]'
                 : 'bg-neutral-800 border-neutral-700 text-neutral-200 hover:bg-neutral-700 hover:text-white'
@@ -373,7 +373,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             ) : (
               <>
                 <Video className="w-3.5 h-3.5 text-rose-400" />
-                <span className="hidden sm:inline">{t.recordVideo}</span>
+                <span className="hidden 2xl:inline">{t.recordVideo}</span>
               </>
             )}
           </button>

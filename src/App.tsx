@@ -147,8 +147,13 @@ export default function App() {
       const mobile = window.innerWidth <= 768;
       setIsMobileScreen((prevMobile) => {
         if (!prevMobile && mobile) {
-          // Auto-turn off Event Log when entering phone viewport
-          setSettings((s) => (s.showEventLog ? { ...s, showEventLog: false } : s));
+          // Auto-turn off desktop-heavy floating overlays when entering phone viewport
+          setSettings((s) => ({
+            ...s,
+            showEventLog: false,
+            showOverheadMap: false,
+            showPerformanceMonitor: false,
+          }));
         }
         return mobile;
       });
@@ -953,21 +958,30 @@ export default function App() {
     // If UI export is enabled, composite the HTML interface over the clean 3D WebGL render
     if (settings.includeUiInExport && appContainerRef.current) {
       try {
+        const containerEl = appContainerRef.current;
+        const primaryWebglCanvas = sceneControllerRef.current.getCanvas();
+        const secondaryWebglCanvas = compareSceneControllerRef.current?.getCanvas();
         const webglDataUrl = sceneControllerRef.current.captureSnapshotDataUrl();
-        const uiDataUrl = await toPng(appContainerRef.current, {
+        const uiDataUrl = await toPng(containerEl, {
           backgroundColor: 'transparent',
+          width: containerEl.clientWidth,
+          height: containerEl.clientHeight,
           style: {
             backgroundColor: 'transparent',
           },
           filter: (node: HTMLElement) => {
-            // Do not capture the WebGL canvas in the DOM snapshot (it is composited directly)
-            if (node.tagName === 'CANVAS') return false;
+            // Only exclude the 3D WebGL viewport canvases (composited below); keep 2D HUD canvases like Overhead Radar
+            if (node === primaryWebglCanvas || (secondaryWebglCanvas && node === secondaryWebglCanvas)) {
+              return false;
+            }
             // Exclude modal dialogs if open during export
             if (node.getAttribute?.('role') === 'dialog') return false;
             return true;
           },
           pixelRatio: window.devicePixelRatio || 1,
           cacheBust: true,
+          skipFonts: true,
+          fontEmbedCSS: '',
         });
 
         const compositeCanvas = document.createElement('canvas');
@@ -987,8 +1001,14 @@ export default function App() {
           }),
         ]);
 
-        compositeCanvas.width = bgImg.naturalWidth || bgImg.width;
-        compositeCanvas.height = bgImg.naturalHeight || bgImg.height;
+        compositeCanvas.width = Math.max(
+          bgImg.naturalWidth || bgImg.width,
+          uiImg.naturalWidth || uiImg.width
+        );
+        compositeCanvas.height = Math.max(
+          bgImg.naturalHeight || bgImg.height,
+          uiImg.naturalHeight || uiImg.height
+        );
         const ctx = compositeCanvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(bgImg, 0, 0, compositeCanvas.width, compositeCanvas.height);
@@ -1058,18 +1078,26 @@ export default function App() {
       }
       isCapturingUi = true;
       try {
-        const domCanvas = await toCanvas(appContainerRef.current, {
+        const containerEl = appContainerRef.current;
+        const secondaryWebglCanvas = compareSceneControllerRef.current?.getCanvas();
+        const domCanvas = await toCanvas(containerEl, {
           backgroundColor: 'transparent',
+          width: containerEl.clientWidth,
+          height: containerEl.clientHeight,
           style: {
             backgroundColor: 'transparent',
           },
           filter: (node: HTMLElement) => {
-            if (node.tagName === 'CANVAS') return false;
+            if (node === webglCanvas || (secondaryWebglCanvas && node === secondaryWebglCanvas)) {
+              return false;
+            }
             if (node.getAttribute?.('role') === 'dialog') return false;
             return true;
           },
           pixelRatio: window.devicePixelRatio || 1,
           cacheBust: false,
+          skipFonts: true,
+          fontEmbedCSS: '',
         });
         if (isActive) {
           uiOverlayCanvas = domCanvas;
@@ -1354,15 +1382,15 @@ export default function App() {
           />
         )}
 
-        {/* Left HUD Column: Target Specification Badge + Overhead Radar (with optional Time Dilation UI from Settings) */}
-        {!isCleanMode && !isCompareMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation) && (
-          <div className={`absolute top-2 sm:top-3 left-2 sm:left-4 z-10 flex flex-col items-start gap-2 pointer-events-none ${isPhone ? 'max-w-[210px]' : 'max-w-xs sm:max-w-sm'}`}>
+        {/* Left HUD Column: Target Specification Badge + Overhead Radar + Event Log */}
+        {!isCleanMode && !isCompareMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation || settings.showEventLog !== false) && (
+          <div className={`absolute top-2 sm:top-2.5 left-2 sm:left-3.5 z-10 flex flex-col items-start gap-1.5 sm:gap-2 pointer-events-none ${isPhone ? 'w-[210px]' : 'w-60'}`}>
             {/* Target Spec Badge */}
             {settings.showLeftHud && (
-              <div className={`pointer-events-auto bg-[#050811]/95 border border-slate-800/80 rounded-xl ${isPhone ? 'p-1.5' : 'p-3'} shadow-xl transition-all w-full`}>
-                <div className="flex items-center justify-between gap-2">
+              <div className={`pointer-events-auto bg-[#050811]/95 border border-slate-800/80 rounded-xl ${isPhone ? 'p-1.5' : 'p-2.5'} shadow-xl transition-all w-full`}>
+                <div className="flex items-center justify-between gap-1.5">
                   <span
-                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border ${
+                    className={`px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold uppercase tracking-wider border shrink-0 ${
                       ARCHETYPE_DEFINITIONS[activePreset.archetype].badgeBg
                     }`}
                   >
@@ -1374,7 +1402,7 @@ export default function App() {
                 </div>
 
                 <div className="flex items-baseline justify-between gap-1 mt-0.5">
-                  <h1 className={`font-display ${isPhone ? 'text-sm' : 'text-xl sm:text-2xl'} font-bold text-slate-100 tracking-tight flex items-center gap-1`}>
+                  <h1 className={`font-display ${isPhone ? 'text-sm' : 'text-base sm:text-lg'} font-bold text-slate-100 tracking-tight flex items-center gap-1 whitespace-nowrap`}>
                     <span>{activePreset.name}</span>
                     {activePreset.id === 'ton618' && (
                       <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-normal flex items-center gap-0.5">
@@ -1395,13 +1423,13 @@ export default function App() {
                       </span>
                     )}
                   </h1>
-                  <span className="font-mono text-amber-300 font-bold text-xs">
+                  <span className="font-mono text-amber-300 font-bold text-[11px] shrink-0">
                     {activePreset.plainMassExplanation}
                   </span>
                 </div>
 
                 {!isPhone && (
-                  <p className="text-[11px] text-slate-300 leading-snug mt-1">
+                  <p className="text-[10.5px] text-slate-300 leading-snug mt-0.5">
                     {activePreset.solarEquivalence}
                   </p>
                 )}
@@ -1413,12 +1441,12 @@ export default function App() {
 
                 {/* Quick Link to Real Scale Explorer if TON 618 is selected */}
                 {activePreset.id === 'ton618' && (
-                  <div className="mt-1.5 pt-1.5 border-t border-slate-800/60 flex items-center justify-between">
-                    <span className="text-[10px] text-amber-400 font-mono">True Scale: 66 Billion M☉ (2,600 AU)</span>
+                  <div className="mt-1 pt-1 border-t border-slate-800/60 flex items-center justify-between gap-1">
+                    <span className="text-[9.5px] text-amber-400 font-mono truncate">True: 66B M☉ (2,600 AU)</span>
                     <button
                       type="button"
                       onClick={() => setIsCosmicScaleModalOpen(true)}
-                      className="text-[10px] font-bold text-amber-300 hover:text-amber-200 flex items-center gap-0.5 cursor-pointer"
+                      className="text-[9.5px] font-bold text-amber-300 hover:text-amber-200 flex items-center gap-0.5 cursor-pointer shrink-0"
                     >
                       <Maximize2 className="w-2.5 h-2.5" />
                       {t.compareRealSize}
@@ -1427,7 +1455,7 @@ export default function App() {
                 )}
 
                 {settings.showCursorTelemetry && hoverCoords && (
-                  <div className="mt-1.5 pt-1 border-t border-slate-800/50 text-[10px] font-mono text-cyan-300/90 tabular-nums">
+                  <div className="mt-1 pt-1 border-t border-slate-800/50 text-[9.5px] font-mono text-cyan-300/90 tabular-nums">
                     {t.cursorLabel}: r = {hoverCoords.rRs.toFixed(2)} Rₛ · φ = {hoverCoords.phiDeg.toFixed(0)}° · z = +{hoverCoords.redshiftZ.toFixed(3)}
                   </div>
                 )}
@@ -1459,6 +1487,19 @@ export default function App() {
                   }
                 />
               </div>
+            )}
+
+            {/* Real-Time Astrophysical Event Log Stacked in Left HUD Column */}
+            {settings.showEventLog !== false && (
+              <EventLogOverlay
+                events={eventLogs}
+                onClearEvents={() => setEventLogs([])}
+                isPaused={params.timeScale === 0}
+                isDockCollapsed={isDockCollapsed}
+                isPhoneMode={isPhone}
+                language={settings.language || 'en'}
+                inlineStack={true}
+              />
             )}
           </div>
         )}
@@ -1603,17 +1644,6 @@ export default function App() {
           />
         )}
 
-        {/* Bottom-Left Real-Time Astrophysical Event Log Overlay */}
-        {!isCleanMode && settings.showEventLog !== false && (
-          <EventLogOverlay
-            events={eventLogs}
-            onClearEvents={() => setEventLogs([])}
-            isPaused={params.timeScale === 0}
-            isDockCollapsed={isDockCollapsed}
-            isPhoneMode={isPhone}
-            language={settings.language || 'en'}
-          />
-        )}
 
         {/* Unified Collapsible Bottom Control Dock */}
         {!isCleanMode && (

@@ -2233,17 +2233,19 @@ export class BlackHoleSceneController {
 
     let glContext: WebGL2RenderingContext | null = null;
     try {
+      // Stage 1: Standard WebGL2 context attributes matching Three.js defaults
       glContext = canvas.getContext('webgl2', {
         alpha: true,
         depth: true,
         stencil: false,
         antialias: true,
         premultipliedAlpha: true,
-        preserveDrawingBuffer: false,
-        powerPreference: 'default',
+        preserveDrawingBuffer: true,
+        powerPreference: 'high-performance',
         failIfMajorPerformanceCaveat: false,
       }) as WebGL2RenderingContext | null;
 
+      // Stage 2: Retry on a fresh canvas without antialias or preserveDrawingBuffer
       if (!glContext) {
         const retryCanvas = document.createElement('canvas');
         retryCanvas.style.display = 'block';
@@ -2262,23 +2264,41 @@ export class BlackHoleSceneController {
           failIfMajorPerformanceCaveat: false,
         }) as WebGL2RenderingContext | null;
       }
+
+      // Stage 3: Retry on a fresh canvas with pure browser-default WebGL2 attributes
+      if (!glContext) {
+        const defaultCanvas = document.createElement('canvas');
+        defaultCanvas.style.display = 'block';
+        defaultCanvas.style.width = `${width}px`;
+        defaultCanvas.style.height = `${height}px`;
+        canvas = defaultCanvas;
+        this.domElement = defaultCanvas;
+        glContext = defaultCanvas.getContext('webgl2') as WebGL2RenderingContext | null;
+      }
     } catch {
       glContext = null;
     }
 
     if (glContext) {
       // Guard against sandboxed desktop GPU drivers returning null from gl.getContextAttributes()
-      if (typeof glContext.getContextAttributes === 'function' && !glContext.getContextAttributes()) {
-        glContext.getContextAttributes = () => ({
-          alpha: true,
-          antialias: false,
-          depth: true,
-          failIfMajorPerformanceCaveat: false,
-          powerPreference: 'default',
-          premultipliedAlpha: true,
-          preserveDrawingBuffer: false,
-          stencil: false,
-        });
+      try {
+        if (typeof glContext.getContextAttributes === 'function' && !glContext.getContextAttributes()) {
+          Object.defineProperty(glContext, 'getContextAttributes', {
+            configurable: true,
+            value: () => ({
+              alpha: true,
+              antialias: false,
+              depth: true,
+              failIfMajorPerformanceCaveat: false,
+              powerPreference: 'default',
+              premultipliedAlpha: true,
+              preserveDrawingBuffer: true,
+              stencil: false,
+            }),
+          });
+        }
+      } catch {
+        // Ignore if getContextAttributes is non-configurable
       }
 
       const origConsoleError = console.error;
@@ -2288,13 +2308,14 @@ export class BlackHoleSceneController {
           if (msg.includes('THREE.WebGLRenderer')) return;
           origConsoleError.apply(console, args);
         };
+        const attrs = glContext.getContextAttributes?.();
         this.renderer = new THREE.WebGLRenderer({
           canvas,
           context: glContext,
-          alpha: false,
-          antialias: true,
+          alpha: attrs?.alpha ?? true,
+          antialias: attrs?.antialias ?? false,
           powerPreference: 'default',
-          preserveDrawingBuffer: false,
+          preserveDrawingBuffer: attrs?.preserveDrawingBuffer ?? true,
           failIfMajorPerformanceCaveat: false,
         });
       } catch {
@@ -2475,7 +2496,7 @@ export class BlackHoleSceneController {
       gpuResourceCache.registerShaderProgram(key);
     }
 
-    if (!this.renderer) return;
+    if (!this.renderer || isSoftwareGl) return;
 
     // Record original visibility and frustumCulled flags across every object in the scene graph
     const savedState: Array<{
@@ -5112,7 +5133,7 @@ export class BlackHoleSceneController {
 
     let targetPixelRatio = 1.0;
     if (isSoftwareGl) {
-      targetPixelRatio = 1.0;
+      targetPixelRatio = 0.65;
     } else if (isHighResDesktop || isDesktopDeviceType) {
       // High-resolution desktop display: lock internal WebGL pixel ratio to 1.0 (down from devicePixelRatio)
       targetPixelRatio = 1.0;
@@ -5163,6 +5184,10 @@ export class BlackHoleSceneController {
     }
     if (this.cameraLensFlareMat) {
       this.cameraLensFlareMat.uniforms.uResolution.value.set(rtWidth, rtHeight);
+    }
+    if (this.renderer && this.scene && this.camera) {
+      this.renderer.setRenderTarget(null);
+      this.renderer.render(this.scene, this.camera);
     }
   };
 
@@ -5275,7 +5300,11 @@ export class BlackHoleSceneController {
     }
     const gl = this.renderer.getContext() as WebGL2RenderingContext;
     if (!gl || !gl.fenceSync) {
-      this.frameId = window.setTimeout(cb, 80);
+      this.frameId = window.setTimeout(() => {
+        if (!this.isDisposed) {
+          this.frameId = requestAnimationFrame(cb);
+        }
+      }, 48);
       return;
     }
     const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
@@ -5287,7 +5316,11 @@ export class BlackHoleSceneController {
         this.frameId = window.setTimeout(poll, 5);
       } else {
         if (sync) gl.deleteSync(sync);
-        this.frameId = window.setTimeout(cb, 80);
+        this.frameId = window.setTimeout(() => {
+          if (!this.isDisposed) {
+            this.frameId = requestAnimationFrame(cb);
+          }
+        }, 48);
       }
     };
     this.frameId = window.setTimeout(poll, 5);
@@ -6161,11 +6194,6 @@ export class BlackHoleSceneController {
       const depthMult = this.params.wellDepthMultiplier || 2.2;
       const wellDepth = (14.0 + (this.params.massSolar / 100) * 26.0) * depthMult * 0.55;
       const rs = Math.max(1.8, (2.2 + (this.params.massSolar / 100) * 1.8) * 0.65);
-      const gridColor = this.settings.secret1987Mode
-        ? 'rgba(245, 158, 11, 0.24)'
-        : 'rgba(6, 182, 212, 0.22)';
-      ctx.strokeStyle = gridColor;
-      ctx.lineWidth = 1.0;
 
       const computeWellY = (r: number, theta: number) => {
         const d = -wellDepth / Math.pow((r * r) / (rs * rs) + (isStar ? 0.45 : 0.16), 0.54);
@@ -6173,12 +6201,18 @@ export class BlackHoleSceneController {
         return wellBaseY + d + drag;
       };
 
-      // Concentric relativistic radial rings
+      // Concentric relativistic radial rings with warm curvature heat gradient matching 3D WebGL manifold
       const ringRadii = [2.6, 4.2, 6.5, 9.5, 13.5, 18.5, 25.0, 33.0];
-      for (const r of ringRadii) {
+      ctx.lineWidth = 1.05;
+      for (let idx = 0; idx < ringRadii.length; idx++) {
+        const r = ringRadii[idx];
+        const heat = 1.0 - idx / ringRadii.length;
+        ctx.strokeStyle = isStar
+          ? `rgba(56, 189, 248, ${(0.14 + heat * 0.22).toFixed(2)})`
+          : `rgba(${Math.round(185 + heat * 70)}, ${Math.round(55 + heat * 95)}, ${Math.round(25 + heat * 20)}, ${(0.18 + heat * 0.24).toFixed(2)})`;
         ctx.beginPath();
         let started = false;
-        const segs = 48;
+        const segs = 36;
         for (let s = 0; s <= segs; s++) {
           const th = (s / segs) * Math.PI * 2;
           const wx = Math.cos(th) * r;
@@ -6197,13 +6231,14 @@ export class BlackHoleSceneController {
         ctx.stroke();
       }
 
-      // Frame-dragged azimuthal spokes
+      // Frame-dragged azimuthal spokes (batched into a single stroke call for 60fps performance)
+      ctx.strokeStyle = isStar ? 'rgba(56, 189, 248, 0.20)' : 'rgba(234, 88, 12, 0.24)';
+      ctx.beginPath();
       const spokeCount = 16;
       for (let k = 0; k < spokeCount; k++) {
         const baseTh = (k / spokeCount) * Math.PI * 2;
-        ctx.beginPath();
         let started = false;
-        for (let r = 2.4; r <= 33.0; r += 2.2) {
+        for (let r = 2.4; r <= 33.0; r += 2.6) {
           const twist = (this.params.spin * 1.45) / Math.max(1.2, r * 0.35);
           const th = baseTh + twist;
           const wx = Math.cos(th) * r;
@@ -6219,45 +6254,46 @@ export class BlackHoleSceneController {
             }
           }
         }
-        ctx.stroke();
       }
+      ctx.stroke();
     }
 
-    // 2. Deep Space Starfield with Real-Time Einstein Ring Gravitational Lensing Deflection
+    // 2. Deep Space Starfield with Real-Time Einstein Ring Gravitational Lensing Deflection (Fast fillRect batching)
     if (this.params.backgroundTheme !== 'pure_black') {
       const einsteinR = horizonPx * (isStar ? 0.85 : 1.55);
       const einsteinRSq = einsteinR * einsteinR;
-      const starColors = ['#e2e8f0', '#93c5fd', '#fef08a', '#fdba74', '#bae6fd'];
+      const starColors = [
+        'rgba(226, 232, 240, 0.78)',
+        'rgba(147, 197, 253, 0.75)',
+        'rgba(254, 240, 138, 0.72)',
+        'rgba(253, 186, 116, 0.72)',
+      ];
 
-      for (let i = 0; i < 360; i++) {
-        const rawX = ((Math.sin(i * 127.1 + 1.3) * 43758.5453) % 1 + 1) % 1;
-        const rawY = ((Math.cos(i * 311.7 + 2.9) * 23421.6312) % 1 + 1) % 1;
-        let sx = rawX * width;
-        let sy = rawY * height;
+      for (let c = 0; c < starColors.length; c++) {
+        ctx.fillStyle = starColors[c];
+        for (let i = c; i < 220; i += starColors.length) {
+          const rawX = ((Math.sin(i * 127.1 + 1.3) * 43758.5453) % 1 + 1) % 1;
+          const rawY = ((Math.cos(i * 311.7 + 2.9) * 23421.6312) % 1 + 1) % 1;
+          let sx = rawX * width;
+          let sy = rawY * height;
 
-        // Relativistic radial Einstein deflection around the central mass
-        if (this.params.gravitationalLensing) {
-          const dx = sx - bhX;
-          const dy = sy - bhY;
-          const distSq = dx * dx + dy * dy;
-          if (distSq > 4 && distSq < einsteinRSq * 18) {
-            const dist = Math.sqrt(distSq);
-            const deflectedDist = 0.5 * (dist + Math.sqrt(distSq + 4.0 * einsteinRSq));
-            const scaleDeflect = deflectedDist / Math.max(1.0, dist);
-            sx = bhX + dx * scaleDeflect;
-            sy = bhY + dy * scaleDeflect;
+          if (this.params.gravitationalLensing) {
+            const dx = sx - bhX;
+            const dy = sy - bhY;
+            const distSq = dx * dx + dy * dy;
+            if (distSq > 4 && distSq < einsteinRSq * 16) {
+              const dist = Math.sqrt(distSq);
+              const deflectedDist = 0.5 * (dist + Math.sqrt(distSq + 4.0 * einsteinRSq));
+              const scaleDeflect = deflectedDist / Math.max(1.0, dist);
+              sx = bhX + dx * scaleDeflect;
+              sy = bhY + dy * scaleDeflect;
+            }
           }
-        }
 
-        const twinkle = 0.55 + 0.45 * Math.sin(elapsed * (1.8 + (i % 5) * 0.7) + i * 3.1);
-        const r = i % 11 === 0 ? 1.7 : i % 4 === 0 ? 1.15 : 0.75;
-        ctx.fillStyle = starColors[i % starColors.length];
-        ctx.globalAlpha = twinkle * (i % 7 === 0 ? 0.92 : 0.62);
-        ctx.beginPath();
-        ctx.arc(sx, sy, r, 0, Math.PI * 2);
-        ctx.fill();
+          const sz = i % 11 === 0 ? 2.2 : i % 4 === 0 ? 1.5 : 1.1;
+          ctx.fillRect(sx, sy, sz, sz);
+        }
       }
-      ctx.globalAlpha = 1.0;
     }
 
     // 3. Stellar Remnants & Luminous Stars (Neutron Star / Pulsar / Magnetar / Luminous Star)
@@ -6509,140 +6545,200 @@ export class BlackHoleSceneController {
       const yScale =
         this.params.accretionState === 'active' ? Math.max(0.24, diskTilt * 1.15) : diskTilt;
 
-      // 4a. Upper & Lower Gravitationally Lensed Einstein Arches (bent light from far side of accretion disk)
+      // 4a. Ambient Volumetric Accretion Bloom
+      if (this.params.layers.accretionDisk && this.expansionProgress > 0.03) {
+        const bloomR = diskOuterPx * 1.32;
+        const ambGrad = ctx.createRadialGradient(
+          bhX + dopplerShiftX * 0.4,
+          bhY,
+          horizonPx * 0.85,
+          bhX,
+          bhY,
+          bloomR
+        );
+        if (isXray) {
+          ambGrad.addColorStop(0, 'rgba(56, 189, 248, 0.36)');
+          ambGrad.addColorStop(0.45, 'rgba(14, 165, 233, 0.14)');
+          ambGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        } else {
+          ambGrad.addColorStop(0, 'rgba(251, 191, 36, 0.38)');
+          ambGrad.addColorStop(0.38, 'rgba(217, 119, 6, 0.18)');
+          ambGrad.addColorStop(0.72, 'rgba(154, 52, 18, 0.07)');
+          ambGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        }
+        ctx.fillStyle = ambGrad;
+        ctx.beginPath();
+        ctx.arc(bhX, bhY, bloomR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 4b. Smooth Continuous Gravitationally Lensed Einstein Arches (Upper & Lower)
       if (
         this.params.layers.accretionDisk &&
         this.params.gravitationalLensing &&
         this.expansionProgress > 0.03
       ) {
+        const fluxGain = Math.min(1.25, 0.72 + 0.35 * this.params.accretionRate);
+        const archOuterR = horizonPx * 2.15;
+        const archAspect = Math.max(0.78, 1.0 - diskTilt * 0.14);
+
         ctx.save();
         ctx.translate(bhX, bhY);
+        ctx.scale(1.0, archAspect);
 
-        // Draw multi-layered relativistic lensed arches above (-1) and below (+1) the event horizon shadow
-        for (const archSign of [-1, 1] as const) {
-          const isUpper = archSign === -1;
-          const archRx = horizonPx * (isUpper ? 1.95 : 1.68);
-          const archRy = horizonPx * (isUpper ? 1.88 : 1.54) * (1.0 - diskTilt * 0.18);
-          const bandCount = 12;
-          for (let bIdx = 0; bIdx < bandCount; bIdx++) {
-            const frac = bIdx / (bandCount - 1);
-            const rx = horizonPx * 1.01 + (archRx - horizonPx * 1.01) * Math.pow(frac, 1.08);
-            const ry = horizonPx * 1.01 + (archRy - horizonPx * 1.01) * Math.pow(frac, 1.05);
-            const turb =
-              0.68 +
-              0.32 *
-                Math.sin(frac * 9.5 - elapsed * 2.4 + (isUpper ? 0.0 : 1.7));
-            const alpha =
-              Math.pow(1.0 - frac, 1.35) *
-              turb *
-              (isUpper ? 0.56 : 0.42) *
-              Math.min(1.35, 0.75 + 0.45 * this.params.accretionRate);
-
-            const bandGrad = ctx.createLinearGradient(-rx * 1.15, 0, rx * 1.15, 0);
-            if (isXray) {
-              bandGrad.addColorStop(0, `rgba(240, 249, 255, ${Math.min(0.95, alpha * 1.35)})`);
-              bandGrad.addColorStop(0.48, `rgba(56, 189, 248, ${alpha})`);
-              bandGrad.addColorStop(1, `rgba(2, 132, 199, ${alpha * 0.42})`);
-            } else if (isDopplerMode) {
-              bandGrad.addColorStop(0, `rgba(125, 211, 252, ${Math.min(0.95, alpha * 1.35)})`);
-              bandGrad.addColorStop(0.5, `rgba(251, 191, 36, ${alpha * 0.85})`);
-              bandGrad.addColorStop(1, `rgba(244, 63, 94, ${alpha * 0.55})`);
-            } else {
-              bandGrad.addColorStop(0, `rgba(255, 251, 235, ${Math.min(0.96, alpha * 1.4)})`);
-              bandGrad.addColorStop(0.42, `rgba(251, 191, 36, ${alpha})`);
-              bandGrad.addColorStop(0.78, `rgba(234, 88, 12, ${alpha * 0.72})`);
-              bandGrad.addColorStop(1, `rgba(154, 52, 18, ${alpha * 0.35})`);
-            }
-
-            ctx.strokeStyle = bandGrad;
-            ctx.lineWidth = Math.max(2.2, (archRy - horizonPx) * 0.16);
-            ctx.beginPath();
-            if (isUpper) {
-              ctx.ellipse(dopplerShiftX * (1.0 - frac * 0.45), 0, rx, ry, 0, Math.PI * 1.04, Math.PI * 1.96);
-            } else {
-              ctx.ellipse(dopplerShiftX * (1.0 - frac * 0.45), 0, rx, ry, 0, Math.PI * 0.04, Math.PI * 0.96);
-            }
-            ctx.stroke();
-          }
+        // Continuous radial gradient with off-center inner focal point for relativistic Doppler asymmetry
+        const archGrad = ctx.createRadialGradient(
+          dopplerShiftX * 0.65,
+          -horizonPx * 0.06,
+          horizonPx * 0.96,
+          dopplerShiftX * 0.25,
+          0,
+          archOuterR
+        );
+        if (isXray) {
+          archGrad.addColorStop(0, `rgba(240, 249, 255, ${(0.95 * fluxGain).toFixed(2)})`);
+          archGrad.addColorStop(0.18, `rgba(125, 211, 252, ${(0.82 * fluxGain).toFixed(2)})`);
+          archGrad.addColorStop(0.48, `rgba(14, 165, 233, ${(0.42 * fluxGain).toFixed(2)})`);
+          archGrad.addColorStop(0.82, `rgba(3, 105, 161, ${(0.12 * fluxGain).toFixed(2)})`);
+          archGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        } else if (isDopplerMode) {
+          archGrad.addColorStop(0, `rgba(224, 242, 254, ${(0.95 * fluxGain).toFixed(2)})`);
+          archGrad.addColorStop(0.22, `rgba(96, 165, 250, ${(0.78 * fluxGain).toFixed(2)})`);
+          archGrad.addColorStop(0.55, `rgba(249, 115, 22, ${(0.38 * fluxGain).toFixed(2)})`);
+          archGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        } else {
+          archGrad.addColorStop(0, `rgba(255, 253, 240, ${(0.96 * fluxGain).toFixed(2)})`);
+          archGrad.addColorStop(0.16, `rgba(254, 240, 138, ${(0.86 * fluxGain).toFixed(2)})`);
+          archGrad.addColorStop(0.38, `rgba(245, 158, 11, ${(0.58 * fluxGain).toFixed(2)})`);
+          archGrad.addColorStop(0.68, `rgba(194, 65, 12, ${(0.24 * fluxGain).toFixed(2)})`);
+          archGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         }
+
+        ctx.fillStyle = archGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, archOuterR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Subtle animated lensed plasma filaments inside the upper/lower Einstein ring
+        ctx.lineWidth = Math.max(1.5, horizonPx * 0.045);
+        for (let f = 0; f < 3; f++) {
+          const rFil = horizonPx * (1.16 + f * 0.24);
+          const phase = elapsed * 1.8 + f * 1.4;
+          ctx.strokeStyle = isXray
+            ? `rgba(186, 230, 253, ${0.32 - f * 0.07})`
+            : `rgba(254, 243, 199, ${0.34 - f * 0.08})`;
+          ctx.beginPath();
+          ctx.arc(dopplerShiftX * 0.35, 0, rFil, Math.PI * 1.08 + Math.sin(phase) * 0.05, Math.PI * 1.92);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(dopplerShiftX * 0.35, 0, rFil * 0.94, Math.PI * 0.08, Math.PI * 0.92 + Math.cos(phase) * 0.05);
+          ctx.stroke();
+        }
+
         ctx.restore();
       }
 
-      // Helper to render the 3D-projected Equatorial Accretion Disk without any y=0 rectangular clip seam:
-      // - isFrontHalf = false renders the rear half (theta in [PI, 2*PI]) behind the event horizon shadow
-      // - isFrontHalf = true renders the foreground belt (theta in [0, PI]) sweeping continuously across the front of the shadow
-      const drawEquatorialDiskHalf = (isFrontHalf: boolean) => {
+      // Helper to render the continuous 3D-projected Equatorial Accretion Disk without concentric banding or y=0 seam
+      const drawContinuousEquatorialDisk = (isFrontHalf: boolean) => {
         if (!this.params.layers.accretionDisk || this.expansionProgress <= 0.02) return;
+        const innerR = horizonPx * Math.max(1.04, 1.32 - 0.26 * this.params.spin);
+        const fluxGain = Math.min(1.3, 0.78 + 0.38 * this.params.accretionRate);
+
         ctx.save();
         ctx.translate(bhX, bhY);
 
-        const innerR = horizonPx * Math.max(1.08, 1.38 - 0.28 * this.params.spin);
-        const bandSteps = 22;
-        const startAngle = isFrontHalf ? -0.03 : Math.PI - 0.03;
-        const endAngle = isFrontHalf ? Math.PI + 0.03 : Math.PI * 2 + 0.03;
+        // Clip cleanly to upper half (rear disk) or lower half (foreground belt sweeping in front of shadow)
+        ctx.beginPath();
+        if (isFrontHalf) {
+          ctx.rect(-width, -1.5, width * 2, height);
+        } else {
+          ctx.rect(-width, -height, width * 2, height + 1.5);
+        }
+        ctx.clip();
 
-        for (let i = bandSteps - 1; i >= 0; i--) {
-          const frac = i / Math.max(1, bandSteps - 1);
-          const r = innerR + (diskOuterPx - innerR) * Math.pow(frac, 1.08);
-          const rx = r;
-          const ry = Math.max(2.5, r * yScale);
+        ctx.scale(1.0, yScale);
 
-          // Keplerian differential shear & spiral turbulence modulation
-          const wave =
-            0.72 +
-            0.28 *
-              Math.sin(frac * 14.0 - elapsed * (3.2 - frac * 1.6) + (isFrontHalf ? 0.5 : 2.1));
-          const radialFalloff = Math.pow(1.0 - frac, 0.92) * (frac < 0.08 ? frac / 0.08 : 1.0);
-          const baseAlpha =
-            radialFalloff *
-            wave *
-            (isFrontHalf ? 0.88 : 0.72) *
-            Math.min(1.35, 0.75 + 0.42 * this.params.accretionRate);
+        // Smooth continuous radial gradient with off-center Doppler focal shift
+        const diskGrad = ctx.createRadialGradient(
+          dopplerShiftX * 1.15,
+          0,
+          innerR * 0.92,
+          dopplerShiftX * 0.35,
+          0,
+          diskOuterPx
+        );
+        const alphaScale = (isFrontHalf ? 0.96 : 0.84) * fluxGain;
 
-          const shiftX = dopplerShiftX * (1.0 - frac * 0.55);
-          const grad = ctx.createLinearGradient(-rx + shiftX, 0, rx + shiftX, 0);
-          if (isXray) {
-            grad.addColorStop(0, `rgba(240, 249, 255, ${Math.min(0.98, baseAlpha * 1.3)})`);
-            grad.addColorStop(0.45, `rgba(56, 189, 248, ${baseAlpha})`);
-            grad.addColorStop(0.82, `rgba(2, 132, 199, ${baseAlpha * 0.65})`);
-            grad.addColorStop(1, `rgba(12, 74, 110, ${baseAlpha * 0.28})`);
-          } else if (isDopplerMode) {
-            grad.addColorStop(0, `rgba(56, 189, 248, ${Math.min(0.98, baseAlpha * 1.3)})`);
-            grad.addColorStop(0.5, `rgba(250, 204, 21, ${baseAlpha * 0.85})`);
-            grad.addColorStop(1, `rgba(225, 29, 72, ${baseAlpha * 0.65})`);
-          } else {
-            const isHotInner = frac < 0.28;
-            grad.addColorStop(
-              0,
-              isHotInner
-                ? `rgba(255, 253, 244, ${Math.min(0.98, baseAlpha * 1.35)})`
-                : `rgba(254, 240, 138, ${Math.min(0.95, baseAlpha * 1.2)})`
-            );
-            grad.addColorStop(
-              0.38,
-              isHotInner
-                ? `rgba(253, 224, 71, ${baseAlpha})`
-                : `rgba(245, 158, 11, ${baseAlpha})`
-            );
-            grad.addColorStop(0.75, `rgba(234, 88, 12, ${baseAlpha * 0.78})`);
-            grad.addColorStop(1, `rgba(154, 52, 18, ${baseAlpha * 0.36})`);
-          }
+        if (isXray) {
+          diskGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+          diskGrad.addColorStop(0.04, `rgba(240, 249, 255, ${Math.min(0.98, alphaScale)})`);
+          diskGrad.addColorStop(0.22, `rgba(125, 211, 252, ${Math.min(0.94, alphaScale * 0.92)})`);
+          diskGrad.addColorStop(0.52, `rgba(14, 165, 233, ${alphaScale * 0.58})`);
+          diskGrad.addColorStop(0.82, `rgba(3, 105, 161, ${alphaScale * 0.22})`);
+          diskGrad.addColorStop(1, colOuter);
+        } else if (isDopplerMode) {
+          diskGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+          diskGrad.addColorStop(0.04, `rgba(224, 242, 254, ${Math.min(0.98, alphaScale)})`);
+          diskGrad.addColorStop(0.24, `rgba(56, 189, 248, ${alphaScale * 0.88})`);
+          diskGrad.addColorStop(0.58, `rgba(250, 204, 21, ${alphaScale * 0.52})`);
+          diskGrad.addColorStop(0.85, `rgba(225, 29, 72, ${alphaScale * 0.26})`);
+          diskGrad.addColorStop(1, colOuter);
+        } else {
+          diskGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+          diskGrad.addColorStop(0.03, `rgba(255, 253, 245, ${Math.min(0.99, alphaScale * 1.05)})`);
+          diskGrad.addColorStop(0.16, `rgba(254, 240, 138, ${Math.min(0.96, alphaScale * 0.95)})`);
+          diskGrad.addColorStop(0.38, `rgba(251, 191, 36, ${alphaScale * 0.78})`);
+          diskGrad.addColorStop(0.65, `rgba(234, 88, 12, ${alphaScale * 0.46})`);
+          diskGrad.addColorStop(0.88, `rgba(154, 52, 18, ${alphaScale * 0.18})`);
+          diskGrad.addColorStop(1, colOuter);
+        }
 
-          ctx.strokeStyle = grad;
-          ctx.lineWidth = Math.max(2.4, ((diskOuterPx - innerR) / bandSteps) * 1.45);
-          ctx.lineCap = 'round';
+        ctx.fillStyle = diskGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, diskOuterPx, 0, Math.PI * 2);
+        ctx.arc(0, 0, innerR * 0.94, 0, Math.PI * 2, true);
+        ctx.fill();
+
+        // 5 subtle Keplerian shear spiral filaments inside the continuous disk
+        ctx.lineWidth = Math.max(1.8, (diskOuterPx - innerR) * 0.035);
+        for (let s = 0; s < 5; s++) {
+          const frac = (s + 0.5) / 5;
+          const rFil = innerR + (diskOuterPx - innerR) * Math.pow(frac, 0.95);
+          const rot = -elapsed * (2.6 - frac * 1.4) + s * 1.25;
+          ctx.strokeStyle = isXray
+            ? `rgba(224, 242, 254, ${(1.0 - frac) * 0.28})`
+            : `rgba(255, 251, 235, ${(1.0 - frac) * 0.32})`;
           ctx.beginPath();
-          ctx.ellipse(shiftX, 0, rx, ry, 0, startAngle, endAngle);
+          if (isFrontHalf) {
+            ctx.arc(dopplerShiftX * (1.0 - frac * 0.5), 0, rFil, 0.08, Math.PI - 0.08);
+          } else {
+            ctx.arc(dopplerShiftX * (1.0 - frac * 0.5), 0, rFil, Math.PI + 0.08, Math.PI * 2 - 0.08);
+          }
           ctx.stroke();
+        }
+
+        // Approaching left-limb relativistic Doppler beaming hotspot boost
+        if (this.params.dopplerStrength > 0.05) {
+          const hotR = (innerR + diskOuterPx * 0.45) * 0.55;
+          const hotX = -innerR * 1.28 + dopplerShiftX * 0.4;
+          const hotGrad = ctx.createRadialGradient(hotX, 0, 0, hotX, 0, hotR);
+          const dBoost = Math.min(0.65, this.params.dopplerStrength * 0.55);
+          hotGrad.addColorStop(0, `rgba(255, 255, 255, ${dBoost})`);
+          hotGrad.addColorStop(0.45, isXray ? `rgba(125, 211, 252, ${dBoost * 0.55})` : `rgba(254, 240, 138, ${dBoost * 0.55})`);
+          hotGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          ctx.fillStyle = hotGrad;
+          ctx.beginPath();
+          ctx.arc(hotX, 0, hotR, 0, Math.PI * 2);
+          ctx.fill();
         }
 
         ctx.restore();
       };
 
-      // 4b. Draw Rear Half of Equatorial Accretion Disk (occluded behind event horizon shadow)
-      drawEquatorialDiskHalf(false);
+      // 4c. Draw Rear Half of Equatorial Accretion Disk (occluded behind event horizon shadow)
+      drawContinuousEquatorialDisk(false);
 
-      // 4c. Central Event Horizon Shadow (#000000) & Asymmetric Doppler-Boosted Relativistic Photon Ring
+      // 4d. Central Event Horizon Shadow (#000000) & Asymmetric Doppler-Boosted Relativistic Photon Ring
       ctx.fillStyle = '#000000';
       ctx.beginPath();
       ctx.arc(bhX, bhY, horizonPx, 0, Math.PI * 2);
@@ -6656,24 +6752,24 @@ export class BlackHoleSceneController {
         bhY
       );
       if (isXray) {
-        photonRingGrad.addColorStop(0, 'rgba(224, 242, 254, 0.96)');
-        photonRingGrad.addColorStop(0.55, 'rgba(56, 189, 248, 0.68)');
-        photonRingGrad.addColorStop(1, 'rgba(2, 132, 199, 0.25)');
+        photonRingGrad.addColorStop(0, 'rgba(240, 249, 255, 0.98)');
+        photonRingGrad.addColorStop(0.55, 'rgba(56, 189, 248, 0.72)');
+        photonRingGrad.addColorStop(1, 'rgba(2, 132, 199, 0.28)');
       } else {
-        photonRingGrad.addColorStop(0, 'rgba(255, 251, 235, 0.96)');
-        photonRingGrad.addColorStop(0.55, 'rgba(251, 191, 36, 0.72)');
-        photonRingGrad.addColorStop(1, 'rgba(180, 83, 9, 0.26)');
+        photonRingGrad.addColorStop(0, 'rgba(255, 251, 235, 0.98)');
+        photonRingGrad.addColorStop(0.55, 'rgba(251, 191, 36, 0.76)');
+        photonRingGrad.addColorStop(1, 'rgba(180, 83, 9, 0.28)');
       }
       ctx.strokeStyle = photonRingGrad;
-      ctx.lineWidth = Math.max(1.4, horizonPx * 0.055);
+      ctx.lineWidth = Math.max(1.8, horizonPx * 0.048);
       ctx.beginPath();
-      ctx.arc(bhX, bhY, horizonPx * 1.015, 0, Math.PI * 2);
+      ctx.arc(bhX, bhY, horizonPx * 1.012, 0, Math.PI * 2);
       ctx.stroke();
 
-      // 4d. Draw Foreground Half of Equatorial Accretion Disk (sweeping continuously across the front of the shadow)
-      drawEquatorialDiskHalf(true);
+      // 4e. Draw Foreground Half of Equatorial Accretion Disk (sweeping continuously across the front of the shadow)
+      drawContinuousEquatorialDisk(true);
 
-      // 4e. Ergosphere Static-Limit Cage (when ergosphereCage layer is enabled)
+      // 4f. Ergosphere Static-Limit Cage (when ergosphereCage layer is enabled)
       if (this.params.layers.ergosphereCage) {
         const ergoRx = horizonPx * (1.16 + 0.22 * this.params.spin);
         const ergoRy = horizonPx * (0.86 - 0.12 * this.params.spin);
@@ -6685,7 +6781,7 @@ export class BlackHoleSceneController {
       }
     }
 
-    // 4f. Orbiting S-Star Cluster & S2 Precessing Trail (when orbitalStars layer is enabled)
+    // 4g. Orbiting S-Star Cluster & S2 Precessing Trail (when orbitalStars layer is enabled)
     if (this.params.layers.orbitalStars && this.starS2Mesh) {
       const orbitR = this.params.probeRadiusRs * 1.75 * this.currentScale;
       ctx.strokeStyle = 'rgba(56, 189, 248, 0.28)';
@@ -6721,7 +6817,7 @@ export class BlackHoleSceneController {
       }
     }
 
-    // 4g. Live Relativistic Photon Geodesic Trajectories (when geodesicRays layer is enabled)
+    // 4h. Live Relativistic Photon Geodesic Trajectories (when geodesicRays layer is enabled)
     if (this.params.layers.geodesicRays && this.activeGeodesicPulses.length > 0) {
       for (const item of this.activeGeodesicPulses) {
         const lineMat = item.line.material as THREE.LineBasicMaterial;
@@ -6757,64 +6853,41 @@ export class BlackHoleSceneController {
       ctx.stroke();
     }
 
-    // 6. Camera-Space Multi-Element Hexagonal Optical Lens Flare & Starburst Needles
+    // 6. Camera-Space Anamorphic Horizontal Streak & Starburst at Approaching Photon Ring Limb
     const flareStrength = this.settings.lensFlareIntensity ?? 1.0;
     if (flareStrength > 0.01 && _vec3A.z < 1.0) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
 
-      const flareX = bhX - (isStar ? 0 : horizonPx * 0.42);
-      const flareY = bhY;
-      const centerX = width * 0.5;
-      const centerY = height * 0.5;
-      const axisX = centerX - flareX;
-      const axisY = centerY - flareY;
+      const flareX = bhX - (isStar ? 0 : horizonPx * 0.96);
+      const flareY = bhY + (isStar ? 0 : horizonPx * 0.06);
 
-      // Subtle 8-ray optical diffraction needles at the brightest emission point
-      const rayAlpha = Math.min(0.42, 0.14 * flareStrength);
-      const rayLen = horizonPx * (1.8 + 0.9 * flareStrength);
-      for (let r = 0; r < 4; r++) {
-        const angle = (r / 4) * Math.PI + 0.22;
-        const rx = Math.cos(angle) * rayLen;
-        const ry = Math.sin(angle) * rayLen * (r === 0 ? 1.8 : 0.85);
-        const rayGrad = ctx.createLinearGradient(
-          flareX - rx,
-          flareY - ry,
-          flareX + rx,
-          flareY + ry
-        );
-        rayGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-        rayGrad.addColorStop(0.5, `rgba(254, 243, 199, ${rayAlpha})`);
-        rayGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        ctx.strokeStyle = rayGrad;
-        ctx.lineWidth = r === 0 ? 1.6 : 1.0;
-        ctx.beginPath();
-        ctx.moveTo(flareX - rx, flareY - ry);
-        ctx.lineTo(flareX + rx, flareY + ry);
-        ctx.stroke();
-      }
+      // Horizontal anamorphic optical streak matching the 3D shader
+      const streakHalfW = horizonPx * (2.6 + 1.1 * flareStrength);
+      const streakAlpha = Math.min(0.62, 0.28 * flareStrength);
+      const streakGrad = ctx.createLinearGradient(flareX - streakHalfW, flareY, flareX + streakHalfW * 1.35, flareY);
+      streakGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      streakGrad.addColorStop(0.32, `rgba(186, 230, 253, ${streakAlpha * 0.55})`);
+      streakGrad.addColorStop(0.43, `rgba(255, 251, 235, ${streakAlpha})`);
+      streakGrad.addColorStop(0.55, `rgba(251, 191, 36, ${streakAlpha * 0.45})`);
+      streakGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.strokeStyle = streakGrad;
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.moveTo(flareX - streakHalfW, flareY);
+      ctx.lineTo(flareX + streakHalfW * 1.35, flareY);
+      ctx.stroke();
 
-      // Multi-element hexagonal iris ghosts along the optical axis through screen center
-      const ghosts = [
-        { t: 0.55, r: horizonPx * 0.28, color: 'rgba(56, 189, 248, 0.11)' },
-        { t: 1.15, r: horizonPx * 0.46, color: 'rgba(251, 191, 36, 0.09)' },
-        { t: 1.65, r: horizonPx * 0.34, color: 'rgba(129, 140, 248, 0.08)' },
-      ];
-      for (const g of ghosts) {
-        const gx = flareX + axisX * g.t;
-        const gy = flareY + axisY * g.t;
-        ctx.fillStyle = g.color;
-        ctx.beginPath();
-        for (let h = 0; h < 6; h++) {
-          const ha = (h / 6) * Math.PI * 2 + 0.52;
-          const hx = gx + Math.cos(ha) * g.r * Math.min(1.5, flareStrength);
-          const hy = gy + Math.sin(ha) * g.r * Math.min(1.5, flareStrength);
-          if (h === 0) ctx.moveTo(hx, hy);
-          else ctx.lineTo(hx, hy);
-        }
-        ctx.closePath();
-        ctx.fill();
-      }
+      // Crisp starburst core at the approaching Doppler limb
+      const coreR = Math.max(8, horizonPx * 0.32);
+      const coreGrad = ctx.createRadialGradient(flareX, flareY, 0, flareX, flareY, coreR);
+      coreGrad.addColorStop(0, `rgba(255, 255, 255, ${Math.min(0.85, 0.48 * flareStrength)})`);
+      coreGrad.addColorStop(0.35, `rgba(254, 240, 138, ${Math.min(0.55, 0.26 * flareStrength)})`);
+      coreGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = coreGrad;
+      ctx.beginPath();
+      ctx.arc(flareX, flareY, coreR, 0, Math.PI * 2);
+      ctx.fill();
 
       ctx.restore();
     }

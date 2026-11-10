@@ -91,7 +91,7 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
     sceneController ? sceneController.getPerformanceTelemetry() : FALLBACK_TELEMETRY
   );
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
-  const [showLayerDiagnostics, setShowLayerDiagnostics] = useState<boolean>(true);
+  const [showLayerDiagnostics, setShowLayerDiagnostics] = useState<boolean>(false);
 
   useEffect(() => {
     if (!sceneController) return;

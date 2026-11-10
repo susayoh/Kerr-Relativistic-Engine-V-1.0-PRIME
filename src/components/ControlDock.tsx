@@ -425,7 +425,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               {/* 2x2 Ultra-Compact Sliders */}
               <div className="grid grid-cols-2 gap-1.5">
                 {/* Mass */}
-                <div className="flex flex-col justify-between px-1.5 py-1 rounded-md bg-neutral-950 border border-neutral-800/80">
+                <div className="flex flex-col justify-between gap-1 px-2 py-1.5 rounded-md bg-neutral-950 border border-neutral-800/80">
                   <div className="flex items-center justify-between text-[10px] leading-tight">
                     <span className="text-neutral-400 font-medium flex items-center gap-1">
                       <Scale className="w-2.5 h-2.5 text-amber-400" />
@@ -445,12 +445,12 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       haptics.sliderTick();
                       onChangeParams((prev) => ({ ...prev, massSolar: parseFloat(e.target.value) }));
                     }}
-                    className="sci-slider w-full !my-0.5"
+                    className="sci-slider w-full !mt-1 !mb-0.5"
                   />
                 </div>
 
                 {/* Kerr Spin */}
-                <div className="flex flex-col justify-between px-1.5 py-1 rounded-md bg-neutral-950 border border-neutral-800/80">
+                <div className="flex flex-col justify-between gap-1 px-2 py-1.5 rounded-md bg-neutral-950 border border-neutral-800/80">
                   <div className="flex items-center justify-between text-[10px] leading-tight">
                     <span className="text-neutral-400 font-medium flex items-center gap-1">
                       <Orbit className="w-2.5 h-2.5 text-amber-400" />
@@ -470,12 +470,12 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       haptics.sliderTick();
                       onChangeParams((prev) => ({ ...prev, spin: parseFloat(e.target.value) }));
                     }}
-                    className="sci-slider w-full !my-0.5"
+                    className="sci-slider w-full !mt-1 !mb-0.5"
                   />
                 </div>
 
                 {/* Accretion Rate */}
-                <div className="flex flex-col justify-between px-1.5 py-1 rounded-md bg-neutral-950 border border-neutral-800/80">
+                <div className="flex flex-col justify-between gap-1 px-2 py-1.5 rounded-md bg-neutral-950 border border-neutral-800/80">
                   <div className="flex items-center justify-between text-[10px] leading-tight">
                     <span className="text-neutral-400 font-medium flex items-center gap-1">
                       <Sparkles className="w-2.5 h-2.5 text-amber-400" />
@@ -495,12 +495,12 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       haptics.sliderTick();
                       onChangeParams((prev) => ({ ...prev, accretionRate: parseFloat(e.target.value) }));
                     }}
-                    className="sci-slider w-full !my-0.5"
+                    className="sci-slider w-full !mt-1 !mb-0.5"
                   />
                 </div>
 
                 {/* Gravity Well Depth */}
-                <div className="flex flex-col justify-between px-1.5 py-1 rounded-md bg-neutral-950 border border-neutral-800/80">
+                <div className="flex flex-col justify-between gap-1 px-2 py-1.5 rounded-md bg-neutral-950 border border-neutral-800/80">
                   <div className="flex items-center justify-between text-[10px] leading-tight">
                     <span className="text-neutral-400 font-medium flex items-center gap-1">
                       <Compass className="w-2.5 h-2.5 text-cyan-400" />
@@ -520,7 +520,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       haptics.sliderTick();
                       onChangeParams((prev) => ({ ...prev, wellDepthMultiplier: parseFloat(e.target.value) }));
                     }}
-                    className="sci-slider w-full !my-0.5"
+                    className="sci-slider w-full !mt-1 !mb-0.5"
                   />
                 </div>
               </div>
@@ -917,8 +917,10 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   // Desktop Control Dock Layout
   return (
     <div
-      className={`fixed left-1/2 -translate-x-1/2 bottom-1 sm:bottom-3 z-20 pointer-events-auto transition-transform duration-200 ease-out ${
-        isPhoneMode ? 'w-[calc(100vw-0.75rem)] max-w-sm sm:max-w-md' : 'w-[min(980px,calc(100vw-1.5rem))]'
+      className={`fixed left-1/2 bottom-1 sm:bottom-3 z-20 pointer-events-auto transition-transform duration-200 ease-out ${
+        isPhoneMode
+          ? 'w-[calc(100vw-0.75rem)] max-w-sm sm:max-w-md'
+          : 'w-[min(860px,calc(100vw-1.5rem))] 2xl:w-[min(980px,calc(100vw-1.5rem))]'
       }`}
       style={{
         transform: isCollapsed
@@ -1187,9 +1189,9 @@ export const ControlDock: React.FC<ControlDockProps> = ({
           </div>
         ) : (
           /* Desktop Unified Modular Command Bar */
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center pb-2 border-b border-neutral-800/80">
-            {/* Section A: Segmented Mode Tabs (Cols 1-5) */}
-            <div className="md:col-span-5 flex items-center gap-1 p-0.5 bg-neutral-950 rounded-lg border border-neutral-800/90 w-full sm:w-auto">
+          <div className="flex flex-wrap md:flex-nowrap items-center justify-between gap-2 pb-2 border-b border-neutral-800/80">
+            {/* Section A: Segmented Mode Tabs */}
+            <div className="flex items-center gap-0.5 p-0.5 bg-neutral-950 rounded-lg border border-neutral-800/90 shrink-0">
               {(
                 [
                   { id: 'spacetime', label: 'Spacetime', icon: Sliders },
@@ -1208,7 +1210,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       haptics.light();
                       setActiveTab(tab.id);
                     }}
-                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap cursor-pointer ${
+                    className={`flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap cursor-pointer ${
                       isActive
                         ? 'bg-neutral-800 text-amber-300 font-medium border border-neutral-700/80 shadow-sm'
                         : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
@@ -1221,10 +1223,10 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               })}
             </div>
 
-            {/* Section B: System Category Dropdown + Astrophysical Target Selector (Cols 6-9) */}
-            <div className="md:col-span-4 flex items-center gap-1.5 w-full">
-              {/* System Category Dropdown: Isolated Singularity vs Binary Accretion */}
-              <div className="relative flex items-center shrink-0">
+            {/* Section B: System Category Dropdown + Astrophysical Target Selector */}
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              {/* System Category Dropdown: Isolated Singularity vs Binary Accretion (shown on 2xl; TopBar always provides this dropdown) */}
+              <div className="hidden 2xl:flex relative items-center shrink-0">
                 <select
                   aria-label="System Category"
                   value={params.systemCategory || 'isolated'}
@@ -1319,8 +1321,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               </button>
             </div>
 
-            {/* Section C: Transport Actions (Cols 9-12) */}
-            <div className="md:col-span-3 flex items-center justify-end gap-1.5 w-full">
+            {/* Section C: Transport Actions */}
+            <div className="flex items-center justify-end gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -1703,8 +1705,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 </div>
 
                 {/* Doppler strength scrubber */}
-                <div className="sm:col-span-3 flex items-center gap-1.5 px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-md">
-                  <span className="text-[11px] font-mono text-neutral-400 whitespace-nowrap">Doppler:</span>
+                <div className="sm:col-span-3 flex items-center gap-1.5 px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-md min-w-0 overflow-hidden">
+                  <span className="text-[11px] font-mono text-neutral-400 whitespace-nowrap shrink-0">Doppler:</span>
                   <input
                     type="range"
                     min={0.0}
@@ -1718,9 +1720,9 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                         dopplerStrength: parseFloat(e.target.value),
                       }));
                     }}
-                    className="sci-slider flex-1"
+                    className="sci-slider flex-1 min-w-0 w-full"
                   />
-                  <span className="font-mono text-[11px] text-amber-300/90 font-bold tabular-nums w-8 text-right">
+                  <span className="font-mono text-[11px] text-amber-300/90 font-bold tabular-nums shrink-0 text-right">
                     {(params.dopplerStrength * 100).toFixed(0)}%
                   </span>
                 </div>
