@@ -109,7 +109,7 @@ export const EventLogOverlay: React.FC<EventLogOverlayProps> = ({
 
   return (
     <div
-      className={`${
+      className={`hud-panel ${
         inlineStack
           ? 'relative z-20 pointer-events-auto transition-all duration-200 ease-out'
           : `absolute left-2 sm:left-4 ${bottomPositionClass} z-20 pointer-events-auto transition-all duration-200 ease-out`

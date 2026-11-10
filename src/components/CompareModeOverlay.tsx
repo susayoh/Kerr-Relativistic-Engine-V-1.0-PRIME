@@ -68,10 +68,10 @@ export const CompareModeOverlay: React.FC<CompareModeOverlayProps> = ({
   return (
     <div
       data-testid="compare-mode-overlay"
-      className="absolute top-2 left-2 right-2 z-20 pointer-events-none flex flex-col gap-2 select-none"
+      className="hud-panel absolute top-2 left-2 right-2 z-20 pointer-events-none flex flex-col gap-2 select-none"
     >
       {/* Top Dual-Target Synchronized Comparison Control Bar */}
-      <div className="pointer-events-auto mx-auto w-full max-w-6xl bg-[#050812]/95 border border-amber-500/40 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.85)] backdrop-blur-md px-3 py-2">
+      <div className="hud-panel pointer-events-auto mx-auto w-full max-w-6xl bg-[#050812]/95 border border-amber-500/40 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.85)] px-3 py-2">
         <div className="grid grid-cols-1 lg:grid-cols-11 gap-2.5 items-center">
           {/* LEFT: Viewport A Preset & Kerr Spin Controls (4 cols) */}
           <div className="lg:col-span-4 bg-neutral-950/90 border border-amber-500/35 rounded-lg p-2 space-y-1.5">

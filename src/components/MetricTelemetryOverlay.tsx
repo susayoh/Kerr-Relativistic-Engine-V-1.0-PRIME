@@ -18,7 +18,7 @@ interface MetricTelemetryOverlayProps {
   params: BlackHoleParams;
   metrics: DerivedRelativisticMetrics;
   sceneController: BlackHoleSceneController | null;
-  hoverCoords: { rRs: number; phiDeg: number; redshiftZ: number } | null;
+  hoverCoordsRef?: React.RefObject<{ rRs: number; phiDeg: number; redshiftZ: number } | null>;
   onChangeProbeRadius?: (radiusRs: number) => void;
   onClose?: () => void;
   isPhoneMode?: boolean;
@@ -103,7 +103,7 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
   params,
   metrics,
   sceneController,
-  hoverCoords,
+  hoverCoordsRef,
   onChangeProbeRadius,
   onClose,
   isPhoneMode = false,
@@ -133,6 +133,7 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
     const FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
     let lastFrameTime = 0;
     let lastSamplePush = 0;
+    let lastReactStateUpdate = 0;
 
     const renderLoop = (now: number) => {
       animId = requestAnimationFrame(renderLoop);
@@ -150,13 +151,12 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
       const orbitalFreq = 1.6 / Math.pow(Math.max(1.2, params.probeRadiusRs), 1.5);
       phaseRef.current += dt * orbitalFreq * 2.4;
 
-      // Determine instantaneous radial coordinate r (in Rs)
-      // If user hovers over the accretion disk/spacetime grid, sample at cursor radius;
-      // otherwise sample along the quasi-periodic relativistic epicyclic orbit around probeRadiusRs
-      const baseRs = hoverCoords ? hoverCoords.rRs : params.probeRadiusRs;
+      // Determine instantaneous radial coordinate r (in Rs) via direct ref without React re-renders
+      const currentHover = hoverCoordsRef?.current ?? null;
+      const baseRs = currentHover ? currentHover.rRs : params.probeRadiusRs;
       const horizonRs = metrics.eventHorizonRg * 0.5;
       const epicyclicModulation =
-        hoverCoords || params.timeScale === 0
+        currentHover || params.timeScale === 0
           ? 0
           : eccentricity *
             (Math.cos(phaseRef.current) + 0.35 * Math.sin(phaseRef.current * 2.15));
@@ -195,8 +195,11 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
         }
       }
 
-      // Synchronize numeric telemetry readout at 30fps
-      setLiveSample(sample);
+      // Throttle React state update for numeric telemetry readout to at most once every 150ms
+      if (now - lastReactStateUpdate >= 160) {
+        lastReactStateUpdate = now;
+        setLiveSample(sample);
+      }
 
       const canvas = canvasRef.current;
       if (!canvas || isMinimized) return;
@@ -435,7 +438,7 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
     metrics.eventHorizonRg,
     metrics.photonSphereRg,
     metrics.iscoProgradeRg,
-    hoverCoords,
+    hoverCoordsRef,
     eccentricity,
     graphMode,
     isMinimized,
@@ -448,7 +451,7 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
   return (
     <div
       data-testid="metric-telemetry-overlay"
-      className={`absolute top-2 sm:top-3 right-2 sm:right-4 z-20 pointer-events-auto select-none transition-all ${
+      className={`hud-panel absolute top-2 sm:top-3 right-2 sm:right-4 z-20 pointer-events-auto select-none transition-all ${
         isPhoneMode ? 'w-[260px]' : 'w-80 sm:w-[340px]'
       }`}
     >

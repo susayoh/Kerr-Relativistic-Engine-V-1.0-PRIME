@@ -66,7 +66,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   const activePreset = ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
 
   return (
-    <header className="relative z-20 flex items-center justify-between gap-1.5 sm:gap-2 px-2 sm:px-3.5 py-1.5 sm:py-2 bg-[#05070d]/95 border-b border-neutral-800 overflow-x-auto no-scrollbar">
+    <header className="hud-panel relative z-20 flex items-center justify-between gap-1.5 sm:gap-2 px-2 sm:px-3.5 py-1.5 sm:py-2 bg-[#05070d]/95 border-b border-neutral-800 overflow-x-auto no-scrollbar">
       {/* Zone 1: Smart Brand, Active Target Badge & System Category Dropdown */}
       <div className="flex items-center gap-2 shrink-0">
         <a

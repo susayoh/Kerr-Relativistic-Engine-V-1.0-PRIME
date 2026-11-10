@@ -97,25 +97,12 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
     if (!sceneController) return;
     setTelemetry(sceneController.getPerformanceTelemetry());
 
-    let animId = 0;
-    const TARGET_FPS = 30;
-    const FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
-    let lastFrameTime = 0;
-
-    const updateTelemetryLoop = (now: number) => {
-      animId = requestAnimationFrame(updateTelemetryLoop);
-
-      // 30fps requestAnimationFrame-throttling (~33.33ms interval)
-      const elapsedMs = now - lastFrameTime;
-      if (elapsedMs < FRAME_INTERVAL_MS) {
-        return;
-      }
-      lastFrameTime = now - (elapsedMs % FRAME_INTERVAL_MS);
+    const FRAME_INTERVAL_MS = 250; // 4 Hz (once every 250ms)
+    const timerId = window.setInterval(() => {
       setTelemetry(sceneController.getPerformanceTelemetry());
-    };
+    }, FRAME_INTERVAL_MS);
 
-    animId = requestAnimationFrame(updateTelemetryLoop);
-    return () => cancelAnimationFrame(animId);
+    return () => window.clearInterval(timerId);
   }, [sceneController]);
 
   const isStar = isStellarCategory(params.objectCategory);
@@ -285,7 +272,7 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
     <aside
       data-testid="performance-monitor-overlay"
       aria-label="Three.js Performance Monitor & GPU Bottleneck Diagnostics"
-      className={`absolute ${
+      className={`hud-panel absolute ${
         offsetTopForMetricOverlay ? 'top-2 sm:top-3 right-2 sm:right-[364px]' : 'top-2 sm:top-3 right-2 sm:right-4'
       } z-20 pointer-events-auto transition-all ${
         isPhoneMode ? 'w-[285px]' : isCollapsed ? 'w-[310px]' : 'w-[356px]'

@@ -129,8 +129,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   if (isPhoneMode) {
     if (isCollapsed) {
       return (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-2 z-20 pointer-events-auto w-[calc(100vw-1rem)] max-w-sm">
-          <div className="flex items-center justify-between gap-1.5 px-3 py-1.5 bg-[#060911]/95 border border-amber-500/40 rounded-full shadow-2xl backdrop-blur-md">
+        <div className="hud-dock fixed left-1/2 -translate-x-1/2 bottom-2 z-20 pointer-events-auto w-[calc(100vw-1rem)] max-w-sm">
+          <div className="hud-panel flex items-center justify-between gap-1.5 px-3 py-1.5 bg-[#060911]/95 border border-amber-500/40 rounded-full shadow-2xl">
             {/* Target Preset Pill */}
             <button
               type="button"
@@ -209,8 +209,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
 
     // Expanded Phone Mode Drawer
     return (
-      <div className="fixed left-1/2 -translate-x-1/2 bottom-1 z-20 pointer-events-auto w-[calc(100vw-0.75rem)] max-w-sm sm:max-w-md">
-        <div className="bg-[#060911]/98 border border-neutral-800/90 rounded-2xl shadow-2xl p-2 flex flex-col gap-1.5 backdrop-blur-md">
+      <div className="hud-dock fixed left-1/2 -translate-x-1/2 bottom-1 z-20 pointer-events-auto w-[calc(100vw-0.75rem)] max-w-sm sm:max-w-md">
+        <div className="hud-panel bg-[#060911]/98 border border-neutral-800/90 rounded-2xl shadow-2xl p-2 flex flex-col gap-1.5">
           {/* Header Row: Minimize + Target Switcher + Quick Actions */}
           <div className="flex items-center justify-between gap-1 pb-1 border-b border-neutral-800/80">
             {/* Minimize Button */}
@@ -917,7 +917,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   // Desktop Control Dock Layout
   return (
     <div
-      className={`fixed left-1/2 bottom-1 sm:bottom-3 z-20 pointer-events-auto transition-transform duration-200 ease-out ${
+      className={`hud-dock fixed left-1/2 bottom-1 sm:bottom-3 z-20 pointer-events-auto transition-transform duration-200 ease-out ${
         isPhoneMode
           ? 'w-[calc(100vw-0.75rem)] max-w-sm sm:max-w-md'
           : 'w-[min(860px,calc(100vw-1.5rem))] 2xl:w-[min(980px,calc(100vw-1.5rem))]'
@@ -976,7 +976,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
 
       {/* Main Grid Chassis */}
       <div
-        className={`bg-[#060911]/95 border border-neutral-800/90 rounded-xl shadow-2xl ${
+        className={`hud-panel bg-[#060911]/95 border border-neutral-800/90 rounded-xl shadow-2xl ${
           isPhoneMode
             ? 'p-2 flex flex-col gap-1.5 max-h-[48vh] overflow-y-auto overscroll-contain'
             : 'p-2.5 sm:p-3 flex flex-col gap-2 max-h-[46vh] sm:max-h-[50vh] overflow-y-auto'

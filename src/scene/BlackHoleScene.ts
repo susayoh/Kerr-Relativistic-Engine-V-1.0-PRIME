@@ -66,6 +66,7 @@ export interface VisualizerSettings {
   timeLapseEnabled: boolean;
   rapidAdjustmentRipples: boolean;
   accretionShockwaveEnabled: boolean;
+  dynamicResolutionScaling?: boolean;
   secret1987Unlocked?: boolean;
   secret1987Mode?: boolean;
   language?: 'en' | 'de' | 'ja' | 'es' | 'zh';
@@ -106,6 +107,7 @@ export const DEFAULT_VISUALIZER_SETTINGS: VisualizerSettings = {
   timeLapseEnabled: false,
   rapidAdjustmentRipples: true,
   accretionShockwaveEnabled: true,
+  dynamicResolutionScaling: false,
   secret1987Unlocked: false,
   secret1987Mode: false,
   language: 'en',
@@ -409,6 +411,22 @@ const ACCRETION_FRAGMENT_SHADER = `
   varying vec3 vLocalPos;
   varying float vVerticalLayer;
 
+  float fastTurb2D(vec2 p) {
+    return (sin(p.x * 1.35 + cos(p.y * 1.65)) + cos(p.y * 1.85 - sin(p.x * 1.45))) * 0.25 + 0.5;
+  }
+
+  // 4-octave Fractional Brownian Motion (fBM) plasma turbulence for crisp volumetric desktop & mobile fidelity
+  float fbmDisk2D(vec2 p) {
+    float v = 0.50 * fastTurb2D(p);
+    p = vec2(p.x * 1.62 - p.y * 1.18, p.x * 1.18 + p.y * 1.62) + vec2(1.7, 3.1);
+    v += 0.26 * fastTurb2D(p);
+    p = vec2(p.x * 1.68 + p.y * 1.12, -p.x * 1.12 + p.y * 1.68) + vec2(4.3, 1.9);
+    v += 0.15 * fastTurb2D(p);
+    p = vec2(p.x * 1.74 - p.y * 1.08, p.x * 1.08 + p.y * 1.74) + vec2(2.9, 5.4);
+    v += 0.09 * fastTurb2D(p);
+    return clamp(v, 0.0, 1.0);
+  }
+
   // ACES filmic tone mapping with smooth highlight shoulder to preserve plasma band contrast
   vec3 acesFilm(vec3 x) {
     vec3 r = x / (1.0 + x * 0.14);
@@ -465,7 +483,8 @@ const ACCRETION_FRAGMENT_SHADER = `
     float verticalDensityFalloff = exp(-pow(max(0.0001, absLayer), 1.45) * 1.55);
     float layerPhaseOffset = vVerticalLayer * 1.65 * uAccretionState;
 
-    // Classic Disk Mode (uDiskStyle < 0.5): Original vibrant 3D equatorial accretion disk
+    // Unified Full-Fidelity Volumetric Accretion Disk Shader (uDiskStyle < 0.5):
+    // Multi-octave fBM turbulence + high-contrast concentric Doppler-beamed rings + ACES filmic tone mapping
     if (uDiskStyle < 0.5) {
       float starRadius = 1.65;
       float r_horizon = (isStar > 0.5) ? 0.0 : mix(2.05, 1.35, spin * 0.65);
@@ -483,7 +502,7 @@ const ACCRETION_FRAGMENT_SHADER = `
         discard;
       }
 
-      // Continuous 2PI unit vector so the classic disk has zero horizontal slice seam
+      // Continuous 2PI unit vector so the disk has zero horizontal slice seam
       vec2 unitDir = vLocalPos.xy / max(0.0001, r);
       float omega = 3.2 / (pow(r, 1.45) + 0.15 * spin);
       float twist = uTurbulenceBuffer.x * omega * 1.5 - 1.35 * log(max(0.1, r / rIn)) + layerPhaseOffset * 0.35;
@@ -496,12 +515,14 @@ const ACCRETION_FRAGMENT_SHADER = `
       float cos3Phi = 4.0 * rotDir.x * rotDir.x * rotDir.x - 3.0 * rotDir.x;
 
       float turbFreqBoost = mix(1.0, 1.35, uAccretionState);
-      float waveA = sin(r * uTurbulenceHarmonics.x * 3.1 * turbFreqBoost - uTurbulenceBuffer.z * 0.55 + cos2Phi * 1.2 + uTurbulenceBuffer.y + layerPhaseOffset);
-      float waveB = cos(r * uTurbulenceHarmonics.x * 6.4 * turbFreqBoost - uTurbulenceBuffer.z * 0.8 + waveA * (1.4 + 0.45 * uAccretionState) + sin2Phi * 0.9 - layerPhaseOffset * 0.7);
-      float waveC = sin(r * 3.8 * turbFreqBoost + cos3Phi * 1.1 - uTurbulenceBuffer.w + layerPhaseOffset * 1.2);
+      float fbmTurb = fbmDisk2D(rotDir * (r * 0.68 * turbFreqBoost) + vec2(uTurbulenceBuffer.y * 0.15, -uTurbulenceBuffer.z * 0.12 + layerPhaseOffset));
+      float waveA = sin(r * uTurbulenceHarmonics.x * 3.1 * turbFreqBoost - uTurbulenceBuffer.z * 0.55 + cos2Phi * 1.2 + uTurbulenceBuffer.y + (fbmTurb - 0.5) * 1.8 + layerPhaseOffset);
+      float waveB = cos(r * uTurbulenceHarmonics.x * 6.8 * turbFreqBoost - uTurbulenceBuffer.z * 0.8 + waveA * (1.4 + 0.45 * uAccretionState) + sin2Phi * 0.9 - layerPhaseOffset * 0.7);
+      float waveC = sin(r * 11.2 * turbFreqBoost + cos3Phi * 1.1 - uTurbulenceBuffer.w + (fbmTurb - 0.5) * 2.2 + layerPhaseOffset * 1.2);
       float diskTurb = waveA * 0.5 + 0.5;
-      float diskRings = waveB * 0.5 + 0.5;
-      float diskFilaments = mix(mix(diskTurb, diskRings, uTurbulenceHarmonics.z), waveC * 0.5 + 0.5, 0.25 + 0.12 * uAccretionState);
+      float concentricRings = pow(waveB * 0.5 + 0.5, 1.18);
+      float fineSubRings = waveC * 0.5 + 0.5;
+      float diskFilaments = clamp(mix(mix(fbmTurb, concentricRings, 0.58), fineSubRings, 0.26 + 0.10 * uAccretionState), 0.12, 1.0);
 
       vec2 toCamXZ = length(cameraPosition.xz) > 0.001
         ? normalize(cameraPosition.xz)
@@ -524,13 +545,14 @@ const ACCRETION_FRAGMENT_SHADER = `
       // Shockwave-coupled leading rim compression as the disk grows outward with the shockwave
       float ignitionWave = exp(-pow(abs((normR - diskUnfurl) / 0.09), 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
 
-      float innerTaper = smoothstep(rIn, rIn + mix(0.42, 0.28, uAccretionState), r);
+      float innerTaper = smoothstep(rIn, rIn + mix(0.38, 0.25, uAccretionState), r);
       float outerTaper = 1.0 - smoothstep(rOut - mix(2.2, 3.2, uAccretionState), rOut, r);
-      float radialProfile = pow(max(0.0001, 1.0 - normR), mix(1.15, 0.92, uAccretionState)) * innerTaper * outerTaper;
+      float radialProfile = pow(max(0.0001, 1.0 - normR), mix(1.08, 0.88, uAccretionState)) * innerTaper * outerTaper;
 
-      // Constraint 2: Base Emission Multiplier significantly boosted in Active mode
+      // Base Emission Multiplier significantly boosted with inner ISCO caustic peak
       float activeEmissionMult = mix(1.0, 2.45, uAccretionState) * (1.0 + ignitionWave);
-      float flux = radialProfile * (0.30 + 0.70 * diskFilaments) * dopplerBoost * (0.65 + 0.45 * accretionRate) * activeEmissionMult;
+      float innerIscoRing = 1.0 + 1.45 * exp(-normR * 5.6);
+      float flux = radialProfile * innerIscoRing * (0.28 + 0.72 * diskFilaments) * dopplerBoost * (0.68 + 0.45 * accretionRate) * activeEmissionMult;
 
       float sonicRarefaction = 0.0;
       float sonicCompression = 0.0;
@@ -547,8 +569,6 @@ const ACCRETION_FRAGMENT_SHADER = `
       float lutU = clamp(flux * 0.65, 0.02, 0.99);
       vec3 baseLut = texture2D(uSpectrumLut, vec2(lutU, 0.5)).rgb;
 
-      // Constraint 3: Spectral Filter dictates final color, while Active mode's boosted emission pushes
-      // the standard thermal filter (spectralMode == 0) into white-hot core -> bright gold -> red outer edge
       if (spectralMode == 1) {
         baseLut = mix(vec3(0.18, 0.02, 0.01), vec3(1.0, 0.85, 0.42), lutU);
       } else if (spectralMode == 2) {
@@ -571,7 +591,6 @@ const ACCRETION_FRAGMENT_SHADER = `
       vec3 bloomGlow = coreTone * coreWhiteHot + baseLut * (0.45 * bloomMult * flux);
       vec3 diskColor = baseLut * (0.48 + (0.75 + 0.60 * bloomMult) * flux) + bloomGlow;
       if (uAccretionState > 0.5 && spectralMode == 0) {
-        // Preserve rich bright-gold mid-disk and deep-red outer taper while keeping the inner core blazing white-hot
         vec3 activeThermal = computeActiveThermalSpectrum(normR, flux, diskFilaments);
         float outerRedMask = smoothstep(0.52, 0.92, normR);
         diskColor = mix(diskColor, activeThermal * (0.75 + 0.55 * radialProfile), outerRedMask * 0.68);
@@ -582,16 +601,16 @@ const ACCRETION_FRAGMENT_SHADER = `
       float stratumWeight = (absLayer > 0.01) ? (verticalDensityFalloff * 0.62) : 1.0;
       float diskAlpha = clamp(baseAlpha * stratumWeight * unfurlMask * smoothstep(0.02, 0.16, uExpansionProgress), 0.0, 0.98);
 
+      vec3 tonemappedClassic = acesFilm(diskColor * (1.06 + 0.22 * bloomMult));
       if (uPulseStrength > 0.001) {
-        // Sonic boom N-wave: dark evacuated decompression cavity + desaturated neutral grey shock front (no bright colors)
-        float luma = dot(diskColor, vec3(0.299, 0.587, 0.114));
+        float luma = dot(tonemappedClassic, vec3(0.299, 0.587, 0.114));
         vec3 neutralShock = mix(vec3(luma * 0.72), vec3(0.52, 0.55, 0.60), 0.35);
-        diskColor = mix(diskColor, neutralShock, sonicCompression * 0.78);
-        diskColor *= (1.0 - sonicRarefaction * 0.76);
+        tonemappedClassic = mix(tonemappedClassic, neutralShock, sonicCompression * 0.78);
+        tonemappedClassic *= (1.0 - sonicRarefaction * 0.76);
         diskAlpha = clamp(diskAlpha * (1.0 - sonicRarefaction * 0.42 + sonicCompression * 0.15), 0.0, 0.98);
       }
 
-      gl_FragColor = vec4(diskColor, diskAlpha);
+      gl_FragColor = vec4(tonemappedClassic, diskAlpha);
       return;
     }
 
@@ -1054,11 +1073,13 @@ const LENSING_FRAGMENT_SHADER = `
       float bloomMult = max(0.0, uBloomIntensity);
       float distFromHorizon = max(0.0, b - r_horizon);
       float activePhotonBoost = mix(1.0, 1.55, uAccretionState);
-      float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs(distFromHorizon / 0.06), 2.0)) * (0.65 + 0.55 * bloomMult) * activePhotonBoost;
-      float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs((distFromHorizon - 0.08) / 0.11), 2.0)) * (0.25 + 0.25 * bloomMult) * activePhotonBoost;
+      // Primary critical curve (n=0) + sharp secondary lensed photon ring (n=1) + tertiary caustic (n=2)
+      float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs(distFromHorizon / 0.048), 2.0)) * (0.78 + 0.58 * bloomMult) * activePhotonBoost;
+      float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs((distFromHorizon - 0.072) / 0.032), 2.0)) * (0.52 + 0.42 * bloomMult) * activePhotonBoost;
+      float photonSubringN2 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs((distFromHorizon - 0.135) / 0.065), 2.0)) * (0.24 + 0.22 * bloomMult) * activePhotonBoost;
       float photonBloom = (uIsStar > 0.5) ? 0.0 : exp(-distFromHorizon / (0.24 + 0.22 * bloomMult)) * 0.42 * bloomMult * activePhotonBoost;
-      float photonRing = photonRing1 + photonRing2 + photonBloom;
-      vec3 photonColor = mix(vec3(1.0, 0.95, 0.85), vec3(1.0, 0.80, 0.38), spin * 0.5) * photonRing;
+      float photonRing = photonRing1 + photonRing2 + photonSubringN2 + photonBloom;
+      vec3 photonColor = mix(vec3(1.0, 0.96, 0.88), vec3(1.0, 0.80, 0.38), spin * 0.5) * photonRing;
 
       vec3 lensedDiskColor = vec3(0.0);
       float lensedDiskAlpha = 0.0;
@@ -1253,7 +1274,9 @@ const LENSING_FRAGMENT_SHADER = `
     float minRayR = 100.0;
     float lensFactor = (uLensingActive > 0.5 && uIsStar < 0.5) ? 1.0 : 0.0;
 
-    for (int step = 0; step < 42; step++) {
+    // Locked 64-step Kerr geodesic raymarcher for unified high-detail volumetric desktop & mobile quality
+    const int MAX_RAYMARCH_STEPS = 64;
+    for (int step = 0; step < MAX_RAYMARCH_STEPS; step++) {
       float r = length(pos);
       minRayR = min(minRayR, r);
 
@@ -1268,7 +1291,7 @@ const LENSING_FRAGMENT_SHADER = `
         break;
       }
 
-      float stepSize = clamp(r * 0.22, 0.20, 0.95);
+      float stepSize = clamp(r * 0.16, 0.14, 0.72);
 
       vec3 hVec = cross(pos, dir);
       float h2 = dot(hVec, hVec);
@@ -1345,10 +1368,11 @@ const LENSING_FRAGMENT_SHADER = `
     float bloomMult = max(0.0, uBloomIntensity);
     float distFromHorizon = max(0.0, minRayR - r_horizon);
     float activePhotonBoost = mix(1.0, 1.50, uAccretionState);
-    float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs(distFromHorizon / 0.055), 2.0)) * (0.65 + 0.55 * bloomMult) * activePhotonBoost;
-    float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs((distFromHorizon - 0.07) / 0.10), 2.0)) * (0.25 + 0.25 * bloomMult) * activePhotonBoost;
+    float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs(distFromHorizon / 0.045), 2.0)) * (0.78 + 0.58 * bloomMult) * activePhotonBoost;
+    float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs((distFromHorizon - 0.068) / 0.030), 2.0)) * (0.52 + 0.42 * bloomMult) * activePhotonBoost;
+    float photonSubringN2 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs((distFromHorizon - 0.128) / 0.062), 2.0)) * (0.24 + 0.22 * bloomMult) * activePhotonBoost;
     float photonBloom = (uIsStar > 0.5) ? 0.0 : exp(-distFromHorizon / (0.24 + 0.22 * bloomMult)) * 0.42 * bloomMult * activePhotonBoost;
-    float photonRing = photonRing1 + photonRing2 + photonBloom;
+    float photonRing = photonRing1 + photonRing2 + photonSubringN2 + photonBloom;
     vec3 photonColor = mix(vec3(1.0, 0.96, 0.86), vec3(1.0, 0.80, 0.35), spin * 0.45) * photonRing;
 
     float einsteinGlow = (uIsStar > 0.5 || uLensingActive < 0.5)
@@ -2169,6 +2193,13 @@ export class BlackHoleSceneController {
   // Camera transition & auto-orbit state
   private cameraTransitionActive = false;
   private isUserInteracting = false;
+  private lastOrbitEndMs = 0;
+  private dragEndCooldownTimer: number | null = null;
+  private lastResizeWidth = 0;
+  private lastResizeHeight = 0;
+  private lastAppliedPixelRatio = 0;
+  private pendingResizeAfterOrbit = false;
+  private cachedCanvasRect: DOMRect | null = null;
   private targetCamPos = new THREE.Vector3(0, 6.8, 19.5);
   private targetCamLook = new THREE.Vector3(0, 0, 0);
   private followStarMode = false;
@@ -2180,6 +2211,11 @@ export class BlackHoleSceneController {
   private onFeatureSelect?: (feature: InspectedFeature | null) => void;
   private onTrajectoryCreated?: (traj: GeodesicTrajectory) => void;
   private onHoverCoordsChange?: (coords: { rRs: number; phiDeg: number; redshiftZ: number } | null) => void;
+  private onObserverReadoutChange?: (
+    readout: { rRs: number; thetaDeg: number; phiDeg: number },
+    forceImmediate?: boolean
+  ) => void;
+  private onCameraDragStateChange?: (isDragging: boolean) => void;
   private onSingularityStateChange?: (isCollapsed: boolean) => void;
   private onCameraChange?: (
     pos: { x: number; y: number; z: number },
@@ -2206,6 +2242,11 @@ export class BlackHoleSceneController {
       onFeatureSelect?: (feature: InspectedFeature | null) => void;
       onTrajectoryCreated?: (traj: GeodesicTrajectory) => void;
       onHoverCoordsChange?: (coords: { rRs: number; phiDeg: number; redshiftZ: number } | null) => void;
+      onObserverReadoutChange?: (
+        readout: { rRs: number; thetaDeg: number; phiDeg: number },
+        forceImmediate?: boolean
+      ) => void;
+      onCameraDragStateChange?: (isDragging: boolean) => void;
       onSingularityStateChange?: (isCollapsed: boolean) => void;
       onCameraChange?: (
         pos: { x: number; y: number; z: number },
@@ -2218,11 +2259,12 @@ export class BlackHoleSceneController {
     this.onFeatureSelect = callbacks?.onFeatureSelect;
     this.onTrajectoryCreated = callbacks?.onTrajectoryCreated;
     this.onHoverCoordsChange = callbacks?.onHoverCoordsChange;
+    this.onObserverReadoutChange = callbacks?.onObserverReadoutChange;
+    this.onCameraDragStateChange = callbacks?.onCameraDragStateChange;
     this.onSingularityStateChange = callbacks?.onSingularityStateChange;
     this.onCameraChange = callbacks?.onCameraChange;
 
-    // 1. Acquire a single WebGL2 context directly on our target canvas (no secondary probeCanvas or loseContext() calls
-    // that can destabilize desktop dual-GPU / sandboxed command buffers, and no 'webglcontextcreationerror' console.error spam).
+    // 1. Acquire WebGL2 / WebGL1 context directly on our target canvas with high-DPI antialiasing
     const width = Math.max(1, container.clientWidth || window.innerWidth);
     const height = Math.max(1, container.clientHeight || window.innerHeight);
     let canvas = document.createElement('canvas');
@@ -2231,9 +2273,9 @@ export class BlackHoleSceneController {
     canvas.style.height = `${height}px`;
     this.domElement = canvas;
 
-    let glContext: WebGL2RenderingContext | null = null;
+    let glContext: WebGL2RenderingContext | WebGLRenderingContext | null = null;
     try {
-      // Stage 1: Standard WebGL2 context attributes matching Three.js defaults
+      // Stage 1: Standard WebGL2 context attributes with antialias: true
       glContext = canvas.getContext('webgl2', {
         alpha: true,
         depth: true,
@@ -2245,7 +2287,7 @@ export class BlackHoleSceneController {
         failIfMajorPerformanceCaveat: false,
       }) as WebGL2RenderingContext | null;
 
-      // Stage 2: Retry on a fresh canvas without antialias or preserveDrawingBuffer
+      // Stage 2: Retry on a fresh canvas with default powerPreference & antialias
       if (!glContext) {
         const retryCanvas = document.createElement('canvas');
         retryCanvas.style.display = 'block';
@@ -2257,7 +2299,7 @@ export class BlackHoleSceneController {
           alpha: true,
           depth: true,
           stencil: false,
-          antialias: false,
+          antialias: true,
           premultipliedAlpha: true,
           preserveDrawingBuffer: false,
           powerPreference: 'default',
@@ -2265,7 +2307,7 @@ export class BlackHoleSceneController {
         }) as WebGL2RenderingContext | null;
       }
 
-      // Stage 3: Retry on a fresh canvas with pure browser-default WebGL2 attributes
+      // Stage 3: Retry on a fresh canvas with pure browser-default WebGL2 or WebGL1 attributes
       if (!glContext) {
         const defaultCanvas = document.createElement('canvas');
         defaultCanvas.style.display = 'block';
@@ -2273,7 +2315,12 @@ export class BlackHoleSceneController {
         defaultCanvas.style.height = `${height}px`;
         canvas = defaultCanvas;
         this.domElement = defaultCanvas;
-        glContext = defaultCanvas.getContext('webgl2') as WebGL2RenderingContext | null;
+        glContext = (defaultCanvas.getContext('webgl2') ||
+          defaultCanvas.getContext('webgl') ||
+          defaultCanvas.getContext('experimental-webgl')) as
+          | WebGL2RenderingContext
+          | WebGLRenderingContext
+          | null;
       }
     } catch {
       glContext = null;
@@ -2287,10 +2334,10 @@ export class BlackHoleSceneController {
             configurable: true,
             value: () => ({
               alpha: true,
-              antialias: false,
+              antialias: true,
               depth: true,
               failIfMajorPerformanceCaveat: false,
-              powerPreference: 'default',
+              powerPreference: 'high-performance',
               premultipliedAlpha: true,
               preserveDrawingBuffer: true,
               stencil: false,
@@ -2311,10 +2358,10 @@ export class BlackHoleSceneController {
         const attrs = glContext.getContextAttributes?.();
         this.renderer = new THREE.WebGLRenderer({
           canvas,
-          context: glContext,
+          context: glContext as WebGL2RenderingContext,
           alpha: attrs?.alpha ?? true,
-          antialias: attrs?.antialias ?? false,
-          powerPreference: 'default',
+          antialias: attrs?.antialias ?? true,
+          powerPreference: 'high-performance',
           preserveDrawingBuffer: attrs?.preserveDrawingBuffer ?? true,
           failIfMajorPerformanceCaveat: false,
         });
@@ -2352,14 +2399,18 @@ export class BlackHoleSceneController {
       this.renderer.shadowMap.enabled = false;
       this.renderer.debug.checkShaderErrors = false;
       this.renderer.info.autoReset = false;
+      this.renderer.setPixelRatio(
+        Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2)
+      );
       this.configureDevicePixelRatioAndUpscaling(width, height);
     }
 
     if (!this.renderer) {
-      // If WebGL context creation was blocked by the browser, create a clean 2D Canvas for fallback rendering
+      // If WebGL context creation was blocked by the browser, create a clean High-DPI 2D Canvas for fallback rendering
+      const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
       const fallbackCanvas = document.createElement('canvas');
-      fallbackCanvas.width = width;
-      fallbackCanvas.height = height;
+      fallbackCanvas.width = Math.max(1, Math.round(width * dpr));
+      fallbackCanvas.height = Math.max(1, Math.round(height * dpr));
       fallbackCanvas.style.display = 'block';
       fallbackCanvas.style.width = `${width}px`;
       fallbackCanvas.style.height = `${height}px`;
@@ -2394,13 +2445,36 @@ export class BlackHoleSceneController {
       this.isUserInteracting = true;
       this.cameraTransitionActive = false;
       this.followStarMode = false;
+      if (this.dragEndCooldownTimer !== null) {
+        window.clearTimeout(this.dragEndCooldownTimer);
+        this.dragEndCooldownTimer = null;
+      }
+      this.onCameraDragStateChange?.(true);
     });
 
     this.controls.addEventListener('end', () => {
       this.isUserInteracting = false;
+      this.lastOrbitEndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      if (this.onObserverReadoutChange) {
+        this.onObserverReadoutChange(this.getObserverSphericalCoords(), true);
+      }
+      if (this.dragEndCooldownTimer !== null) {
+        window.clearTimeout(this.dragEndCooldownTimer);
+      }
+      this.dragEndCooldownTimer = window.setTimeout(() => {
+        this.dragEndCooldownTimer = null;
+        this.onCameraDragStateChange?.(false);
+      }, 300);
+      if (this.pendingResizeAfterOrbit) {
+        this.pendingResizeAfterOrbit = false;
+        this.handleResize();
+      }
     });
 
     this.controls.addEventListener('change', () => {
+      if (this.onObserverReadoutChange) {
+        this.onObserverReadoutChange(this.getObserverSphericalCoords(), false);
+      }
       if (this.isUserInteracting && this.onCameraChange) {
         this.onCameraChange(
           { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z },
@@ -2408,6 +2482,11 @@ export class BlackHoleSceneController {
         );
       }
     });
+
+    // Emit initial observer spherical coordinates once on setup
+    if (this.onObserverReadoutChange) {
+      this.onObserverReadoutChange(this.getObserverSphericalCoords(), true);
+    }
 
     this.raycaster.layers.set(1);
 
@@ -3893,13 +3972,14 @@ export class BlackHoleSceneController {
   private buildRelativisticMotionBlurPass() {
     const width = Math.max(1, this.container.clientWidth || window.innerWidth);
     const height = Math.max(1, this.container.clientHeight || window.innerHeight);
-    const dpr = this.renderer ? this.renderer.getPixelRatio() : 1.0;
+    const dpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
     const rtWidth = Math.max(1, Math.round(width * dpr));
     const rtHeight = Math.max(1, Math.round(height * dpr));
     const rtOptions: THREE.RenderTargetOptions = {
       minFilter: THREE.LinearFilter,
       magFilter: THREE.LinearFilter,
       format: THREE.RGBAFormat,
+      type: this.isWebGL2Context ? THREE.HalfFloatType : THREE.UnsignedByteType,
       generateMipmaps: false,
     };
     this.motionBlurRenderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight, rtOptions);
@@ -5104,45 +5184,23 @@ export class BlackHoleSceneController {
   }
 
   /**
-   * Conditional device-type detection and WebGL pixel ratio controller:
-   * - Detects whether the runtime device is a mobile handset/tablet or a desktop display.
-   * - For high-resolution desktop displays (HiDPI / Retina where devicePixelRatio > 1.0 or large desktop viewports),
-   *   adjusts the WebGL canvas pixel ratio to 1.0 (down from devicePixelRatio) to alleviate fragment shader load
-   *   on complex Kerr raymarching and volumetric fBM shaders while maintaining smooth hardware bilinear upscaling.
+   * High-DPI WebGL pixel ratio controller:
+   * - Locks pixel ratio to Math.min(window.devicePixelRatio, 2) by default so both desktop and mobile
+   *   render with crisp anti-aliased edges, sharp spacetime grid lines, and full volumetric shader fidelity.
+   * - Disables automatic frame-spike resolution downscaling unless explicitly enabled via the opt-in
+   *   dynamicResolutionScaling setting in Settings.
    */
   private configureDevicePixelRatioAndUpscaling(width: number, height: number): number {
     const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1.0 : 1.0;
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-    const isMobileUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-    const isCoarsePointer =
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(pointer: coarse)').matches;
-    const isSmallViewport = width <= 768;
+    const nativeHighDpi = Math.min(rawDpr, 2.0);
 
-    const isMobileDeviceType = Boolean(
-      this.settings?.phoneMode || isMobileUa || (isCoarsePointer && isSmallViewport)
-    );
-    const isDesktopDeviceType = !isMobileDeviceType;
-
-    const screenWidth = typeof window !== 'undefined' && window.screen ? window.screen.width : width;
-    const screenHeight = typeof window !== 'undefined' && window.screen ? window.screen.height : height;
-    const isHighResDesktop =
-      isDesktopDeviceType &&
-      (rawDpr > 1.0 || width >= 1024 || height >= 768 || screenWidth >= 1280 || screenHeight >= 800);
-
-    let targetPixelRatio = 1.0;
-    if (isSoftwareGl) {
-      targetPixelRatio = 0.65;
-    } else if (isHighResDesktop || isDesktopDeviceType) {
-      // High-resolution desktop display: lock internal WebGL pixel ratio to 1.0 (down from devicePixelRatio)
-      targetPixelRatio = 1.0;
-    } else {
-      // Mobile device: allow up to 2.0x DPR on compact physical screens
-      targetPixelRatio = Math.min(rawDpr, 2.0);
+    let targetPixelRatio = nativeHighDpi;
+    if (this.settings?.dynamicResolutionScaling) {
+      // Strictly opt-in dynamic resolution scaling (OFF by default)
+      targetPixelRatio = isSoftwareGl ? 0.75 : Math.min(nativeHighDpi, 1.0);
     }
 
-    // Maintain high-quality hardware bilinear/bicubic upscaling on the canvas DOM element
+    // Maintain GPU-composited layer promotion on the canvas DOM element
     if (this.domElement) {
       this.domElement.style.imageRendering = 'auto';
       this.domElement.style.transform = 'translateZ(0)';
@@ -5154,27 +5212,74 @@ export class BlackHoleSceneController {
       if (this.renderer.getPixelRatio() !== targetPixelRatio) {
         this.renderer.setPixelRatio(targetPixelRatio);
       }
-      this.renderer.setSize(width, height, true);
+      if (
+        width !== this.lastResizeWidth ||
+        height !== this.lastResizeHeight ||
+        targetPixelRatio !== this.lastAppliedPixelRatio
+      ) {
+        this.renderer.setSize(width, height, true);
+      }
     }
 
     return targetPixelRatio;
   }
 
+  public isOrbitingCamera(): boolean {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    return this.isUserInteracting || now - this.lastOrbitEndMs < 300;
+  }
+
+  public getObserverSphericalCoords(): { rRs: number; thetaDeg: number; phiDeg: number } {
+    const dx = this.camera.position.x - this.controls.target.x;
+    const dy = this.camera.position.y - this.controls.target.y;
+    const dz = this.camera.position.z - this.controls.target.z;
+    const dist = Math.max(0.001, Math.hypot(dx, dy, dz));
+    const rRs = Math.max(1.0, dist / Math.max(0.1, 1.75 * this.currentScale));
+    const thetaDeg = THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(dy / dist, -1, 1)));
+    const phiDeg = ((THREE.MathUtils.radToDeg(Math.atan2(dz, dx)) % 360) + 360) % 360;
+    return { rRs, thetaDeg, phiDeg };
+  }
+
   private handleResize = () => {
     if (!this.container || this.isDisposed) return;
+    // Never resize the WebGL renderer or allocate new full-screen render targets while the user is actively dragging/orbiting
+    if (this.isUserInteracting) {
+      this.pendingResizeAfterOrbit = true;
+      return;
+    }
     const width = Math.max(1, this.container.clientWidth || window.innerWidth);
     const height = Math.max(1, this.container.clientHeight || window.innerHeight);
+    const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    const nativeHighDpi = Math.min(rawDpr, 2.0);
+    const expectedDpr = this.settings?.dynamicResolutionScaling
+      ? isSoftwareGl
+        ? 0.75
+        : Math.min(nativeHighDpi, 1.0)
+      : nativeHighDpi;
+    if (
+      width === this.lastResizeWidth &&
+      height === this.lastResizeHeight &&
+      expectedDpr === this.lastAppliedPixelRatio
+    ) {
+      return;
+    }
+
     this.camera.aspect = width / Math.max(1, height);
     this.camera.updateProjectionMatrix();
     const effectiveDpr = this.configureDevicePixelRatioAndUpscaling(width, height);
+    this.lastResizeWidth = width;
+    this.lastResizeHeight = height;
+    this.lastAppliedPixelRatio = effectiveDpr;
+    this.cachedCanvasRect = this.domElement.getBoundingClientRect();
+
+    const rtWidth = Math.max(1, Math.round(width * effectiveDpr));
+    const rtHeight = Math.max(1, Math.round(height * effectiveDpr));
     if (!this.renderer) {
-      this.domElement.width = width;
-      this.domElement.height = height;
+      this.domElement.width = rtWidth;
+      this.domElement.height = rtHeight;
       this.domElement.style.width = `${width}px`;
       this.domElement.style.height = `${height}px`;
     }
-    const rtWidth = Math.max(1, Math.round(width * effectiveDpr));
-    const rtHeight = Math.max(1, Math.round(height * effectiveDpr));
     this.motionBlurRenderTarget?.setSize(rtWidth, rtHeight);
     this.timeLapseTargetA?.setSize(rtWidth, rtHeight);
     this.timeLapseTargetB?.setSize(rtWidth, rtHeight);
@@ -5193,14 +5298,18 @@ export class BlackHoleSceneController {
 
   private handlePointerDown = (e: PointerEvent) => {
     this.pointerDownPos.set(e.clientX, e.clientY);
+    this.cachedCanvasRect = this.domElement.getBoundingClientRect();
   };
 
   private handlePointerMove = (e: PointerEvent) => {
+    // Decouple camera orbit dragging from pointer raycasting, layout reflows, and React state updates
+    if (this.isUserInteracting || e.buttons !== 0) return;
+
     const now = performance.now();
-    if (now - this.lastRaycastTime < 34) return;
+    if (now - this.lastRaycastTime < 64) return;
     this.lastRaycastTime = now;
 
-    const rect = this.domElement.getBoundingClientRect();
+    const rect = this.cachedCanvasRect || (this.cachedCanvasRect = this.domElement.getBoundingClientRect());
     this.pointerNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     this.pointerNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
@@ -5213,8 +5322,11 @@ export class BlackHoleSceneController {
       const hitRadius = this.isSingularityCollapsed
         ? Math.max(3.8, 1.8 * this.currentScale)
         : 2.25 * this.currentScale;
-      this.domElement.style.cursor = distToOrigin < hitRadius ? 'pointer' : 'crosshair';
-    } else {
+      const targetCursor = distToOrigin < hitRadius ? 'pointer' : 'crosshair';
+      if (this.domElement.style.cursor !== targetCursor) {
+        this.domElement.style.cursor = targetCursor;
+      }
+    } else if (this.domElement.style.cursor !== 'crosshair') {
       this.domElement.style.cursor = 'crosshair';
     }
 
@@ -5294,36 +5406,9 @@ export class BlackHoleSceneController {
   };
 
   private afterDraw(cb: () => void) {
-    if (!this.renderer) {
-      this.frameId = window.setTimeout(cb, 32);
-      return;
+    if (!this.isDisposed) {
+      this.frameId = window.setTimeout(cb, 16);
     }
-    const gl = this.renderer.getContext() as WebGL2RenderingContext;
-    if (!gl || !gl.fenceSync) {
-      this.frameId = window.setTimeout(() => {
-        if (!this.isDisposed) {
-          this.frameId = requestAnimationFrame(cb);
-        }
-      }, 48);
-      return;
-    }
-    const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
-    gl.flush();
-    const poll = () => {
-      if (this.isDisposed) return;
-      const state = sync && gl.getSyncParameter(sync, gl.SYNC_STATUS);
-      if (state === gl.UNSIGNALED) {
-        this.frameId = window.setTimeout(poll, 5);
-      } else {
-        if (sync) gl.deleteSync(sync);
-        this.frameId = window.setTimeout(() => {
-          if (!this.isDisposed) {
-            this.frameId = requestAnimationFrame(cb);
-          }
-        }, 48);
-      }
-    };
-    this.frameId = window.setTimeout(poll, 5);
   }
 
   private tick = () => {
@@ -5331,7 +5416,11 @@ export class BlackHoleSceneController {
 
     const nowPerfMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
     if (this.lastFramePerfMs > 0) {
-      const elapsedFrameMs = Math.min(250, Math.max(0.5, nowPerfMs - this.lastFramePerfMs));
+      const rawElapsedMs = Math.min(250, Math.max(0.5, nowPerfMs - this.lastFramePerfMs));
+      // Prevent transient pointer-event coalescing during active camera orbit drags from registering as a frame spike
+      const elapsedFrameMs = this.isOrbitingCamera()
+        ? Math.min(rawElapsedMs, Math.max(16.67, this.currentFrameTimeMs * 1.15))
+        : rawElapsedMs;
       this.currentFrameTimeMs = elapsedFrameMs;
       this.frameTimeSamples.push(elapsedFrameMs);
       if (this.frameTimeSamples.length > 60) {
@@ -6151,7 +6240,9 @@ export class BlackHoleSceneController {
       this.camera.updateMatrixWorld();
     }
 
-    if (isSoftwareGl && this.renderer) {
+    if (!this.renderer) {
+      this.frameId = window.setTimeout(this.tick, 16);
+    } else if (isSoftwareGl) {
       this.afterDraw(this.tick);
     } else {
       this.frameId = requestAnimationFrame(this.tick);
@@ -7214,6 +7305,7 @@ export class BlackHoleSceneController {
     if (!nextSettings.timeLapseEnabled) {
       this.resetTimeLapseExposure();
     }
+    this.handleResize();
   }
 
   public resetTimeLapseExposure() {
@@ -7590,6 +7682,10 @@ export class BlackHoleSceneController {
     this.isDisposed = true;
     cancelAnimationFrame(this.frameId);
     clearTimeout(this.frameId);
+    if (this.dragEndCooldownTimer !== null) {
+      window.clearTimeout(this.dragEndCooldownTimer);
+      this.dragEndCooldownTimer = null;
+    }
     window.removeEventListener('resize', this.handleResize);
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;

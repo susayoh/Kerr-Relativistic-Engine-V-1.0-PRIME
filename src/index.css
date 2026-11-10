@@ -109,3 +109,21 @@ input[type="range"].sci-slider::-webkit-slider-thumb:hover {
   border-radius: 9999px;
 }
 
+/* GPU compositor layer isolation for floating HUD panels to prevent full-screen canvas repaints */
+.hud-panel {
+  contain: layout style paint;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
+  background-color: rgba(10, 12, 18, 0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.hud-dock {
+  contain: layout style paint;
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
+

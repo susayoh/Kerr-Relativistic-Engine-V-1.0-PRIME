@@ -15,58 +15,41 @@ import {
 
 interface OverheadMapWidgetProps {
   sceneController: BlackHoleSceneController | null;
+  cameraCoordsRef?: React.RefObject<{ r: number; theta: number; phi: number }>;
   onSetProbeRadius?: (radiusRs: number) => void;
 }
 
 export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
   sceneController,
+  cameraCoordsRef,
   onSetProbeRadius,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
   const [zoomLevel, setZoomLevel] = useState<number>(1.0); // 1.0x (up to 7 Rs), 2.0x (zoom into ISCO/horizon)
-  const [telemetry, setTelemetry] = useState<{
-    rRs: number;
-    rRg: number;
-    phiDeg: number;
-    beta: number;
-    timeDilation: number;
-    orbitalStarsVisible: boolean;
-    eventHorizonRs: number;
-    photonSphereRs: number;
-    iscoRs: number;
-  }>({
-    rRs: 3.4,
-    rRg: 6.8,
-    phiDeg: 0,
-    beta: 0.48,
-    timeDilation: 0.82,
-    orbitalStarsVisible: false,
-    eventHorizonRs: 0.56,
-    photonSphereRs: 0.65,
-    iscoRs: 0.81,
-  });
+  const [orbitalStarsVisible, setOrbitalStarsVisible] = useState<boolean>(false);
+  const orbitalStarsVisibleRef = useRef<boolean>(false);
+
+  // Direct DOM refs for numeric telemetry so updates never trigger React component re-renders
+  const horizonValRef = useRef<HTMLSpanElement | null>(null);
+  const iscoValRef = useRef<HTMLSpanElement | null>(null);
+  const s2RadiusValRef = useRef<HTMLSpanElement | null>(null);
+  const s2RgValRef = useRef<HTMLSpanElement | null>(null);
+  const s2PhiValRef = useRef<HTMLSpanElement | null>(null);
+  const s2SpeedValRef = useRef<HTMLSpanElement | null>(null);
+  const s2DilationValRef = useRef<HTMLSpanElement | null>(null);
 
   const [hoverRadius, setHoverRadius] = useState<number | null>(null);
 
   // Pulse animation phase for real-time radar sweep / beacon effect
   const radarSweepAngleRef = useRef<number>(0);
 
-  // Animation render loop throttled to 30fps via requestAnimationFrame
+  // Imperative 2D canvas + DOM ref update loop throttled to 12.5 FPS (every 80ms)
   useEffect(() => {
-    let animId = 0;
-    const TARGET_FPS = 30;
-    const FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
-    let lastFrameTime = 0;
-    let lastTelemetryUpdate = 0;
+    const FRAME_INTERVAL_MS = 80; // 12.5 FPS (10-15 FPS maximum)
 
-    const render = (time: number) => {
-      animId = requestAnimationFrame(render);
-      const elapsedMs = time - lastFrameTime;
-      if (elapsedMs < FRAME_INTERVAL_MS) {
-        return;
-      }
-      lastFrameTime = time - (elapsedMs % FRAME_INTERVAL_MS);
+    const render = () => {
+      const time = performance.now();
       radarSweepAngleRef.current += 0.07;
 
       const canvas = canvasRef.current;
@@ -74,20 +57,24 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
 
       const data: OverheadTelemetryData = sceneController.getOverheadTelemetry();
 
-      // Throttle React state update for text stats to avoid unnecessary re-renders
-      if (time - lastTelemetryUpdate > 65) {
-        lastTelemetryUpdate = time;
-        setTelemetry({
-          rRs: data.probeRadiusRs,
-          rRg: data.probeRadiusRg,
-          phiDeg: data.probeAngleDeg,
-          beta: data.probeOrbitalBeta,
-          timeDilation: 1.0 / data.probeTimeDilationFactor,
-          orbitalStarsVisible: data.orbitalStarsVisible,
-          eventHorizonRs: data.eventHorizonRs,
-          photonSphereRs: data.photonSphereRs,
-          iscoRs: data.iscoRs,
-        });
+      // Only toggle React state if S-Stars layer visibility boolean actually changes
+      if (data.orbitalStarsVisible !== orbitalStarsVisibleRef.current) {
+        orbitalStarsVisibleRef.current = data.orbitalStarsVisible;
+        setOrbitalStarsVisible(data.orbitalStarsVisible);
+      }
+
+      // Imperatively update numeric readout DOM nodes with zero React re-renders
+      if (data.orbitalStarsVisible) {
+        if (s2RadiusValRef.current) s2RadiusValRef.current.textContent = data.probeRadiusRs.toFixed(2);
+        if (s2RgValRef.current) s2RgValRef.current.textContent = `(${data.probeRadiusRg.toFixed(2)} R_g)`;
+        if (s2PhiValRef.current) s2PhiValRef.current.textContent = `${data.probeAngleDeg.toFixed(1)}°`;
+        if (s2SpeedValRef.current) s2SpeedValRef.current.textContent = `${(data.probeOrbitalBeta * 100).toFixed(1)}%`;
+        if (s2DilationValRef.current) {
+          s2DilationValRef.current.textContent = (1.0 / data.probeTimeDilationFactor).toFixed(3);
+        }
+      } else {
+        if (horizonValRef.current) horizonValRef.current.textContent = data.eventHorizonRs.toFixed(2);
+        if (iscoValRef.current) iscoValRef.current.textContent = data.iscoRs.toFixed(2);
       }
 
       const ctx = canvas.getContext('2d');
@@ -335,12 +322,36 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
         ctx.setLineDash([]);
       }
 
+      // 13. Real-Time Observer Camera Azimuth & Line-of-Sight Indicator from cameraCoordsRef
+      const camCoords = cameraCoordsRef?.current;
+      if (camCoords) {
+        const phiRad = (camCoords.phi * Math.PI) / 180;
+        const indicatorRadius = Math.min(w, h) * 0.44;
+        const camX = cx + Math.cos(phiRad) * indicatorRadius;
+        const camY = cy + Math.sin(phiRad) * indicatorRadius;
+
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(camX, camY);
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+        ctx.lineWidth = 0.85;
+        ctx.setLineDash([2, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.beginPath();
+        ctx.arc(camX, camY, 2.6, 0, Math.PI * 2);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fill();
+      }
+
       ctx.restore();
     };
 
-    animId = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(animId);
-  }, [sceneController, isMinimized, zoomLevel, hoverRadius]);
+    render();
+    const timerId = window.setInterval(render, FRAME_INTERVAL_MS);
+    return () => window.clearInterval(timerId);
+  }, [sceneController, cameraCoordsRef, isMinimized, zoomLevel, hoverRadius]);
 
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -380,7 +391,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
   }, []);
 
   return (
-    <div className="w-60 bg-black/95 border border-neutral-800 rounded-lg shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
+    <div className="hud-panel w-60 bg-black/95 border border-neutral-800 rounded-lg shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
       {/* Top Header Bar */}
       <div className="flex items-center justify-between px-2.5 py-1.5 bg-neutral-950 border-b border-neutral-800/80">
         <div className="flex items-center gap-1.5">
@@ -440,44 +451,44 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
             </div>
 
             {/* Hover radius helper */}
-            {hoverRadius !== null && telemetry.orbitalStarsVisible && (
+            {hoverRadius !== null && orbitalStarsVisible && (
               <div className="absolute bottom-1 right-1.5 pointer-events-none text-[9px] font-mono text-amber-300/90 bg-black/80 px-1 rounded border border-neutral-800">
                 r: {hoverRadius.toFixed(2)} Rₛ (Click to set)
               </div>
             )}
           </div>
 
-          {/* Real-Time Telemetry Strip */}
-          {telemetry.orbitalStarsVisible ? (
+          {/* Real-Time Telemetry Strip (Updated imperatively via DOM refs) */}
+          {orbitalStarsVisible ? (
             <div className="grid grid-cols-2 gap-1 text-[10px] font-mono tabular-nums bg-neutral-950 px-2 py-1.5 rounded border border-neutral-800/80">
               <div>
                 <span className="text-neutral-500 block text-[8.5px] uppercase leading-tight">Star S2 Radius</span>
                 <span className="text-neutral-200 font-semibold">
-                  {telemetry.rRs.toFixed(2)} <span className="text-neutral-500 text-[9px]">Rₛ</span>
+                  <span ref={s2RadiusValRef}>3.40</span> <span className="text-neutral-500 text-[9px]">Rₛ</span>
                 </span>
-                <span className="text-neutral-500 text-[9px] ml-1">
-                  ({telemetry.rRg.toFixed(2)} R_g)
+                <span ref={s2RgValRef} className="text-neutral-500 text-[9px] ml-1">
+                  (6.80 R_g)
                 </span>
               </div>
 
               <div>
                 <span className="text-neutral-500 block text-[8.5px] uppercase leading-tight">Azimuth (φ)</span>
-                <span className="text-amber-300/90 font-semibold">
-                  {telemetry.phiDeg.toFixed(1)}°
+                <span ref={s2PhiValRef} className="text-amber-300/90 font-semibold">
+                  0.0°
                 </span>
               </div>
 
               <div>
                 <span className="text-neutral-500 block text-[8.5px] uppercase leading-tight">Orbital Speed</span>
                 <span className="text-neutral-200 font-semibold">
-                  {(telemetry.beta * 100).toFixed(1)}% <span className="text-neutral-500 text-[9px]">c</span>
+                  <span ref={s2SpeedValRef}>48.0%</span> <span className="text-neutral-500 text-[9px]">c</span>
                 </span>
               </div>
 
               <div>
                 <span className="text-neutral-500 block text-[8.5px] uppercase leading-tight">Clock Dilation</span>
                 <span className="text-neutral-200 font-semibold">
-                  {telemetry.timeDilation.toFixed(3)} <span className="text-neutral-500 text-[9px]">dτ/dt</span>
+                  <span ref={s2DilationValRef}>0.820</span> <span className="text-neutral-500 text-[9px]">dτ/dt</span>
                 </span>
               </div>
             </div>
@@ -486,14 +497,14 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
               <div>
                 <span className="text-neutral-500 block text-[8.5px] uppercase leading-tight">Horizon (r₊)</span>
                 <span className="text-amber-300/90 font-semibold">
-                  {telemetry.eventHorizonRs.toFixed(2)} <span className="text-neutral-500 text-[9px]">Rₛ</span>
+                  <span ref={horizonValRef}>0.60</span> <span className="text-neutral-500 text-[9px]">Rₛ</span>
                 </span>
               </div>
 
               <div>
                 <span className="text-neutral-500 block text-[8.5px] uppercase leading-tight">ISCO Boundary</span>
                 <span className="text-cyan-300/90 font-semibold">
-                  {telemetry.iscoRs.toFixed(2)} <span className="text-neutral-500 text-[9px]">Rₛ</span>
+                  <span ref={iscoValRef}>0.81</span> <span className="text-neutral-500 text-[9px]">Rₛ</span>
                 </span>
               </div>
             </div>

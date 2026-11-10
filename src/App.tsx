@@ -254,11 +254,20 @@ export default function App() {
 
   const [inspectedFeature, setInspectedFeature] = useState<InspectedFeature | null>(null);
   const [lastTrajectory, setLastTrajectory] = useState<GeodesicTrajectory | null>(null);
-  const [hoverCoords, setHoverCoords] = useState<{
+  const hoverCoordsRef = useRef<{
     rRs: number;
     phiDeg: number;
     redshiftZ: number;
   } | null>(null);
+  const cameraCoordsRef = useRef<{
+    r: number;
+    theta: number;
+    phi: number;
+  }>({ r: 14.8, theta: 72, phi: 90 });
+  const observerReadoutRef = useRef<HTMLDivElement | null>(null);
+  const lastObserverDomUpdateRef = useRef<number>(0);
+  const isDraggingCameraRef = useRef<boolean>(false);
+  const cursorReadoutRef = useRef<HTMLDivElement | null>(null);
 
   const metrics = useMemo(() => computeRelativisticMetrics(params), [params]);
 
@@ -318,6 +327,13 @@ export default function App() {
 
   const appendLogEvent = useCallback(
     (category: AstrophysicalEventCategory, message: string, detail?: string) => {
+      // Never append WARNING: Frame spike detected or background spike warnings while the user is actively orbiting/zooming the camera
+      if (
+        (isDraggingCameraRef.current || sceneControllerRef.current?.isOrbitingCamera()) &&
+        (message.toLowerCase().includes('spike') || category !== 'system')
+      ) {
+        return;
+      }
       const timestamp = formatLogTimestamp();
       setEventLogs((prev) => {
         const next: AstrophysicalLogEvent = {
@@ -368,7 +384,32 @@ export default function App() {
           );
         }
       },
-      onHoverCoordsChange: (coords) => setHoverCoords(coords),
+      onHoverCoordsChange: (coords) => {
+        hoverCoordsRef.current = coords;
+        const el = cursorReadoutRef.current;
+        if (el) {
+          if (coords) {
+            el.style.display = 'block';
+            el.textContent = `Cursor: r = ${coords.rRs.toFixed(2)} Rₛ · φ = ${coords.phiDeg.toFixed(0)}° · z = +${coords.redshiftZ.toFixed(3)}`;
+          } else {
+            el.style.display = 'none';
+          }
+        }
+      },
+      onObserverReadoutChange: ({ rRs, thetaDeg, phiDeg }, forceImmediate) => {
+        cameraCoordsRef.current = { r: rRs, theta: thetaDeg, phi: phiDeg };
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        if (forceImmediate || now - lastObserverDomUpdateRef.current >= 100) {
+          lastObserverDomUpdateRef.current = now;
+          const el = observerReadoutRef.current;
+          if (el) {
+            el.textContent = `Observer: r = ${rRs.toFixed(1)} Rₛ | θ = ${thetaDeg.toFixed(0)}° | φ = ${phiDeg.toFixed(0)}°`;
+          }
+        }
+      },
+      onCameraDragStateChange: (isDragging) => {
+        isDraggingCameraRef.current = isDragging;
+      },
       onSingularityStateChange: (collapsed) => {
         setIsSingularityCollapsed(collapsed);
         if (!collapsed) {
@@ -411,7 +452,9 @@ export default function App() {
       onFeatureSelect: (feat) => {
         setInspectedFeature(feat);
       },
-      onHoverCoordsChange: (coords) => setHoverCoords(coords),
+      onHoverCoordsChange: (coords) => {
+        hoverCoordsRef.current = coords;
+      },
       onCameraChange: (pos, target) => {
         sceneControllerRef.current?.syncCameraPose(pos, target);
       },
@@ -582,7 +625,7 @@ export default function App() {
     let tickCount = 0;
     const intervalId = window.setInterval(() => {
       const ctrl = sceneControllerRef.current;
-      if (!ctrl || isSingularityCollapsed) return;
+      if (!ctrl || isSingularityCollapsed || ctrl.isOrbitingCamera()) return;
 
       tickCount += 1;
       const telemetry = ctrl.getOverheadTelemetry();
@@ -1357,7 +1400,7 @@ export default function App() {
 
         {/* High-Visibility Simulation Paused Status Pill */}
         {params.timeScale === 0 && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#050811]/95 border border-amber-500/60 text-amber-300 font-mono text-[11px] font-semibold backdrop-blur-md shadow-[0_0_25px_rgba(245,158,11,0.3)]">
+          <div className="hud-panel absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#050811]/95 border border-amber-500/60 text-amber-300 font-mono text-[11px] font-semibold shadow-[0_0_25px_rgba(245,158,11,0.3)]">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
             <span className="tracking-wide">{t.simulationPaused}</span>
             <button
@@ -1384,10 +1427,10 @@ export default function App() {
 
         {/* Left HUD Column: Target Specification Badge + Overhead Radar + Event Log */}
         {!isCleanMode && !isCompareMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation || settings.showEventLog !== false) && (
-          <div className={`absolute top-2 sm:top-2.5 left-2 sm:left-3.5 z-10 flex flex-col items-start gap-1.5 sm:gap-2 pointer-events-none ${isPhone ? 'w-[210px]' : 'w-60'}`}>
+          <div className={`hud-panel absolute top-2 sm:top-2.5 left-2 sm:left-3.5 z-10 flex flex-col items-start gap-1.5 sm:gap-2 pointer-events-none ${isPhone ? 'w-[210px]' : 'w-60'}`}>
             {/* Target Spec Badge */}
             {settings.showLeftHud && (
-              <div className={`pointer-events-auto bg-[#050811]/95 border border-slate-800/80 rounded-xl ${isPhone ? 'p-1.5' : 'p-2.5'} shadow-xl transition-all w-full`}>
+              <div className={`hud-panel pointer-events-auto bg-[#050811]/95 border border-slate-800/80 rounded-xl ${isPhone ? 'p-1.5' : 'p-2.5'} shadow-xl transition-all w-full`}>
                 <div className="flex items-center justify-between gap-1.5">
                   <span
                     className={`px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold uppercase tracking-wider border shrink-0 ${
@@ -1417,7 +1460,7 @@ export default function App() {
                       </span>
                     )}
                     {params.objectCategory === 'luminous_star' && (
-                      <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-mono font-normal flex items-center gap-0.5">
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 font-mono font-normal flex items-center gap-0.5">
                         <Sparkles className="w-2.5 h-2.5 text-indigo-400" />
                         Star
                       </span>
@@ -1439,6 +1482,15 @@ export default function App() {
                   <span>a* <strong className="text-cyan-300">{params.spin.toFixed(3)}</strong></span>
                 </div>
 
+                {/* Direct DOM-Ref Observer Spherical Readout (Zero React re-renders during OrbitControls drag) */}
+                <div
+                  ref={observerReadoutRef}
+                  data-testid="observer-readout"
+                  className="mt-1 pt-1 border-t border-slate-800/50 text-[9px] font-mono text-slate-300 tabular-nums truncate"
+                >
+                  Observer: r = 14.8 Rₛ | θ = 72° | φ = 90°
+                </div>
+
                 {/* Quick Link to Real Scale Explorer if TON 618 is selected */}
                 {activePreset.id === 'ton618' && (
                   <div className="mt-1 pt-1 border-t border-slate-800/60 flex items-center justify-between gap-1">
@@ -1454,10 +1506,12 @@ export default function App() {
                   </div>
                 )}
 
-                {settings.showCursorTelemetry && hoverCoords && (
-                  <div className="mt-1 pt-1 border-t border-slate-800/50 text-[9.5px] font-mono text-cyan-300/90 tabular-nums">
-                    {t.cursorLabel}: r = {hoverCoords.rRs.toFixed(2)} Rₛ · φ = {hoverCoords.phiDeg.toFixed(0)}° · z = +{hoverCoords.redshiftZ.toFixed(3)}
-                  </div>
+                {settings.showCursorTelemetry && (
+                  <div
+                    ref={cursorReadoutRef}
+                    style={{ display: 'none' }}
+                    className="mt-1 pt-1 border-t border-slate-800/50 text-[9.5px] font-mono text-cyan-300/90 tabular-nums truncate"
+                  />
                 )}
               </div>
             )}
@@ -1467,6 +1521,7 @@ export default function App() {
               <div className="pointer-events-auto">
                 <OverheadMapWidget
                   sceneController={controllerInstance || sceneControllerRef.current}
+                  cameraCoordsRef={cameraCoordsRef}
                   onSetProbeRadius={(newRadius) =>
                     setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
                   }
@@ -1506,7 +1561,7 @@ export default function App() {
 
         {/* Interactive Click-to-Inspect Feature Popover (Bottom-Right when active) */}
         {!isCleanMode && inspectedFeature && (
-          <div className="absolute bottom-24 right-6 z-20 w-80 bg-[#080c16]/95 border border-slate-800 rounded-lg p-3.5 shadow-xl pointer-events-auto">
+          <div className="hud-panel absolute bottom-24 right-6 z-20 w-80 bg-[#080c16]/95 border border-slate-800 rounded-lg p-3.5 shadow-xl pointer-events-auto">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <div className="text-[11px] font-mono text-amber-400">
@@ -1536,7 +1591,7 @@ export default function App() {
 
         {/* Interactive Singularity Ball Prompt (Displayed when compressed as a small singularity ball) */}
         {!isCleanMode && !isStar && isSingularityCollapsed && (
-          <div className={`absolute ${isPhone ? (isDockCollapsed ? 'bottom-14' : 'bottom-[200px]') : 'bottom-20 sm:bottom-24'} left-1/2 -translate-x-1/2 z-20 pointer-events-auto px-2 w-full max-w-sm flex justify-center transition-all`}>
+          <div className={`hud-panel absolute ${isPhone ? (isDockCollapsed ? 'bottom-14' : 'bottom-[200px]') : 'bottom-20 sm:bottom-24'} left-1/2 -translate-x-1/2 z-20 pointer-events-auto px-2 w-full max-w-sm flex justify-center transition-all`}>
             <button
               type="button"
               onClick={() => {
@@ -1558,7 +1613,7 @@ export default function App() {
 
         {/* Clean Mode Floating Restore UI & Export Snapshot Buttons (Unobtrusive Bottom-Right Corner) */}
         {isCleanMode && (
-          <div className="absolute bottom-5 right-5 z-30 pointer-events-auto flex items-center gap-2">
+          <div className="hud-panel absolute bottom-5 right-5 z-30 pointer-events-auto flex items-center gap-2">
             <button
               type="button"
               onClick={handleExportSnapshot}
@@ -1616,7 +1671,7 @@ export default function App() {
             params={params}
             metrics={metrics}
             sceneController={controllerInstance || sceneControllerRef.current}
-            hoverCoords={hoverCoords}
+            hoverCoordsRef={hoverCoordsRef}
             onChangeProbeRadius={(newRadius) =>
               setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
             }

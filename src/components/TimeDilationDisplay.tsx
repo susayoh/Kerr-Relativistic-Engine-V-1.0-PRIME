@@ -59,7 +59,7 @@ export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
       tSecRef.current += deltaSec;
       tauSecRef.current += deltaSec * dilation.dtau_dt;
 
-      if (now - lastRenderUpdate > 65) {
+      if (now - lastRenderUpdate >= 150) {
         lastRenderUpdate = now;
         setClockState({
           tSeconds: tSecRef.current,
@@ -86,7 +86,7 @@ export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
       <button
         type="button"
         onClick={() => setIsCollapsed(false)}
-        className="flex items-center gap-2 px-3 py-1.5 bg-black/95 border border-neutral-800 rounded-lg shadow-lg hover:border-neutral-700 hover:bg-neutral-900 transition-all text-xs font-mono cursor-pointer group"
+        className="hud-panel flex items-center gap-2 px-3 py-1.5 bg-black/95 border border-neutral-800 rounded-lg shadow-lg hover:border-neutral-700 hover:bg-neutral-900 transition-all text-xs font-mono cursor-pointer group"
         title="Click to view time dilation details"
       >
         <Clock className="w-3.5 h-3.5 text-amber-400/90 group-hover:rotate-12 transition-transform" />
@@ -101,7 +101,7 @@ export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
 
   // Expanded: Compact, friendly card in plain English
   return (
-    <div className="w-64 sm:w-72 bg-black/95 border border-neutral-800 rounded-xl shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
+    <div className="hud-panel w-64 sm:w-72 bg-black/95 border border-neutral-800 rounded-xl shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
       {/* Header Bar */}
       <div className="flex items-center justify-between px-3 py-2 bg-neutral-950 border-b border-neutral-800/80">
         <div className="flex items-center gap-1.5">

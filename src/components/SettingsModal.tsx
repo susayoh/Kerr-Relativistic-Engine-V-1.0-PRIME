@@ -1127,6 +1127,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
+            {/* Opt-In Dynamic Resolution Scaling (Defaults to OFF / Locked Native High-DPI @2x) */}
+            <div className="flex items-center justify-between gap-3 pt-1 pb-2 border-b border-neutral-900">
+              <div>
+                <div className="text-neutral-100 font-medium text-xs flex items-center gap-1.5">
+                  <span>Dynamic Resolution Downscaling</span>
+                  <span className="text-[9.5px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    {settings.dynamicResolutionScaling ? 'OPT-IN ON' : 'LOCKED HIGH-DPI'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400 mt-0.5">
+                  Keep OFF (default) to lock crisp High-DPI (@2x) anti-aliased rendering without automatic frame-spike resolution downgrades.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSetting('dynamicResolutionScaling')}
+                className={`w-11 h-6 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 ${
+                  settings.dynamicResolutionScaling
+                    ? 'bg-amber-500/40 border border-amber-400'
+                    : 'bg-neutral-800 border border-neutral-700'
+                }`}
+                aria-label="Toggle dynamic resolution scaling"
+              >
+                <div
+                  className={`w-4.5 h-4.5 rounded-full transition-transform ${
+                    settings.dynamicResolutionScaling
+                      ? 'translate-x-5 bg-amber-300'
+                      : 'translate-x-0 bg-neutral-500'
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* Bloom Intensity Slider */}
             <div className="pt-1 pb-2 border-b border-neutral-900">
               <div className="flex items-center justify-between mb-1.5">

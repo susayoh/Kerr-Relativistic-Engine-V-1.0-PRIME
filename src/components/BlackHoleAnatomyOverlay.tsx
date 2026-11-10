@@ -166,7 +166,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
 
     let lastUpdate = 0;
     const updateAnchors = (now: number) => {
-      if (now - lastUpdate > 24) {
+      if (now - lastUpdate >= 150) {
         lastUpdate = now;
         try {
           const projected = sceneController.getAnatomyCalloutAnchors();
@@ -232,7 +232,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
             top: `${boxY}px`,
             width: `${spec.width}px`,
           }}
-          className="absolute pointer-events-none z-20"
+          className="hud-panel absolute pointer-events-none z-20"
         >
           <h3
             className="text-white font-sans font-normal text-[17px] sm:text-[18px] leading-snug tracking-tight"
@@ -250,7 +250,7 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
       ))}
 
       {/* Sleek Right-Docked Control Pill (Positioned in the Right HUD slot) */}
-      <div className="absolute top-3 right-6 z-25 pointer-events-auto flex flex-col items-end gap-2">
+      <div className="hud-panel absolute top-3 right-6 z-25 pointer-events-auto flex flex-col items-end gap-2">
         <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-black/90 border border-neutral-800 rounded-lg shadow-2xl ring-1 ring-neutral-800/60">
           <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
           <span className="font-display text-[11px] font-bold uppercase tracking-wider text-neutral-100 mr-1">
