@@ -1,7 +1,8 @@
 import React from 'react';
-import { Sparkles, Layers, Activity, Download, Maximize2, Zap, Sun, Eye, EyeOff, Settings, Orbit, ChevronDown, BookOpen } from 'lucide-react';
+import { Sparkles, Layers, Activity, Download, Maximize2, Zap, Sun, Eye, EyeOff, Settings, Orbit, ChevronDown, BookOpen, Video, Square } from 'lucide-react';
 import { ASTROPHYSICAL_PRESETS, BackgroundThemeId, BACKGROUND_THEMES, SystemCategory } from '../physics/gravitationalPhysics';
 import { useHaptics } from '../hooks/useHaptics';
+import { AppLanguage, TRANSLATIONS } from '../i18n/translations';
 
 interface TopBarProps {
   activePresetId: string;
@@ -18,10 +19,14 @@ interface TopBarProps {
   isAnatomyVisible: boolean;
   onToggleAnatomyVisible: () => void;
   onExportSnapshot: () => void;
+  isRecording?: boolean;
+  recordingSeconds?: number;
+  onToggleRecording?: () => void;
   isCleanMode?: boolean;
   onToggleCleanMode?: () => void;
   isPhoneMode?: boolean;
   hapticsEnabled?: boolean;
+  language?: AppLanguage;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -39,12 +44,17 @@ export const TopBar: React.FC<TopBarProps> = ({
   isAnatomyVisible,
   onToggleAnatomyVisible,
   onExportSnapshot,
+  isRecording = false,
+  recordingSeconds = 0,
+  onToggleRecording,
   isCleanMode = false,
   onToggleCleanMode,
   isPhoneMode = false,
   hapticsEnabled = true,
+  language = 'en',
 }) => {
   const haptics = useHaptics({ enabled: hapticsEnabled });
+  const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const activePreset = ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
 
   return (
@@ -60,7 +70,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           className="font-display text-sm sm:text-base font-bold tracking-tight text-neutral-200 whitespace-nowrap hover:text-amber-300 transition-colors flex items-center gap-1.5"
         >
           <span>Kerr</span>
-          <span className={isPhoneMode ? 'hidden sm:inline' : 'inline'}>Visualizer</span>
+          <span className={isPhoneMode ? 'hidden sm:inline' : 'inline'}>{t.brandVisualizer}</span>
         </a>
 
         <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
@@ -94,10 +104,10 @@ export const TopBar: React.FC<TopBarProps> = ({
               title="Switch System Category between an Isolated Singularity and a Binary Accretion System (Roche Lobe Overflow)"
             >
               <option value="isolated" className="bg-neutral-950 text-neutral-200">
-                {isPhoneMode ? 'Isolated' : 'Isolated Singularity'}
+                {isPhoneMode ? t.isolatedShort : t.isolatedSingularity}
               </option>
               <option value="binary" className="bg-neutral-950 text-amber-200">
-                {isPhoneMode ? 'Binary' : 'Binary Accretion'}
+                {isPhoneMode ? t.binaryShort : t.binaryAccretion}
               </option>
             </select>
             <ChevronDown className="w-3 h-3 text-amber-400/80 absolute right-1.5 pointer-events-none" />
@@ -150,7 +160,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           title="Hide all UI elements for an unobstructed clean view (Shortcut: C / ESC)"
         >
           <EyeOff className="w-3.5 h-3.5 text-amber-400" />
-          <span className="hidden sm:inline">Hide UI</span>
+          <span className="hidden sm:inline">{t.hideUi}</span>
         </button>
 
         {/* Anatomy Infographic Lines Toggle */}
@@ -172,7 +182,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           ) : (
             <EyeOff className="w-3.5 h-3.5 text-neutral-500" />
           )}
-          <span className="hidden sm:inline">Anatomy Guide</span>
+          <span className="hidden sm:inline">{t.anatomyGuide}</span>
         </button>
 
         {/* Soothing Background Environments Picker */}
@@ -186,7 +196,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           title={`Active Background: ${BACKGROUND_THEMES[activeBackgroundTheme]?.name || 'Galactic Center'}`}
         >
           <Sun className="w-3.5 h-3.5 text-neutral-400" />
-          <span>Backgrounds</span>
+          <span>{t.backgrounds}</span>
         </button>
 
         <button
@@ -199,7 +209,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           title="Open True Cosmic Scale Explorer (Why TON 618 is 66 Billion Suns)"
         >
           <Maximize2 className="w-3.5 h-3.5 text-neutral-400" />
-          <span>Real Scale</span>
+          <span>{t.realScale}</span>
         </button>
 
         <button
@@ -212,7 +222,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           title="Open Black Hole & Star Archetypes Guide"
         >
           <Layers className="w-3.5 h-3.5 text-neutral-400" />
-          <span>Archetypes</span>
+          <span>{t.archetypes}</span>
         </button>
 
         {onOpenQuickGuideModal && (
@@ -226,7 +236,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             title="Open Plain-English Physics Quick-Guide (Simple Analogies for Spin, Accretion Rate & Well Depth)"
           >
             <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Quick Guide</span>
+            <span className="hidden sm:inline">{t.quickGuide}</span>
           </button>
         )}
 
@@ -240,7 +250,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           title="View Kerr Spacetime Metrics & Relativistic Potential"
         >
           <Activity className="w-3.5 h-3.5 text-neutral-400" />
-          <span>Metrics</span>
+          <span>{t.metrics}</span>
         </button>
 
         {/* Settings Button */}
@@ -258,7 +268,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           title="Open Visualizer Settings & Preferences (Phone Mode)"
         >
           <Settings className={`w-3.5 h-3.5 ${isPhoneMode ? 'text-emerald-400' : 'text-amber-400/90'}`} />
-          <span className="hidden sm:inline">Settings</span>
+          <span className="hidden sm:inline">{t.settings}</span>
           {isPhoneMode && (
             <span className="flex items-center gap-1 text-[10px] font-mono text-emerald-300 font-bold" title="Phone Mode Active">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -277,8 +287,43 @@ export const TopBar: React.FC<TopBarProps> = ({
           title="Export high-resolution PNG snapshot"
         >
           <Download className="w-3 h-3 text-amber-400/90" />
-          <span className="hidden sm:inline">Export</span>
+          <span className="hidden sm:inline">{t.exportSnapshot}</span>
         </button>
+
+        {onToggleRecording && (
+          <button
+            type="button"
+            onClick={() => {
+              haptics.medium();
+              onToggleRecording();
+            }}
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 text-xs font-semibold rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
+              isRecording
+                ? 'bg-rose-500/25 border-rose-400 text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.4)]'
+                : 'bg-neutral-800 border-neutral-700 text-neutral-200 hover:bg-neutral-700 hover:text-white'
+            }`}
+            title={
+              isRecording
+                ? 'Stop recording and download video file'
+                : 'Record high-bitrate video of the simulation'
+            }
+          >
+            {isRecording ? (
+              <>
+                <Square className="w-3 h-3 fill-rose-400 text-rose-400" />
+                <span className="font-mono text-[11px]">
+                  {t.stopRecording} {Math.floor(recordingSeconds / 60)}:
+                  {(recordingSeconds % 60).toString().padStart(2, '0')}
+                </span>
+              </>
+            ) : (
+              <>
+                <Video className="w-3.5 h-3.5 text-rose-400" />
+                <span className="hidden sm:inline">{t.recordVideo}</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
     </header>
   );

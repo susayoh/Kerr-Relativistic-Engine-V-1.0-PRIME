@@ -51,13 +51,18 @@ export interface VisualizerSettings {
   showOverheadMap: boolean;
   showTimeDilation: boolean;
   showCursorTelemetry: boolean;
+  showEventLog: boolean;
   phoneMode: boolean;
   hapticsEnabled: boolean;
+  hapticsIntensity: number;
   includeUiInExport: boolean;
+  includeUiInVideoExport: boolean;
+  timeLapseEnabled: boolean;
   rapidAdjustmentRipples: boolean;
   accretionShockwaveEnabled: boolean;
   secret1987Unlocked?: boolean;
   secret1987Mode?: boolean;
+  language?: 'en' | 'de' | 'ja' | 'es' | 'zh';
 }
 
 export const isMobileDevice = (() => {
@@ -81,13 +86,18 @@ export const DEFAULT_VISUALIZER_SETTINGS: VisualizerSettings = {
   showOverheadMap: !isMobileDevice,
   showTimeDilation: false,
   showCursorTelemetry: !isMobileDevice,
+  showEventLog: true,
   phoneMode: isMobileDevice,
   hapticsEnabled: true,
+  hapticsIntensity: 1.0,
   includeUiInExport: false,
+  includeUiInVideoExport: false,
+  timeLapseEnabled: false,
   rapidAdjustmentRipples: true,
   accretionShockwaveEnabled: true,
   secret1987Unlocked: false,
   secret1987Mode: false,
+  language: 'en',
 };
 
 
@@ -1536,46 +1546,66 @@ const MOTION_BLUR_VERTEX_SHADER = `
 
 const MOTION_BLUR_FRAGMENT_SHADER = `
   uniform sampler2D tDiffuse;
+  uniform sampler2D tAccum;
   uniform vec2 uVelocity;
   uniform float uStrength;
   uniform vec2 uResolution;
+  uniform float uTimeLapseMix;
+  uniform float uExposureBoost;
   varying vec2 vUv;
 
   void main() {
+    vec4 currentFrame;
+
     if (uStrength < 0.005) {
-      gl_FragColor = texture2D(tDiffuse, vUv);
+      currentFrame = texture2D(tDiffuse, vUv);
+    } else {
+      // Relativistic motion streak & chromatic aberration
+      vec2 screenAspect = vec2(uResolution.x / max(1.0, uResolution.y), 1.0);
+      vec2 blurDir = uVelocity * (uStrength * 0.042);
+      blurDir.x /= max(0.1, screenAspect.x);
+
+      vec4 accum = vec4(0.0);
+      float totalWeight = 0.0;
+
+      // 9-tap directional integration with relativistic chromatic dispersion
+      for (int i = -4; i <= 4; i++) {
+        float t = float(i) / 4.0;
+        float weight = exp(-t * t * 2.2);
+        vec2 offset = blurDir * t;
+
+        // Relativistic chromatic aberration: slight Doppler dispersion of wavelengths
+        float r = texture2D(tDiffuse, vUv + offset * (1.0 + 0.16 * uStrength)).r;
+        float g = texture2D(tDiffuse, vUv + offset).g;
+        float b = texture2D(tDiffuse, vUv + offset * (1.0 - 0.16 * uStrength)).b;
+        float a = texture2D(tDiffuse, vUv + offset).a;
+
+        accum += vec4(r, g, b, a) * weight;
+        totalWeight += weight;
+      }
+
+      vec4 finalColor = accum / totalWeight;
+      vec3 tinted = mix(finalColor.rgb, finalColor.rgb * vec3(0.94, 0.98, 1.06), uStrength * 0.22);
+      currentFrame = vec4(tinted, finalColor.a);
+    }
+
+    // Long-Exposure Time-Lapse Astrophotography Accumulation
+    if (uTimeLapseMix > 0.001) {
+      vec4 prevAccum = texture2D(tAccum, vUv);
+      vec3 boostedCurrent = currentFrame.rgb * (1.0 + uExposureBoost * 0.28);
+
+      // Combine exponential temporal integration with luminous peak-hold for crisp orbital star & plasma trails
+      vec3 emaBlend = mix(boostedCurrent, prevAccum.rgb, uTimeLapseMix);
+      vec3 trailPeak = max(prevAccum.rgb * (0.988 + 0.009 * uTimeLapseMix), boostedCurrent);
+      vec3 longExposureRgb = mix(emaBlend, trailPeak, 0.58);
+
+      // Soft astrophotography highlight roll-off to preserve color saturation in the accumulated core
+      longExposureRgb = longExposureRgb / (vec3(1.0) + max(vec3(0.0), longExposureRgb - vec3(0.85)) * 0.18);
+      gl_FragColor = vec4(longExposureRgb, max(currentFrame.a, prevAccum.a));
       return;
     }
 
-    // Relativistic motion streak & chromatic aberration
-    vec2 screenAspect = vec2(uResolution.x / max(1.0, uResolution.y), 1.0);
-    vec2 blurDir = uVelocity * (uStrength * 0.042);
-    blurDir.x /= max(0.1, screenAspect.x);
-
-    vec4 accum = vec4(0.0);
-    float totalWeight = 0.0;
-
-    // 9-tap directional integration with relativistic chromatic dispersion
-    for (int i = -4; i <= 4; i++) {
-      float t = float(i) / 4.0;
-      float weight = exp(-t * t * 2.2);
-      vec2 offset = blurDir * t;
-
-      // Relativistic chromatic aberration: slight Doppler dispersion of wavelengths
-      float r = texture2D(tDiffuse, vUv + offset * (1.0 + 0.16 * uStrength)).r;
-      float g = texture2D(tDiffuse, vUv + offset).g;
-      float b = texture2D(tDiffuse, vUv + offset * (1.0 - 0.16 * uStrength)).b;
-      float a = texture2D(tDiffuse, vUv + offset).a;
-
-      accum += vec4(r, g, b, a) * weight;
-      totalWeight += weight;
-    }
-
-    vec4 finalColor = accum / totalWeight;
-
-    // Relativistic Doppler optical headlamp tint on high-speed observer motion
-    vec3 tinted = mix(finalColor.rgb, finalColor.rgb * vec3(0.94, 0.98, 1.06), uStrength * 0.22);
-    gl_FragColor = vec4(tinted, finalColor.a);
+    gl_FragColor = currentFrame;
   }
 `;
 
@@ -1591,8 +1621,13 @@ export class BlackHoleSceneController {
   private frameId = 0;
   private isDisposed = false;
 
-  // Relativistic Camera-Motion Blur Post-Processing
+  // Relativistic Camera-Motion Blur & Long-Exposure Time-Lapse Post-Processing
   private motionBlurRenderTarget!: THREE.WebGLRenderTarget;
+  private timeLapseTargetA!: THREE.WebGLRenderTarget;
+  private timeLapseTargetB!: THREE.WebGLRenderTarget;
+  private timeLapseReadFirst = true;
+  private timeLapseInitialized = false;
+  private timeLapseExposureSeconds = 0.0;
   private postScene = new THREE.Scene();
   private postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private postMaterial!: THREE.ShaderMaterial;
@@ -2624,6 +2659,8 @@ export class BlackHoleSceneController {
 
   private neutronStarMat!: THREE.ShaderMaterial;
   private pulsarBeamSystem!: PulsarBeamSystem;
+  private currentMagneticAxis = new THREE.Vector3(0, 1, 0);
+  private lastHotspotAlignment = 0;
 
   private buildPrototypeNeutronStar() {
     const initialMagAxis = new THREE.Vector3(Math.sin(0.42), Math.cos(0.42), 0.0).normalize();
@@ -3174,17 +3211,23 @@ export class BlackHoleSceneController {
   private buildRelativisticMotionBlurPass() {
     const width = this.container.clientWidth || window.innerWidth;
     const height = this.container.clientHeight || window.innerHeight;
-    this.motionBlurRenderTarget = new THREE.WebGLRenderTarget(width, height, {
+    const rtOptions: THREE.RenderTargetOptions = {
       minFilter: THREE.LinearFilter,
       magFilter: THREE.LinearFilter,
       format: THREE.RGBAFormat,
-    });
+    };
+    this.motionBlurRenderTarget = new THREE.WebGLRenderTarget(width, height, rtOptions);
+    this.timeLapseTargetA = new THREE.WebGLRenderTarget(width, height, rtOptions);
+    this.timeLapseTargetB = new THREE.WebGLRenderTarget(width, height, rtOptions);
     this.postMaterial = new THREE.ShaderMaterial({
       uniforms: {
         tDiffuse: { value: this.motionBlurRenderTarget.texture },
+        tAccum: { value: this.timeLapseTargetA.texture },
         uVelocity: { value: this.camMotionVelocity },
         uStrength: { value: 0.0 },
         uResolution: { value: new THREE.Vector2(width, height) },
+        uTimeLapseMix: { value: 0.0 },
+        uExposureBoost: { value: 0.0 },
       },
       vertexShader: MOTION_BLUR_VERTEX_SHADER,
       fragmentShader: MOTION_BLUR_FRAGMENT_SHADER,
@@ -4232,6 +4275,9 @@ export class BlackHoleSceneController {
       this.domElement.style.height = `${height}px`;
     }
     this.motionBlurRenderTarget?.setSize(width, height);
+    this.timeLapseTargetA?.setSize(width, height);
+    this.timeLapseTargetB?.setSize(width, height);
+    this.timeLapseInitialized = false;
     if (this.postMaterial) {
       this.postMaterial.uniforms.uResolution.value.set(width, height);
     }
@@ -4582,11 +4628,49 @@ export class BlackHoleSceneController {
           isLuminous ? 0.35 : 0.55,
           this.pulsarBeamSystem
         );
+        this.currentMagneticAxis.copy(magAxis);
 
         // Align the magnetic dipole field lines to the same precessing magnetic axis
         _vec3A.set(0, 1, 0);
         this.magneticDipoleGroup.quaternion.setFromUnitVectors(_vec3A, magAxis);
+
+        // Synchronize high-frequency pulsar chirp with the beam's sweep frequency & camera alignment
+        _vec3B.copy(this.camera.position).normalize();
+        const hotspotAlignment = Math.min(
+          1.0,
+          Math.max(0.0, Math.abs(_vec3B.dot(this.currentMagneticAxis)))
+        );
+        const camHorizLen = Math.hypot(_vec3B.x, _vec3B.z);
+        const magHorizLen = Math.hypot(this.currentMagneticAxis.x, this.currentMagneticAxis.z);
+        const azimuthalSweep =
+          camHorizLen > 1e-4 && magHorizLen > 1e-4
+            ? Math.abs(
+                (_vec3B.x * this.currentMagneticAxis.x + _vec3B.z * this.currentMagneticAxis.z) /
+                  (camHorizLen * magHorizLen)
+              )
+            : hotspotAlignment;
+        const approachDerivative =
+          simDelta > 1e-5 ? (hotspotAlignment - this.lastHotspotAlignment) / simDelta : 0.0;
+        this.lastHotspotAlignment = hotspotAlignment;
+
+        relativisticAudio.updatePulsarBeamSweep({
+          active: Boolean(this.params.layers.pulsarBeams) && this.params.timeScale > 0,
+          hotspotAlignment,
+          azimuthalSweep,
+          approachDerivative,
+          sweepOmega: spinOmega * Math.max(0.1, this.params.timeScale),
+          isCompactStar: !isLuminous,
+        });
       }
+    } else {
+      relativisticAudio.updatePulsarBeamSweep({
+        active: false,
+        hotspotAlignment: 0,
+        azimuthalSweep: 0,
+        approachDerivative: 0,
+        sweepOmega: 0,
+        isCompactStar: false,
+      });
     }
 
     // 4b. Relativistic Sonic Boom Animation (Shockwave starts at the small singularity ball and grows outward with the black hole)
@@ -4922,14 +5006,90 @@ export class BlackHoleSceneController {
     const timeDilation = Math.sqrt(Math.max(0.01, 1.0 - 1.0 / distanceRs));
     relativisticAudio.updateCameraProximity(distanceRs, timeDilation);
 
+    // 14. Long-Exposure Time-Lapse Emission Intensity Accumulation & Post-Processing Render
+    if (this.settings.timeLapseEnabled) {
+      if (simDelta > 0) {
+        this.timeLapseExposureSeconds += simDelta;
+      }
+      const exposureProgress = 1.0 - Math.exp(-this.timeLapseExposureSeconds * 0.25);
+      const accumulatedBloom = this.settings.bloomIntensity + exposureProgress * 0.95;
+      if (this.accretionDiskMat) {
+        this.accretionDiskMat.uniforms.uBloomIntensity.value = accumulatedBloom;
+      }
+      if (this.gravitationalLensMat) {
+        this.gravitationalLensMat.uniforms.uBloomIntensity.value = accumulatedBloom;
+      }
+      if (this.renderer) {
+        this.renderer.toneMappingExposure =
+          1.03 + this.settings.bloomIntensity * 0.12 + exposureProgress * 0.22;
+      }
+    } else if (this.timeLapseInitialized || this.timeLapseExposureSeconds > 0) {
+      this.timeLapseInitialized = false;
+      this.timeLapseExposureSeconds = 0.0;
+      if (this.accretionDiskMat) {
+        this.accretionDiskMat.uniforms.uBloomIntensity.value = this.settings.bloomIntensity;
+      }
+      if (this.gravitationalLensMat) {
+        this.gravitationalLensMat.uniforms.uBloomIntensity.value = this.settings.bloomIntensity;
+      }
+      if (this.renderer) {
+        this.renderer.toneMappingExposure = 1.03 + this.settings.bloomIntensity * 0.12;
+      }
+    }
+
     if (this.renderer) {
-      if (this.settings.motionBlurEnabled && this.camMotionBlurStrength > 0.012 && this.motionBlurRenderTarget && this.postMaterial) {
-        this.postMaterial.uniforms.uStrength.value = this.camMotionBlurStrength;
+      const useMotionBlur =
+        this.settings.motionBlurEnabled && this.camMotionBlurStrength > 0.012;
+      const useTimeLapse = Boolean(this.settings.timeLapseEnabled);
+
+      if (
+        (useMotionBlur || useTimeLapse) &&
+        this.motionBlurRenderTarget &&
+        this.postMaterial &&
+        this.timeLapseTargetA &&
+        this.timeLapseTargetB
+      ) {
+        this.postMaterial.uniforms.uStrength.value = useMotionBlur
+          ? this.camMotionBlurStrength
+          : 0.0;
         this.postMaterial.uniforms.uVelocity.value.copy(this.camMotionVelocity);
+
         this.renderer.setRenderTarget(this.motionBlurRenderTarget);
         this.renderer.render(this.scene, this.camera);
-        this.renderer.setRenderTarget(null);
-        this.renderer.render(this.postScene, this.postCamera);
+
+        if (useTimeLapse) {
+          const readTarget = this.timeLapseReadFirst
+            ? this.timeLapseTargetA
+            : this.timeLapseTargetB;
+          const writeTarget = this.timeLapseReadFirst
+            ? this.timeLapseTargetB
+            : this.timeLapseTargetA;
+
+          const exposureProgress = 1.0 - Math.exp(-this.timeLapseExposureSeconds * 0.25);
+          // Slightly relax persistence during fast camera slews so trails re-stabilize cleanly
+          const slewDamp = Math.max(0.45, 0.962 - this.camMotionBlurStrength * 1.8);
+          this.postMaterial.uniforms.tAccum.value = readTarget.texture;
+          this.postMaterial.uniforms.uTimeLapseMix.value = this.timeLapseInitialized
+            ? slewDamp
+            : 0.0;
+          this.postMaterial.uniforms.uExposureBoost.value = exposureProgress;
+
+          // Render accumulated result into writeTarget
+          this.renderer.setRenderTarget(writeTarget);
+          this.renderer.render(this.postScene, this.postCamera);
+
+          // Output the accumulated frame to screen
+          this.renderer.setRenderTarget(null);
+          this.renderer.render(this.postScene, this.postCamera);
+
+          this.timeLapseReadFirst = !this.timeLapseReadFirst;
+          this.timeLapseInitialized = true;
+        } else {
+          this.postMaterial.uniforms.uTimeLapseMix.value = 0.0;
+          this.postMaterial.uniforms.uExposureBoost.value = 0.0;
+          this.renderer.setRenderTarget(null);
+          this.renderer.render(this.postScene, this.postCamera);
+        }
       } else {
         this.renderer.render(this.scene, this.camera);
       }
@@ -5376,6 +5536,18 @@ export class BlackHoleSceneController {
     if (nextSettings.accretionShockwaveEnabled === false) {
       this.clearAccretionShockwave();
     }
+    if (!nextSettings.timeLapseEnabled) {
+      this.resetTimeLapseExposure();
+    }
+  }
+
+  public resetTimeLapseExposure() {
+    this.timeLapseInitialized = false;
+    this.timeLapseExposureSeconds = 0.0;
+    if (this.postMaterial) {
+      this.postMaterial.uniforms.uTimeLapseMix.value = 0.0;
+      this.postMaterial.uniforms.uExposureBoost.value = 0.0;
+    }
   }
 
   public setAutoRotate(enabled: boolean, speed?: number) {
@@ -5443,9 +5615,18 @@ export class BlackHoleSceneController {
     };
   }
 
+  public getCanvas(): HTMLCanvasElement {
+    return this.domElement;
+  }
+
   public captureSnapshotDataUrl(): string {
     if (this.renderer) {
-      this.renderer.render(this.scene, this.camera);
+      if (this.settings.timeLapseEnabled && this.timeLapseInitialized && this.postMaterial) {
+        this.renderer.setRenderTarget(null);
+        this.renderer.render(this.postScene, this.postCamera);
+      } else {
+        this.renderer.render(this.scene, this.camera);
+      }
     }
     return this.domElement.toDataURL('image/png');
   }
@@ -5483,6 +5664,8 @@ export class BlackHoleSceneController {
     this.streamParticlesInstanced?.geometry?.dispose();
     (this.streamParticlesInstanced?.material as THREE.Material | undefined)?.dispose();
     this.motionBlurRenderTarget?.dispose();
+    this.timeLapseTargetA?.dispose();
+    this.timeLapseTargetB?.dispose();
     this.postMaterial?.dispose();
     this.postQuad?.geometry?.dispose();
     this.microlensSourceStarMesh?.geometry?.dispose();

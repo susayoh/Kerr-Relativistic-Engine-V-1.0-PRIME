@@ -1,4 +1,19 @@
-import { BlackHoleParams } from '../physics/gravitationalPhysics';
+import { BlackHoleParams, isStellarCategory } from '../physics/gravitationalPhysics';
+
+export interface PulsarSweepAudioState {
+  /** True when viewing a star with active pulsar/outflow beams and non-zero timeScale */
+  active: boolean;
+  /** 3D directional alignment |dot(normalize(cameraPos), normalize(uMagneticAxis))| in [0, 1] */
+  hotspotAlignment: number;
+  /** Azimuthal meridian sweep alignment in [0, 1] tracking each beam pass across the camera azimuth */
+  azimuthalSweep: number;
+  /** Rate of change d(hotspotAlignment)/dt (> 0 when hotspot is approaching the camera view) */
+  approachDerivative: number;
+  /** Rotational sweep angular velocity (rad/s) of the pulsar beam */
+  sweepOmega: number;
+  /** True for compact remnants (Neutron Star / Pulsar / Magnetar), false for luminous stars */
+  isCompactStar: boolean;
+}
 
 class RelativisticAudioEngine {
   private ctx: AudioContext | null = null;
@@ -10,6 +25,14 @@ class RelativisticAudioEngine {
   private lfoGain: GainNode | null = null;
   private filterNode: BiquadFilterNode | null = null;
 
+  // Warm, soothing Pulsar Lighthouse Sweep Pad & Soft Pulse nodes (no harsh high frequencies)
+  private pulsarSweepOsc: OscillatorNode | null = null;
+  private pulsarFifthOsc: OscillatorNode | null = null;
+  private pulsarLowpassFilter: BiquadFilterNode | null = null;
+  private pulsarSweepGain: GainNode | null = null;
+  private lastCrestPulseTime = 0;
+  private wasApproachingPeak = false;
+
   public toggleAudio(params: BlackHoleParams): boolean {
     if (!this.ctx) {
       this.initContext(params);
@@ -18,17 +41,23 @@ class RelativisticAudioEngine {
 
     if (this.ctx && this.masterGain) {
       if (this.ctx.state === 'suspended') {
-        this.ctx.resume();
+        void this.ctx.resume();
       }
       const now = this.ctx.currentTime;
       this.masterGain.gain.cancelScheduledValues(now);
       this.masterGain.gain.setTargetAtTime(this.isMuted ? 0.0 : 0.16, now, 0.25);
+      if (this.isMuted && this.pulsarSweepGain) {
+        this.pulsarSweepGain.gain.cancelScheduledValues(now);
+        this.pulsarSweepGain.gain.setTargetAtTime(0.0, now, 0.08);
+      }
     }
     return !this.isMuted;
   }
 
   private initContext(params: BlackHoleParams) {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.ctx = new AudioCtx();
 
     this.masterGain = this.ctx.createGain();
@@ -66,11 +95,46 @@ class RelativisticAudioEngine {
     harmonicGain.connect(this.filterNode);
 
     this.filterNode.connect(this.masterGain);
+
+    // -------------------------------------------------------------------------
+    // Soothing, Warm Pulsar Lighthouse Sweep Sub-Graph (110 Hz – 320 Hz range)
+    // Uses soft sine + warm fifth interval through a smooth low-pass filter
+    // -------------------------------------------------------------------------
+    this.pulsarSweepGain = this.ctx.createGain();
+    this.pulsarSweepGain.gain.value = 0.0;
+
+    this.pulsarLowpassFilter = this.ctx.createBiquadFilter();
+    this.pulsarLowpassFilter.type = 'lowpass';
+    this.pulsarLowpassFilter.frequency.value = 220;
+    this.pulsarLowpassFilter.Q.value = 0.75; // Smooth butterworth-like rolloff, zero piercing resonance
+
+    // Warm fundamental sine wave (A2 - D4 range)
+    this.pulsarSweepOsc = this.ctx.createOscillator();
+    this.pulsarSweepOsc.type = 'sine';
+    this.pulsarSweepOsc.frequency.value = 110;
+
+    // Gentle musical fifth harmonic (triangle wave rolled off by the lowpass filter)
+    this.pulsarFifthOsc = this.ctx.createOscillator();
+    this.pulsarFifthOsc.type = 'sine';
+    this.pulsarFifthOsc.frequency.value = 165;
+
+    const fifthMix = this.ctx.createGain();
+    fifthMix.gain.value = 0.22;
+
+    this.pulsarSweepOsc.connect(this.pulsarLowpassFilter);
+    this.pulsarFifthOsc.connect(fifthMix);
+    fifthMix.connect(this.pulsarLowpassFilter);
+
+    this.pulsarLowpassFilter.connect(this.pulsarSweepGain);
+    this.pulsarSweepGain.connect(this.masterGain);
+
     this.masterGain.connect(this.ctx.destination);
 
     this.subOsc.start();
     this.harmonicOsc.start();
     this.lfoOsc.start();
+    this.pulsarSweepOsc.start();
+    this.pulsarFifthOsc.start();
 
     this.updateParameters(params);
   }
@@ -80,6 +144,9 @@ class RelativisticAudioEngine {
 
   public updateParameters(params: BlackHoleParams) {
     this.currentParams = params;
+    if (!isStellarCategory(params.objectCategory) && this.ctx && this.pulsarSweepGain) {
+      this.pulsarSweepGain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.08);
+    }
     this.applyAudioModulation();
   }
 
@@ -92,6 +159,129 @@ class RelativisticAudioEngine {
   public updateCameraProximity(distanceRs: number, timeDilationFactor: number) {
     this.currentDistanceRs = Math.max(1.05, distanceRs);
     this.applyAudioModulation(timeDilationFactor);
+  }
+
+  /**
+   * Synchronizes a warm, soothing harmonic swell with the pulsar beam's rotational sweep.
+   * Gently rises in pitch (110 Hz -> 310 Hz) and warmth as the magnetic hotspot approaches
+   * the camera view, avoiding any harsh or ear-fatiguing high frequencies.
+   */
+  public updatePulsarBeamSweep(state: PulsarSweepAudioState) {
+    if (
+      !this.ctx ||
+      this.isMuted ||
+      !this.pulsarSweepOsc ||
+      !this.pulsarFifthOsc ||
+      !this.pulsarLowpassFilter ||
+      !this.pulsarSweepGain
+    ) {
+      return;
+    }
+
+    const now = this.ctx.currentTime;
+
+    if (!state.active) {
+      this.pulsarSweepGain.gain.setTargetAtTime(0.0, now, 0.08);
+      this.wasApproachingPeak = false;
+      return;
+    }
+
+    // 1. Smooth beam alignment envelope
+    const polarFocus = Math.pow(Math.max(0.0, Math.min(1.0, state.hotspotAlignment)), 2.0);
+    const sweepPass = Math.pow(Math.max(0.0, Math.min(1.0, state.azimuthalSweep)), 4.0);
+
+    const combinedAlignment = Math.min(
+      1.0,
+      polarFocus * 0.6 + sweepPass * (0.4 + 0.6 * state.hotspotAlignment)
+    );
+
+    // 2. Gentle relativistic Doppler approach warmth
+    const dopplerApproach = Math.max(-0.25, Math.min(0.6, state.approachDerivative * 0.25));
+    const dopplerFactor = 1.0 + Math.max(0.0, dopplerApproach) * 0.18;
+
+    // 3. Warm Low-Mid Pitch Modulation (110 Hz -> 290 Hz, pleasant musical register)
+    const baseHz = state.isCompactStar ? 115 : 98;
+    const peakHz = state.isCompactStar ? 265 : 210;
+    const spinLift = Math.min(35, state.sweepOmega * 2.5);
+
+    const targetFundamentalFreq =
+      (baseHz + (peakHz - baseHz) * Math.pow(combinedAlignment, 1.25) + spinLift) *
+      dopplerFactor;
+
+    // Musical perfect fifth (1.5x) overtone for a rich, soothing ambient chord swell
+    const targetFifthFreq = targetFundamentalFreq * 1.498;
+
+    // Soft low-pass filter opens gently from 160 Hz to 520 Hz as the beam sweeps past
+    const targetCutoff = 160 + combinedAlignment * 360;
+
+    // 4. Gentle Intensity (Gain) Swell
+    const proximityAttenuation = Math.min(
+      1.1,
+      Math.max(0.35, 11.0 / Math.max(4.5, this.currentDistanceRs))
+    );
+    const maxSwellGain = state.isCompactStar ? 0.16 : 0.11;
+    const targetGain =
+      Math.pow(combinedAlignment, 1.5) *
+      maxSwellGain *
+      proximityAttenuation *
+      (1.0 + Math.max(0.0, dopplerApproach) * 0.15);
+
+    this.pulsarSweepOsc.frequency.setTargetAtTime(targetFundamentalFreq, now, 0.05);
+    this.pulsarFifthOsc.frequency.setTargetAtTime(targetFifthFreq, now, 0.05);
+    this.pulsarLowpassFilter.frequency.setTargetAtTime(targetCutoff, now, 0.06);
+    this.pulsarSweepGain.gain.setTargetAtTime(targetGain, now, 0.05);
+
+    // 5. Soft, Deep Lighthouse Heartbeat Whoosh when the beam crosses the camera meridian
+    const isAtSweepCrest = sweepPass > 0.84 && state.hotspotAlignment > 0.35;
+    const minPulseInterval = Math.max(0.18, (Math.PI / Math.max(1.0, state.sweepOmega)) * 0.7);
+    if (
+      isAtSweepCrest &&
+      !this.wasApproachingPeak &&
+      now - this.lastCrestPulseTime >= minPulseInterval
+    ) {
+      this.lastCrestPulseTime = now;
+      this.wasApproachingPeak = true;
+      this.triggerSoftLighthousePulse(state.hotspotAlignment, state.sweepOmega);
+    } else if (sweepPass < 0.55) {
+      this.wasApproachingPeak = false;
+    }
+  }
+
+  /**
+   * Produces a soft, warm low-mid thrum (130 Hz -> 220 Hz -> 140 Hz) when the pulsar beam
+   * sweeps across the camera, feeling like a deep cosmic lighthouse pulse without sharp highs.
+   */
+  private triggerSoftLighthousePulse(hotspotAlignment: number, sweepOmega: number) {
+    if (!this.ctx || this.isMuted || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(340, now);
+
+    const align = Math.max(0.0, Math.min(1.0, hotspotAlignment));
+    const startFreq = 125 + align * 45;
+    const peakFreq = startFreq + 55 + align * 65;
+    const duration = Math.max(0.12, Math.min(0.28, 0.65 / Math.max(1.8, sweepOmega)));
+
+    osc.frequency.setValueAtTime(startFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(peakFreq, now + duration * 0.45);
+    osc.frequency.exponentialRampToValueAtTime(startFreq * 0.92, now + duration);
+
+    const peakAmp = 0.045 * Math.pow(align, 1.3);
+    gain.gain.setValueAtTime(0.0005, now);
+    gain.gain.linearRampToValueAtTime(Math.max(0.001, peakAmp), now + duration * 0.35);
+    gain.gain.exponentialRampToValueAtTime(0.0005, now + duration);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + duration + 0.02);
   }
 
   private applyAudioModulation(timeDilation?: number) {
@@ -216,7 +406,7 @@ class RelativisticAudioEngine {
 
   public dispose() {
     if (this.ctx) {
-      this.ctx.close();
+      void this.ctx.close();
       this.ctx = null;
     }
   }

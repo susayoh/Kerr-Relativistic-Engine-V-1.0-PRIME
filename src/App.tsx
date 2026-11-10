@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, X, Zap, Maximize2, Eye, Download } from 'lucide-react';
+import { Sparkles, X, Zap, Maximize2, Eye, Download, Video, Square } from 'lucide-react';
 import {
   ARCHETYPE_DEFINITIONS,
   ASTROPHYSICAL_PRESETS,
@@ -34,8 +34,14 @@ import { BlackHoleAnatomyOverlay } from './components/BlackHoleAnatomyOverlay';
 import { OverheadMapWidget } from './components/OverheadMapWidget';
 import { TimeDilationDisplay } from './components/TimeDilationDisplay';
 import { SettingsModal } from './components/SettingsModal';
-import { useHaptics } from './hooks/useHaptics';
-import { toPng } from 'html-to-image';
+import {
+  EventLogOverlay,
+  AstrophysicalLogEvent,
+  AstrophysicalEventCategory,
+} from './components/EventLogOverlay';
+import { useHaptics, setGlobalHapticIntensity } from './hooks/useHaptics';
+import { TRANSLATIONS } from './i18n/translations';
+import { toPng, toCanvas } from 'html-to-image';
 
 const DEFAULT_PARAMS: BlackHoleParams = {
   objectCategory: 'black_hole',
@@ -89,6 +95,17 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
   const [isSingularityCollapsed, setIsSingularityCollapsed] = useState<boolean>(true);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingRafRef = useRef<number | null>(null);
+  const recordingTimerRef = useRef<number | null>(null);
+  const includeUiInVideoRef = useRef<boolean>(settings.includeUiInVideoExport);
+
+  useEffect(() => {
+    includeUiInVideoRef.current = Boolean(settings.includeUiInVideoExport);
+  }, [settings.includeUiInVideoExport]);
 
   // Responsive mobile viewport tracking (screen width <= 768px)
   const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
@@ -109,7 +126,14 @@ export default function App() {
   // Effective phone mode: active either via Settings toggle or mobile viewport
   const isPhone = settings.phoneMode || isMobileScreen;
 
-  const haptics = useHaptics({ enabled: settings.hapticsEnabled !== false });
+  useEffect(() => {
+    setGlobalHapticIntensity(settings.hapticsIntensity ?? 1.0);
+  }, [settings.hapticsIntensity]);
+
+  const haptics = useHaptics({
+    enabled: settings.hapticsEnabled !== false,
+    intensity: settings.hapticsIntensity ?? 1.0,
+  });
 
   const isAnatomyVisible = params.layers.anatomyLines ?? false;
   const handleToggleAnatomyVisible = useCallback(() => {
@@ -204,22 +228,93 @@ export default function App() {
     [activePresetId]
   );
 
+  const formatLogTimestamp = useCallback(() => {
+    const now = new Date();
+    return now.toTimeString().slice(0, 8);
+  }, []);
+
+  const [eventLogs, setEventLogs] = useState<AstrophysicalLogEvent[]>(() => {
+    const t0 = new Date().toTimeString().slice(0, 8);
+    return [
+      {
+        id: 'init-metric',
+        timestamp: t0,
+        category: 'metric',
+        message: 'Kerr-Newman spacetime metric initialized',
+        detail: 'a* = 0.920 · r₊ = 0.69 Rₛ · Relativistic lensing active',
+      },
+      {
+        id: 'init-target',
+        timestamp: t0,
+        category: 'system',
+        message: 'Target locked: TON 618 (66 Billion M☉)',
+        detail: 'Ultramassive Quasar · ṁ = 1.65× Eddington luminosity',
+      },
+    ];
+  });
+
+  const appendLogEvent = useCallback(
+    (category: AstrophysicalEventCategory, message: string, detail?: string) => {
+      const timestamp = formatLogTimestamp();
+      setEventLogs((prev) => {
+        const next: AstrophysicalLogEvent = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          timestamp,
+          category,
+          message,
+          detail,
+        };
+        return [...prev.slice(-39), next];
+      });
+    },
+    [formatLogTimestamp]
+  );
+
   // Initialize Three.js WebGL scene once inside isolated ref container
   useEffect(() => {
     const mountEl = canvasMountRef.current;
     if (!mountEl) return;
 
     const controller = new BlackHoleSceneController(mountEl, DEFAULT_PARAMS, {
-      onFeatureSelect: (feat) => setInspectedFeature(feat),
+      onFeatureSelect: (feat) => {
+        setInspectedFeature(feat);
+        if (feat) {
+          appendLogEvent('system', `Inspected anatomical region: ${feat.title}`, feat.formula);
+        }
+      },
       onTrajectoryCreated: (traj) => {
         setLastTrajectory(traj);
         relativisticAudio.triggerGeodesicPing(traj.outcome);
+        if (traj.outcome === 'captured') {
+          appendLogEvent(
+            'geodesic',
+            'Geodesic trajectory completed',
+            `Photon captured by r₊ event horizon (b = ${traj.impactParameterB.toFixed(2)} Rₛ)`
+          );
+        } else if (traj.outcome === 'critical-orbit') {
+          appendLogEvent(
+            'geodesic',
+            'Geodesic trajectory completed',
+            `Critical photon-ring resonance orbit (b = ${traj.impactParameterB.toFixed(2)} Rₛ)`
+          );
+        } else {
+          appendLogEvent(
+            'geodesic',
+            'Geodesic trajectory completed',
+            `Gravitational lensing deflection scattered ray (b = ${traj.impactParameterB.toFixed(2)} Rₛ)`
+          );
+        }
       },
       onHoverCoordsChange: (coords) => setHoverCoords(coords),
       onSingularityStateChange: (collapsed) => {
         setIsSingularityCollapsed(collapsed);
         if (!collapsed) {
           relativisticAudio.triggerAccretionShockPulse(false);
+          appendLogEvent(
+            'metric',
+            'Singularity seed expanded into full horizon',
+            'Kerr event horizon r₊ & relativistic accretion disk deployed'
+          );
         }
       },
     });
@@ -232,13 +327,200 @@ export default function App() {
       setControllerInstance(null);
       relativisticAudio.dispose();
     };
-  }, []);
+  }, [appendLogEvent]);
 
   // Push parameter updates to Three.js controller and Web Audio synthesizer
   useEffect(() => {
     sceneControllerRef.current?.updateParams(params);
     relativisticAudio.updateParameters(params);
   }, [params]);
+
+  // Track real-time parameter transitions (Accretion Rate spikes, Kerr spin shifts, Well depth, Spectral filters)
+  const loggedParamsRef = useRef({
+    accretionRate: params.accretionRate,
+    accretionState: params.accretionState,
+    spin: params.spin,
+    wellDepthMultiplier: params.wellDepthMultiplier,
+    spectralMode: params.spectralMode,
+    orbitalStars: params.layers.orbitalStars,
+    timeLapseEnabled: settings.timeLapseEnabled,
+  });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const prev = loggedParamsRef.current;
+
+      // 1. Accretion Rate spike / drop detection
+      const deltaAccretion = params.accretionRate - prev.accretionRate;
+      if (Math.abs(deltaAccretion) >= 0.18) {
+        if (deltaAccretion > 0) {
+          appendLogEvent(
+            'accretion',
+            'Accretion Rate spike detected',
+            `Mass-infall flux surged to ṁ = ${params.accretionRate.toFixed(2)}× Eddington (T_peak ≈ ${(metrics.peakDiskTempK / 1e6).toFixed(2)} MK)`
+          );
+        } else {
+          appendLogEvent(
+            'accretion',
+            'Accretion mass-infall subsiding',
+            `Disk radiative flux reduced to ṁ = ${params.accretionRate.toFixed(2)}× Eddington`
+          );
+        }
+        prev.accretionRate = params.accretionRate;
+      }
+
+      // 2. Accretion State transition (Active vs Quiescent)
+      if (params.accretionState !== prev.accretionState) {
+        if (params.accretionState === 'active') {
+          appendLogEvent(
+            'accretion',
+            'Accretion Rate spike detected',
+            'Active volumetric coronal torus & thermal flare state engaged'
+          );
+        } else {
+          appendLogEvent(
+            'accretion',
+            'Quiescent razor-thin disk restored',
+            'Coronal scale-height relaxed to equatorial plane'
+          );
+        }
+        prev.accretionState = params.accretionState;
+      }
+
+      // 3. Kerr Spin parameter shift
+      if (Math.abs(params.spin - prev.spin) >= 0.1) {
+        appendLogEvent(
+          'metric',
+          `Kerr frame-dragging updated (a* = ${params.spin.toFixed(3)})`,
+          `Prograde ISCO shifted to ${(metrics.iscoProgradeRg * 0.5).toFixed(2)} Rₛ · r₊ = ${(metrics.eventHorizonRg * 0.5).toFixed(2)} Rₛ`
+        );
+        prev.spin = params.spin;
+      }
+
+      // 4. Gravity Well Depth shift
+      if (Math.abs(params.wellDepthMultiplier - prev.wellDepthMultiplier) >= 0.35) {
+        appendLogEvent(
+          'metric',
+          'Gravity well curvature depth adjusted',
+          `Spacetime embedding plunge set to ${params.wellDepthMultiplier.toFixed(1)}× Rₛ`
+        );
+        prev.wellDepthMultiplier = params.wellDepthMultiplier;
+      }
+
+      // 5. Spectral filter change
+      if (params.spectralMode !== prev.spectralMode) {
+        const modeNames: Record<BlackHoleParams['spectralMode'], string> = {
+          blackbody: 'Optical Thermal Blackbody',
+          eht230ghz: 'EHT 230 GHz VLBI Millimeter Band',
+          xray: 'Chandra High-Energy X-Ray Corona',
+          doppler: 'Relativistic Doppler Red/Blueshift Map',
+        };
+        appendLogEvent(
+          'system',
+          `Spectral band tuned: ${modeNames[params.spectralMode]}`,
+          'Radiative transfer lookup table updated'
+        );
+        prev.spectralMode = params.spectralMode;
+      }
+
+      // 6. S-Star Orbital tracers toggled
+      if (params.layers.orbitalStars !== prev.orbitalStars) {
+        if (params.layers.orbitalStars) {
+          appendLogEvent(
+            'orbital',
+            'Relativistic S-Star orbital tracers deployed',
+            `Tracking Keplerian/Kerr precession at r = ${params.probeRadiusRs.toFixed(2)} Rₛ`
+          );
+        }
+        prev.orbitalStars = params.layers.orbitalStars;
+      }
+
+      // 7. Time-Lapse astrophotography toggled
+      if (settings.timeLapseEnabled !== prev.timeLapseEnabled) {
+        appendLogEvent(
+          'system',
+          settings.timeLapseEnabled
+            ? 'Time-Lapse long-exposure accumulation started'
+            : 'Time-Lapse exposure buffer cleared',
+          settings.timeLapseEnabled
+            ? 'Integrating high-velocity orbital & accretion photon trails'
+            : 'Returned to instantaneous real-time frame rendering'
+        );
+        prev.timeLapseEnabled = settings.timeLapseEnabled;
+      }
+    }, 280);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    params.accretionRate,
+    params.accretionState,
+    params.spin,
+    params.wellDepthMultiplier,
+    params.spectralMode,
+    params.layers.orbitalStars,
+    params.probeRadiusRs,
+    settings.timeLapseEnabled,
+    metrics.peakDiskTempK,
+    metrics.iscoProgradeRg,
+    metrics.eventHorizonRg,
+    appendLogEvent,
+  ]);
+
+  // Continuous Real-Time Astrophysical Telemetry Monitor while simulation is running
+  useEffect(() => {
+    if (params.timeScale === 0) return;
+
+    let tickCount = 0;
+    const intervalId = window.setInterval(() => {
+      const ctrl = sceneControllerRef.current;
+      if (!ctrl || isSingularityCollapsed) return;
+
+      tickCount += 1;
+      const telemetry = ctrl.getOverheadTelemetry();
+
+      if (telemetry.orbitalStarsVisible && tickCount % 2 === 1) {
+        appendLogEvent(
+          'orbital',
+          'Relativistic orbital passage telemetry',
+          `v = ${(telemetry.probeOrbitalBeta * 100).toFixed(1)}% c at r = ${telemetry.probeRadiusRs.toFixed(2)} Rₛ · z = +${telemetry.probeRedshiftZ.toFixed(3)}`
+        );
+      } else if (isStellarCategory(params.objectCategory)) {
+        appendLogEvent(
+          'orbital',
+          'Pulsar magnetosphere sweep synchronized',
+          `Relativistic lighthouse beam aligned · Spin a* = ${params.spin.toFixed(3)}`
+        );
+      } else if (params.accretionRate >= 1.35 || params.accretionState === 'active') {
+        appendLogEvent(
+          'accretion',
+          'Accretion Rate spike detected',
+          `MRI magnetic reconnection flare at inner ISCO boundary (${telemetry.iscoRs.toFixed(2)} Rₛ)`
+        );
+      } else if (params.spin >= 0.8) {
+        appendLogEvent(
+          'metric',
+          'Lense-Thirring frame-dragging vortex shear',
+          `Ergosphere torsional coupling active (r_ergo = ${telemetry.ergosphereRs.toFixed(2)} Rₛ)`
+        );
+      } else {
+        appendLogEvent(
+          'geodesic',
+          'Geodesic trajectory completed',
+          `Photon ring lensed caustic stabilized at r_ph = ${telemetry.photonSphereRs.toFixed(2)} Rₛ`
+        );
+      }
+    }, 9500);
+
+    return () => window.clearInterval(intervalId);
+  }, [
+    params.timeScale,
+    params.objectCategory,
+    params.accretionRate,
+    params.accretionState,
+    params.spin,
+    isSingularityCollapsed,
+    appendLogEvent,
+  ]);
 
   // Push visualizer settings updates to Three.js controller
   useEffect(() => {
@@ -296,7 +578,12 @@ export default function App() {
       sceneControllerRef.current?.triggerEventHorizonPulse(found.category);
     }
     relativisticAudio.triggerAccretionShockPulse(isStellarCategory(found.category));
-  }, []);
+    appendLogEvent(
+      'system',
+      `Target locked: ${found.name}`,
+      `${found.classification} · Mass: ${found.plainMassExplanation}`
+    );
+  }, [appendLogEvent]);
 
   const handleResetParams = useCallback(() => {
     const currentPreset =
@@ -324,7 +611,8 @@ export default function App() {
     setActiveCamera(targetCam);
     sceneControllerRef.current?.setCameraPreset(targetCam);
     sceneControllerRef.current?.triggerEventHorizonPulse(currentPreset.category);
-  }, [activePresetId]);
+    appendLogEvent('system', 'Relativistic parameters reset to baseline', currentPreset.name);
+  }, [activePresetId, appendLogEvent]);
 
   const handleSelectCamera = useCallback((preset: CameraPresetId) => {
     setActiveCamera(preset);
@@ -337,7 +625,16 @@ export default function App() {
       objectCategory: 'black_hole',
       systemCategory: nextCategory,
     }));
-  }, []);
+    appendLogEvent(
+      'accretion',
+      nextCategory === 'binary'
+        ? 'Binary Roche-lobe mass transfer activated'
+        : 'Isolated singularity architecture restored',
+      nextCategory === 'binary'
+        ? 'Donor star tidal stream feeding outer accretion disk'
+        : 'Single Kerr spacetime metric'
+    );
+  }, [appendLogEvent]);
 
   const handleSelectPhysicsPreset = useCallback((presetId: PhysicsPresetId) => {
     haptics.medium();
@@ -381,7 +678,14 @@ export default function App() {
 
     sceneControllerRef.current?.triggerEventHorizonPulse('black_hole');
     relativisticAudio.triggerAccretionShockPulse(false);
-  }, [haptics]);
+    appendLogEvent(
+      'metric',
+      `GR Metric preset loaded: ${presetId.toUpperCase()}`,
+      presetId === 'kerr_max' || presetId === 'extreme_kerr'
+        ? 'Accretion Rate spike detected · High frame-dragging regime'
+        : 'Spacetime metric tensor reconfigured'
+    );
+  }, [haptics, appendLogEvent]);
 
   const handleLaunchPhoton = useCallback((impactB: number) => {
     sceneControllerRef.current?.launchPhotonGeodesic(impactB, 0);
@@ -466,7 +770,172 @@ export default function App() {
     link.click();
   }, [activePresetId, haptics, settings.includeUiInExport]);
 
+  const stopRecordingCleanup = useCallback(() => {
+    if (recordingRafRef.current !== null) {
+      cancelAnimationFrame(recordingRafRef.current);
+      recordingRafRef.current = null;
+    }
+    if (recordingTimerRef.current !== null) {
+      window.clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  }, []);
+
+  const handleToggleRecording = useCallback(() => {
+    // If currently recording, stop and save video
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      haptics.success();
+      mediaRecorderRef.current.stop();
+      stopRecordingCleanup();
+      setIsRecording(false);
+      return;
+    }
+
+    if (!sceneControllerRef.current) return;
+    const webglCanvas = sceneControllerRef.current.getCanvas();
+    if (!webglCanvas) return;
+
+    haptics.medium();
+
+    // Offscreen compositing canvas so we can record 60fps 3D WebGL + optional live UI overlay
+    const recordCanvas = document.createElement('canvas');
+    recordCanvas.width = webglCanvas.width || 1920;
+    recordCanvas.height = webglCanvas.height || 1080;
+    const ctx = recordCanvas.getContext('2d');
+    if (!ctx) return;
+
+    let uiOverlayCanvas: HTMLCanvasElement | null = null;
+    let isCapturingUi = false;
+    let lastUiCaptureMs = 0;
+    let isActive = true;
+
+    const refreshUiOverlay = async () => {
+      if (!isActive || !includeUiInVideoRef.current || !appContainerRef.current || isCapturingUi) {
+        return;
+      }
+      isCapturingUi = true;
+      try {
+        const domCanvas = await toCanvas(appContainerRef.current, {
+          backgroundColor: 'transparent',
+          style: {
+            backgroundColor: 'transparent',
+          },
+          filter: (node: HTMLElement) => {
+            if (node.tagName === 'CANVAS') return false;
+            if (node.getAttribute?.('role') === 'dialog') return false;
+            return true;
+          },
+          pixelRatio: window.devicePixelRatio || 1,
+          cacheBust: false,
+        });
+        if (isActive) {
+          uiOverlayCanvas = domCanvas;
+        }
+      } catch {
+        // Ignore transient DOM serialization errors during rapid layout changes
+      } finally {
+        isCapturingUi = false;
+      }
+    };
+
+    const renderCompositeFrame = (nowMs: number) => {
+      if (!isActive) return;
+
+      if (
+        webglCanvas.width > 0 &&
+        webglCanvas.height > 0 &&
+        (recordCanvas.width !== webglCanvas.width || recordCanvas.height !== webglCanvas.height)
+      ) {
+        recordCanvas.width = webglCanvas.width;
+        recordCanvas.height = webglCanvas.height;
+      }
+
+      ctx.clearRect(0, 0, recordCanvas.width, recordCanvas.height);
+      ctx.drawImage(webglCanvas, 0, 0, recordCanvas.width, recordCanvas.height);
+
+      if (includeUiInVideoRef.current) {
+        if (nowMs - lastUiCaptureMs > 320) {
+          lastUiCaptureMs = nowMs;
+          void refreshUiOverlay();
+        }
+        if (uiOverlayCanvas) {
+          ctx.drawImage(uiOverlayCanvas, 0, 0, recordCanvas.width, recordCanvas.height);
+        }
+      }
+
+      recordingRafRef.current = requestAnimationFrame(renderCompositeFrame);
+    };
+
+    if (includeUiInVideoRef.current) {
+      void refreshUiOverlay();
+    }
+    renderCompositeFrame(performance.now());
+
+    const stream = recordCanvas.captureStream(60);
+    const candidateMimeTypes = [
+      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+      'video/mp4',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
+    ];
+    const selectedMimeType =
+      candidateMimeTypes.find(
+        (type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)
+      ) || '';
+
+    const chunks: BlobPart[] = [];
+    const recorder = new MediaRecorder(
+      stream,
+      selectedMimeType
+        ? { mimeType: selectedMimeType, videoBitsPerSecond: 12_000_000 }
+        : { videoBitsPerSecond: 12_000_000 }
+    );
+
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+
+    recorder.onstop = () => {
+      isActive = false;
+      stopRecordingCleanup();
+      stream.getTracks().forEach((track) => track.stop());
+
+      if (chunks.length === 0) return;
+      const finalMime = recorder.mimeType || selectedMimeType || 'video/webm';
+      const ext = finalMime.includes('mp4') ? 'mp4' : 'webm';
+      const blob = new Blob(chunks, { type: finalMime });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `cosmic-vis-video-${activePresetId}-${Date.now()}.${ext}`;
+      link.href = url;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+    };
+
+    mediaRecorderRef.current = recorder;
+    recorder.start(250);
+    setIsRecording(true);
+    setRecordingSeconds(0);
+
+    recordingTimerRef.current = window.setInterval(() => {
+      setRecordingSeconds((prev) => prev + 1);
+    }, 1000);
+  }, [activePresetId, haptics, stopRecordingCleanup]);
+
+  useEffect(() => {
+    return () => {
+      stopRecordingCleanup();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, [stopRecordingCleanup]);
+
   const isStar = isStellarCategory(params.objectCategory);
+  const t = TRANSLATIONS[settings.language || 'en'] || TRANSLATIONS.en;
 
   return (
     <div
@@ -490,10 +959,14 @@ export default function App() {
           isAnatomyVisible={isAnatomyVisible}
           onToggleAnatomyVisible={handleToggleAnatomyVisible}
           onExportSnapshot={handleExportSnapshot}
+          isRecording={isRecording}
+          recordingSeconds={recordingSeconds}
+          onToggleRecording={handleToggleRecording}
           isCleanMode={isCleanMode}
           onToggleCleanMode={handleToggleCleanMode}
           isPhoneMode={isPhone}
           hapticsEnabled={settings.hapticsEnabled !== false}
+          language={settings.language || 'en'}
         />
       )}
 
@@ -509,14 +982,14 @@ export default function App() {
         {params.timeScale === 0 && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#050811]/95 border border-amber-500/60 text-amber-300 font-mono text-[11px] font-semibold backdrop-blur-md shadow-[0_0_25px_rgba(245,158,11,0.3)]">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
-            <span className="tracking-wide">SIMULATION PAUSED</span>
+            <span className="tracking-wide">{t.simulationPaused}</span>
             <button
               type="button"
               onClick={() => setParams((p) => ({ ...p, timeScale: 1.0 }))}
               className="ml-1 px-2.5 py-0.5 rounded-full bg-amber-400 text-black hover:bg-amber-300 font-sans text-[11px] font-bold cursor-pointer transition-colors shadow-sm"
-              title="Resume Simulation (Space)"
+              title={`${t.resume} (Space)`}
             >
-              Resume
+              {t.resume}
             </button>
           </div>
         )}
@@ -585,7 +1058,7 @@ export default function App() {
                 )}
 
                 <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 pt-1 mt-1 border-t border-slate-800/60">
-                  <span>{params.objectCategory === 'luminous_star' ? 'Photosphere' : isStar ? 'Crust' : 'Horizon'} <strong className="text-slate-200">{activePreset.horizonDiameterKmDisplay}</strong></span>
+                  <span>{params.objectCategory === 'luminous_star' ? t.photosphereLabel : isStar ? t.crustLabel : t.horizonLabel} <strong className="text-slate-200">{activePreset.horizonDiameterKmDisplay}</strong></span>
                   <span>a* <strong className="text-cyan-300">{params.spin.toFixed(3)}</strong></span>
                 </div>
 
@@ -599,14 +1072,14 @@ export default function App() {
                       className="text-[10px] font-bold text-amber-300 hover:text-amber-200 flex items-center gap-0.5 cursor-pointer"
                     >
                       <Maximize2 className="w-2.5 h-2.5" />
-                      Compare Real Size
+                      {t.compareRealSize}
                     </button>
                   </div>
                 )}
 
                 {settings.showCursorTelemetry && hoverCoords && (
                   <div className="mt-1.5 pt-1 border-t border-slate-800/50 text-[10px] font-mono text-cyan-300/90 tabular-nums">
-                    Cursor: r = {hoverCoords.rRs.toFixed(2)} Rₛ · φ = {hoverCoords.phiDeg.toFixed(0)}° · z = +{hoverCoords.redshiftZ.toFixed(3)}
+                    {t.cursorLabel}: r = {hoverCoords.rRs.toFixed(2)} Rₛ · φ = {hoverCoords.phiDeg.toFixed(0)}° · z = +{hoverCoords.redshiftZ.toFixed(3)}
                   </div>
                 )}
               </div>
@@ -687,7 +1160,7 @@ export default function App() {
             >
               <span className="inline-flex rounded-full h-2.5 w-2.5 bg-amber-400 shrink-0" />
               <span className="font-mono text-xs font-semibold text-amber-200 group-hover:text-white tracking-wide">
-                Singularity Seed — Tap black hole to expand
+                {t.singularitySeedPrompt}
               </span>
             </button>
           </div>
@@ -700,25 +1173,63 @@ export default function App() {
               type="button"
               onClick={handleExportSnapshot}
               className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#050811]/90 hover:bg-black text-neutral-200 hover:text-white border border-neutral-700/80 hover:border-amber-400 shadow-2xl font-mono text-xs transition-all cursor-pointer"
-              title="Export high-resolution PNG snapshot"
+              title={t.exportSnapshot}
             >
               <Download className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-semibold tracking-wide">Export</span>
+              <span className="font-semibold tracking-wide">{t.exportSnapshot}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleRecording}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border shadow-2xl font-mono text-xs transition-all cursor-pointer ${
+                isRecording
+                  ? 'bg-rose-950/90 border-rose-400 text-rose-200 shadow-[0_0_16px_rgba(244,63,94,0.4)]'
+                  : 'bg-[#050811]/90 hover:bg-black text-neutral-200 hover:text-white border-neutral-700/80 hover:border-rose-400'
+              }`}
+              title={isRecording ? t.stopRecording : t.recordVideo}
+            >
+              {isRecording ? (
+                <>
+                  <Square className="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
+                  <span className="font-semibold tracking-wide">
+                    REC {Math.floor(recordingSeconds / 60)}:
+                    {(recordingSeconds % 60).toString().padStart(2, '0')}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Video className="w-3.5 h-3.5 text-rose-400" />
+                  <span className="font-semibold tracking-wide">{t.recordVideo}</span>
+                </>
+              )}
             </button>
 
             <button
               type="button"
               onClick={() => handleSetCleanMode(false)}
               className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#050811]/90 hover:bg-black text-neutral-200 hover:text-white border border-neutral-700/80 hover:border-amber-400 shadow-2xl font-mono text-xs transition-all cursor-pointer"
-              title="Restore full user interface (Shortcut: C or ESC)"
+              title={`${t.showUi} (Shortcut: C / ESC)`}
             >
               <Eye className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-semibold tracking-wide">Show UI</span>
+              <span className="font-semibold tracking-wide">{t.showUi}</span>
               <span className="text-[10px] text-neutral-400 bg-neutral-900 px-1.5 py-0.5 rounded border border-neutral-800">
                 C / Esc
               </span>
             </button>
           </div>
+        )}
+
+        {/* Bottom-Left Real-Time Astrophysical Event Log Overlay */}
+        {!isCleanMode && settings.showEventLog !== false && (
+          <EventLogOverlay
+            events={eventLogs}
+            onClearEvents={() => setEventLogs([])}
+            isPaused={params.timeScale === 0}
+            isDockCollapsed={isDockCollapsed}
+            isPhoneMode={isPhone}
+            language={settings.language || 'en'}
+          />
         )}
 
         {/* Unified Collapsible Bottom Control Dock */}
@@ -753,6 +1264,11 @@ export default function App() {
                 sceneControllerRef.current?.triggerEventHorizonPulse(params.objectCategory);
               }
               relativisticAudio.triggerAccretionShockPulse(isStellarCategory(params.objectCategory));
+              appendLogEvent(
+                'accretion',
+                'Relativistic accretion shockwave emitted',
+                'Magnetosonic pressure wave propagating across horizon'
+              );
             }}
           />
         )}
@@ -813,6 +1329,9 @@ export default function App() {
         onResetPhysics={handleResetParams}
         currentSpin={params.spin}
         onSelectPhysicsPreset={handleSelectPhysicsPreset}
+        isRecording={isRecording}
+        recordingSeconds={recordingSeconds}
+        onToggleRecording={handleToggleRecording}
       />
     </div>
   );
