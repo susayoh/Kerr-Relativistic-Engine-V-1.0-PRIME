@@ -9,6 +9,12 @@ import {
   BACKGROUND_THEMES,
 } from '../physics/gravitationalPhysics';
 import { relativisticAudio } from '../audio/relativisticAudio';
+import {
+  createCompactStarMaterial,
+  createPulsarBeamSystem,
+  PulsarBeamSystem,
+  updateCompactStarPrecession,
+} from './CompactStarMaterial';
 
 export interface AnatomyCalloutAnchor {
   id: string;
@@ -255,6 +261,7 @@ const ACCRETION_FRAGMENT_SHADER = `
     float spin = clamp(uDiskParams.x, 0.0, 1.0);
     float accretionRate = uDiskParams.y;
     int spectralMode = int(uDiskParams.z);
+    float isStar = uDiskParams.w;
     float absLayer = abs(vVerticalLayer);
 
     // In Quiescent mode, discard any elevated volumetric strata so only the razor-thin midplane renders
@@ -268,11 +275,15 @@ const ACCRETION_FRAGMENT_SHADER = `
 
     // Classic Disk Mode (uDiskStyle < 0.5): Original vibrant 3D equatorial accretion disk
     if (uDiskStyle < 0.5) {
-      float r_horizon = mix(2.05, 1.35, spin * 0.65);
-      float rIn = max(r_horizon + 0.10, mix(2.55, 1.45, spin * 0.75));
+      float starRadius = 1.65;
+      float r_horizon = (isStar > 0.5) ? 0.0 : mix(2.05, 1.35, spin * 0.65);
+      // For a Compact Star, enforce innerRadius >= starRadius * 1.35 (2.2275) so the disk physically clears the stellar equator
+      float rIn = (isStar > 0.5)
+        ? (starRadius * 1.35)
+        : max(r_horizon + 0.10, mix(2.55, 1.45, spin * 0.75));
       float rOut = mix(12.2, 14.4, uAccretionState);
 
-      if (r < r_horizon) {
+      if (isStar < 0.5 && r < r_horizon) {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
         return;
       }
@@ -393,11 +404,12 @@ const ACCRETION_FRAGMENT_SHADER = `
     }
 
     // Volumetric Raymarched Mode (uDiskStyle >= 0.5)
-    float r_horizon = mix(1.95, 1.62, spin * 0.45);
-    float rIn = mix(2.38, 1.92, spin * 0.55);
+    float starRadius = 1.65;
+    float r_horizon = (isStar > 0.5) ? 0.0 : mix(1.95, 1.62, spin * 0.45);
+    float rIn = (isStar > 0.5) ? (starRadius * 1.35) : mix(2.38, 1.92, spin * 0.55);
     float rOut = mix(15.6, 16.2, uAccretionState);
 
-    if (r < r_horizon) {
+    if (isStar < 0.5 && r < r_horizon) {
       gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
       return;
     }
@@ -2055,14 +2067,17 @@ export class BlackHoleSceneController {
     });
 
     // 2. High-Fidelity 3D Relativistic Accretion Disk (Equatorial Ring Geometry)
-    const diskPlaneGeo = new THREE.RingGeometry(1.02, 16.2, 160, 64);
+    // Inner radius = starRadius * 1.35 (1.65 * 1.35 = 2.2275) so the ring geometry physically clears
+    // the compact star equator while also sitting cleanly outside the Kerr black hole horizon
+    const diskInnerRadius = 1.65 * 1.35;
+    const diskPlaneGeo = new THREE.RingGeometry(diskInnerRadius, 16.2, 160, 64);
     const vertCount = diskPlaneGeo.attributes.position.count;
     const midLayerAttr = new Float32Array(vertCount);
     diskPlaneGeo.setAttribute('aVerticalLayer', new THREE.BufferAttribute(midLayerAttr, 1));
 
     const mainDiskMesh = new THREE.Mesh(diskPlaneGeo, this.accretionDiskMat);
     mainDiskMesh.rotation.x = -Math.PI / 2;
-    mainDiskMesh.renderOrder = 1;
+    mainDiskMesh.renderOrder = 10;
     mainDiskMesh.layers.enable(1);
     mainDiskMesh.userData.feature = {
       title: 'Relativistic Accretion Disk (ISCO)',
@@ -2077,13 +2092,13 @@ export class BlackHoleSceneController {
     this.activeDiskVolumeGroup = new THREE.Group();
     const volumeLayers = [-0.95, -0.62, -0.32, 0.32, 0.62, 0.95];
     for (const layerVal of volumeLayers) {
-      const layerGeo = new THREE.RingGeometry(1.05, 16.2, 128, 44);
+      const layerGeo = new THREE.RingGeometry(diskInnerRadius, 16.2, 128, 44);
       const count = layerGeo.attributes.position.count;
       const layerArr = new Float32Array(count).fill(layerVal);
       layerGeo.setAttribute('aVerticalLayer', new THREE.BufferAttribute(layerArr, 1));
       const layerMesh = new THREE.Mesh(layerGeo, this.accretionDiskMat);
       layerMesh.rotation.x = -Math.PI / 2;
-      layerMesh.renderOrder = 2;
+      layerMesh.renderOrder = 11;
       this.activeDiskVolumeGroup.add(layerMesh);
     }
     this.activeDiskVolumeGroup.visible = this.params.accretionState === 'active';
@@ -2599,18 +2614,23 @@ export class BlackHoleSceneController {
     if (this.accretionHorizonFlashMesh) this.accretionHorizonFlashMesh.visible = false;
   }
 
+  private neutronStarMat!: THREE.ShaderMaterial;
+  private pulsarBeamSystem!: PulsarBeamSystem;
+
   private buildPrototypeNeutronStar() {
+    const initialMagAxis = new THREE.Vector3(Math.sin(0.42), Math.cos(0.42), 0.0).normalize();
+
     // 1. Ultra-Dense Crystalline Iron Crust Sphere (20 km Physical Stellar Surface)
-    const crustGeo = new THREE.SphereGeometry(1.65, 48, 48);
-    const crustMat = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      emissive: 0x0284c7,
-      emissiveIntensity: 1.25,
-      roughness: 0.25,
-      metalness: 0.9,
-      wireframe: false,
+    // High-resolution subdivision (96x96) supports smooth vertex seismic ripple modes
+    const crustGeo = new THREE.SphereGeometry(1.65, 96, 96);
+    this.neutronStarMat = createCompactStarMaterial({
+      baseColor: 0x0ea5e9,
+      hotspotIntensity: 1.65,
+      radius: 1.65,
+      schwarzschildRadius: 0.68, // R_s / R_star ≈ 0.41 (Beloborodov self-lensing limit)
+      magneticAxis: initialMagAxis,
     });
-    this.neutronStarMesh = new THREE.Mesh(crustGeo, crustMat);
+    this.neutronStarMesh = new THREE.Mesh(crustGeo, this.neutronStarMat);
     this.neutronStarMesh.layers.enable(1);
     this.neutronStarMesh.userData.feature = {
       title: 'Neutron Star Crystalline Crust',
@@ -2621,42 +2641,19 @@ export class BlackHoleSceneController {
     } satisfies InspectedFeature;
     this.neutronStarGroup.add(this.neutronStarMesh);
 
-    // Glowing Hotspot Corona Aura
-    const auraGeo = new THREE.SphereGeometry(1.85, 32, 32);
-    const auraMat = new THREE.MeshBasicMaterial({
-      color: 0x67e8f9,
-      transparent: true,
-      opacity: 0.35,
-      blending: THREE.AdditiveBlending,
+    // 2. Dual Relativistic Pulsar Radio Lighthouse Beams (Volumetric Core-Sheath Synchrotron Jets)
+    // Erupt directly from the North (+uMagneticAxis * R_star) and South (-uMagneticAxis * R_star) magnetic polar caps
+    this.pulsarBeamSystem = createPulsarBeamSystem({
+      starRadius: 1.65,
+      beamLength: 18.0,
+      baseRadius: 0.32,
+      tipRadius: 2.4,
+      coreColor: 0xf0f9ff,
+      sheathColor: 0x38bdf8,
+      beamIntensity: 1.85,
+      magneticAxis: initialMagAxis,
     });
-    const auraMesh = new THREE.Mesh(auraGeo, auraMat);
-    this.neutronStarMesh.add(auraMesh);
-
-    // 2. Dual Relativistic Pulsar Radio Lighthouse Beams (Synchrotron Jet Cones)
-    // Beams are tilted at ~24° relative to the rotational axis
-    this.pulsarBeamsGroup = new THREE.Group();
-    this.pulsarBeamsGroup.rotation.z = THREE.MathUtils.degToRad(24);
-
-    const beamConeGeo = new THREE.ConeGeometry(2.2, 18.0, 32, 1, true);
-    beamConeGeo.translate(0, 9.0, 0);
-
-    const beamMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0.42,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-
-    // North Magnetic Pole Beam
-    const northBeam = new THREE.Mesh(beamConeGeo, beamMat);
-    this.pulsarBeamsGroup.add(northBeam);
-
-    // South Magnetic Pole Beam
-    const southBeam = new THREE.Mesh(beamConeGeo, beamMat.clone());
-    southBeam.rotation.x = Math.PI;
-    this.pulsarBeamsGroup.add(southBeam);
+    this.pulsarBeamsGroup = this.pulsarBeamSystem.group;
 
     this.pulsarBeamsGroup.userData.feature = {
       title: 'Relativistic Pulsar Lighthouse Beams',
@@ -4433,13 +4430,41 @@ export class BlackHoleSceneController {
       effectiveScale * (1.0 + 0.22 * this.params.spin)
     );
 
-    // 4. Pulsar Lighthouse Beams & Magnetic Field Rotation
+    // 4. Pulsar Lighthouse Beams, Magnetic Axis Precession & Compact Star Shader Uniforms
     if (this.params.objectCategory === 'star') {
       // Rapid rotation of neutron star crust and sweeping pulsar lighthouse beams (~1.3 second period)
-      this.pulsarRotationAngle += simDelta * (4.5 + this.params.spin * 8.0);
-      this.pulsarBeamsGroup.rotation.y = this.pulsarRotationAngle;
-      this.magneticDipoleGroup.rotation.y = this.pulsarRotationAngle;
-      this.neutronStarMesh.rotation.y = this.pulsarRotationAngle * 0.8;
+      const spinOmega = 4.5 + this.params.spin * 8.0;
+      this.pulsarRotationAngle += simDelta * spinOmega;
+      this.neutronStarMesh.rotation.y = this.pulsarRotationAngle * 0.25;
+
+      if (this.neutronStarMat) {
+        // Dynamically scale hotspot intensity and compactness with accretion/wind flux and stellar mass
+        this.neutronStarMat.uniforms.uHotspotIntensity.value =
+          1.25 + this.params.accretionRate * 0.65;
+        // R_s / R_star increases with mass (from ~0.35 at 1.4 M_sun up to ~0.62 near the TOV collapse limit)
+        const compactnessRatio = THREE.MathUtils.clamp(
+          0.36 + (this.params.massSolar - 1.4) * 0.08,
+          0.34,
+          0.64
+        );
+        this.neutronStarMat.uniforms.uRadius.value = 1.65;
+        this.neutronStarMat.uniforms.uSchwarzschildRadius.value = 1.65 * compactnessRatio;
+
+        // Rotate the magnetic dipole axis independently with free precession wobble
+        // and synchronize the twin pulsar beams so their apexes stay locked to ±uMagneticAxis * R_star
+        const magAxis = updateCompactStarPrecession(
+          this.neutronStarMat,
+          elapsed,
+          spinOmega,
+          THREE.MathUtils.degToRad(24),
+          0.55,
+          this.pulsarBeamSystem
+        );
+
+        // Align the magnetic dipole field lines to the same precessing magnetic axis
+        _vec3A.set(0, 1, 0);
+        this.magneticDipoleGroup.quaternion.setFromUnitVectors(_vec3A, magAxis);
+      }
     }
 
     // 4b. Relativistic Sonic Boom Animation (Shockwave starts at the small singularity ball and grows outward with the black hole)
@@ -5269,6 +5294,9 @@ export class BlackHoleSceneController {
     this.singularityCoreMat?.dispose();
     this.singularityHaloMesh?.geometry?.dispose();
     this.singularityHaloMat?.dispose();
+    this.neutronStarMesh?.geometry?.dispose();
+    this.neutronStarMat?.dispose();
+    this.pulsarBeamSystem?.dispose();
     this.binaryStarMesh?.geometry?.dispose();
     this.binaryStarMat?.dispose();
     this.binaryCoronaMesh?.geometry?.dispose();
