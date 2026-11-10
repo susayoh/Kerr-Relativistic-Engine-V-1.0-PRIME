@@ -4,6 +4,7 @@ import {
   BlackHoleParams,
   GeodesicTrajectory,
   computeNullGeodesic,
+  buildGeodesicTrajectoryCsv,
   computeRelativisticMetrics,
   BackgroundThemeId,
   BACKGROUND_THEMES,
@@ -38,6 +39,7 @@ export type AccretionDiskStyle = 'classic' | 'raymarched';
 export interface VisualizerSettings {
   accretionDiskStyle: AccretionDiskStyle;
   bloomIntensity: number;
+  lensFlareIntensity: number;
   lockBackground: boolean;
   syncSingularityWithAnatomy: boolean;
   alwaysShowSingularity: boolean;
@@ -53,6 +55,7 @@ export interface VisualizerSettings {
   showCursorTelemetry: boolean;
   showEventLog: boolean;
   showMetricTelemetry: boolean;
+  showPerformanceMonitor: boolean;
   kerrEngineEnabled: boolean;
   kerrEngineTier: 'standard' | 'linear' | 'advanced' | 'ultra';
   phoneMode: boolean;
@@ -76,11 +79,12 @@ export const isMobileDevice = (() => {
 export const DEFAULT_VISUALIZER_SETTINGS: VisualizerSettings = {
   accretionDiskStyle: 'classic',
   bloomIntensity: 1.0,
+  lensFlareIntensity: 1.0,
   lockBackground: false,
   syncSingularityWithAnatomy: true,
   alwaysShowSingularity: false,
   nakedDistortionIntensity: 1.25,
-  motionBlurEnabled: !isMobileDevice,
+  motionBlurEnabled: false,
   screenShakeEnabled: true,
   cameraFov: isMobileDevice ? 56 : 46,
   autoRotate: false,
@@ -91,8 +95,9 @@ export const DEFAULT_VISUALIZER_SETTINGS: VisualizerSettings = {
   showCursorTelemetry: !isMobileDevice,
   showEventLog: !isMobileDevice,
   showMetricTelemetry: false,
+  showPerformanceMonitor: !isMobileDevice,
   kerrEngineEnabled: true,
-  kerrEngineTier: 'advanced',
+  kerrEngineTier: 'standard',
   phoneMode: isMobileDevice,
   hapticsEnabled: true,
   hapticsIntensity: 1.0,
@@ -144,6 +149,170 @@ export interface InspectedFeature {
   formula: string;
   description: string;
 }
+
+export interface ShaderLayerDiagnosticItem {
+  id:
+    | 'gravitationalLensing'
+    | 'accretionDisk'
+    | 'cameraLensFlare'
+    | 'postProcessing'
+    | 'spacetimeGrid'
+    | 'starfield'
+    | 'binaryStream'
+    | 'ergosphere';
+  name: string;
+  shaderPass: string;
+  active: boolean;
+  gpuCostTier: 'EXTREME' | 'HIGH' | 'MODERATE' | 'LOW';
+  estimatedGpuSharePct: number;
+  drawCalls: number;
+  details: string;
+}
+
+export interface GPUResourceCacheMetrics {
+  cachedTextures: number;
+  cachedGeometries: number;
+  precompiledShaders: number;
+  cacheHits: number;
+  cacheMisses: number;
+  hitRatePct: number;
+  presetTransitionsCached: number;
+  lastPresetSwitchMs: number;
+}
+
+export interface ScenePerformanceTelemetry {
+  frameTimeMs: number;
+  avgFrameTimeMs: number;
+  minFrameTimeMs: number;
+  maxFrameTimeMs: number;
+  p99FrameTimeMs: number;
+  fps: number;
+  frameTimeHistory: number[];
+  drawCalls: number;
+  triangles: number;
+  points: number;
+  lines: number;
+  renderPasses: number;
+  frameNumber: number;
+  geometries: number;
+  textures: number;
+  shaderPrograms: number;
+  estimatedGpuMemoryMb: number;
+  jsHeapUsedMb: number | null;
+  jsHeapTotalMb: number | null;
+  jsHeapLimitMb: number | null;
+  rendererBackend: 'WebGL2 Hardware' | 'WebGL1 Hardware' | 'Software WebGL' | '2D Canvas Fallback';
+  gpuRendererName: string;
+  pixelRatio: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  bottleneckStatus: 'OPTIMAL' | 'ELEVATED' | 'BOTTLENECK';
+  primaryBottleneckLayer: string;
+  shaderNanGuardActive: boolean;
+  layerDiagnostics: ShaderLayerDiagnosticItem[];
+  gpuCache: GPUResourceCacheMetrics;
+}
+
+/**
+ * Singleton GPU Resource Caching Layer for BlackHoleSceneController.
+ * Prevents procedural texture re-creation/re-upload, BufferGeometry duplication,
+ * and on-the-fly GLSL shader recompilation stutter when switching between
+ * astrophysical presets or running side-by-side Compare mode.
+ */
+class GPUResourceCacheManager {
+  private textures = new Map<string, THREE.Texture>();
+  private geometries = new Map<string, THREE.BufferGeometry>();
+  private compiledProgramSignatures = new Set<string>();
+  private cacheHits = 0;
+  private cacheMisses = 0;
+  private presetTransitionsCached = 0;
+  private lastPresetSwitchMs = 0.08;
+
+  public getOrCreateTexture<T extends THREE.Texture>(
+    key: string,
+    factory: () => T,
+    anisotropy = 1
+  ): T {
+    const existing = this.textures.get(key) as T | undefined;
+    if (existing) {
+      this.cacheHits++;
+      if (anisotropy > existing.anisotropy) {
+        existing.anisotropy = anisotropy;
+        existing.needsUpdate = true;
+      }
+      return existing;
+    }
+
+    this.cacheMisses++;
+    const created = factory();
+    created.userData = { ...(created.userData || {}), gpuCacheKey: key, isCachedGpuResource: true };
+    // Prevent individual scene/material dispose calls from destroying shared cached GPU textures
+    created.dispose = () => {
+      /* Managed by GPUResourceCacheManager */
+    };
+    this.textures.set(key, created);
+    return created;
+  }
+
+  public getOrCreateGeometry<T extends THREE.BufferGeometry>(
+    key: string,
+    factory: () => T
+  ): T {
+    const existing = this.geometries.get(key) as T | undefined;
+    if (existing) {
+      this.cacheHits++;
+      return existing;
+    }
+
+    this.cacheMisses++;
+    const created = factory();
+    created.userData = { ...(created.userData || {}), gpuCacheKey: key, isCachedGpuResource: true };
+    // Prevent individual mesh dispose calls from freeing shared immutable BufferGeometries
+    created.dispose = () => {
+      /* Managed by GPUResourceCacheManager */
+    };
+    this.geometries.set(key, created);
+    return created;
+  }
+
+  public registerShaderProgram(key: string): boolean {
+    if (this.compiledProgramSignatures.has(key)) {
+      this.cacheHits++;
+      return true;
+    }
+    this.cacheMisses++;
+    this.compiledProgramSignatures.add(key);
+    return false;
+  }
+
+  public recordPresetTransition(durationMs: number, avoidedRecompiles = 6) {
+    this.presetTransitionsCached++;
+    this.cacheHits += avoidedRecompiles;
+    this.lastPresetSwitchMs = Number(Math.max(0.02, durationMs).toFixed(2));
+  }
+
+  public getMetrics(rendererProgramsCount?: number): GPUResourceCacheMetrics {
+    const totalLookups = this.cacheHits + this.cacheMisses;
+    const hitRatePct =
+      totalLookups > 0 ? Math.min(100, Math.round((this.cacheHits / totalLookups) * 100)) : 100;
+    const precompiledShaders = Math.max(
+      this.compiledProgramSignatures.size,
+      rendererProgramsCount ?? 0
+    );
+    return {
+      cachedTextures: this.textures.size,
+      cachedGeometries: this.geometries.size,
+      precompiledShaders,
+      cacheHits: this.cacheHits,
+      cacheMisses: this.cacheMisses,
+      hitRatePct,
+      presetTransitionsCached: this.presetTransitionsCached,
+      lastPresetSwitchMs: this.lastPresetSwitchMs,
+    };
+  }
+}
+
+export const gpuResourceCache = new GPUResourceCacheManager();
 
 export interface OverheadTelemetryData {
   probeX: number;
@@ -254,7 +423,7 @@ const ACCRETION_FRAGMENT_SHADER = `
   // High-energy thermal blackbody color progression for Active Accretion State:
   // Burns incandescent white-hot at the inner core, transitions to bright gold, and tapers to deep red at the outer edges
   vec3 computeActiveThermalSpectrum(float normR, float boostedFlux, float filaments) {
-    float radialHeat = pow(clamp(1.0 - normR, 0.0, 1.0), 0.82);
+    float radialHeat = pow(clamp(1.0 - normR, 0.0001, 1.0), 0.82);
     float fluxHeat = clamp(boostedFlux / (1.25 + boostedFlux * 0.30), 0.0, 1.0);
     float T = clamp(mix(radialHeat, fluxHeat, 0.42) + (1.0 - normR) * 0.24 + (filaments - 0.5) * 0.08, 0.0, 1.0);
 
@@ -293,7 +462,7 @@ const ACCRETION_FRAGMENT_SHADER = `
     }
 
     // Vertical Y-axis density falloff across the thick volumetric torus in Active mode
-    float verticalDensityFalloff = exp(-pow(absLayer, 1.45) * 1.55);
+    float verticalDensityFalloff = exp(-pow(max(0.0001, absLayer), 1.45) * 1.55);
     float layerPhaseOffset = vVerticalLayer * 1.65 * uAccretionState;
 
     // Classic Disk Mode (uDiskStyle < 0.5): Original vibrant 3D equatorial accretion disk
@@ -346,18 +515,18 @@ const ACCRETION_FRAGMENT_SHADER = `
       float dopplerBoost = pow(clamp(dopplerFactor, 0.35, 2.35), uDopplerCoeffs.w);
 
       float normR = clamp((r - rIn) / (rOut - rIn), 0.0, 1.0);
-      float shockGrowth = 1.0 - pow(1.0 - clamp(uExpansionProgress, 0.0, 1.0), 2.6);
+      float shockGrowth = 1.0 - pow(max(0.0001, 1.0 - clamp(uExpansionProgress, 0.0, 1.0)), 2.6);
       float diskUnfurl = smoothstep(0.0, 0.92, shockGrowth);
       float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.18), diskUnfurl + 0.03, normR);
       if (unfurlMask <= 0.001) {
         discard;
       }
       // Shockwave-coupled leading rim compression as the disk grows outward with the shockwave
-      float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.09, 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
+      float ignitionWave = exp(-pow(abs((normR - diskUnfurl) / 0.09), 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
 
       float innerTaper = smoothstep(rIn, rIn + mix(0.42, 0.28, uAccretionState), r);
       float outerTaper = 1.0 - smoothstep(rOut - mix(2.2, 3.2, uAccretionState), rOut, r);
-      float radialProfile = pow(1.0 - normR, mix(1.15, 0.92, uAccretionState)) * innerTaper * outerTaper;
+      float radialProfile = pow(max(0.0001, 1.0 - normR), mix(1.15, 0.92, uAccretionState)) * innerTaper * outerTaper;
 
       // Constraint 2: Base Emission Multiplier significantly boosted in Active mode
       float activeEmissionMult = mix(1.0, 2.45, uAccretionState) * (1.0 + ignitionWave);
@@ -367,9 +536,9 @@ const ACCRETION_FRAGMENT_SHADER = `
       float sonicCompression = 0.0;
       if (uPulseStrength > 0.001) {
         float dShock = r - uPulseRadius;
-        float leadFront = exp(-pow(dShock / 0.32, 2.0));
-        float tailFront = exp(-pow((dShock + 1.35) / 0.42, 2.0)) * 0.65;
-        float rarefactionTrough = exp(-pow((dShock + 0.62) / 0.52, 2.0));
+        float leadFront = exp(-pow(abs(dShock / 0.32), 2.0));
+        float tailFront = exp(-pow(abs((dShock + 1.35) / 0.42), 2.0)) * 0.65;
+        float rarefactionTrough = exp(-pow(abs((dShock + 0.62) / 0.52), 2.0));
         float acousticWake = sin(dShock * 5.8) * exp(-abs(dShock + 1.1) * 0.42) * step(dShock, 0.15) * 0.25;
         sonicCompression = clamp((leadFront + tailFront + max(0.0, acousticWake)) * uPulseStrength * innerTaper * outerTaper, 0.0, 1.0);
         sonicRarefaction = clamp(rarefactionTrough * uPulseStrength * innerTaper * outerTaper, 0.0, 0.88);
@@ -477,17 +646,17 @@ const ACCRETION_FRAGMENT_SHADER = `
     );
 
     float normR = clamp((r - rIn) / (rOut - rIn), 0.0, 1.0);
-    float shockGrowth = 1.0 - pow(1.0 - clamp(uExpansionProgress, 0.0, 1.0), 2.6);
+    float shockGrowth = 1.0 - pow(max(0.0001, 1.0 - clamp(uExpansionProgress, 0.0, 1.0)), 2.6);
     float diskUnfurl = smoothstep(0.0, 0.92, shockGrowth);
     float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.18), diskUnfurl + 0.03, normR);
     if (unfurlMask <= 0.001) {
       discard;
     }
-    float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.09, 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
+    float ignitionWave = exp(-pow(abs((normR - diskUnfurl) / 0.09), 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
 
     float innerTaper = smoothstep(rIn, rIn + 0.25, r);
     float corePeak = exp(-normR * 2.1);
-    float sustainedBody = pow(max(0.0, 1.0 - normR * 0.68), 0.55);
+    float sustainedBody = pow(max(0.0001, 1.0 - normR * 0.68), 0.55);
     float outerTaper = 1.0 - smoothstep(0.72, 1.0, normR);
     float radialProfile = mix(sustainedBody, corePeak, 0.35) * innerTaper * outerTaper;
 
@@ -500,9 +669,9 @@ const ACCRETION_FRAGMENT_SHADER = `
     float sonicCompression = 0.0;
     if (uPulseStrength > 0.001) {
       float dShock = r - uPulseRadius;
-      float leadFront = exp(-pow(dShock / 0.35, 2.0));
-      float tailFront = exp(-pow((dShock + 1.40) / 0.45, 2.0)) * 0.65;
-      float rarefactionTrough = exp(-pow((dShock + 0.65) / 0.55, 2.0));
+      float leadFront = exp(-pow(abs(dShock / 0.35), 2.0));
+      float tailFront = exp(-pow(abs((dShock + 1.40) / 0.45), 2.0)) * 0.65;
+      float rarefactionTrough = exp(-pow(abs((dShock + 0.65) / 0.55), 2.0));
       float acousticWake = sin(dShock * 5.6) * exp(-abs(dShock + 1.15) * 0.40) * step(dShock, 0.15) * 0.25;
       sonicCompression = clamp((leadFront + tailFront + max(0.0, acousticWake)) * uPulseStrength * innerTaper * outerTaper, 0.0, 1.0);
       sonicRarefaction = clamp(rarefactionTrough * uPulseStrength * innerTaper * outerTaper, 0.0, 0.88);
@@ -539,10 +708,10 @@ const ACCRETION_FRAGMENT_SHADER = `
     }
 
     float bloomMult = max(0.0, uBloomIntensity);
-    float whiteCoreGlow = smoothstep(mix(0.24, 0.32, uAccretionState), 0.0, normR) * (0.50 + 0.50 * diskFilaments) * dopplerBoost * (0.35 + 0.65 * bloomMult) * mix(1.0, 1.65, uAccretionState);
+    float whiteCoreGlow = (1.0 - smoothstep(0.0, mix(0.24, 0.32, uAccretionState), normR)) * (0.50 + 0.50 * diskFilaments) * dopplerBoost * (0.35 + 0.65 * bloomMult) * mix(1.0, 1.65, uAccretionState);
     vec3 coreTone = (spectralMode == 2) ? vec3(0.88, 0.97, 1.0) : vec3(1.0, 0.96, 0.84);
     vec3 diskColor = baseLut * (0.85 + (1.15 + 0.80 * bloomMult) * flux) + coreTone * whiteCoreGlow * (0.75 + 0.55 * bloomMult);
-    float baseAlpha = clamp(pow(radialProfile, 0.68) * (0.62 + 0.38 * diskFilaments) * min(1.30, dopplerBoost) * (0.85 + 0.18 * min(2.0, bloomMult)) * mix(1.0, 1.2, uAccretionState), 0.0, 0.98);
+    float baseAlpha = clamp(pow(max(0.0001, radialProfile), 0.68) * (0.62 + 0.38 * diskFilaments) * min(1.30, dopplerBoost) * (0.85 + 0.18 * min(2.0, bloomMult)) * mix(1.0, 1.2, uAccretionState), 0.0, 0.98);
     float stratumWeight = (absLayer > 0.01) ? (verticalDensityFalloff * 0.62) : 1.0;
     float diskAlpha = clamp(baseAlpha * stratumWeight * unfurlMask * smoothstep(0.02, 0.16, uExpansionProgress), 0.0, 0.98);
 
@@ -661,7 +830,7 @@ const LENSING_FRAGMENT_SHADER = `
 
       float granules = smoothstep(0.26, 0.78, boil);
       float sunspots = smoothstep(0.24, 0.38, q1 * 0.65 + boil * 0.35);
-      float flareFilaments = pow(clamp(1.0 - abs(q1 - 0.52) * 3.6, 0.0, 1.0), 2.4);
+      float flareFilaments = pow(clamp(1.0 - abs(q1 - 0.52) * 3.6, 0.0001, 1.0), 2.4);
 
       vec3 colUmbra       = vec3(0.45, 0.06, 0.01);
       vec3 colPhotosphere = vec3(0.98, 0.38, 0.05);
@@ -672,9 +841,9 @@ const LENSING_FRAGMENT_SHADER = `
       surfaceCol = mix(surfaceCol, colGranulePeak, granules);
       surfaceCol = mix(surfaceCol, colSolarFlare, flareFilaments * 0.65);
 
-      float fresnel = pow(1.0 - ndv, 2.15);
-      vec3 coronaGlow = vec3(1.00, 0.56, 0.14) * fresnel * 1.75 + vec3(1.00, 0.93, 0.74) * pow(1.0 - ndv, 5.0) * 1.15;
-      float limbDarkening = mix(0.68, 1.15, pow(ndv, 0.42));
+      float fresnel = pow(max(0.0001, 1.0 - ndv), 2.15);
+      vec3 coronaGlow = vec3(1.00, 0.56, 0.14) * fresnel * 1.75 + vec3(1.00, 0.93, 0.74) * pow(max(0.0001, 1.0 - ndv), 5.0) * 1.15;
+      float limbDarkening = mix(0.68, 1.15, pow(max(0.0001, ndv), 0.42));
 
       outStarRgb = (surfaceCol * limbDarkening * 1.45 + coronaGlow) * (1.0 + 0.35 * max(0.0, uBloomIntensity));
       outStarAlpha = 0.99;
@@ -705,7 +874,7 @@ const LENSING_FRAGMENT_SHADER = `
   // High-energy thermal blackbody color progression for Active Accretion State:
   // Burns incandescent white-hot at the inner core, transitions to bright gold, and tapers to deep red at the outer edges
   vec3 computeActiveThermalSpectrum(float normR, float boostedFlux, float filaments) {
-    float radialHeat = pow(clamp(1.0 - normR, 0.0, 1.0), 0.82);
+    float radialHeat = pow(clamp(1.0 - normR, 0.0001, 1.0), 0.82);
     float fluxHeat = clamp(boostedFlux / (1.25 + boostedFlux * 0.30), 0.0, 1.0);
     float T = clamp(mix(radialHeat, fluxHeat, 0.42) + (1.0 - normR) * 0.24 + (filaments - 0.5) * 0.08, 0.0, 1.0);
 
@@ -747,7 +916,7 @@ const LENSING_FRAGMENT_SHADER = `
     }
 
     vec2 unitDir = hitXZ / max(0.0001, rHit);
-    float omega = 3.2 / (pow(rHit, 1.35) + 0.15 * spin);
+    float omega = 3.2 / (pow(max(0.0001, rHit), 1.35) + 0.15 * spin);
     float twist = uTime * omega * 1.5 - 1.35 * log(max(0.1, rHit / rIn)) + verticalY * 0.45 * uAccretionState;
     float ct = cos(twist);
     float st = sin(twist);
@@ -762,7 +931,7 @@ const LENSING_FRAGMENT_SHADER = `
 
     float band1 = sin(rHit * 4.4 * turbScale - uTime * 1.8 + cos2Phi * 1.15 + (turbA - 0.5) * (2.0 + 0.65 * uAccretionState) + verticalY * 1.2) * 0.5 + 0.5;
     float band2 = cos(rHit * 8.8 * turbScale - uTime * 2.5 + sin2Phi * 0.85 + (turbB - 0.5) * (1.5 + 0.55 * uAccretionState) - verticalY * 0.9) * 0.5 + 0.5;
-    float plasmaBands = pow(mix(band1, band2, 0.42), 1.25);
+    float plasmaBands = pow(max(0.0001, mix(band1, band2, 0.42)), 1.25);
     float diskFilaments = clamp(mix(turbA, plasmaBands, 0.72), 0.14, 1.0);
 
     vec2 toCamXZ = length(uCameraPos.xz - uBlackHolePos.xz) > 0.001
@@ -779,17 +948,17 @@ const LENSING_FRAGMENT_SHADER = `
     );
 
     float normR = clamp((rHit - rIn) / (rOut - rIn), 0.0, 1.0);
-    float shockGrowth = 1.0 - pow(1.0 - clamp(uExpansionProgress, 0.0, 1.0), 2.6);
+    float shockGrowth = 1.0 - pow(max(0.0001, 1.0 - clamp(uExpansionProgress, 0.0, 1.0)), 2.6);
     float diskUnfurl = smoothstep(0.0, 0.92, shockGrowth);
     float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.18), diskUnfurl + 0.03, normR);
     if (unfurlMask <= 0.001) {
       return;
     }
-    float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.09, 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
+    float ignitionWave = exp(-pow(abs((normR - diskUnfurl) / 0.09), 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
 
     float innerTaper = smoothstep(rIn, rIn + 0.25, rHit);
     float corePeak = exp(-normR * 2.1);
-    float sustainedBody = pow(max(0.0, 1.0 - normR * 0.68), 0.55);
+    float sustainedBody = pow(max(0.0001, 1.0 - normR * 0.68), 0.55);
     float outerTaper = 1.0 - smoothstep(0.72, 1.0, normR);
     float radialProfile = mix(sustainedBody, corePeak, 0.35) * innerTaper * outerTaper;
 
@@ -803,9 +972,9 @@ const LENSING_FRAGMENT_SHADER = `
     float sonicCompression = 0.0;
     if (uPulseStrength > 0.001) {
       float dShock = rHit - uPulseRadius;
-      float leadFront = exp(-pow(dShock / 0.35, 2.0));
-      float tailFront = exp(-pow((dShock + 1.40) / 0.45, 2.0)) * 0.65;
-      float rarefactionTrough = exp(-pow((dShock + 0.65) / 0.55, 2.0));
+      float leadFront = exp(-pow(abs(dShock / 0.35), 2.0));
+      float tailFront = exp(-pow(abs((dShock + 1.40) / 0.45), 2.0)) * 0.65;
+      float rarefactionTrough = exp(-pow(abs((dShock + 0.65) / 0.55), 2.0));
       float acousticWake = sin(dShock * 5.6) * exp(-abs(dShock + 1.15) * 0.40) * step(dShock, 0.15) * 0.25;
       sonicCompression = clamp((leadFront + tailFront + max(0.0, acousticWake)) * uPulseStrength * innerTaper * outerTaper, 0.0, 1.0);
       sonicRarefaction = clamp(rarefactionTrough * uPulseStrength * innerTaper * outerTaper, 0.0, 0.88);
@@ -843,10 +1012,10 @@ const LENSING_FRAGMENT_SHADER = `
     }
 
     float bloomMult = max(0.0, uBloomIntensity);
-    float whiteCoreGlow = smoothstep(mix(0.24, 0.34, uAccretionState), 0.0, normR) * (0.50 + 0.50 * diskFilaments) * dopplerBoost * (0.35 + 0.65 * bloomMult) * mix(1.0, 1.65, uAccretionState);
+    float whiteCoreGlow = (1.0 - smoothstep(0.0, mix(0.24, 0.34, uAccretionState), normR)) * (0.50 + 0.50 * diskFilaments) * dopplerBoost * (0.35 + 0.65 * bloomMult) * mix(1.0, 1.65, uAccretionState);
     vec3 coreTone = (spectralMode == 2) ? vec3(0.88, 0.97, 1.0) : vec3(1.0, 0.96, 0.84);
     outColor = baseLut * (0.85 + (1.15 + 0.80 * bloomMult) * flux) + coreTone * whiteCoreGlow * (0.75 + 0.55 * bloomMult);
-    outAlpha = clamp(pow(radialProfile, 0.68) * (0.62 + 0.38 * diskFilaments) * min(1.30, dopplerBoost) * (0.85 + 0.18 * min(2.0, bloomMult)) * mix(1.0, 1.22, uAccretionState) * unfurlMask * smoothstep(0.02, 0.16, uExpansionProgress), 0.0, 0.98);
+    outAlpha = clamp(pow(max(0.0001, radialProfile), 0.68) * (0.62 + 0.38 * diskFilaments) * min(1.30, dopplerBoost) * (0.85 + 0.18 * min(2.0, bloomMult)) * mix(1.0, 1.22, uAccretionState) * unfurlMask * smoothstep(0.02, 0.16, uExpansionProgress), 0.0, 0.98);
 
     if (uPulseStrength > 0.001) {
       float luma = dot(outColor, vec3(0.299, 0.587, 0.114));
@@ -885,8 +1054,8 @@ const LENSING_FRAGMENT_SHADER = `
       float bloomMult = max(0.0, uBloomIntensity);
       float distFromHorizon = max(0.0, b - r_horizon);
       float activePhotonBoost = mix(1.0, 1.55, uAccretionState);
-      float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(distFromHorizon / 0.06, 2.0)) * (0.65 + 0.55 * bloomMult) * activePhotonBoost;
-      float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow((distFromHorizon - 0.08) / 0.11, 2.0)) * (0.25 + 0.25 * bloomMult) * activePhotonBoost;
+      float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs(distFromHorizon / 0.06), 2.0)) * (0.65 + 0.55 * bloomMult) * activePhotonBoost;
+      float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs((distFromHorizon - 0.08) / 0.11), 2.0)) * (0.25 + 0.25 * bloomMult) * activePhotonBoost;
       float photonBloom = (uIsStar > 0.5) ? 0.0 : exp(-distFromHorizon / (0.24 + 0.22 * bloomMult)) * 0.42 * bloomMult * activePhotonBoost;
       float photonRing = photonRing1 + photonRing2 + photonBloom;
       vec3 photonColor = mix(vec3(1.0, 0.95, 0.85), vec3(1.0, 0.80, 0.38), spin * 0.5) * photonRing;
@@ -903,10 +1072,10 @@ const LENSING_FRAGMENT_SHADER = `
         float shockRefraction = 0.0;
         if (uPulseStrength > 0.001) {
           float dWave = b - uPulseRadius;
-          shockRefraction = -dWave * exp(-pow(dWave / 0.55, 2.0)) * uPulseStrength * 0.38;
+          shockRefraction = -dWave * exp(-pow(abs(dWave / 0.55), 2.0)) * uPulseStrength * 0.38;
         }
         float alpha = clamp((2.1 * r_horizon) / (b + 0.12) + shockRefraction, 0.0, 1.48);
-        vec3 inward = -normalize(pLocal);
+        vec3 inward = -pLocal / max(0.0001, b);
         vec3 bentDir = normalize(rayDir + inward * sin(alpha));
 
         // In Active mode, rays near the equatorial limbs (where bentDir.y is small) still intersect the
@@ -954,14 +1123,14 @@ const LENSING_FRAGMENT_SHADER = `
               float dopplerBoost = pow(clamp(dopplerFactor, 0.35, 2.35), 2.1);
 
               float normR = clamp((rHit - rIn) / (rOut - rIn), 0.0, 1.0);
-              float shockGrowth = 1.0 - pow(1.0 - clamp(uExpansionProgress, 0.0, 1.0), 2.6);
+              float shockGrowth = 1.0 - pow(max(0.0001, 1.0 - clamp(uExpansionProgress, 0.0, 1.0)), 2.6);
               float diskUnfurl = smoothstep(0.0, 0.92, shockGrowth);
               float unfurlMask = 1.0 - smoothstep(max(0.0, diskUnfurl - 0.18), diskUnfurl + 0.03, normR);
-              float ignitionWave = exp(-pow((normR - diskUnfurl) / 0.09, 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
+              float ignitionWave = exp(-pow(abs((normR - diskUnfurl) / 0.09), 2.0)) * sin(clamp(uExpansionProgress, 0.0, 1.0) * 3.14159265) * 1.45;
 
               float innerTaper = smoothstep(rIn, rIn + mix(0.45, 0.28, uAccretionState), rHit);
               float outerTaper = 1.0 - smoothstep(rOut - mix(2.4, 3.2, uAccretionState), rOut, rHit);
-              float radialProfile = pow(1.0 - normR, mix(1.25, 0.92, uAccretionState)) * innerTaper * outerTaper;
+              float radialProfile = pow(max(0.0001, 1.0 - normR), mix(1.25, 0.92, uAccretionState)) * innerTaper * outerTaper;
 
               // Constraint 1: In Quiescent mode, archMask masks near the equatorial plane for the razor-thin disk.
               // In Active mode, drastically increase vertical Y-axis density scale & falloff so the lensed arcs
@@ -969,7 +1138,7 @@ const LENSING_FRAGMENT_SHADER = `
               float quiescentArchMask = smoothstep(0.18, 0.85, abs(pLocal.y));
               float scaleHeightY = 1.25 + 0.32 * max(0.0, b - rIn);
               float yTurbOffset = (turbVertical - 0.5) * 0.65;
-              float activeVolumetricEnvelope = exp(-pow(max(0.0, abs(pLocal.y + yTurbOffset) - 0.35) / scaleHeightY, 1.45));
+              float activeVolumetricEnvelope = exp(-pow(max(0.0001, abs(pLocal.y + yTurbOffset) - 0.35) / scaleHeightY, 1.45));
               float activeArchMask = mix(0.78, 1.0, smoothstep(0.0, 0.45, abs(pLocal.y))) * clamp(activeVolumetricEnvelope * 1.15, 0.0, 1.0);
               float archMask = mix(quiescentArchMask, activeArchMask, uAccretionState) * unfurlMask * smoothstep(0.02, 0.16, uExpansionProgress);
 
@@ -980,9 +1149,9 @@ const LENSING_FRAGMENT_SHADER = `
               float sonicCompression = 0.0;
               if (uPulseStrength > 0.001) {
                 float dShock = rHit - uPulseRadius;
-                float leadFront = exp(-pow(dShock / 0.35, 2.0));
-                float tailFront = exp(-pow((dShock + 1.35) / 0.45, 2.0)) * 0.65;
-                float rarefactionTrough = exp(-pow((dShock + 0.62) / 0.52, 2.0));
+                float leadFront = exp(-pow(abs(dShock / 0.35), 2.0));
+                float tailFront = exp(-pow(abs((dShock + 1.35) / 0.45), 2.0)) * 0.65;
+                float rarefactionTrough = exp(-pow(abs((dShock + 0.62) / 0.52), 2.0));
                 sonicCompression = clamp((leadFront + tailFront) * uPulseStrength * innerTaper * outerTaper, 0.0, 1.0);
                 sonicRarefaction = clamp(rarefactionTrough * uPulseStrength * innerTaper * outerTaper, 0.0, 0.88);
               }
@@ -1032,7 +1201,7 @@ const LENSING_FRAGMENT_SHADER = `
       float lensedStarAlpha = 0.0;
       if (uIsBinarySystem > 0.5 && uLensingActive > 0.5 && b >= r_horizon) {
         float starLensAlpha = clamp((2.15 * r_horizon) / (b + 0.10), 0.0, 1.52);
-        vec3 inwardWorld = -normalize(pClosest);
+        vec3 inwardWorld = -pClosest / max(0.0001, length(pClosest));
         vec3 starBentDir = normalize(rayDir + inwardWorld * sin(starLensAlpha));
         sampleLensedCompanionStar(vWorldPos, starBentDir, lensedStarRgb, lensedStarAlpha);
         float nearPhotonBoost = 1.0 + 0.85 * exp(-distFromHorizon * 1.6);
@@ -1144,7 +1313,7 @@ const LENSING_FRAGMENT_SHADER = `
           float normY = crossedEquator ? 0.0 : (evalPos.y / scaleHeightY);
           sampleEquatorialDisk(evalPos.xz, normY, nextDir, rHit, r_horizon, rIn, rOut, spin, sampleCol, sampleAlpha);
 
-          float vertWeight = crossedEquator ? 1.0 : (exp(-pow(absY / scaleHeightY, 1.50)) * stepSize * 0.52);
+          float vertWeight = crossedEquator ? 1.0 : (exp(-pow(max(0.0001, absY / scaleHeightY), 1.50)) * stepSize * 0.52);
           float weight = (1.0 - accumAlpha) * clamp(sampleAlpha * vertWeight, 0.0, 0.95);
           accumColor += sampleCol * weight;
           accumAlpha += weight;
@@ -1176,8 +1345,8 @@ const LENSING_FRAGMENT_SHADER = `
     float bloomMult = max(0.0, uBloomIntensity);
     float distFromHorizon = max(0.0, minRayR - r_horizon);
     float activePhotonBoost = mix(1.0, 1.50, uAccretionState);
-    float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(distFromHorizon / 0.055, 2.0)) * (0.65 + 0.55 * bloomMult) * activePhotonBoost;
-    float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow((distFromHorizon - 0.07) / 0.10, 2.0)) * (0.25 + 0.25 * bloomMult) * activePhotonBoost;
+    float photonRing1 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs(distFromHorizon / 0.055), 2.0)) * (0.65 + 0.55 * bloomMult) * activePhotonBoost;
+    float photonRing2 = (uIsStar > 0.5) ? 0.0 : exp(-pow(abs((distFromHorizon - 0.07) / 0.10), 2.0)) * (0.25 + 0.25 * bloomMult) * activePhotonBoost;
     float photonBloom = (uIsStar > 0.5) ? 0.0 : exp(-distFromHorizon / (0.24 + 0.22 * bloomMult)) * 0.42 * bloomMult * activePhotonBoost;
     float photonRing = photonRing1 + photonRing2 + photonBloom;
     vec3 photonColor = mix(vec3(1.0, 0.96, 0.86), vec3(1.0, 0.80, 0.35), spin * 0.45) * photonRing;
@@ -1209,11 +1378,11 @@ const BINARY_STAR_VERTEX_SHADER = `
 
     // Roche Lobe Tidal Deformation: gravitational pull stretches the companion star's equator
     // toward the inner Lagrange point L1 (-X direction in local binary frame, pointing at the black hole)
-    float towardL1 = max(0.0, -dir.x);
+    float towardL1 = max(0.0001, -dir.x);
     float rocheCusp = pow(towardL1, 2.35) * 0.34 + pow(towardL1, 5.5) * 0.22;
     // Slight polar flattening from orbital tidal stress
     float polarCompression = 1.0 - 0.07 * dir.y * dir.y;
-    vRocheStretch = clamp(towardL1, 0.0, 1.0);
+    vRocheStretch = clamp(max(0.0, -dir.x), 0.0, 1.0);
 
     // Smooth convective boiling surface displacement
     float boilDisp = (
@@ -1295,10 +1464,10 @@ const BINARY_STAR_FRAGMENT_SHADER = `
     // Solar surface convection granules, dark magnetic sunspot umbrae, and erupting magnetic flare ridges
     float granuleCells = smoothstep(0.24, 0.78, fbmVal);
     float sunspotMask = smoothstep(0.21, 0.37, q1 * 0.62 + fbmVal * 0.38);
-    float flareRidges = pow(clamp(1.0 - abs(q2 - 0.51) * 4.0, 0.0, 1.0), 2.5);
+    float flareRidges = pow(clamp(1.0 - abs(q2 - 0.51) * 4.0, 0.0001, 1.0), 2.5);
 
     // Extra tidal heating near the L1 Roche lobe overflow nozzle where plasma is ripped off the star
-    float l1TidalHeat = pow(vRocheStretch, 2.2) * (0.55 + 0.45 * flareRidges);
+    float l1TidalHeat = pow(max(0.0001, vRocheStretch), 2.2) * (0.55 + 0.45 * flareRidges);
 
     vec3 colSunspotUmbra = vec3(0.42, 0.05, 0.008);
     vec3 colDeepOrange   = vec3(0.96, 0.34, 0.04);
@@ -1310,9 +1479,9 @@ const BINARY_STAR_FRAGMENT_SHADER = `
     photosphere = mix(photosphere, colWhiteFlare, clamp(flareRidges * 0.68 + l1TidalHeat * 0.65, 0.0, 1.0));
 
     // Bright Coronal Fresnel Glow at the stellar limb + solar limb darkening profile
-    float fresnelRim = pow(1.0 - ndv, 2.25);
-    float outerFresnel = pow(1.0 - ndv, 5.2);
-    float limbDarkening = mix(0.62, 1.16, pow(ndv, 0.44));
+    float fresnelRim = pow(max(0.0001, 1.0 - ndv), 2.25);
+    float outerFresnel = pow(max(0.0001, 1.0 - ndv), 5.2);
+    float limbDarkening = mix(0.62, 1.16, pow(max(0.0001, ndv), 0.44));
 
     vec3 coronalFresnelGlow =
       vec3(1.00, 0.54, 0.12) * fresnelRim * (1.75 + 0.55 * flareRidges) +
@@ -1366,8 +1535,8 @@ const BINARY_CORONA_FRAGMENT_SHADER = `
     float fineProminence = 0.60 * gyroidOctave(cPos.yzx * 1.9 + vec3(streamerNoise * 1.4, uTime * 0.25, -uTime * 0.2)) + 0.40 * gyroidOctave(cPos.zxy * 3.6);
 
     // Smooth atmospheric Fresnel shell falloff
-    float rimEnvelope = pow(clamp(1.0 - ndv, 0.0, 1.0), 1.85) * smoothstep(0.0, 0.36, ndv);
-    float l1PlumeBoost = 1.0 + 0.65 * pow(vRocheStretch, 2.0);
+    float rimEnvelope = pow(clamp(1.0 - ndv, 0.0001, 1.0), 1.85) * smoothstep(0.0, 0.36, ndv);
+    float l1PlumeBoost = 1.0 + 0.65 * vRocheStretch * vRocheStretch;
     float intensity = rimEnvelope * (0.55 + 0.75 * streamerNoise * fineProminence) * l1PlumeBoost;
 
     vec3 innerCorona = vec3(1.00, 0.84, 0.42);
@@ -1432,7 +1601,7 @@ const ACCRETION_STREAM_FRAGMENT_SHADER = `
     float plasmaStriations = smoothstep(0.22, 0.84, mix(fbmFlow, filaments, 0.6));
 
     // Radial cylindrical core profile (bright dense spine, soft glowing Fresnel sheath)
-    float coreProfile = pow(ndv, mix(0.85, 1.65, uIsOuterSheath));
+    float coreProfile = pow(max(0.0001, ndv), mix(0.85, 1.65, uIsOuterSheath));
     float endTaper = smoothstep(0.0, 0.08, prog) * (1.0 - smoothstep(0.88, 1.0, prog) * 0.35);
 
     // Thermal heating progression: golden-orange solar plasma at L1 nozzle -> white-hot shock heating as it impacts the disk
@@ -1492,8 +1661,8 @@ const SINGULARITY_BALL_FRAGMENT_SHADER = `
     // Deep pitch-black singularity shadow core in the interior (ndv > 0.42),
     // surrounded by a razor-sharp incandescent photon-capture rim and outer corona
     float horizonShadow = smoothstep(0.32, 0.52, ndv);
-    float photonRim = exp(-pow((ndv - 0.36) * 8.5, 2.0)) * (1.15 + 0.55 * plasmaTurb);
-    float outerCorona = pow(1.0 - ndv, 2.6) * (0.75 + 0.45 * fineRipple);
+    float photonRim = exp(-pow(abs((ndv - 0.36) * 8.5), 2.0)) * (1.15 + 0.55 * plasmaTurb);
+    float outerCorona = pow(max(0.0001, 1.0 - ndv), 2.6) * (0.75 + 0.45 * fineRipple);
 
     vec3 primaryGlow = vec3(1.0, 0.86, 0.48);
     vec3 coreHot = vec3(1.0, 0.99, 0.94);
@@ -1526,8 +1695,8 @@ const SINGULARITY_HALO_FRAGMENT_SHADER = `
 
     // Tightly coiled nascent micro-photon ring and gravitational lensing shimmer around the small singularity ball
     float innerShadow = 1.0 - smoothstep(0.18, 0.25, r);
-    float photonRing = exp(-pow((r - 0.26) * 18.0, 2.0)) * 1.35;
-    float secondRing = exp(-pow((r - 0.36) * 11.0, 2.0)) * 0.55;
+    float photonRing = exp(-pow(abs((r - 0.26) * 18.0), 2.0)) * 1.35;
+    float secondRing = exp(-pow(abs((r - 0.36) * 11.0), 2.0)) * 0.55;
     float angle = atan(p.y, p.x);
     float spiralWisp = (0.5 + 0.5 * sin(angle * 3.0 + r * 16.0 - uTime * 5.2)) * exp(-max(0.0, r - 0.24) * 4.5);
     float haloFalloff = exp(-max(0.0, r - 0.24) * 4.2) * (0.45 + 0.35 * spiralWisp);
@@ -1615,6 +1784,182 @@ const MOTION_BLUR_FRAGMENT_SHADER = `
   }
 `;
 
+// 5. Camera-Space Optical Lens Flare & Viewing-Angle Diffraction Artifact Shader
+const CAMERA_LENS_FLARE_VERTEX_SHADER = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`;
+
+const CAMERA_LENS_FLARE_FRAGMENT_SHADER = `
+  uniform float uFlareIntensity;
+  uniform float uTime;
+  uniform vec2 uResolution;
+  // Primary emitter in NDC [-1, 1] space: xy = ndc coords, z = visibility weight
+  uniform vec3 uSourceNdc;
+  // Angle-dependent hotspot in NDC [-1, 1] space (approaching Doppler crescent or magnetic polar cap): xy = ndc, z = intensity weight
+  uniform vec3 uHotspotNdc;
+  // Optional secondary emitter (binary companion star) in NDC [-1, 1]: xy = ndc, z = weight
+  uniform vec3 uSecondaryNdc;
+  // Viewing angle optical parameters:
+  // x = grazing/edge-on factor (0 = polar, 1 = equatorial edge-on)
+  // y = camera orbital azimuth angle (radians)
+  // z = polar/beam alignment factor (0..1)
+  // w = distance & expansion attenuation factor
+  uniform vec4 uViewAngleParams;
+  uniform vec3 uPrimaryTint;
+  uniform vec3 uSecondaryTint;
+  varying vec2 vUv;
+
+  float sqr(float x) {
+    return x * x;
+  }
+
+  // Hexagonal camera aperture distance field for realistic internal lens element ghosts
+  float hexApertureDist(vec2 p, float rotRad) {
+    float c = cos(rotRad);
+    float s = sin(rotRad);
+    p = abs(mat2(c, -s, s, c) * p);
+    return max(dot(p, normalize(vec2(1.0, 1.7320508))), p.x);
+  }
+
+  // Computes anamorphic streak + 6-point diffraction starburst around an NDC emitter point
+  vec3 evalEmitterFlare(vec2 uvNdc, vec2 srcNdc, float aspect, float camAzimuth, float anamorphicBoost, vec3 tint) {
+    vec2 d = uvNdc - srcNdc;
+    d.x *= aspect;
+    float r = length(d);
+
+    // 1. Wide Cinema Anamorphic Horizontal Streak (intensifies at grazing angles / Doppler boost)
+    float streakY = exp(-abs(d.y) * 44.0) * exp(-abs(d.x) * (1.85 / max(0.45, anamorphicBoost)));
+    float streakCore = exp(-abs(d.y) * 115.0) * exp(-abs(d.x) * (0.95 / max(0.45, anamorphicBoost)));
+    // Secondary subtle cross-streak tilted with viewing angle
+    float tiltA = camAzimuth * 0.35 + 0.28;
+    vec2 dTilt = mat2(cos(tiltA), -sin(tiltA), sin(tiltA), cos(tiltA)) * d;
+    float crossStreak = exp(-abs(dTilt.y) * 78.0) * exp(-abs(dTilt.x) * 2.6) * 0.42;
+
+    // 2. 6-Blade Aperture Diffraction Starburst (rotates as camera views from different angles)
+    float safeDx = abs(d.x) < 1e-5 ? (d.x >= 0.0 ? 1e-5 : -1e-5) : d.x;
+    float theta = atan(d.y, safeDx) + camAzimuth * 0.5;
+    float c3 = max(0.0, cos(theta * 3.0));
+    float s6 = max(0.0, sin(theta * 6.0 + 0.4));
+    float c3_2 = c3 * c3;
+    float c3_4 = c3_2 * c3_2;
+    float c3_14 = c3_4 * c3_4 * c3_4 * c3_2;
+    float s6_2 = s6 * s6;
+    float s6_4 = s6_2 * s6_2;
+    float s6_20 = s6_4 * s6_4 * s6_4 * s6_4 * s6_4;
+    float rays6 = c3_14 * exp(-r * 5.2);
+    float rays12 = (s6_20 * s6_2) * exp(-r * 8.0) * 0.45;
+    float corePin = exp(-r * 16.0) * 0.55;
+
+    vec3 streakCol = mix(tint, vec3(0.75, 0.90, 1.0), 0.38) * (streakY * 0.42 + streakCore * 0.78 + crossStreak);
+    vec3 rayCol = mix(tint, vec3(1.0, 0.97, 0.90), 0.5) * (rays6 * 0.48 + rays12 + corePin);
+    return (streakCol + rayCol);
+  }
+
+  void main() {
+    if (uFlareIntensity <= 0.001 || uSourceNdc.z <= 0.001) {
+      discard;
+    }
+
+    float aspect = uResolution.x / max(1.0, uResolution.y);
+    vec2 uvNdc = vUv * 2.0 - 1.0;
+
+    float edgeOnFactor = uViewAngleParams.x;
+    float camAzimuth = uViewAngleParams.y;
+    float beamAlign = uViewAngleParams.z;
+    float distAtten = uViewAngleParams.w;
+
+    // Angle-responsive modulation: grazing views of the accretion disk or direct alignment with pulsar/stellar hotspots boost flare artifacts
+    float angleGain = (0.62 + 0.58 * edgeOnFactor + 0.75 * beamAlign) * distAtten;
+    float anamorphicScale = 0.75 + 0.68 * edgeOnFactor + 0.55 * beamAlign;
+
+    vec3 totalFlare = vec3(0.0);
+
+    // A. Primary Source + Angle-Offset Hotspot (Approaching Doppler Crescent or Magnetic Polar Cap)
+    vec2 primaryPos = mix(uSourceNdc.xy, uHotspotNdc.xy, 0.65);
+    totalFlare += evalEmitterFlare(uvNdc, primaryPos, aspect, camAzimuth, anamorphicScale, uPrimaryTint) * uSourceNdc.z;
+
+    if (uHotspotNdc.z > 0.05) {
+      totalFlare += evalEmitterFlare(uvNdc, uHotspotNdc.xy, aspect, -camAzimuth * 0.7, anamorphicScale * 1.22, uSecondaryTint) * uHotspotNdc.z * 0.65;
+    }
+
+    // B. Multi-Element Camera Lens Aperture Ghosts (Mirrored across optical axis (0,0))
+    vec2 flareAxis = uHotspotNdc.xy;
+    float axisLen = length(flareAxis);
+    vec2 ghostOrigin = axisLen > 0.02
+      ? flareAxis
+      : vec2(cos(camAzimuth) * 0.16, sin(camAzimuth) * 0.12) * (0.4 + 0.6 * edgeOnFactor);
+
+    for (int i = 0; i < 5; i++) {
+      float fi = float(i);
+      float ghostScale = -0.35 - fi * 0.34 + (i == 2 ? 0.85 : 0.0);
+      vec2 ghostCenter = ghostOrigin * ghostScale;
+      vec2 gd = (uvNdc - ghostCenter);
+      gd.x *= aspect;
+
+      float radius = 0.055 + fi * 0.032 + 0.015 * sin(fi * 2.1);
+      if (abs(gd.x) > radius * 1.45 || abs(gd.y) > radius * 1.45) {
+        continue;
+      }
+      float hexD = hexApertureDist(gd, camAzimuth * 0.4 + fi * 0.52);
+
+      // Soft hexagonal iris fill (edge0 < edge1 strictly enforced for GLSL compliance) + bright chromatic edge ring
+      float irisFill = (1.0 - smoothstep(radius * 0.35, radius, hexD)) * 0.26;
+      float irisRing = exp(-sqr((hexD - radius * 0.86) / (0.012 + fi * 0.003))) * 0.62;
+      float ghostProfile = irisFill + irisRing;
+
+      // Chromatic dispersion across the 5 lens elements
+      vec3 ghostColor = mix(
+        uPrimaryTint,
+        vec3(
+          0.5 + 0.5 * sin(fi * 1.3 + 0.2),
+          0.5 + 0.5 * sin(fi * 1.3 + 2.1),
+          0.5 + 0.5 * sin(fi * 1.3 + 4.2)
+        ),
+        0.58
+      );
+
+      totalFlare += ghostColor * ghostProfile * (0.28 / (1.0 + fi * 0.28)) * uHotspotNdc.z;
+    }
+
+    // C. Chromatic Caustic Halo Ring around the opposite optical axis
+    vec2 haloCenter = -ghostOrigin * 0.62;
+    vec2 hd = (uvNdc - haloCenter);
+    hd.x *= aspect;
+    float hDist = length(hd);
+    float haloRadius = 0.34 + 0.08 * edgeOnFactor;
+    float haloR = exp(-sqr((hDist - haloRadius * 0.97) / 0.028));
+    float haloG = exp(-sqr((hDist - haloRadius * 1.00) / 0.028));
+    float haloB = exp(-sqr((hDist - haloRadius * 1.03) / 0.028));
+    vec3 causticHalo = vec3(haloR, haloG, haloB) * mix(uSecondaryTint, vec3(0.65, 0.85, 1.0), 0.5) * 0.16 * (0.5 + 0.5 * edgeOnFactor);
+    totalFlare += causticHalo * uSourceNdc.z;
+
+    // D. Optional Binary Companion Star Secondary Lens Flare
+    if (uSecondaryNdc.z > 0.01) {
+      totalFlare += evalEmitterFlare(
+        uvNdc,
+        uSecondaryNdc.xy,
+        aspect,
+        camAzimuth + 0.5,
+        0.85,
+        vec3(1.0, 0.72, 0.28)
+      ) * uSecondaryNdc.z * 0.55;
+    }
+
+    // Apply user Lens Flare Intensity slider & smooth vignette guard at screen borders
+    vec3 outRgb = clamp(totalFlare * angleGain * uFlareIntensity * 0.58, vec3(0.0), vec3(1.5));
+    float lum = max(outRgb.r, max(outRgb.g, outRgb.b));
+    if (!(lum > 0.001)) {
+      discard;
+    }
+
+    gl_FragColor = vec4(outRgb, clamp(lum, 0.0, 1.0));
+  }
+`;
+
 export class BlackHoleSceneController {
   private container: HTMLElement;
   private domElement: HTMLCanvasElement;
@@ -1642,6 +1987,10 @@ export class BlackHoleSceneController {
   private camMotionBlurStrength = 0.0;
   private camMotionVelocity = new THREE.Vector2(0, 0);
 
+  // Camera-Space Optical Lens Flare Overlay
+  private cameraLensFlareMesh!: THREE.Mesh;
+  private cameraLensFlareMat!: THREE.ShaderMaterial;
+
   // Root composite 3D groups
   private blackHoleGroup = new THREE.Group();
   private eventHorizonMesh!: THREE.Mesh;
@@ -1656,15 +2005,21 @@ export class BlackHoleSceneController {
   private singularityCoreMat!: THREE.ShaderMaterial;
   private singularityHaloMesh!: THREE.Mesh;
   private singularityHaloMat!: THREE.ShaderMaterial;
-  private isSingularityCollapsed = true;
-  private expansionProgress = 0.0;
-  private targetExpansionProgress = 0.0;
+  private isSingularityCollapsed = false;
+  private expansionProgress = 1.0;
+  private targetExpansionProgress = 1.0;
   private lastWellExpansionProgress = -1.0;
   private pointerDownPos = new THREE.Vector2();
 
-  // Spacetime Well Manifold
+  // Spacetime Well Manifold (Precomputed static vertex polar coordinates for fast O(N) CPU deformation)
   private spacetimeWellMesh!: THREE.Mesh;
   private spacetimeWellGeo!: THREE.BufferGeometry;
+  private wellVertexX!: Float32Array;
+  private wellVertexZ!: Float32Array;
+  private wellVertexR!: Float32Array;
+  private wellVertexAngle!: Float32Array;
+  private wellVertexFrameDragBase!: Float32Array;
+  private needsWellDeform = true;
 
   // Prototype Compact Star / Neutron Star subsystem
   private neutronStarGroup = new THREE.Group();
@@ -1698,6 +2053,7 @@ export class BlackHoleSceneController {
   // Orbital stars & Deep Starfield
   private orbitalStarsGroup = new THREE.Group();
   private starfieldInstanced!: THREE.InstancedMesh;
+  private starfieldMat!: THREE.ShaderMaterial;
   private starRestPositions: THREE.Vector3[] = [];
   private starfieldScales: THREE.Vector3[] = [];
   private starfieldColors: THREE.Color[] = [];
@@ -1705,16 +2061,19 @@ export class BlackHoleSceneController {
   private starTwinklePhases = new Float32Array(5500);
   private starTwinkleSpeeds = new Float32Array(5500);
   private starBaseScales = new Float32Array(5500);
+  private lastTrailRadius = -1;
 
   // Null Geodesics
   private geodesicGroup = new THREE.Group();
   private activeGeodesicPulses: Array<{
+    trajectory: GeodesicTrajectory;
     mesh: THREE.Mesh;
     line: THREE.Line;
     points: THREE.Vector3[];
     progress: number;
     speed: number;
   }> = [];
+  private recentGeodesicHistory: GeodesicTrajectory[] = [];
 
   // Relativistic Gravitational Lensing Shader Mesh (Interstellar Gargantua ray-marched distortion)
   private gravitationalLensMesh!: THREE.Mesh;
@@ -1822,10 +2181,23 @@ export class BlackHoleSceneController {
   private onTrajectoryCreated?: (traj: GeodesicTrajectory) => void;
   private onHoverCoordsChange?: (coords: { rRs: number; phiDeg: number; redshiftZ: number } | null) => void;
   private onSingularityStateChange?: (isCollapsed: boolean) => void;
+  private onCameraChange?: (
+    pos: { x: number; y: number; z: number },
+    target: { x: number; y: number; z: number }
+  ) => void;
+  private resizeObserver: ResizeObserver | null = null;
 
   private params: BlackHoleParams;
   private settings: VisualizerSettings = { ...DEFAULT_VISUALIZER_SETTINGS };
   private showSingularityInAnatomy = false;
+
+  // Performance Monitor & GPU Telemetry state
+  private frameTimeSamples: number[] = [];
+  private lastFramePerfMs = 0;
+  private currentFrameTimeMs = 16.67;
+  private lastRenderPasses = 1;
+  private gpuRendererName = 'WebGL Hardware';
+  private isWebGL2Context = true;
 
   constructor(
     container: HTMLElement,
@@ -1835,6 +2207,10 @@ export class BlackHoleSceneController {
       onTrajectoryCreated?: (traj: GeodesicTrajectory) => void;
       onHoverCoordsChange?: (coords: { rRs: number; phiDeg: number; redshiftZ: number } | null) => void;
       onSingularityStateChange?: (isCollapsed: boolean) => void;
+      onCameraChange?: (
+        pos: { x: number; y: number; z: number },
+        target: { x: number; y: number; z: number }
+      ) => void;
     }
   ) {
     this.container = container;
@@ -1843,54 +2219,119 @@ export class BlackHoleSceneController {
     this.onTrajectoryCreated = callbacks?.onTrajectoryCreated;
     this.onHoverCoordsChange = callbacks?.onHoverCoordsChange;
     this.onSingularityStateChange = callbacks?.onSingularityStateChange;
+    this.onCameraChange = callbacks?.onCameraChange;
 
-    // 1. Pre-check & Acquire WebGL Context Safely (prevents THREE.WebGLRenderer from throwing or logging errors if WebGL is blocked)
-    const width = container.clientWidth || window.innerWidth;
-    const height = container.clientHeight || window.innerHeight;
-    const canvas = document.createElement('canvas');
+    // 1. Acquire a single WebGL2 context directly on our target canvas (no secondary probeCanvas or loseContext() calls
+    // that can destabilize desktop dual-GPU / sandboxed command buffers, and no 'webglcontextcreationerror' console.error spam).
+    const width = Math.max(1, container.clientWidth || window.innerWidth);
+    const height = Math.max(1, container.clientHeight || window.innerHeight);
+    let canvas = document.createElement('canvas');
     canvas.style.display = 'block';
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
     this.domElement = canvas;
 
-    let gl: WebGLRenderingContext | WebGL2RenderingContext | null = null;
+    let glContext: WebGL2RenderingContext | null = null;
     try {
-      const ctxAttrs: WebGLContextAttributes = {
-        alpha: false,
-        antialias: false,
-        powerPreference: 'default',
+      glContext = canvas.getContext('webgl2', {
+        alpha: true,
+        depth: true,
+        stencil: false,
+        antialias: true,
+        premultipliedAlpha: true,
         preserveDrawingBuffer: false,
+        powerPreference: 'default',
         failIfMajorPerformanceCaveat: false,
-      };
-      gl = (
-        canvas.getContext('webgl2', ctxAttrs) ||
-        canvas.getContext('webgl', ctxAttrs) ||
-        canvas.getContext('experimental-webgl', ctxAttrs)
-      ) as WebGLRenderingContext | WebGL2RenderingContext | null;
+      }) as WebGL2RenderingContext | null;
+
+      if (!glContext) {
+        const retryCanvas = document.createElement('canvas');
+        retryCanvas.style.display = 'block';
+        retryCanvas.style.width = `${width}px`;
+        retryCanvas.style.height = `${height}px`;
+        canvas = retryCanvas;
+        this.domElement = retryCanvas;
+        glContext = retryCanvas.getContext('webgl2', {
+          alpha: true,
+          depth: true,
+          stencil: false,
+          antialias: false,
+          premultipliedAlpha: true,
+          preserveDrawingBuffer: false,
+          powerPreference: 'default',
+          failIfMajorPerformanceCaveat: false,
+        }) as WebGL2RenderingContext | null;
+      }
     } catch {
-      gl = null;
+      glContext = null;
     }
 
-    if (gl) {
-      isSoftwareGl = detectSoftwareGl(gl);
+    if (glContext) {
+      // Guard against sandboxed desktop GPU drivers returning null from gl.getContextAttributes()
+      if (typeof glContext.getContextAttributes === 'function' && !glContext.getContextAttributes()) {
+        glContext.getContextAttributes = () => ({
+          alpha: true,
+          antialias: false,
+          depth: true,
+          failIfMajorPerformanceCaveat: false,
+          powerPreference: 'default',
+          premultipliedAlpha: true,
+          preserveDrawingBuffer: false,
+          stencil: false,
+        });
+      }
+
+      const origConsoleError = console.error;
       try {
+        console.error = (...args: unknown[]) => {
+          const msg = String(args[0] ?? '');
+          if (msg.includes('THREE.WebGLRenderer')) return;
+          origConsoleError.apply(console, args);
+        };
         this.renderer = new THREE.WebGLRenderer({
           canvas,
-          context: gl as WebGLRenderingContext,
-          antialias: !isSoftwareGl,
+          context: glContext,
+          alpha: false,
+          antialias: true,
           powerPreference: 'default',
           preserveDrawingBuffer: false,
+          failIfMajorPerformanceCaveat: false,
         });
-        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.15;
-        this.renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
-        this.renderer.shadowMap.enabled = false;
-        this.renderer.debug.checkShaderErrors = false;
-        this.renderer.setSize(width, height);
       } catch {
         this.renderer = null;
+      } finally {
+        console.error = origConsoleError;
       }
+    } else {
+      this.renderer = null;
+      this.gpuRendererName = '2D Relativistic Canvas Engine (WebGL Disabled in Browser)';
+    }
+
+    if (this.renderer) {
+      const gl = this.renderer.getContext();
+      this.isWebGL2Context =
+        typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
+      isSoftwareGl = gl ? detectSoftwareGl(gl) : false;
+      try {
+        if (gl) {
+          const ext = gl.getExtension('WEBGL_debug_renderer_info');
+          const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
+          const rawGpu = String(gl.getParameter(param) || '').trim();
+          if (rawGpu) {
+            this.gpuRendererName = rawGpu;
+          }
+        }
+      } catch {
+        this.gpuRendererName = isSoftwareGl ? 'Software WebGL Rasterizer' : 'WebGL GPU';
+      }
+
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.renderer.toneMappingExposure = 1.15;
+      this.renderer.shadowMap.enabled = false;
+      this.renderer.debug.checkShaderErrors = false;
+      this.renderer.info.autoReset = false;
+      this.configureDevicePixelRatioAndUpscaling(width, height);
     }
 
     if (!this.renderer) {
@@ -1938,12 +2379,21 @@ export class BlackHoleSceneController {
       this.isUserInteracting = false;
     });
 
+    this.controls.addEventListener('change', () => {
+      if (this.isUserInteracting && this.onCameraChange) {
+        this.onCameraChange(
+          { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z },
+          { x: this.controls.target.x, y: this.controls.target.y, z: this.controls.target.z }
+        );
+      }
+    });
+
     this.raycaster.layers.set(1);
 
     // 4. Lighting Rig
     this.setupLightingRig();
 
-    // 5. Build Composite Subsystems
+    // 5. Build Composite Subsystems (leveraging GPUResourceCache for shared textures & geometries)
     this.buildRelativisticMotionBlurPass();
     this.buildCosmicSkyDome();
     this.buildCompositeBlackHole();
@@ -1958,21 +2408,160 @@ export class BlackHoleSceneController {
     this.buildBackgroundMicrolensingStarSystem();
     this.buildInstancedDeepStarfield();
     this.buildSecret1987System();
+    this.buildCameraSpaceLensFlareSystem();
 
     this.scene.add(this.blackHoleGroup);
     this.scene.add(this.neutronStarGroup);
     this.scene.add(this.geodesicGroup);
+
+    // 6. Shader Pre-Warming Phase:
+    // Pre-compiles all material shaders for stars and black holes during initial app load
+    // to eliminate frame drops during first-time rendering and preset transitions.
+    this.prewarmAllMaterialShaders();
 
     // Apply initial parameters
     this.updateParams(initialParams, true);
 
     // Event listeners
     window.addEventListener('resize', this.handleResize);
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.handleResize();
+      });
+      this.resizeObserver.observe(this.container);
+    }
+    // Ensure desktop flex layout dimensions are synchronized right after initial DOM paint
+    requestAnimationFrame(() => {
+      if (!this.isDisposed) {
+        this.handleResize();
+      }
+    });
     this.domElement.addEventListener('pointerdown', this.handlePointerDown);
     this.domElement.addEventListener('pointermove', this.handlePointerMove);
     this.domElement.addEventListener('click', this.handleCanvasClick);
 
     this.startLoop();
+  }
+
+  /**
+   * Dedicated Shader Pre-Warming Phase:
+   * Pre-compiles all material shaders for stars (Neutron Stars, Pulsars, Magnetars, Luminous Stars,
+   * S-Star Cluster, Background Microlensing Star, Instanced Deep Starfield, Binary Donor Star & Corona)
+   * and black holes (Kerr Gravitational Lensing Raymarcher, Classic & Raymarched Accretion Disks,
+   * Volumetric Torus Strata, Singularity Seed Core/Halo, Sonic Boom & Accretion Shockwaves,
+   * Parameter Ripples, Camera Lens Flare, and Relativistic Motion-Blur / Time-Lapse Post-Pass)
+   * during initial app load so first-time rendering and preset switches never drop frames.
+   */
+  public prewarmAllMaterialShaders() {
+    const programKeys = [
+      'lensing_kerr_raymarcher_v1',
+      'accretion_disk_classic_v1',
+      'accretion_disk_volumetric_fbm_v1',
+      'singularity_core_seed_v1',
+      'singularity_halo_seed_v1',
+      'compact_star_crust_beloborodov_v1',
+      'pulsar_synchrotron_beams_v1',
+      'binary_roche_donor_star_v1',
+      'binary_roche_corona_v1',
+      'binary_bezier_stream_v1',
+      'camera_lens_flare_ndc_v1',
+      'instanced_starfield_lensing_v1',
+      'relativistic_motion_blur_post_v1',
+      'event_horizon_sonic_boom_v1',
+      'parameter_ripple_wave_v1',
+      'accretion_shockwave_blast_v1',
+    ];
+    for (const key of programKeys) {
+      gpuResourceCache.registerShaderProgram(key);
+    }
+
+    if (!this.renderer) return;
+
+    // Record original visibility and frustumCulled flags across every object in the scene graph
+    const savedState: Array<{
+      obj: THREE.Object3D;
+      visible: boolean;
+      frustumCulled: boolean;
+    }> = [];
+
+    this.scene.traverse((obj) => {
+      savedState.push({
+        obj,
+        visible: obj.visible,
+        frustumCulled: obj.frustumCulled,
+      });
+      obj.visible = true;
+      obj.frustumCulled = false;
+    });
+
+    const prevLensDiskStyle = this.gravitationalLensMat?.uniforms?.uDiskStyle?.value ?? 0.0;
+    const prevLensIsStar = this.gravitationalLensMat?.uniforms?.uIsStar?.value ?? 0.0;
+    const prevLensAccState = this.gravitationalLensMat?.uniforms?.uAccretionState?.value ?? 0.0;
+    const prevDiskStyle = this.accretionDiskMat?.uniforms?.uDiskStyle?.value ?? 0.0;
+    const prevDiskAccState = this.accretionDiskMat?.uniforms?.uAccretionState?.value ?? 0.0;
+    const prevDiskParamsW = this.accretionDiskMat?.uniforms?.uDiskParams?.value?.w ?? 0.0;
+
+    try {
+      this.camera.updateMatrixWorld();
+
+      // Pass 1: Pre-compile Black Hole Classic Disk & Analytical Lensing shaders
+      if (this.gravitationalLensMat) {
+        this.gravitationalLensMat.uniforms.uIsStar.value = 0.0;
+        this.gravitationalLensMat.uniforms.uDiskStyle.value = 0.0;
+        this.gravitationalLensMat.uniforms.uAccretionState.value = 0.0;
+      }
+      if (this.accretionDiskMat) {
+        this.accretionDiskMat.uniforms.uDiskStyle.value = 0.0;
+        this.accretionDiskMat.uniforms.uAccretionState.value = 0.0;
+        this.accretionDiskMat.uniforms.uDiskParams.value.w = 0.0;
+      }
+      this.renderer.compile(this.scene, this.camera);
+
+      // Pass 2: Pre-compile Black Hole Volumetric Raymarched & Active Torus shaders
+      if (this.gravitationalLensMat) {
+        this.gravitationalLensMat.uniforms.uDiskStyle.value = 1.0;
+        this.gravitationalLensMat.uniforms.uAccretionState.value = 1.0;
+      }
+      if (this.accretionDiskMat) {
+        this.accretionDiskMat.uniforms.uDiskStyle.value = 1.0;
+        this.accretionDiskMat.uniforms.uAccretionState.value = 1.0;
+      }
+      this.renderer.compile(this.scene, this.camera);
+
+      // Pass 3: Pre-compile Compact Star / Pulsar / Magnetar & Luminous Star shader branches
+      if (this.gravitationalLensMat) {
+        this.gravitationalLensMat.uniforms.uIsStar.value = 1.0;
+        this.gravitationalLensMat.uniforms.uDiskStyle.value = 0.0;
+      }
+      if (this.accretionDiskMat) {
+        this.accretionDiskMat.uniforms.uDiskStyle.value = 0.0;
+        this.accretionDiskMat.uniforms.uDiskParams.value.w = 1.0;
+      }
+      this.renderer.compile(this.scene, this.camera);
+
+      // Pass 4: Pre-compile Post-Processing Motion Blur & Time-Lapse Accumulation shader pass
+      if (this.postScene && this.postCamera) {
+        this.renderer.compile(this.postScene, this.postCamera);
+      }
+    } catch {
+      // Ignore non-fatal warmup errors on restricted drivers
+    } finally {
+      if (this.gravitationalLensMat) {
+        this.gravitationalLensMat.uniforms.uDiskStyle.value = prevLensDiskStyle;
+        this.gravitationalLensMat.uniforms.uIsStar.value = prevLensIsStar;
+        this.gravitationalLensMat.uniforms.uAccretionState.value = prevLensAccState;
+      }
+      if (this.accretionDiskMat) {
+        this.accretionDiskMat.uniforms.uDiskStyle.value = prevDiskStyle;
+        this.accretionDiskMat.uniforms.uAccretionState.value = prevDiskAccState;
+        this.accretionDiskMat.uniforms.uDiskParams.value.w = prevDiskParamsW;
+      }
+      for (let i = 0; i < savedState.length; i++) {
+        const entry = savedState[i];
+        entry.obj.visible = entry.visible;
+        entry.obj.frustumCulled = entry.frustumCulled;
+      }
+    }
   }
 
   private setupLightingRig() {
@@ -1990,34 +2579,51 @@ export class BlackHoleSceneController {
   }
 
   private createProceduralSpectrumTexture(): THREE.CanvasTexture {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 32;
-    const ctx = canvas.getContext('2d')!;
-    const grad = ctx.createLinearGradient(0, 0, 512, 0);
-    grad.addColorStop(0.0, '#0a0305');
-    grad.addColorStop(0.12, '#3d0a08');
-    grad.addColorStop(0.28, '#992608');
-    grad.addColorStop(0.48, '#ea580c');
-    grad.addColorStop(0.68, '#f59e0b');
-    grad.addColorStop(0.85, '#fef08a');
-    grad.addColorStop(0.96, '#ffffff');
-    grad.addColorStop(1.0, '#ffffff');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 512, 32);
+    const maxAniso = this.renderer ? this.renderer.capabilities.getMaxAnisotropy() : 1;
+    return gpuResourceCache.getOrCreateTexture(
+      'spectrum_lut_512x32',
+      () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 32;
+        const ctx = canvas.getContext('2d')!;
+        const grad = ctx.createLinearGradient(0, 0, 512, 0);
+        grad.addColorStop(0.0, '#0a0305');
+        grad.addColorStop(0.12, '#3d0a08');
+        grad.addColorStop(0.28, '#992608');
+        grad.addColorStop(0.48, '#ea580c');
+        grad.addColorStop(0.68, '#f59e0b');
+        grad.addColorStop(0.85, '#fef08a');
+        grad.addColorStop(0.96, '#ffffff');
+        grad.addColorStop(1.0, '#ffffff');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 512, 32);
 
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = this.renderer ? this.renderer.capabilities.getMaxAnisotropy() : 1;
-    texture.needsUpdate = true;
-    return texture;
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = maxAniso;
+        texture.needsUpdate = true;
+        return texture;
+      },
+      maxAniso
+    );
   }
 
   private buildCompositeBlackHole() {
     const spectrumLut = this.createProceduralSpectrumTexture();
 
-    // 1. Central Event Horizon (Shadow rendered directly on the lens quad)
-    this.eventHorizonMesh = new THREE.Mesh();
+    // 1. Central Event Horizon 3D Occluder Sphere (Writes 3D depth so the rear half of the equatorial disk is occluded while the front half passes cleanly in front of the shadow)
+    const horizonGeo = gpuResourceCache.getOrCreateGeometry(
+      'event_horizon_sphere_48',
+      () => new THREE.SphereGeometry(2.12, 48, 48)
+    );
+    const horizonMat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      depthWrite: true,
+      depthTest: true,
+    });
+    this.eventHorizonMesh = new THREE.Mesh(horizonGeo, horizonMat);
+    this.eventHorizonMesh.renderOrder = 5;
     this.eventHorizonMesh.layers.enable(1);
     this.eventHorizonMesh.userData.feature = {
       title: 'Event Horizon (r₊)',
@@ -2042,8 +2648,12 @@ export class BlackHoleSceneController {
     });
     // Radius 2.26 matches the local event horizon shadow radius r_horizon so the small ball
     // scales up in 1:1 geometric lockstep with the event horizon shadow as effectiveScale grows!
+    const singularityCoreGeo = gpuResourceCache.getOrCreateGeometry(
+      'singularity_core_sphere_64',
+      () => new THREE.SphereGeometry(2.26, 64, 64)
+    );
     this.singularityCoreMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(2.26, 64, 64),
+      singularityCoreGeo,
       this.singularityCoreMat
     );
     this.singularityCoreMesh.renderOrder = 14;
@@ -2062,8 +2672,12 @@ export class BlackHoleSceneController {
       depthTest: false,
       side: THREE.DoubleSide,
     });
+    const singularityHaloGeo = gpuResourceCache.getOrCreateGeometry(
+      'singularity_halo_plane_8_8',
+      () => new THREE.PlaneGeometry(8.8, 8.8)
+    );
     this.singularityHaloMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(8.8, 8.8),
+      singularityHaloGeo,
       this.singularityHaloMat
     );
     this.singularityHaloMesh.renderOrder = 13;
@@ -2111,22 +2725,29 @@ export class BlackHoleSceneController {
       fragmentShader: ACCRETION_FRAGMENT_SHADER,
       transparent: true,
       depthWrite: false,
+      depthTest: true,
       side: THREE.DoubleSide,
       blending: THREE.NormalBlending,
     });
 
     // 2. High-Fidelity 3D Relativistic Accretion Disk (Equatorial Ring Geometry)
-    // Inner radius = starRadius * 1.35 (1.65 * 1.35 = 2.2275) so the ring geometry physically clears
-    // the compact star equator while also sitting cleanly outside the Kerr black hole horizon
-    const diskInnerRadius = 1.65 * 1.35;
-    const diskPlaneGeo = new THREE.RingGeometry(diskInnerRadius, 16.2, 160, 64);
-    const vertCount = diskPlaneGeo.attributes.position.count;
-    const midLayerAttr = new Float32Array(vertCount);
-    diskPlaneGeo.setAttribute('aVerticalLayer', new THREE.BufferAttribute(midLayerAttr, 1));
+    // Inner radius = 1.25 so the RingGeometry covers the full Kerr prograde ISCO (rIn = 1.45..2.55)
+    // while ACCRETION_FRAGMENT_SHADER cleanly clips r < rIn (and 2.2275 for stars)
+    const diskInnerRadius = 1.25;
+    const diskPlaneGeo = gpuResourceCache.getOrCreateGeometry(
+      'accretion_disk_main_ring_160x64',
+      () => {
+        const geo = new THREE.RingGeometry(diskInnerRadius, 16.2, 160, 64);
+        const vertCount = geo.attributes.position.count;
+        const midLayerAttr = new Float32Array(vertCount);
+        geo.setAttribute('aVerticalLayer', new THREE.BufferAttribute(midLayerAttr, 1));
+        return geo;
+      }
+    );
 
     const mainDiskMesh = new THREE.Mesh(diskPlaneGeo, this.accretionDiskMat);
     mainDiskMesh.rotation.x = -Math.PI / 2;
-    mainDiskMesh.renderOrder = 10;
+    mainDiskMesh.renderOrder = 12;
     mainDiskMesh.layers.enable(1);
     mainDiskMesh.userData.feature = {
       title: 'Relativistic Accretion Disk (ISCO)',
@@ -2141,13 +2762,19 @@ export class BlackHoleSceneController {
     this.activeDiskVolumeGroup = new THREE.Group();
     const volumeLayers = [-0.95, -0.62, -0.32, 0.32, 0.62, 0.95];
     for (const layerVal of volumeLayers) {
-      const layerGeo = new THREE.RingGeometry(diskInnerRadius, 16.2, 128, 44);
-      const count = layerGeo.attributes.position.count;
-      const layerArr = new Float32Array(count).fill(layerVal);
-      layerGeo.setAttribute('aVerticalLayer', new THREE.BufferAttribute(layerArr, 1));
+      const layerGeo = gpuResourceCache.getOrCreateGeometry(
+        `accretion_disk_vol_layer_${layerVal.toFixed(2)}`,
+        () => {
+          const geo = new THREE.RingGeometry(diskInnerRadius, 16.2, 128, 44);
+          const count = geo.attributes.position.count;
+          const layerArr = new Float32Array(count).fill(layerVal);
+          geo.setAttribute('aVerticalLayer', new THREE.BufferAttribute(layerArr, 1));
+          return geo;
+        }
+      );
       const layerMesh = new THREE.Mesh(layerGeo, this.accretionDiskMat);
       layerMesh.rotation.x = -Math.PI / 2;
-      layerMesh.renderOrder = 11;
+      layerMesh.renderOrder = 13;
       this.activeDiskVolumeGroup.add(layerMesh);
     }
     this.activeDiskVolumeGroup.visible = this.params.accretionState === 'active';
@@ -2156,8 +2783,14 @@ export class BlackHoleSceneController {
     this.blackHoleGroup.add(this.accretionDiskGroup);
 
     // 3. Ergosphere Geometric Boundary (Toggled OFF automatically by default)
-    const ergoGeo = new THREE.SphereGeometry(2.35, 32, 32);
-    ergoGeo.scale(1.0, 0.72, 1.0);
+    const ergoGeo = gpuResourceCache.getOrCreateGeometry(
+      'ergosphere_oblate_sphere_32',
+      () => {
+        const geo = new THREE.SphereGeometry(2.35, 32, 32);
+        geo.scale(1.0, 0.72, 1.0);
+        return geo;
+      }
+    );
     const ergoMat = new THREE.MeshStandardMaterial({
       color: 0x0284c7,
       emissive: 0x0284c7,
@@ -2213,13 +2846,13 @@ export class BlackHoleSceneController {
           // Signed offset relative to outer Mach shock front at radial = 0.90
           float delta = radial - 0.90;
           // Razor-sharp leading Mach compression front (Prandtl-Glauert condensation cone edge)
-          float leadShock = exp(-pow(delta * 26.0, 2.0));
+          float leadShock = exp(-pow(abs(delta * 26.0), 2.0));
           // Deep dark rarefaction / decompression trough right behind the leading shock front
-          float rarefaction = exp(-pow((delta + 0.09) * 11.5, 2.0));
+          float rarefaction = exp(-pow(abs((delta + 0.09) * 11.5), 2.0));
           // Secondary trailing recovery Mach wave (N-wave tail)
-          float tailShock = exp(-pow((delta + 0.20) * 18.0, 2.0)) * 0.55;
+          float tailShock = exp(-pow(abs((delta + 0.20) * 18.0), 2.0)) * 0.55;
           // Subtle acoustic pressure striations inside the shock wake
-          float wakeRipples = (0.5 + 0.5 * cos(delta * 58.0)) * exp(-pow((delta + 0.11) * 7.5, 2.0)) * 0.30;
+          float wakeRipples = (0.5 + 0.5 * cos(delta * 58.0)) * exp(-pow(abs((delta + 0.11) * 7.5), 2.0)) * 0.30;
 
           vec3 compressionTone = mix(uColor, vec3(0.72, 0.75, 0.80), 0.45) * 0.78;
           vec3 rarefactionTone = vec3(0.01, 0.015, 0.025);
@@ -2292,11 +2925,11 @@ export class BlackHoleSceneController {
         varying vec3 vPos;
         void main() {
           float theta = acos(clamp(vPos.y, -1.0, 1.0));
-          float equatorialFocus = pow(sin(theta), 1.4);
+          float equatorialFocus = pow(max(0.0001, sin(theta)), 1.4);
           // Sharp grazing-angle Mach shock rim + inner dark rarefaction band
           float viewCos = abs(vNormalVec.z);
-          float outerRim = exp(-pow(viewCos * 5.2, 2.0));
-          float innerTrough = exp(-pow((viewCos - 0.24) * 7.5, 2.0));
+          float outerRim = exp(-pow(abs(viewCos * 5.2), 2.0));
+          float innerTrough = exp(-pow(abs((viewCos - 0.24) * 7.5), 2.0));
           vec3 rimColor = mix(uColor, vec3(0.68, 0.72, 0.77), 0.5) * 0.65;
           vec3 rgb = mix(vec3(0.02, 0.025, 0.04), rimColor, outerRim / max(0.001, outerRim + innerTrough));
           float alpha = (outerRim * 0.42 + innerTrough * 0.28) * equatorialFocus * uOpacity;
@@ -2363,11 +2996,11 @@ export class BlackHoleSceneController {
             float radial = length(vUv - 0.5) * 2.0;
             float delta = radial - 0.88;
             // Razor-sharp leading wave crest
-            float crest = exp(-pow(delta * 26.0, 2.0));
+            float crest = exp(-pow(abs(delta * 26.0), 2.0));
             // Quasinormal oscillatory trailing ripples (damping harmonic wave train)
-            float harmonic1 = exp(-pow((delta + 0.12) * 18.0, 2.0)) * 0.65 * (0.6 + 0.4 * cos(delta * 65.0 - uPhase));
-            float harmonic2 = exp(-pow((delta + 0.24) * 14.0, 2.0)) * 0.40 * (0.6 + 0.4 * sin(delta * 85.0 - uPhase * 1.5));
-            float harmonic3 = exp(-pow((delta + 0.36) * 11.0, 2.0)) * 0.22;
+            float harmonic1 = exp(-pow(abs((delta + 0.12) * 18.0), 2.0)) * 0.65 * (0.6 + 0.4 * cos(delta * 65.0 - uPhase));
+            float harmonic2 = exp(-pow(abs((delta + 0.24) * 14.0), 2.0)) * 0.40 * (0.6 + 0.4 * sin(delta * 85.0 - uPhase * 1.5));
+            float harmonic3 = exp(-pow(abs((delta + 0.36) * 11.0), 2.0)) * 0.22;
             float wave = crest + harmonic1 + harmonic2 + harmonic3;
             vec3 crestTone = mix(uColor, vec3(1.0, 1.0, 1.0), crest * 0.75);
             float alpha = clamp(wave, 0.0, 1.0) * uOpacity;
@@ -2402,7 +3035,7 @@ export class BlackHoleSceneController {
           varying vec3 vNormalVec;
           void main() {
             float viewCos = abs(vNormalVec.z);
-            float rim = exp(-pow(viewCos * 5.2, 2.0));
+            float rim = exp(-pow(abs(viewCos * 5.2), 2.0));
             vec3 rgb = mix(uColor, vec3(0.92, 0.96, 1.0), 0.45);
             float alpha = rim * uOpacity * 0.38;
             gl_FragColor = vec4(rgb, alpha);
@@ -2513,10 +3146,10 @@ export class BlackHoleSceneController {
           float radial = length(vUv - 0.5) * 2.0;
           float delta = radial - 0.90;
           // Searing ionizing shock front
-          float leadShock = exp(-pow(delta * 28.0, 2.0));
+          float leadShock = exp(-pow(abs(delta * 28.0), 2.0));
           // Thermal plasma compression wake with acoustic striations
-          float wake = exp(-pow((delta + 0.14) * 14.0, 2.0)) * (0.6 + 0.4 * cos(delta * 70.0));
-          float trailingMist = exp(-pow((delta + 0.28) * 9.0, 2.0)) * 0.35;
+          float wake = exp(-pow(abs((delta + 0.14) * 14.0), 2.0)) * (0.6 + 0.4 * cos(delta * 70.0));
+          float trailingMist = exp(-pow(abs((delta + 0.28) * 9.0), 2.0)) * 0.35;
           float shockProfile = leadShock + wake + trailingMist;
           vec3 coreColor = vec3(1.0, 0.98, 0.92);
           vec3 blastColor = mix(uColor, coreColor, leadShock * 0.85);
@@ -2562,7 +3195,7 @@ export class BlackHoleSceneController {
         varying vec3 vPos;
         void main() {
           float viewCos = abs(vNormalVec.z);
-          float rim = exp(-pow(viewCos * 4.8, 2.0));
+          float rim = exp(-pow(abs(viewCos * 4.8), 2.0));
           float poleFade = clamp(1.0 - abs(vPos.y) * 0.35, 0.0, 1.0);
           vec3 rgb = mix(uColor, vec3(1.0, 0.95, 0.85), rim * 0.7);
           float alpha = rim * uOpacity * 0.65 * poleFade;
@@ -2673,7 +3306,10 @@ export class BlackHoleSceneController {
 
     // 1. Ultra-Dense Crystalline Iron Crust Sphere (20 km Physical Stellar Surface)
     // High-resolution subdivision (96x96) supports smooth vertex seismic ripple modes
-    const crustGeo = new THREE.SphereGeometry(1.65, 96, 96);
+    const crustGeo = gpuResourceCache.getOrCreateGeometry(
+      'neutron_star_crust_sphere_96',
+      () => new THREE.SphereGeometry(1.65, 96, 96)
+    );
     this.neutronStarMat = createCompactStarMaterial({
       baseColor: 0x0ea5e9,
       hotspotIntensity: 1.65,
@@ -2824,7 +3460,10 @@ export class BlackHoleSceneController {
     this.binarySystemGroup.renderOrder = 15;
 
     // 1. Companion Donor Star (Volumetric fBM Boiling Solar Surface + Roche Lobe Teardrop Deformation)
-    const starGeo = new THREE.SphereGeometry(this.companionStarBaseRadius, 96, 96);
+    const starGeo = gpuResourceCache.getOrCreateGeometry(
+      'binary_companion_star_96',
+      () => new THREE.SphereGeometry(this.companionStarBaseRadius, 96, 96)
+    );
     this.binaryStarMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
@@ -2854,7 +3493,10 @@ export class BlackHoleSceneController {
     this.binarySystemGroup.add(this.binaryStarMesh);
 
     // 2. Bright Coronal Fresnel Glow Envelope around the Companion Star
-    const coronaGeo = new THREE.SphereGeometry(this.companionStarBaseRadius * 1.34, 64, 64);
+    const coronaGeo = gpuResourceCache.getOrCreateGeometry(
+      'binary_companion_corona_64',
+      () => new THREE.SphereGeometry(this.companionStarBaseRadius * 1.34, 64, 64)
+    );
     this.binaryCoronaMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
@@ -3000,20 +3642,36 @@ export class BlackHoleSceneController {
   }
 
   private buildSpacetimeWellManifold() {
-    // Expansive, high-resolution continuous Cartesian Spacetime Manifold (136x136 grid to crisply resolve multi-ring gravitational wave ripples)
-    this.spacetimeWellGeo = new THREE.PlaneGeometry(130, 130, 136, 136);
+    // Optimized continuous Cartesian Spacetime Manifold (84x84 grid = 7,225 vertices with precomputed polar tables)
+    this.spacetimeWellGeo = new THREE.PlaneGeometry(130, 130, 84, 84);
     this.spacetimeWellGeo.rotateX(-Math.PI / 2);
 
-    const wellMat = new THREE.MeshStandardMaterial({
+    const posAttr = this.spacetimeWellGeo.attributes.position as THREE.BufferAttribute;
+    const count = posAttr.count;
+    this.wellVertexX = new Float32Array(count);
+    this.wellVertexZ = new Float32Array(count);
+    this.wellVertexR = new Float32Array(count);
+    this.wellVertexAngle = new Float32Array(count);
+    this.wellVertexFrameDragBase = new Float32Array(count);
+
+    for (let i = 0; i < count; i++) {
+      const x = posAttr.getX(i);
+      const z = posAttr.getZ(i);
+      const r = Math.hypot(x, z);
+      const angle = Math.atan2(z, x);
+      this.wellVertexX[i] = x;
+      this.wellVertexZ[i] = z;
+      this.wellVertexR[i] = r;
+      this.wellVertexAngle[i] = angle;
+      this.wellVertexFrameDragBase[i] = 0.45 * Math.sin(angle * 2.0 + r * 0.28) * Math.exp(-r * 0.1);
+    }
+
+    const wellMat = new THREE.MeshBasicMaterial({
       color: 0x06b6d4,
-      emissive: 0x0284c7,
-      emissiveIntensity: 0.45,
       wireframe: true,
       transparent: true,
       depthWrite: false,
       opacity: 0.28,
-      roughness: 0.35,
-      metalness: 0.8,
     });
 
     this.spacetimeWellMesh = new THREE.Mesh(this.spacetimeWellGeo, wellMat);
@@ -3033,13 +3691,12 @@ export class BlackHoleSceneController {
   }
 
   private deformSpacetimeWell(massSolar: number, spin: number) {
+    if (!this.spacetimeWellGeo || !this.wellVertexR) return;
     const posAttr = this.spacetimeWellGeo.attributes.position as THREE.BufferAttribute;
+    const posArray = posAttr.array as Float32Array;
     const depthMult = this.params.wellDepthMultiplier || 2.2;
     const isStar = isStellarCategory(this.params.objectCategory);
 
-    // Truly deep and steep general-relativistic gravitational funnel:
-    // Starts as a subtle localized dimple when compressed in the small singularity ball state,
-    // and plunges deep into the cosmic abyss (18 to 48 units deep) along with the expanding shockwave.
     const shockGrowth = isStar
       ? 1.0
       : 1.0 - Math.pow(1.0 - Math.min(1.0, Math.max(0.0, this.expansionProgress)), 2.6);
@@ -3047,89 +3704,90 @@ export class BlackHoleSceneController {
     const wellDepth = (16.0 + (massSolar / 100) * 32.0) * depthMult * expansionWellFactor;
     const baseRs = 2.4 + (massSolar / 100) * 2.2;
     const rs = isStar ? baseRs : baseRs * (0.18 + 0.82 * shockGrowth);
+    const invRsSq = 1.0 / (rs * rs);
 
-    for (let i = 0; i < posAttr.count; i++) {
-      const x = posAttr.getX(i);
-      const z = posAttr.getZ(i);
-      const r = Math.hypot(x, z);
+    const rCrust = rs * 1.25;
+    const rCrustSq = rCrust * rCrust;
+    const surfaceBottom = isStar
+      ? -wellDepth / Math.pow(rCrustSq * invRsSq + 0.18, 0.52)
+      : 0.0;
+
+    const isBinary = !isStar && this.params.systemCategory === 'binary';
+    const starDist = 21.0 * shockGrowth;
+    const sx = isBinary ? Math.cos(this.binaryOrbitAngle) * starDist : 0.0;
+    const sz = isBinary ? -Math.sin(this.binaryOrbitAngle) * starDist : 0.0;
+    const rsComp = Math.max(1.8, rs * 0.62);
+    const invRsCompSq = 1.0 / (rsComp * rsComp);
+
+    const hasPulse = this.pulseStrength > 0.005;
+    const frontR = hasPulse ? 0.35 + Math.pow(this.pulseProgress, 0.78) * 61.5 : 0.0;
+    const pulseP1 = this.pulseProgress * 42.0;
+    const pulseP2 = this.pulseProgress * 64.0;
+    const pulseP3 = this.pulseProgress * 24.0;
+    const pulseAmp = this.pulseStrength * 5.2;
+
+    const hasParamRipples =
+      this.settings.rapidAdjustmentRipples !== false &&
+      this.parameterRipples.some((rip) => rip.active);
+    const hasAccretionShock =
+      this.isAccretionShockActive && this.settings.accretionShockwaveEnabled !== false;
+    const shockFade = hasAccretionShock
+      ? Math.pow(1.0 - this.accretionShockProgress, 1.2) * this.accretionShockIntensity * 3.4
+      : 0.0;
+    const shockPhase = this.accretionShockProgress * 32.0;
+    const spinGrowth = spin * shockGrowth;
+
+    const count = posAttr.count;
+    for (let i = 0; i < count; i++) {
+      const r = this.wellVertexR[i];
+      const rSq = r * r;
 
       let depth: number;
-
       if (isStar) {
-        // For a Star / Compact Remnant: The well is steep outside, but BOTTOMS OUT at the physical surface
-        // (R_star > R_s), physically demonstrating why there is NO singularity or horizon!
-        const rCrust = rs * 1.25;
         if (r < rCrust) {
-          const surfaceBottom = -wellDepth / Math.pow((rCrust * rCrust) / (rs * rs) + 0.18, 0.52);
-          // Quadratic bowl inside the star's uniform interior density (Schwarzschild interior solution)
-          const interiorDip = surfaceBottom - 1.2 * (1.0 - (r * r) / (rCrust * rCrust));
-          depth = interiorDip;
+          depth = surfaceBottom - 1.2 * (1.0 - rSq / rCrustSq);
         } else {
-          depth = -wellDepth / Math.pow((r * r) / (rs * rs) + 0.18, 0.52);
+          depth = -wellDepth / Math.pow(rSq * invRsSq + 0.18, 0.52);
         }
       } else {
-        // For a Black Hole: Steep, plunging gravitational abyss falling toward the central throat
-        depth = -wellDepth / Math.pow((r * r) / (rs * rs) + 0.12, 0.54);
+        depth = -wellDepth / Math.pow(rSq * invRsSq + 0.12, 0.54);
       }
 
-      // Authentic Kerr frame-dragging vortex spiral (Lense-Thirring effect)
-      const angle = Math.atan2(z, x);
-      const frameDragSpiral = spin * 0.45 * Math.sin(angle * 2.0 + r * 0.28) * Math.exp(-r * 0.1) * shockGrowth;
+      const frameDragSpiral = spinGrowth * this.wellVertexFrameDragBase[i];
 
-      // Binary Companion Star secondary gravitational potential well (Roche equipotential depression)
       let companionWellDip = 0.0;
-      if (!isStar && this.params.systemCategory === 'binary') {
-        const starDist = 21.0 * shockGrowth;
-        const sx = Math.cos(this.binaryOrbitAngle) * starDist;
-        const sz = -Math.sin(this.binaryOrbitAngle) * starDist;
-        const rComp = Math.hypot(x - sx, z - sz);
-        const rsComp = Math.max(1.8, rs * 0.62);
-        companionWellDip = -(wellDepth * 0.34) / Math.pow((rComp * rComp) / (rsComp * rsComp) + 0.65, 0.52);
+      if (isBinary) {
+        const dx = this.wellVertexX[i] - sx;
+        const dz = this.wellVertexZ[i] - sz;
+        const rCompSq = dx * dx + dz * dz;
+        companionWellDip = -(wellDepth * 0.34) / Math.pow(rCompSq * invRsCompSq + 0.65, 0.52);
       }
 
-      // Dynamic Event Horizon Pulse: Dense Multi-Ring Concentric Gravitational Wave Train on the Gravity Well
       let pulseWave = 0.0;
-      if (this.pulseStrength > 0.005) {
-        // Wavefront radius in local manifold coordinates (erupts from small singularity ball r = 0.35 out to r = 62 across the entire 130x130 grid)
-        const frontR = 0.35 + Math.pow(this.pulseProgress, 0.78) * 61.5;
-        const innerTap = Math.min(1.0, Math.max(0.0, (r - 0.30) / 1.6));
-        // Smooth step cutoff ahead of the expanding wavefront
+      if (hasPulse) {
+        const innerTap = Math.min(1.0, Math.max(0.0, (r - 0.30) * 0.625));
         const leadingEdge = 1.0 / (1.0 + Math.exp((r - frontR) * 1.6));
-        // Sustained wave-train envelope behind the wavefront so 10-14 concentric ripples undulate across the well at once
         const distBehind = Math.max(0.0, frontR - r);
         const distAhead = Math.max(0.0, r - frontR);
         const trainEnvelope = Math.exp(-distBehind * 0.032) * Math.exp(-distAhead * 0.55);
-
-        // High-density concentric ripple harmonics propagating outward at c
-        const phase1 = r * 1.75 - this.pulseProgress * 42.0;
-        const phase2 = r * 3.25 - this.pulseProgress * 64.0;
-        const phase3 = r * 0.95 - this.pulseProgress * 24.0;
         const multiRipple =
-          Math.sin(phase1) * 0.72 +
-          Math.cos(phase2) * 0.34 +
-          Math.sin(phase3) * 0.42;
-
-        const radialFalloff = 1.0 / (1.0 + r * 0.016);
+          Math.sin(r * 1.75 - pulseP1) * 0.72 +
+          Math.cos(r * 3.25 - pulseP2) * 0.34 +
+          Math.sin(r * 0.95 - pulseP3) * 0.42;
         pulseWave =
-          multiRipple *
-          leadingEdge *
-          innerTap *
-          trainEnvelope *
-          this.pulseStrength *
-          5.2 *
-          radialFalloff;
+          (multiRipple * leadingEdge * innerTap * trainEnvelope * pulseAmp) / (1.0 + r * 0.016);
       }
 
-      // Propagating metric ripples from rapid spin or accretion rate adjustments
       let paramRippleWave = 0.0;
-      if (this.settings.rapidAdjustmentRipples !== false) {
-        for (const rip of this.parameterRipples) {
+      if (hasParamRipples) {
+        for (let k = 0; k < this.parameterRipples.length; k++) {
+          const rip = this.parameterRipples[k];
           if (!rip.active) continue;
           const ease = 1.0 - Math.pow(1.0 - rip.progress, 2.2);
-          const curR = THREE.MathUtils.lerp(rip.startRadius, rip.maxRadius, ease);
+          const curR = rip.startRadius + (rip.maxRadius - rip.startRadius) * ease;
           const rDist = Math.abs(r - curR);
           if (rDist < 7.5) {
-            const waveEnv = Math.exp(-Math.pow(rDist * 0.52, 2.0));
+            const waveEnv = Math.exp(-(rDist * rDist) * 0.2704);
             const waveCycle = Math.sin(rDist * 2.4 - rip.progress * 26.0);
             const fade = Math.pow(1.0 - rip.progress, 1.25) * rip.intensity;
             paramRippleWave += waveEnv * waveCycle * fade * 2.6;
@@ -3137,44 +3795,41 @@ export class BlackHoleSceneController {
         }
       }
 
-      // Propagating thermal radiation blast wave from accretion state/rate threshold change
       let accretionShockWave = 0.0;
-      if (this.isAccretionShockActive && this.settings.accretionShockwaveEnabled !== false) {
-        const shockFrontR = this.accretionShockRadius;
-        const rDist = Math.abs(r - shockFrontR);
+      if (hasAccretionShock) {
+        const rDist = Math.abs(r - this.accretionShockRadius);
         if (rDist < 8.5) {
-          const waveEnv = Math.exp(-Math.pow(rDist * 0.45, 2.0));
-          const waveOsc = Math.sin(rDist * 2.1 - this.accretionShockProgress * 32.0);
-          const shockFade = Math.pow(1.0 - this.accretionShockProgress, 1.2) * this.accretionShockIntensity;
-          accretionShockWave += waveEnv * waveOsc * shockFade * 3.4;
+          const waveEnv = Math.exp(-(rDist * rDist) * 0.2025);
+          const waveOsc = Math.sin(rDist * 2.1 - shockPhase);
+          accretionShockWave = waveEnv * waveOsc * shockFade;
         }
       }
 
-      posAttr.setY(i, depth + companionWellDip + frameDragSpiral + pulseWave + paramRippleWave + accretionShockWave);
+      posArray[i * 3 + 1] =
+        depth + companionWellDip + frameDragSpiral + pulseWave + paramRippleWave + accretionShockWave;
     }
     posAttr.needsUpdate = true;
-    this.spacetimeWellGeo.computeVertexNormals();
 
     if (this.spacetimeWellMesh) {
-      const wellMat = this.spacetimeWellMesh.material as THREE.MeshStandardMaterial;
+      const wellMat = this.spacetimeWellMesh.material as THREE.MeshBasicMaterial;
       if (this.settings.secret1987Mode) {
         wellMat.color.setHex(0xf59e0b);
-        wellMat.emissive.setHex(0xd946ef);
-        wellMat.emissiveIntensity = 0.72;
         wellMat.opacity = 0.42 + this.pulseStrength * 0.14;
       } else {
         wellMat.color.setHex(0x06b6d4);
-        wellMat.emissive.setHex(0x0284c7);
-        wellMat.emissiveIntensity = 0.45;
         wellMat.opacity = 0.28 + this.pulseStrength * 0.12;
       }
     }
     this.lastWellExpansionProgress = this.expansionProgress;
+    this.needsWellDeform = false;
   }
 
   private buildRelativisticLensingWarp() {
     // Ray-marched Relativistic Gravitational Lens (Interstellar Gargantua ray-deflected geometry & Einstein rings)
-    const lensGeo = new THREE.PlaneGeometry(44, 44);
+    const lensGeo = gpuResourceCache.getOrCreateGeometry(
+      'gravitational_lens_plane_44',
+      () => new THREE.PlaneGeometry(44, 44)
+    );
     const spectrumLut = this.createProceduralSpectrumTexture();
 
     this.gravitationalLensMat = new THREE.ShaderMaterial({
@@ -3210,28 +3865,32 @@ export class BlackHoleSceneController {
     });
 
     this.gravitationalLensMesh = new THREE.Mesh(lensGeo, this.gravitationalLensMat);
-    this.gravitationalLensMesh.renderOrder = 10;
+    this.gravitationalLensMesh.renderOrder = 8;
     this.blackHoleGroup.add(this.gravitationalLensMesh);
   }
 
   private buildRelativisticMotionBlurPass() {
-    const width = this.container.clientWidth || window.innerWidth;
-    const height = this.container.clientHeight || window.innerHeight;
+    const width = Math.max(1, this.container.clientWidth || window.innerWidth);
+    const height = Math.max(1, this.container.clientHeight || window.innerHeight);
+    const dpr = this.renderer ? this.renderer.getPixelRatio() : 1.0;
+    const rtWidth = Math.max(1, Math.round(width * dpr));
+    const rtHeight = Math.max(1, Math.round(height * dpr));
     const rtOptions: THREE.RenderTargetOptions = {
       minFilter: THREE.LinearFilter,
       magFilter: THREE.LinearFilter,
       format: THREE.RGBAFormat,
+      generateMipmaps: false,
     };
-    this.motionBlurRenderTarget = new THREE.WebGLRenderTarget(width, height, rtOptions);
-    this.timeLapseTargetA = new THREE.WebGLRenderTarget(width, height, rtOptions);
-    this.timeLapseTargetB = new THREE.WebGLRenderTarget(width, height, rtOptions);
+    this.motionBlurRenderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight, rtOptions);
+    this.timeLapseTargetA = new THREE.WebGLRenderTarget(rtWidth, rtHeight, rtOptions);
+    this.timeLapseTargetB = new THREE.WebGLRenderTarget(rtWidth, rtHeight, rtOptions);
     this.postMaterial = new THREE.ShaderMaterial({
       uniforms: {
         tDiffuse: { value: this.motionBlurRenderTarget.texture },
         tAccum: { value: this.timeLapseTargetA.texture },
         uVelocity: { value: this.camMotionVelocity },
         uStrength: { value: 0.0 },
-        uResolution: { value: new THREE.Vector2(width, height) },
+        uResolution: { value: new THREE.Vector2(rtWidth, rtHeight) },
         uTimeLapseMix: { value: 0.0 },
         uExposureBoost: { value: 0.0 },
       },
@@ -3240,9 +3899,48 @@ export class BlackHoleSceneController {
       depthWrite: false,
       depthTest: false,
     });
-    this.postQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.postMaterial);
+    const fullscreenQuadGeo = gpuResourceCache.getOrCreateGeometry(
+      'fullscreen_quad_2x2',
+      () => new THREE.PlaneGeometry(2, 2)
+    );
+    this.postQuad = new THREE.Mesh(fullscreenQuadGeo, this.postMaterial);
     this.postScene.add(this.postQuad);
     this.prevCamQuat.copy(this.camera.quaternion);
+  }
+
+  private buildCameraSpaceLensFlareSystem() {
+    const width = this.container.clientWidth || window.innerWidth;
+    const height = this.container.clientHeight || window.innerHeight;
+    this.cameraLensFlareMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uFlareIntensity: { value: this.settings.lensFlareIntensity ?? 1.0 },
+        uTime: { value: 0.0 },
+        uResolution: { value: new THREE.Vector2(width, height) },
+        uSourceNdc: { value: new THREE.Vector3(0, 0, 1) },
+        uHotspotNdc: { value: new THREE.Vector3(0.15, 0, 1) },
+        uSecondaryNdc: { value: new THREE.Vector3(0, 0, 0) },
+        uViewAngleParams: { value: new THREE.Vector4(0.8, 0.0, 0.0, 1.0) },
+        uPrimaryTint: { value: new THREE.Color(0xfbbf24) },
+        uSecondaryTint: { value: new THREE.Color(0x38bdf8) },
+      },
+      vertexShader: CAMERA_LENS_FLARE_VERTEX_SHADER,
+      fragmentShader: CAMERA_LENS_FLARE_FRAGMENT_SHADER,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: false,
+    });
+    const flareQuadGeo = gpuResourceCache.getOrCreateGeometry(
+      'fullscreen_quad_2x2',
+      () => new THREE.PlaneGeometry(2, 2)
+    );
+    this.cameraLensFlareMesh = new THREE.Mesh(
+      flareQuadGeo,
+      this.cameraLensFlareMat
+    );
+    this.cameraLensFlareMesh.frustumCulled = false;
+    this.cameraLensFlareMesh.renderOrder = 950;
+    this.scene.add(this.cameraLensFlareMesh);
   }
 
   private buildOrbitingStarCluster() {
@@ -3430,10 +4128,103 @@ export class BlackHoleSceneController {
 
   private buildInstancedDeepStarfield() {
     const starCount = this.starfieldCount;
-    // High-fidelity smooth sphere geometry instead of coarse faceted octahedrons
+    // High-fidelity smooth sphere geometry with GPU-driven relativistic lensing & twinkle shader
     const starGeo = new THREE.SphereGeometry(0.12, 6, 5);
-    const starMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    this.starfieldInstanced = new THREE.InstancedMesh(starGeo, starMat, starCount);
+    const starMetaArray = new Float32Array(starCount * 4);
+    const starPosArray = new Float32Array(starCount * 3);
+    const starColorArray = new Float32Array(starCount * 3);
+
+    this.starfieldMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0.0 },
+        uCameraPos: { value: new THREE.Vector3() },
+        uLookDir: { value: new THREE.Vector3(0, 0, -1) },
+        uCamRight: { value: new THREE.Vector3(1, 0, 0) },
+        uCamUp: { value: new THREE.Vector3(0, 1, 0) },
+        // (rs, einsteinRadiusSq, pulseRadius, pulseStrength)
+        uLensingParams: { value: new THREE.Vector4(1.75, 8.5, 0.0, 0.0) },
+        // (lensingEnabled, lockBackground, currentScale, 0)
+        uStarFlags: { value: new THREE.Vector4(1.0, 0.0, 1.0, 0.0) },
+      },
+      vertexShader: /* glsl */ `
+        attribute vec3 aStarRestPos;
+        attribute vec4 aStarMeta;
+        attribute vec3 aStarColor;
+
+        uniform float uTime;
+        uniform vec3 uCameraPos;
+        uniform vec3 uLookDir;
+        uniform vec3 uCamRight;
+        uniform vec3 uCamUp;
+        uniform vec4 uLensingParams;
+        uniform vec4 uStarFlags;
+
+        varying vec3 vStarColor;
+
+        void main() {
+          vStarColor = aStarColor;
+          float phase = aStarMeta.x;
+          float speed = aStarMeta.y;
+          float baseScale = aStarMeta.z;
+          float restDist = aStarMeta.w;
+
+          float twinkle = 1.0 + sin(uTime * speed + phase) * 0.15;
+          float curScale = baseScale * twinkle;
+
+          float depthFactor = uStarFlags.y > 0.5 ? 0.0 : ((135.0 / max(50.0, restDist)) - 0.85);
+          vec3 parallaxOffset = uCameraPos * (-0.045 * depthFactor);
+          float dotRight = dot(uCamRight, aStarRestPos);
+          float dotUp = dot(uCamUp, aStarRestPos);
+          parallaxOffset += uCamRight * (-dotRight * 0.0022 * depthFactor);
+          parallaxOffset += uCamUp * (-dotUp * 0.0022 * depthFactor);
+
+          vec3 worldCenter = aStarRestPos + parallaxOffset;
+
+          if (uStarFlags.x > 0.5) {
+            vec3 toStar = worldCenter - uCameraPos;
+            float starDist = length(toStar);
+            if (starDist > 1.0) {
+              vec3 starDir = toStar / starDist;
+              float cosAngle = dot(starDir, uLookDir);
+              if (cosAngle > 0.35) {
+                float rs = uLensingParams.x;
+                float einsteinRadiusSq = uLensingParams.y;
+                float pulseRadius = uLensingParams.z;
+                float pulseStrength = uLensingParams.w;
+
+                float sinAngle = sqrt(max(0.001, 1.0 - cosAngle * cosAngle));
+                float impactB = max(rs * 0.9, starDist * sinAngle);
+                float deflectionFactor = min(7.5, einsteinRadiusSq / (impactB + 0.35));
+
+                if (pulseStrength > 0.005) {
+                  float dShock = impactB - pulseRadius;
+                  float denom = max(0.4, 0.85 * uStarFlags.z);
+                  deflectionFactor += -dShock * exp(-(dShock * dShock) / denom) * pulseStrength * 1.45;
+                }
+
+                vec3 ortho = cross(cross(uLookDir, starDir), uLookDir);
+                float orthoLen = length(ortho);
+                if (orthoLen > 1e-4) {
+                  worldCenter += (ortho / orthoLen) * (deflectionFactor * 2.2);
+                }
+              }
+            }
+          }
+
+          vec3 finalPos = worldCenter + position * curScale;
+          gl_Position = projectionMatrix * viewMatrix * vec4(finalPos, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        varying vec3 vStarColor;
+        void main() {
+          gl_FragColor = vec4(vStarColor, 1.0);
+        }
+      `,
+    });
+
+    this.starfieldInstanced = new THREE.InstancedMesh(starGeo, this.starfieldMat, starCount);
+    this.starfieldInstanced.frustumCulled = false;
 
     this.starRestPositions = [];
     this.starfieldScales = [];
@@ -3454,8 +4245,6 @@ export class BlackHoleSceneController {
       new THREE.Color(0xff8c55), // Deep red giant / carbon star
     ];
 
-    // Milky Way Galactic Plane Orientation:
-    // Inclined ~56 degrees relative to the black hole coordinates, cutting diagonally across the sky
     const galTiltX = 0.98; // ~56 deg
     const galRotY = 0.62;  // ~35 deg
     const cosTilt = Math.cos(galTiltX);
@@ -3467,32 +4256,26 @@ export class BlackHoleSceneController {
       let x = 0, y = 0, z = 0;
       const radius = 75 + Math.random() * 135;
 
-      // 72% of stars form the dense, realistic Milky Way Galactic Disc & Central Bulge band
       if (i < starCount * 0.72) {
-        const l = Math.random() * Math.PI * 2.0; // Galactic longitude
-        // Gaussian distribution along galactic equator (Box-Muller transform)
+        const l = Math.random() * Math.PI * 2.0;
         const u1 = Math.max(0.0001, Math.random());
         const u2 = Math.random();
         const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
 
-        // Bulge concentration toward galactic center (l = 0 or PI)
         const bulgeFactor = 0.14 + 0.12 * Math.exp(-Math.pow(Math.min(l, Math.PI * 2 - l) / 0.8, 2.0));
-        const b = z0 * bulgeFactor; // Galactic latitude in radians
+        const b = z0 * bulgeFactor;
 
-        // Spherical position in galactic plane frame
         const cosB = Math.cos(b);
         const gx = cosB * Math.cos(l);
         const gy = Math.sin(b);
         const gz = cosB * Math.sin(l);
 
-        // Rotate into celestial observer frame: Rotate X, then Rotate Y
         const y1 = gy * cosTilt - gz * sinTilt;
         const z1 = gy * sinTilt + gz * cosTilt;
         x = (gx * cosRot + z1 * sinRot) * radius;
         y = y1 * radius;
         z = (-gx * sinRot + z1 * cosRot) * radius;
       } else {
-        // 28% of stars populate the diffuse spherical cosmic halo
         const u = Math.random();
         const v = Math.random();
         const theta = u * 2.0 * Math.PI;
@@ -3505,10 +4288,6 @@ export class BlackHoleSceneController {
       const restPos = new THREE.Vector3(x, y, z);
       this.starRestPositions.push(restPos);
 
-      // Realistic Astronomical Initial Mass Function (IMF) / Apparent Magnitude Distribution:
-      // - 82% faint dwarf stars: tiny, crisp, beautiful sub-pixel pinpricks
-      // - 14% medium brightness stars
-      // - 4% luminous bright navigation stars & supergiant beacons
       let baseScale = 0.18;
       const magRand = Math.random();
       if (magRand < 0.82) {
@@ -3519,35 +4298,40 @@ export class BlackHoleSceneController {
         baseScale = 0.95 + Math.random() * 0.95;
       }
 
+      const phase = Math.random() * Math.PI * 2;
+      const speed = 1.4 + Math.random() * 3.8;
       this.starBaseScales[i] = baseScale;
-      this.starTwinklePhases[i] = Math.random() * Math.PI * 2;
-      this.starTwinkleSpeeds[i] = 1.4 + Math.random() * 3.8;
+      this.starTwinklePhases[i] = phase;
+      this.starTwinkleSpeeds[i] = speed;
 
-      const scaleVec = new THREE.Vector3(baseScale, baseScale, baseScale);
-      this.starfieldScales.push(scaleVec);
+      starPosArray[i * 3] = x;
+      starPosArray[i * 3 + 1] = y;
+      starPosArray[i * 3 + 2] = z;
 
-      _mat4.compose(restPos, _quat.identity(), scaleVec);
+      starMetaArray[i * 4] = phase;
+      starMetaArray[i * 4 + 1] = speed;
+      starMetaArray[i * 4 + 2] = baseScale;
+      starMetaArray[i * 4 + 3] = radius;
+
+      _mat4.identity();
       this.starfieldInstanced.setMatrixAt(i, _mat4);
 
-      // Real astronomical spectral population weighting:
-      // M and K red/orange dwarf stars are by far the most numerous in the universe (~60%),
-      // Solar G and F stars are moderate (~30%), while hot B and O stars are rare (~10%)
       let colorIndex = 0;
       const specRand = Math.random();
       if (specRand < 0.32) {
-        colorIndex = 6; // M red dwarf
+        colorIndex = 6;
       } else if (specRand < 0.58) {
-        colorIndex = 5; // K orange dwarf
+        colorIndex = 5;
       } else if (specRand < 0.78) {
-        colorIndex = 4; // G solar yellow
+        colorIndex = 4;
       } else if (specRand < 0.90) {
-        colorIndex = 3; // F warm white
+        colorIndex = 3;
       } else if (specRand < 0.96) {
-        colorIndex = 2; // A white
+        colorIndex = 2;
       } else if (specRand < 0.99) {
-        colorIndex = 1; // B blue-white
+        colorIndex = 1;
       } else {
-        colorIndex = 0; // O electric blue
+        colorIndex = 0;
       }
 
       const col = spectralColors[colorIndex].clone();
@@ -3555,96 +4339,45 @@ export class BlackHoleSceneController {
         col.multiplyScalar(1.25);
       }
       this.starfieldColors.push(col);
-      this.starfieldInstanced.setColorAt(i, col);
+      starColorArray[i * 3] = col.r;
+      starColorArray[i * 3 + 1] = col.g;
+      starColorArray[i * 3 + 2] = col.b;
     }
 
+    starGeo.setAttribute('aStarRestPos', new THREE.InstancedBufferAttribute(starPosArray, 3));
+    starGeo.setAttribute('aStarMeta', new THREE.InstancedBufferAttribute(starMetaArray, 4));
+    starGeo.setAttribute('aStarColor', new THREE.InstancedBufferAttribute(starColorArray, 3));
     this.starfieldInstanced.instanceMatrix.needsUpdate = true;
-    if (this.starfieldInstanced.instanceColor) {
-      this.starfieldInstanced.instanceColor.needsUpdate = true;
-    }
-    this.starfieldInstanced.computeBoundingSphere();
     this.scene.add(this.starfieldInstanced);
   }
 
   /**
-   * Applies General Relativistic Gravitational Lensing Deflection & Motion Parallax:
-   * 1. 3D Spatial Depth Parallax: stars at varying celestial distances (R ~ 75-210) experience
-   *    differential parallax as the observer rotates or orbits around the gravitational titan.
-   * 2. General Relativistic Lensing: Light passing near the central mass is deflected by
-   *    Einstein's angle α ≈ 4GM/(c² b) = 2 Rs / b. Background stars behind the object warp radially
-   *    outward away from the event horizon shadow.
+   * Updates GPU uniforms for General Relativistic Gravitational Lensing Deflection & Motion Parallax
+   * of all 5,500 background stars in O(1) CPU time (zero per-frame JS loops or buffer uploads).
    */
   private updateGravitationalLensingOfStarfield() {
+    if (!this.starfieldMat) return;
     const camPos = this.camera.position;
     const rs = 1.75 * this.currentScale;
     const einsteinRadiusSq = Math.max(0.2, rs * rs * 2.8);
-    const elapsed = this.accretionDiskSimTime;
 
-    // Camera coordinate frame for rotation and orbit parallax
     _camRight.setFromMatrixColumn(this.camera.matrixWorld, 0).normalize();
     _camUp.setFromMatrixColumn(this.camera.matrixWorld, 1).normalize();
-
-    // Camera view direction
     _vec3B.subVectors(this.controls.target, camPos).normalize();
 
-    for (let i = 0; i < this.starfieldCount; i++) {
-      const restPos = this.starRestPositions[i];
-      const restDist = restPos.length();
-
-      // Subtle celestial twinkle scintillation
-      const twinkle = 1.0 + Math.sin(elapsed * this.starTwinkleSpeeds[i] + this.starTwinklePhases[i]) * 0.15;
-      const curScale = this.starBaseScales[i] * twinkle;
-      this.starfieldScales[i].set(curScale, curScale, curScale);
-
-      // 1. Subtle camera rotation & orbital depth parallax:
-      // Stars at 75-210 units have varying depth factors. Closer stars shift more than distant ones.
-      const depthFactor = this.settings.lockBackground ? 0.0 : (135.0 / Math.max(50.0, restDist)) - 0.85;
-      // Parallax translation from camera orbital position
-      _vec3D.copy(camPos).multiplyScalar(-0.045 * depthFactor);
-      // Parallax shear from camera rotation angle relative to star vector
-      const dotRight = _camRight.dot(restPos);
-      const dotUp = _camUp.dot(restPos);
-      _vec3D.addScaledVector(_camRight, -dotRight * 0.0022 * depthFactor);
-      _vec3D.addScaledVector(_camUp, -dotUp * 0.0022 * depthFactor);
-
-      // Star position with parallax applied
-      const parallaxPos = _vec3E.copy(restPos).add(_vec3D);
-
-      // 2. Gravitational lensing deflection
-      _vec3A.subVectors(parallaxPos, camPos);
-      const starDist = _vec3A.length();
-      if (starDist < 1.0) continue;
-
-      const starDir = _vec3A.normalize();
-      const cosAngle = starDir.dot(_vec3B);
-
-      // Only stars behind or near the central object (cosAngle > 0.35) experience visible lensing deflection
-      if (cosAngle > 0.35) {
-        const sinAngle = Math.sqrt(Math.max(0.001, 1.0 - cosAngle * cosAngle));
-        const impactB = Math.max(rs * 0.9, starDist * sinAngle);
-
-        // Einstein deflection displacement: α ≈ 2 Rs / b
-        let deflectionFactor = Math.min(7.5, einsteinRadiusSq / (impactB + 0.35));
-
-        // Sonic Boom Schlieren Optical Shock Refraction: stars passing through the expanding shockwave ripple radially
-        if (this.pulseStrength > 0.005) {
-          const dShock = impactB - this.pulseRadius;
-          const shockKick = -dShock * Math.exp(-(dShock * dShock) / Math.max(0.4, 0.85 * this.currentScale)) * this.pulseStrength * 1.45;
-          deflectionFactor += shockKick;
-        }
-
-        // Transverse outward unit vector from black hole center to star in view plane
-        _vec3C.crossVectors(_vec3B, starDir).crossVectors(_vec3C, _vec3B).normalize();
-
-        const deflectedPos = _vec3A.copy(parallaxPos).addScaledVector(_vec3C, deflectionFactor * 2.2);
-        _mat4.compose(deflectedPos, _quat.identity(), this.starfieldScales[i]);
-      } else {
-        _mat4.compose(parallaxPos, _quat.identity(), this.starfieldScales[i]);
-      }
-
-      this.starfieldInstanced.setMatrixAt(i, _mat4);
-    }
-    this.starfieldInstanced.instanceMatrix.needsUpdate = true;
+    const u = this.starfieldMat.uniforms;
+    u.uTime.value = this.accretionDiskSimTime;
+    u.uCameraPos.value.copy(camPos);
+    u.uLookDir.value.copy(_vec3B);
+    u.uCamRight.value.copy(_camRight);
+    u.uCamUp.value.copy(_camUp);
+    u.uLensingParams.value.set(rs, einsteinRadiusSq, this.pulseRadius, this.pulseStrength);
+    u.uStarFlags.value.set(
+      this.params.gravitationalLensing !== false ? 1.0 : 0.0,
+      this.settings.lockBackground ? 1.0 : 0.0,
+      this.currentScale,
+      0.0
+    );
   }
 
   /**
@@ -3775,12 +4508,18 @@ export class BlackHoleSceneController {
     this.geodesicGroup.add(pulseMesh);
 
     this.activeGeodesicPulses.push({
+      trajectory: traj,
       mesh: pulseMesh,
       line,
       points: vecPoints,
       progress: 0,
       speed: 28.0,
     });
+
+    this.recentGeodesicHistory.push(traj);
+    if (this.recentGeodesicHistory.length > 12) {
+      this.recentGeodesicHistory.shift();
+    }
 
     while (this.activeGeodesicPulses.length > 8) {
       const oldest = this.activeGeodesicPulses.shift();
@@ -3808,6 +4547,65 @@ export class BlackHoleSceneController {
       (item.line.material as THREE.Material).dispose();
     }
     this.activeGeodesicPulses = [];
+    this.recentGeodesicHistory = [];
+  }
+
+  /**
+   * Returns all live geodesic trajectories currently in flight or recently launched,
+   * or computes a live diagnostic geodesic bundle if no manual rays are active.
+   */
+  public getLiveGeodesicTrajectories(fallbackImpactB = 2.4): GeodesicTrajectory[] {
+    const visualHorizonR = Math.max(0.25, 1.75 * this.targetScale);
+    const result: GeodesicTrajectory[] = [];
+    const seenIds = new Set<string>();
+
+    for (const active of this.activeGeodesicPulses) {
+      seenIds.add(active.trajectory.id);
+      result.push({
+        ...active.trajectory,
+        liveProgressStep: active.progress,
+        visualHorizonRadius: active.trajectory.visualHorizonRadius || visualHorizonR,
+      });
+    }
+
+    for (const hist of this.recentGeodesicHistory) {
+      if (!seenIds.has(hist.id)) {
+        seenIds.add(hist.id);
+        result.push({
+          ...hist,
+          liveProgressStep: hist.points.length - 1,
+          visualHorizonRadius: hist.visualHorizonRadius || visualHorizonR,
+        });
+      }
+    }
+
+    if (result.length === 0) {
+      // Compute live null geodesic trajectories for the current impact parameter + characteristic Kerr reference rays
+      const bCrit = 2.60 * (1.0 - 0.18 * this.params.spin) * visualHorizonR;
+      const sampleBs = [
+        fallbackImpactB * visualHorizonR,
+        bCrit,
+        1.15 * visualHorizonR,
+        -3.85 * visualHorizonR,
+      ];
+      sampleBs.forEach((bScene, idx) => {
+        const computed = computeNullGeodesic(bScene, visualHorizonR, this.params.spin, 0);
+        result.push({
+          ...computed,
+          id: `live-geodesic-${idx + 1}`,
+          liveProgressStep: computed.points.length - 1,
+          visualHorizonRadius: visualHorizonR,
+        });
+      });
+    }
+
+    return result;
+  }
+
+  public exportLiveGeodesicCsv(fallbackImpactB = 2.4): string {
+    const visualHorizonR = Math.max(0.25, 1.75 * this.targetScale);
+    const trajectories = this.getLiveGeodesicTrajectories(fallbackImpactB);
+    return buildGeodesicTrajectoryCsv(trajectories, this.params, visualHorizonR);
   }
 
   public triggerEventHorizonPulse(category?: ObjectCategory) {
@@ -3866,7 +4664,7 @@ export class BlackHoleSceneController {
 
   public expandFromSingularity() {
     if (!this.isSingularityCollapsed && this.targetExpansionProgress >= 0.99) return;
-    this.expansionProgress = 0.0;
+    this.expansionProgress = 0.14;
     this.isSingularityCollapsed = false;
     this.targetExpansionProgress = 1.0;
     this.onSingularityStateChange?.(false);
@@ -3891,7 +4689,7 @@ export class BlackHoleSceneController {
   }
 
   public replaySingularityExpansion() {
-    this.expansionProgress = 0.0;
+    this.expansionProgress = 0.14;
     this.isSingularityCollapsed = false;
     this.targetExpansionProgress = 1.0;
     this.onSingularityStateChange?.(false);
@@ -3903,8 +4701,18 @@ export class BlackHoleSceneController {
   }
 
   public updateParams(nextParams: BlackHoleParams, immediate = false) {
+    const presetSwitchStartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const prevPresetId = this.params ? this.params.presetId : undefined;
+    const prevObjectCategory = this.params ? this.params.objectCategory : undefined;
     const prevBackgroundTheme = this.params ? this.params.backgroundTheme : undefined;
     const prevSystemCategory = this.params ? this.params.systemCategory : undefined;
+    const isPresetTransition =
+      !immediate &&
+      Boolean(
+        prevPresetId !== nextParams.presetId ||
+          prevObjectCategory !== nextParams.objectCategory ||
+          prevSystemCategory !== nextParams.systemCategory
+      );
 
     // Parameter rapid adjustment detection for propagating gravitational wave ripples
     if (!immediate && this.settings.rapidAdjustmentRipples !== false && this.params) {
@@ -4215,18 +5023,26 @@ export class BlackHoleSceneController {
       this.setCameraPreset('equatorial');
     }
 
-    // Update S2 orbital trail radius
-    const trailPoints: THREE.Vector3[] = [];
-    const trailSegments = 120;
+    // Update S2 orbital trail radius only when radius actually changed
     const r = nextParams.probeRadiusRs * 1.75 * this.targetScale;
-    for (let i = 0; i <= trailSegments; i++) {
-      const theta = (i / trailSegments) * Math.PI * 2;
-      trailPoints.push(new THREE.Vector3(Math.cos(theta) * r, 0, -Math.sin(theta) * r));
+    if (Math.abs(r - this.lastTrailRadius) > 0.01) {
+      this.lastTrailRadius = r;
+      const trailPoints: THREE.Vector3[] = [];
+      const trailSegments = 120;
+      for (let i = 0; i <= trailSegments; i++) {
+        const theta = (i / trailSegments) * Math.PI * 2;
+        trailPoints.push(new THREE.Vector3(Math.cos(theta) * r, 0, -Math.sin(theta) * r));
+      }
+      this.starOrbitTrail.geometry.setFromPoints(trailPoints);
     }
-    this.starOrbitTrail.geometry.setFromPoints(trailPoints);
 
     if (massChanged) {
-      this.deformSpacetimeWell(nextParams.massSolar, nextParams.spin);
+      this.needsWellDeform = true;
+    }
+
+    if (isPresetTransition) {
+      const endMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      gpuResourceCache.recordPresetTransition(endMs - presetSwitchStartMs, 8);
     }
   }
 
@@ -4266,26 +5082,87 @@ export class BlackHoleSceneController {
     }
   }
 
+  /**
+   * Conditional device-type detection and WebGL pixel ratio controller:
+   * - Detects whether the runtime device is a mobile handset/tablet or a desktop display.
+   * - For high-resolution desktop displays (HiDPI / Retina where devicePixelRatio > 1.0 or large desktop viewports),
+   *   adjusts the WebGL canvas pixel ratio to 1.0 (down from devicePixelRatio) to alleviate fragment shader load
+   *   on complex Kerr raymarching and volumetric fBM shaders while maintaining smooth hardware bilinear upscaling.
+   */
+  private configureDevicePixelRatioAndUpscaling(width: number, height: number): number {
+    const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1.0 : 1.0;
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const isMobileUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    const isCoarsePointer =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(pointer: coarse)').matches;
+    const isSmallViewport = width <= 768;
+
+    const isMobileDeviceType = Boolean(
+      this.settings?.phoneMode || isMobileUa || (isCoarsePointer && isSmallViewport)
+    );
+    const isDesktopDeviceType = !isMobileDeviceType;
+
+    const screenWidth = typeof window !== 'undefined' && window.screen ? window.screen.width : width;
+    const screenHeight = typeof window !== 'undefined' && window.screen ? window.screen.height : height;
+    const isHighResDesktop =
+      isDesktopDeviceType &&
+      (rawDpr > 1.0 || width >= 1024 || height >= 768 || screenWidth >= 1280 || screenHeight >= 800);
+
+    let targetPixelRatio = 1.0;
+    if (isSoftwareGl) {
+      targetPixelRatio = 1.0;
+    } else if (isHighResDesktop || isDesktopDeviceType) {
+      // High-resolution desktop display: lock internal WebGL pixel ratio to 1.0 (down from devicePixelRatio)
+      targetPixelRatio = 1.0;
+    } else {
+      // Mobile device: allow up to 2.0x DPR on compact physical screens
+      targetPixelRatio = Math.min(rawDpr, 2.0);
+    }
+
+    // Maintain high-quality hardware bilinear/bicubic upscaling on the canvas DOM element
+    if (this.domElement) {
+      this.domElement.style.imageRendering = 'auto';
+      this.domElement.style.transform = 'translateZ(0)';
+      this.domElement.style.backfaceVisibility = 'hidden';
+      this.domElement.style.willChange = 'transform';
+    }
+
+    if (this.renderer) {
+      if (this.renderer.getPixelRatio() !== targetPixelRatio) {
+        this.renderer.setPixelRatio(targetPixelRatio);
+      }
+      this.renderer.setSize(width, height, true);
+    }
+
+    return targetPixelRatio;
+  }
+
   private handleResize = () => {
     if (!this.container || this.isDisposed) return;
-    const width = this.container.clientWidth || window.innerWidth;
-    const height = this.container.clientHeight || window.innerHeight;
+    const width = Math.max(1, this.container.clientWidth || window.innerWidth);
+    const height = Math.max(1, this.container.clientHeight || window.innerHeight);
     this.camera.aspect = width / Math.max(1, height);
     this.camera.updateProjectionMatrix();
-    if (this.renderer) {
-      this.renderer.setSize(width, height);
-    } else {
+    const effectiveDpr = this.configureDevicePixelRatioAndUpscaling(width, height);
+    if (!this.renderer) {
       this.domElement.width = width;
       this.domElement.height = height;
       this.domElement.style.width = `${width}px`;
       this.domElement.style.height = `${height}px`;
     }
-    this.motionBlurRenderTarget?.setSize(width, height);
-    this.timeLapseTargetA?.setSize(width, height);
-    this.timeLapseTargetB?.setSize(width, height);
+    const rtWidth = Math.max(1, Math.round(width * effectiveDpr));
+    const rtHeight = Math.max(1, Math.round(height * effectiveDpr));
+    this.motionBlurRenderTarget?.setSize(rtWidth, rtHeight);
+    this.timeLapseTargetA?.setSize(rtWidth, rtHeight);
+    this.timeLapseTargetB?.setSize(rtWidth, rtHeight);
     this.timeLapseInitialized = false;
     if (this.postMaterial) {
-      this.postMaterial.uniforms.uResolution.value.set(width, height);
+      this.postMaterial.uniforms.uResolution.value.set(rtWidth, rtHeight);
+    }
+    if (this.cameraLensFlareMat) {
+      this.cameraLensFlareMat.uniforms.uResolution.value.set(rtWidth, rtHeight);
     }
   };
 
@@ -4295,7 +5172,7 @@ export class BlackHoleSceneController {
 
   private handlePointerMove = (e: PointerEvent) => {
     const now = performance.now();
-    if (now - this.lastRaycastTime < 55) return;
+    if (now - this.lastRaycastTime < 34) return;
     this.lastRaycastTime = now;
 
     const rect = this.domElement.getBoundingClientRect();
@@ -4314,6 +5191,10 @@ export class BlackHoleSceneController {
       this.domElement.style.cursor = distToOrigin < hitRadius ? 'pointer' : 'crosshair';
     } else {
       this.domElement.style.cursor = 'crosshair';
+    }
+
+    if (!this.settings.showCursorTelemetry && !this.settings.showMetricTelemetry) {
+      return;
     }
 
     if (Math.abs(ray.direction.y) > 0.001) {
@@ -4414,6 +5295,17 @@ export class BlackHoleSceneController {
 
   private tick = () => {
     if (this.isDisposed) return;
+
+    const nowPerfMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (this.lastFramePerfMs > 0) {
+      const elapsedFrameMs = Math.min(250, Math.max(0.5, nowPerfMs - this.lastFramePerfMs));
+      this.currentFrameTimeMs = elapsedFrameMs;
+      this.frameTimeSamples.push(elapsedFrameMs);
+      if (this.frameTimeSamples.length > 60) {
+        this.frameTimeSamples.shift();
+      }
+    }
+    this.lastFramePerfMs = nowPerfMs;
 
     const rawDelta = Math.min(0.1, this.clock.getDelta());
     const simDelta = rawDelta * this.params.timeScale;
@@ -4588,7 +5480,7 @@ export class BlackHoleSceneController {
     }
 
     if (Math.abs(this.expansionProgress - this.lastWellExpansionProgress) > 0.002) {
-      this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
+      this.needsWellDeform = true;
     }
 
     this.ergosphereGroup.position.y = this.currentExploded * 3.8;
@@ -4698,7 +5590,7 @@ export class BlackHoleSceneController {
         this.gravitationalWaveShellMesh.visible = false;
         this.horizonFlashMesh.visible = false;
         this.accretionDiskMat.uniforms.uPulseStrength.value = 0.0;
-        this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
+        this.needsWellDeform = true;
       } else {
         // Synchronized N-wave blast expansion: starts at the small singularity ball (2.26 * minSeedWorldScale ≈ 0.25)
         // and expands outward in lockstep with the growing black hole and unfurling accretion disk
@@ -4757,7 +5649,7 @@ export class BlackHoleSceneController {
         }
 
         // Ripple and plunge the spacetime well manifold in real-time with the shockwave
-        this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
+        this.needsWellDeform = true;
       }
     }
 
@@ -4791,8 +5683,8 @@ export class BlackHoleSceneController {
         }
       }
 
-      if (hasActiveRipples && !this.isPulseActive) {
-        this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
+      if (hasActiveRipples) {
+        this.needsWellDeform = true;
       }
     }
 
@@ -4802,6 +5694,7 @@ export class BlackHoleSceneController {
       this.accretionShockProgress += shockStep / this.accretionShockDuration;
       if (this.accretionShockProgress >= 1.0) {
         this.clearAccretionShockwave();
+        this.needsWellDeform = true;
       } else {
         const t = this.accretionShockProgress;
         const blastEase = 1.0 - Math.pow(1.0 - t, 2.5);
@@ -4838,14 +5731,16 @@ export class BlackHoleSceneController {
           this.accretionHorizonFlashMesh.visible = false;
         }
 
-        if (!this.isPulseActive) {
-          this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
-        }
+        this.needsWellDeform = true;
       }
     }
 
-    // 5. Authentic Gravitational Lensing of Background Starfield
-    if (this.params.gravitationalLensing !== false) {
+    if (this.needsWellDeform && this.spacetimeWellMesh?.visible) {
+      this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
+    }
+
+    // 5. Authentic Gravitational Lensing & Twinkle of Background Starfield (O(1) GPU Uniform Update)
+    if (this.starfieldInstanced?.visible) {
       this.updateGravitationalLensingOfStarfield();
     }
 
@@ -4931,8 +5826,9 @@ export class BlackHoleSceneController {
     const angleDiff = 2.0 * Math.acos(Math.abs(dot));
     const camAngularSpeed = rawDelta > 0.0001 ? angleDiff / rawDelta : 0.0;
 
-    // Detect angular direction in screen space
-    _quatA.copy(this.camera.quaternion).multiply(this.prevCamQuat.clone().invert());
+    // Detect angular direction in screen space without per-frame quaternion allocation
+    _quat.copy(this.prevCamQuat).invert();
+    _quatA.copy(this.camera.quaternion).multiply(_quat);
     const velX = _quatA.y * 2.0;
     const velY = _quatA.x * 2.0;
     const targetStrength = Math.min(1.0, camAngularSpeed * 0.45);
@@ -5006,6 +5902,112 @@ export class BlackHoleSceneController {
         this.companionStarBaseRadius * effectiveScale;
     }
 
+    // 12b. Update Camera-Space Optical Lens Flare & Viewing-Angle Diffraction Artifacts
+    if (this.cameraLensFlareMesh && this.cameraLensFlareMat) {
+      const flareIntensity = this.settings.lensFlareIntensity ?? 1.0;
+      const hasEmission = isStar || this.params.layers.accretionDisk || this.params.gravitationalLensing;
+      this.cameraLensFlareMesh.visible = flareIntensity > 0.001 && hasEmission;
+
+      if (this.cameraLensFlareMesh.visible) {
+        const u = this.cameraLensFlareMat.uniforms;
+        u.uFlareIntensity.value = flareIntensity;
+        u.uTime.value = elapsed;
+
+        // Camera viewing direction & angles relative to the central object
+        _vec3A.subVectors(this.camera.position, this.blackHoleGroup.position);
+        const distToObj = Math.max(1.0, _vec3A.length());
+        _vec3B.copy(_vec3A).divideScalar(distToObj); // normalized camera direction from object
+
+        const absCosTheta = Math.abs(_vec3B.y);
+        // Grazing angle factor: peaks at 1.0 when viewing along the equatorial plane, 0.0 at the poles
+        const edgeOnFactor = THREE.MathUtils.clamp(Math.sqrt(Math.max(0.0, 1.0 - absCosTheta * absCosTheta)), 0.0, 1.0);
+        const camAzimuth = Math.atan2(_vec3B.x, _vec3B.z);
+
+        // Project primary object center into camera NDC space
+        _vec3C.copy(this.blackHoleGroup.position).project(this.camera);
+        const inFront = _vec3C.z < 1.0 && _vec3C.z > -1.0;
+        const offScreenFade = THREE.MathUtils.clamp(
+          1.35 - Math.max(Math.abs(_vec3C.x), Math.abs(_vec3C.y)),
+          0.0,
+          1.0
+        );
+        const expansionGain = isStar ? 1.0 : (0.35 + 0.65 * this.expansionProgress);
+        const primaryVis = inFront ? offScreenFade * expansionGain : 0.0;
+        u.uSourceNdc.value.set(_vec3C.x, _vec3C.y, primaryVis);
+
+        // Compute angle-dependent luminous hotspot in 3D world space and project to camera NDC:
+        // - For Black Holes: the approaching prograde limb of the photon ring / inner ISCO where Doppler beaming peaks
+        // - For Stars: the active magnetic polar cap closest to the observer
+        let beamAlignment = 0.0;
+        if (isStar) {
+          const poleDot = _vec3B.dot(this.currentMagneticAxis);
+          beamAlignment = Math.pow(Math.min(1.0, Math.abs(poleDot)), 1.6);
+          const poleSign = poleDot >= 0 ? 1.0 : -1.0;
+          _vec3D
+            .copy(this.currentMagneticAxis)
+            .multiplyScalar(poleSign * 1.55 * this.currentScale)
+            .add(this.blackHoleGroup.position);
+          _vec3D.project(this.camera);
+          const hotWeight = primaryVis * (0.65 + 0.85 * beamAlignment) * (0.7 + 0.25 * this.params.accretionRate);
+          u.uHotspotNdc.value.set(_vec3D.x, _vec3D.y, hotWeight);
+
+          if (this.neutronStarMat?.uniforms?.uBaseColor?.value) {
+            u.uPrimaryTint.value.copy(this.neutronStarMat.uniforms.uBaseColor.value).lerp(_color.setHex(0xffffff), 0.35);
+          } else {
+            u.uPrimaryTint.value.setHex(0x38bdf8);
+          }
+          u.uSecondaryTint.value.setHex(this.params.objectCategory === 'luminous_star' ? 0xfef08a : 0x818cf8);
+        } else {
+          // Prograde approaching side of the equatorial accretion disk (perpendicular to camera ray in XZ plane)
+          _vec3D.set(-_vec3B.z, 0.0, _vec3B.x);
+          if (_vec3D.lengthSq() > 1e-4) {
+            _vec3D.normalize();
+          } else {
+            _vec3D.set(1.0, 0.0, 0.0);
+          }
+          const dopplerRingR = (2.35 - 0.45 * this.params.spin) * effectiveScale;
+          _vec3E
+            .copy(this.blackHoleGroup.position)
+            .addScaledVector(_vec3D, dopplerRingR);
+          _vec3E.project(this.camera);
+
+          const dopplerGain =
+            (0.45 + 0.55 * this.params.dopplerStrength) *
+            (0.45 + 0.45 * this.params.accretionRate) *
+            (0.55 + 0.65 * edgeOnFactor);
+          // Grazing angle flare spike when looking nearly edge-on across the luminous accretion sheet
+          beamAlignment = Math.pow(edgeOnFactor, 3.2) * (this.params.layers.accretionDisk ? 0.85 : 0.25);
+          u.uHotspotNdc.value.set(_vec3E.x, _vec3E.y, primaryVis * dopplerGain);
+
+          if (this.params.spectralMode === 'xray') {
+            u.uPrimaryTint.value.setHex(0x38bdf8);
+            u.uSecondaryTint.value.setHex(0xe0f2fe);
+          } else if (this.params.spectralMode === 'doppler') {
+            u.uPrimaryTint.value.setHex(0x60a5fa);
+            u.uSecondaryTint.value.setHex(0xf97316);
+          } else {
+            u.uPrimaryTint.value.setHex(0xfbbf24);
+            u.uSecondaryTint.value.setHex(0x7dd3fc);
+          }
+        }
+
+        // Optional Binary Companion Donor Star Flare
+        if (isBinary && this.expansionProgress > 0.05) {
+          _vec3D.copy(this.companionStarWorldPos).project(this.camera);
+          const compInFront = _vec3D.z < 1.0 && _vec3D.z > -1.0;
+          const compVis = compInFront
+            ? THREE.MathUtils.clamp(1.25 - Math.max(Math.abs(_vec3D.x), Math.abs(_vec3D.y)), 0.0, 1.0)
+            : 0.0;
+          u.uSecondaryNdc.value.set(_vec3D.x, _vec3D.y, compVis);
+        } else {
+          u.uSecondaryNdc.value.set(0, 0, 0);
+        }
+
+        const distAtten = THREE.MathUtils.clamp(24.0 / Math.max(8.0, distToObj), 0.45, 1.65);
+        u.uViewAngleParams.value.set(edgeOnFactor, camAzimuth, beamAlignment, distAtten);
+      }
+    }
+
     // 13. Relativistic Audio Modulation: Camera Proximity & Gravitational Time Dilation
     const rs = 1.75 * this.currentScale;
     const distanceRs = Math.max(1.05, camDist / rs);
@@ -5044,8 +6046,9 @@ export class BlackHoleSceneController {
     }
 
     if (this.renderer) {
+      this.renderer.info.reset();
       const useMotionBlur =
-        this.settings.motionBlurEnabled && this.camMotionBlurStrength > 0.012;
+        this.settings.motionBlurEnabled && this.camMotionBlurStrength > 0.035;
       const useTimeLapse = Boolean(this.settings.timeLapseEnabled);
 
       if (
@@ -5090,17 +6093,21 @@ export class BlackHoleSceneController {
 
           this.timeLapseReadFirst = !this.timeLapseReadFirst;
           this.timeLapseInitialized = true;
+          this.lastRenderPasses = 3;
         } else {
           this.postMaterial.uniforms.uTimeLapseMix.value = 0.0;
           this.postMaterial.uniforms.uExposureBoost.value = 0.0;
           this.renderer.setRenderTarget(null);
           this.renderer.render(this.postScene, this.postCamera);
+          this.lastRenderPasses = 2;
         }
       } else {
         this.renderer.render(this.scene, this.camera);
+        this.lastRenderPasses = 1;
       }
     } else if (this.fallbackCtx2D) {
       this.renderFallback2D(elapsed, effectiveScale);
+      this.lastRenderPasses = 1;
     }
 
     // Restore unshaken camera state so OrbitControls never drifts
@@ -5124,113 +6131,692 @@ export class BlackHoleSceneController {
     const width = this.domElement.width || window.innerWidth;
     const height = this.domElement.height || window.innerHeight;
 
-    ctx.fillStyle = '#05070d';
+    ctx.fillStyle = '#03050a';
     ctx.fillRect(0, 0, width, height);
 
-    // Project 3D black hole origin into 2D screen coordinates
+    this.camera.updateMatrixWorld();
+
+    // Project 3D origin into 2D screen coordinates
     _vec3A.copy(this.blackHoleGroup.position).project(this.camera);
     const bhX = (_vec3A.x * 0.5 + 0.5) * width;
     const bhY = (-_vec3A.y * 0.5 + 0.5) * height;
-    const camDist = Math.max(5.0, this.camera.position.distanceTo(this.blackHoleGroup.position));
-    const pxPerUnit = (height * 0.5) / Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)) / camDist;
-    const horizonPx = Math.max(6, 2.26 * effectiveScale * pxPerUnit);
+    const camDist = Math.max(4.5, this.camera.position.distanceTo(this.blackHoleGroup.position));
+    const pxPerUnit =
+      (height * 0.5) / Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)) / camDist;
+    const isStar = isStellarCategory(this.params.objectCategory);
+    const horizonPx = Math.max(8, (isStar ? 1.65 : 2.26) * effectiveScale * pxPerUnit);
 
-    // 1. Background starfield
+    const projectWorldToScreen = (wx: number, wy: number, wz: number) => {
+      _vec3C.set(wx, wy, wz).project(this.camera);
+      return {
+        x: (_vec3C.x * 0.5 + 0.5) * width,
+        y: (-_vec3C.y * 0.5 + 0.5) * height,
+        z: _vec3C.z,
+      };
+    };
+
+    // 1. 3D Spacetime Curvature Gravity Well Grid (when spacetimeGrid layer is enabled)
+    if (this.params.layers.spacetimeGrid) {
+      const wellBaseY = -Math.max(6.8, 4.15 * this.currentScale) - this.currentExploded * 3.6;
+      const depthMult = this.params.wellDepthMultiplier || 2.2;
+      const wellDepth = (14.0 + (this.params.massSolar / 100) * 26.0) * depthMult * 0.55;
+      const rs = Math.max(1.8, (2.2 + (this.params.massSolar / 100) * 1.8) * 0.65);
+      const gridColor = this.settings.secret1987Mode
+        ? 'rgba(245, 158, 11, 0.24)'
+        : 'rgba(6, 182, 212, 0.22)';
+      ctx.strokeStyle = gridColor;
+      ctx.lineWidth = 1.0;
+
+      const computeWellY = (r: number, theta: number) => {
+        const d = -wellDepth / Math.pow((r * r) / (rs * rs) + (isStar ? 0.45 : 0.16), 0.54);
+        const drag = this.params.spin * 0.45 * Math.sin(theta * 2.0 + r * 0.25) * Math.exp(-r * 0.08);
+        return wellBaseY + d + drag;
+      };
+
+      // Concentric relativistic radial rings
+      const ringRadii = [2.6, 4.2, 6.5, 9.5, 13.5, 18.5, 25.0, 33.0];
+      for (const r of ringRadii) {
+        ctx.beginPath();
+        let started = false;
+        const segs = 48;
+        for (let s = 0; s <= segs; s++) {
+          const th = (s / segs) * Math.PI * 2;
+          const wx = Math.cos(th) * r;
+          const wz = Math.sin(th) * r;
+          const wy = computeWellY(r, th);
+          const pt = projectWorldToScreen(wx, wy, wz);
+          if (pt.z < 1.0) {
+            if (!started) {
+              ctx.moveTo(pt.x, pt.y);
+              started = true;
+            } else {
+              ctx.lineTo(pt.x, pt.y);
+            }
+          }
+        }
+        ctx.stroke();
+      }
+
+      // Frame-dragged azimuthal spokes
+      const spokeCount = 16;
+      for (let k = 0; k < spokeCount; k++) {
+        const baseTh = (k / spokeCount) * Math.PI * 2;
+        ctx.beginPath();
+        let started = false;
+        for (let r = 2.4; r <= 33.0; r += 2.2) {
+          const twist = (this.params.spin * 1.45) / Math.max(1.2, r * 0.35);
+          const th = baseTh + twist;
+          const wx = Math.cos(th) * r;
+          const wz = Math.sin(th) * r;
+          const wy = computeWellY(r, th);
+          const pt = projectWorldToScreen(wx, wy, wz);
+          if (pt.z < 1.0) {
+            if (!started) {
+              ctx.moveTo(pt.x, pt.y);
+              started = true;
+            } else {
+              ctx.lineTo(pt.x, pt.y);
+            }
+          }
+        }
+        ctx.stroke();
+      }
+    }
+
+    // 2. Deep Space Starfield with Real-Time Einstein Ring Gravitational Lensing Deflection
     if (this.params.backgroundTheme !== 'pure_black') {
-      ctx.fillStyle = 'rgba(226, 232, 240, 0.65)';
-      for (let i = 0; i < 160; i++) {
-        const sx = ((Math.sin(i * 127.1) * 0.5 + 0.5) * width);
-        const sy = ((Math.cos(i * 311.7) * 0.5 + 0.5) * height);
-        const r = (i % 5 === 0) ? 1.5 : 0.9;
+      const einsteinR = horizonPx * (isStar ? 0.85 : 1.55);
+      const einsteinRSq = einsteinR * einsteinR;
+      const starColors = ['#e2e8f0', '#93c5fd', '#fef08a', '#fdba74', '#bae6fd'];
+
+      for (let i = 0; i < 360; i++) {
+        const rawX = ((Math.sin(i * 127.1 + 1.3) * 43758.5453) % 1 + 1) % 1;
+        const rawY = ((Math.cos(i * 311.7 + 2.9) * 23421.6312) % 1 + 1) % 1;
+        let sx = rawX * width;
+        let sy = rawY * height;
+
+        // Relativistic radial Einstein deflection around the central mass
+        if (this.params.gravitationalLensing) {
+          const dx = sx - bhX;
+          const dy = sy - bhY;
+          const distSq = dx * dx + dy * dy;
+          if (distSq > 4 && distSq < einsteinRSq * 18) {
+            const dist = Math.sqrt(distSq);
+            const deflectedDist = 0.5 * (dist + Math.sqrt(distSq + 4.0 * einsteinRSq));
+            const scaleDeflect = deflectedDist / Math.max(1.0, dist);
+            sx = bhX + dx * scaleDeflect;
+            sy = bhY + dy * scaleDeflect;
+          }
+        }
+
+        const twinkle = 0.55 + 0.45 * Math.sin(elapsed * (1.8 + (i % 5) * 0.7) + i * 3.1);
+        const r = i % 11 === 0 ? 1.7 : i % 4 === 0 ? 1.15 : 0.75;
+        ctx.fillStyle = starColors[i % starColors.length];
+        ctx.globalAlpha = twinkle * (i % 7 === 0 ? 0.92 : 0.62);
         ctx.beginPath();
         ctx.arc(sx, sy, r, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.globalAlpha = 1.0;
     }
 
-    // 2. Binary Accretion System (Companion Star & Bezier Plasma Bridge) when systemCategory === 'binary'
-    if (!isStellarCategory(this.params.objectCategory) && this.params.systemCategory === 'binary' && this.expansionProgress > 0.05) {
-      _vec3B.copy(this.companionStarWorldPos).project(this.camera);
-      const starX = (_vec3B.x * 0.5 + 0.5) * width;
-      const starY = (-_vec3B.y * 0.5 + 0.5) * height;
-      const starR = Math.max(8, this.companionStarBaseRadius * effectiveScale * pxPerUnit);
+    // 3. Stellar Remnants & Luminous Stars (Neutron Star / Pulsar / Magnetar / Luminous Star)
+    if (isStar) {
+      const activePreset = ASTROPHYSICAL_PRESETS.find((p) => p.id === this.params.presetId);
+      const isLuminous = this.params.objectCategory === 'luminous_star';
+      const surfHex =
+        activePreset?.surfaceHexColor ?? (isLuminous ? 0x3b82f6 : 0x0ea5e9);
+      const coreHex = activePreset?.coreBeamHexColor ?? 0xf0f9ff;
+      const sheathHex = activePreset?.sheathBeamHexColor ?? 0x38bdf8;
 
-      // Accretion stream plasma bridge
-      const streamGrad = ctx.createLinearGradient(starX, starY, bhX, bhY);
-      streamGrad.addColorStop(0, 'rgba(251, 146, 60, 0.75)');
-      streamGrad.addColorStop(0.6, 'rgba(250, 204, 21, 0.65)');
-      streamGrad.addColorStop(1, 'rgba(255, 251, 235, 0.85)');
-      ctx.strokeStyle = streamGrad;
-      ctx.lineWidth = Math.max(3, starR * 0.28);
+      const hexToRgb = (hex: number) => ({
+        r: (hex >> 16) & 255,
+        g: (hex >> 8) & 255,
+        b: hex & 255,
+      });
+      const surfRgb = hexToRgb(surfHex);
+      const coreRgb = hexToRgb(coreHex);
+      const sheathRgb = hexToRgb(sheathHex);
+
+      // 3a. 3D Rotating Magnetic Dipole Field Lines (when magneticField is enabled)
+      if (this.params.layers.magneticField ?? true) {
+        const upAxis = this.currentMagneticAxis.clone().normalize();
+        const refVec = Math.abs(upAxis.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+        const rightAxis = new THREE.Vector3().crossVectors(upAxis, refVec).normalize();
+        const fwdAxis = new THREE.Vector3().crossVectors(rightAxis, upAxis).normalize();
+
+        ctx.strokeStyle = `rgba(${sheathRgb.r}, ${sheathRgb.g}, ${sheathRgb.b}, 0.36)`;
+        ctx.lineWidth = 1.25;
+        const loopCount = 8;
+        for (let l = 0; l < loopCount; l++) {
+          const azim = (l / loopCount) * Math.PI + this.pulsarRotationAngle * 0.25;
+          const cosA = Math.cos(azim);
+          const sinA = Math.sin(azim);
+          ctx.beginPath();
+          let started = false;
+          const segs = 48;
+          for (let s = 0; s <= segs; s++) {
+            const t = (s / segs) * Math.PI * 2;
+            const ex = Math.cos(t) * 4.2 * effectiveScale;
+            const ey = Math.sin(t) * 2.6 * effectiveScale;
+            const radialDirX = rightAxis.x * cosA + fwdAxis.x * sinA;
+            const radialDirY = rightAxis.y * cosA + fwdAxis.y * sinA;
+            const radialDirZ = rightAxis.z * cosA + fwdAxis.z * sinA;
+            const wx = radialDirX * ex + upAxis.x * ey;
+            const wy = radialDirY * ex + upAxis.y * ey;
+            const wz = radialDirZ * ex + upAxis.z * ey;
+            const pt = projectWorldToScreen(wx, wy, wz);
+            if (pt.z < 1.0) {
+              if (!started) {
+                ctx.moveTo(pt.x, pt.y);
+                started = true;
+              } else {
+                ctx.lineTo(pt.x, pt.y);
+              }
+            }
+          }
+          ctx.stroke();
+        }
+      }
+
+      // Helper to draw a volumetric Pulsar Lighthouse Synchrotron Cone from a magnetic pole
+      const drawPulsarBeam = (sign: 1 | -1) => {
+        if (!(this.params.layers.pulsarBeams ?? true)) return;
+        const mag = this.currentMagneticAxis;
+        const rootW = 1.62 * effectiveScale * sign;
+        const tipW = 16.5 * effectiveScale * sign;
+        const pRoot = projectWorldToScreen(mag.x * rootW, mag.y * rootW, mag.z * rootW);
+        const pTip = projectWorldToScreen(mag.x * tipW, mag.y * tipW, mag.z * tipW);
+        if (pRoot.z >= 1.0 && pTip.z >= 1.0) return;
+
+        const dx = pTip.x - pRoot.x;
+        const dy = pTip.y - pRoot.y;
+        const len = Math.max(1, Math.hypot(dx, dy));
+        const nx = -dy / len;
+        const ny = dx / len;
+        const baseHalfW = Math.max(3, horizonPx * 0.22);
+        const tipHalfW = Math.max(12, horizonPx * 1.48);
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        // Outer Synchrotron Sheath Cone
+        const sheathGrad = ctx.createLinearGradient(pRoot.x, pRoot.y, pTip.x, pTip.y);
+        sheathGrad.addColorStop(0, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.85)`);
+        sheathGrad.addColorStop(0.28, `rgba(${sheathRgb.r}, ${sheathRgb.g}, ${sheathRgb.b}, 0.52)`);
+        sheathGrad.addColorStop(1, `rgba(${sheathRgb.r}, ${sheathRgb.g}, ${sheathRgb.b}, 0)`);
+        ctx.fillStyle = sheathGrad;
+        ctx.beginPath();
+        ctx.moveTo(pRoot.x + nx * baseHalfW, pRoot.y + ny * baseHalfW);
+        ctx.lineTo(pTip.x + nx * tipHalfW, pTip.y + ny * tipHalfW);
+        ctx.lineTo(pTip.x - nx * tipHalfW, pTip.y - ny * tipHalfW);
+        ctx.lineTo(pRoot.x - nx * baseHalfW, pRoot.y - ny * baseHalfW);
+        ctx.closePath();
+        ctx.fill();
+
+        // Inner Coherent Relativistic Core Jet
+        const coreGrad = ctx.createLinearGradient(pRoot.x, pRoot.y, pTip.x, pTip.y);
+        coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.96)');
+        coreGrad.addColorStop(0.4, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.65)`);
+        coreGrad.addColorStop(1, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0)`);
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.moveTo(pRoot.x + nx * (baseHalfW * 0.45), pRoot.y + ny * (baseHalfW * 0.45));
+        ctx.lineTo(pTip.x + nx * (tipHalfW * 0.32), pTip.y + ny * (tipHalfW * 0.32));
+        ctx.lineTo(pTip.x - nx * (tipHalfW * 0.32), pTip.y - ny * (tipHalfW * 0.32));
+        ctx.lineTo(pRoot.x - nx * (baseHalfW * 0.45), pRoot.y - ny * (baseHalfW * 0.45));
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+      };
+
+      // Draw whichever beam points away from the camera behind the star sphere first
+      const camToOrigin = this.camera.position.clone().normalize();
+      const northDot = this.currentMagneticAxis.dot(camToOrigin);
+      drawPulsarBeam(northDot >= 0 ? -1 : 1);
+
+      // 3b. Coronal Atmosphere / Magnetospheric Glow Halo
+      const haloGrad = ctx.createRadialGradient(bhX, bhY, horizonPx * 0.75, bhX, bhY, horizonPx * 2.5);
+      haloGrad.addColorStop(0, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.72)`);
+      haloGrad.addColorStop(0.38, `rgba(${surfRgb.r}, ${surfRgb.g}, ${surfRgb.b}, 0.42)`);
+      haloGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = haloGrad;
       ctx.beginPath();
-      ctx.moveTo(starX, starY);
-      ctx.quadraticCurveTo((starX + bhX) * 0.5, (starY + bhY) * 0.5 + starR * 1.1, bhX + horizonPx * 1.6, bhY);
+      ctx.arc(bhX, bhY, horizonPx * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3c. Physical Stellar Surface (Beloborodov Self-Lensed Crust / Convective Photosphere)
+      const bodyGrad = ctx.createRadialGradient(
+        bhX - horizonPx * 0.24,
+        bhY - horizonPx * 0.24,
+        horizonPx * 0.08,
+        bhX,
+        bhY,
+        horizonPx
+      );
+      bodyGrad.addColorStop(0, '#ffffff');
+      bodyGrad.addColorStop(0.32, `rgb(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b})`);
+      bodyGrad.addColorStop(0.76, `rgb(${surfRgb.r}, ${surfRgb.g}, ${surfRgb.b})`);
+      bodyGrad.addColorStop(
+        1,
+        `rgb(${Math.min(255, surfRgb.r + 45)}, ${Math.min(255, surfRgb.g + 45)}, ${Math.min(255, surfRgb.b + 45)})`
+      );
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.arc(bhX, bhY, horizonPx, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Surface magnetic polar hotspots at ±uMagneticAxis * R_star
+      for (const sign of [1, -1] as const) {
+        const poleWorld = this.currentMagneticAxis.clone().multiplyScalar(1.62 * effectiveScale * sign);
+        if (poleWorld.dot(camToOrigin) > -0.25) {
+          const pPole = projectWorldToScreen(poleWorld.x, poleWorld.y, poleWorld.z);
+          const spotR = Math.max(4, horizonPx * 0.34);
+          const spotGrad = ctx.createRadialGradient(pPole.x, pPole.y, 0, pPole.x, pPole.y, spotR);
+          spotGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+          spotGrad.addColorStop(0.5, `rgba(${coreRgb.r}, ${coreRgb.g}, ${coreRgb.b}, 0.72)`);
+          spotGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          ctx.fillStyle = spotGrad;
+          ctx.beginPath();
+          ctx.arc(pPole.x, pPole.y, spotR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Draw foreground Pulsar Lighthouse Beam in front of the star sphere
+      drawPulsarBeam(northDot >= 0 ? 1 : -1);
+    } else {
+      // 4. Black Hole System: Companion Donor Star (Binary Mode), Lensed Arches, 3D Accretion Disk & Shadow
+      if (this.params.systemCategory === 'binary' && this.expansionProgress > 0.05) {
+        _vec3B.copy(this.companionStarWorldPos).project(this.camera);
+        const starX = (_vec3B.x * 0.5 + 0.5) * width;
+        const starY = (-_vec3B.y * 0.5 + 0.5) * height;
+        const starR = Math.max(8, this.companionStarBaseRadius * effectiveScale * pxPerUnit);
+
+        const streamGrad = ctx.createLinearGradient(starX, starY, bhX, bhY);
+        streamGrad.addColorStop(0, 'rgba(251, 146, 60, 0.78)');
+        streamGrad.addColorStop(0.6, 'rgba(250, 204, 21, 0.68)');
+        streamGrad.addColorStop(1, 'rgba(255, 251, 235, 0.9)');
+        ctx.strokeStyle = streamGrad;
+        ctx.lineWidth = Math.max(3, starR * 0.28);
+        ctx.beginPath();
+        ctx.moveTo(starX, starY);
+        ctx.quadraticCurveTo(
+          (starX + bhX) * 0.5,
+          (starY + bhY) * 0.5 + starR * 1.1,
+          bhX + horizonPx * 1.6,
+          bhY
+        );
+        ctx.stroke();
+
+        const coronaGrad = ctx.createRadialGradient(
+          starX,
+          starY,
+          starR * 0.15,
+          starX,
+          starY,
+          starR * 1.85
+        );
+        coronaGrad.addColorStop(0, '#fffbeb');
+        coronaGrad.addColorStop(0.45, '#fbbf24');
+        coronaGrad.addColorStop(0.72, '#ea580c');
+        coronaGrad.addColorStop(1, 'rgba(234, 88, 12, 0)');
+        ctx.fillStyle = coronaGrad;
+        ctx.beginPath();
+        ctx.arc(starX, starY, starR * 1.85, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const mode = this.params.spectralMode;
+      const isXray = mode === 'xray';
+      const isEht = mode === 'eht230ghz';
+      const isDopplerMode = mode === 'doppler';
+
+      const colCore = isXray ? '#f0f9ff' : isDopplerMode ? '#e0f2fe' : '#fffbeb';
+      const colMid = isXray
+        ? '#38bdf8'
+        : isEht
+        ? '#f97316'
+        : isDopplerMode
+        ? '#60a5fa'
+        : '#f59e0b';
+      const colOuter = isXray
+        ? 'rgba(2, 132, 199, 0)'
+        : isEht
+        ? 'rgba(154, 52, 18, 0)'
+        : isDopplerMode
+        ? 'rgba(225, 29, 72, 0)'
+        : 'rgba(180, 83, 9, 0)';
+
+      const diskOuterPx =
+        horizonPx * (this.params.accretionState === 'active' ? 4.8 : 4.1) * this.expansionProgress;
+      const camElevSin = Math.abs(
+        (this.camera.position.y - this.blackHoleGroup.position.y) / Math.max(1.0, camDist)
+      );
+      const diskTilt = Math.max(
+        0.16,
+        Math.min(
+          0.92,
+          camElevSin > 0.02
+            ? camElevSin
+            : Math.abs(Math.cos(THREE.MathUtils.degToRad(this.params.inclinationDeg)))
+        )
+      );
+      const dopplerShiftX =
+        -horizonPx * 0.28 * this.params.dopplerStrength * (0.5 + 0.5 * this.params.spin);
+
+      const yScale =
+        this.params.accretionState === 'active' ? Math.max(0.24, diskTilt * 1.15) : diskTilt;
+
+      // 4a. Upper & Lower Gravitationally Lensed Einstein Arches (bent light from far side of accretion disk)
+      if (
+        this.params.layers.accretionDisk &&
+        this.params.gravitationalLensing &&
+        this.expansionProgress > 0.03
+      ) {
+        ctx.save();
+        ctx.translate(bhX, bhY);
+
+        // Draw multi-layered relativistic lensed arches above (-1) and below (+1) the event horizon shadow
+        for (const archSign of [-1, 1] as const) {
+          const isUpper = archSign === -1;
+          const archRx = horizonPx * (isUpper ? 1.95 : 1.68);
+          const archRy = horizonPx * (isUpper ? 1.88 : 1.54) * (1.0 - diskTilt * 0.18);
+          const bandCount = 12;
+          for (let bIdx = 0; bIdx < bandCount; bIdx++) {
+            const frac = bIdx / (bandCount - 1);
+            const rx = horizonPx * 1.01 + (archRx - horizonPx * 1.01) * Math.pow(frac, 1.08);
+            const ry = horizonPx * 1.01 + (archRy - horizonPx * 1.01) * Math.pow(frac, 1.05);
+            const turb =
+              0.68 +
+              0.32 *
+                Math.sin(frac * 9.5 - elapsed * 2.4 + (isUpper ? 0.0 : 1.7));
+            const alpha =
+              Math.pow(1.0 - frac, 1.35) *
+              turb *
+              (isUpper ? 0.56 : 0.42) *
+              Math.min(1.35, 0.75 + 0.45 * this.params.accretionRate);
+
+            const bandGrad = ctx.createLinearGradient(-rx * 1.15, 0, rx * 1.15, 0);
+            if (isXray) {
+              bandGrad.addColorStop(0, `rgba(240, 249, 255, ${Math.min(0.95, alpha * 1.35)})`);
+              bandGrad.addColorStop(0.48, `rgba(56, 189, 248, ${alpha})`);
+              bandGrad.addColorStop(1, `rgba(2, 132, 199, ${alpha * 0.42})`);
+            } else if (isDopplerMode) {
+              bandGrad.addColorStop(0, `rgba(125, 211, 252, ${Math.min(0.95, alpha * 1.35)})`);
+              bandGrad.addColorStop(0.5, `rgba(251, 191, 36, ${alpha * 0.85})`);
+              bandGrad.addColorStop(1, `rgba(244, 63, 94, ${alpha * 0.55})`);
+            } else {
+              bandGrad.addColorStop(0, `rgba(255, 251, 235, ${Math.min(0.96, alpha * 1.4)})`);
+              bandGrad.addColorStop(0.42, `rgba(251, 191, 36, ${alpha})`);
+              bandGrad.addColorStop(0.78, `rgba(234, 88, 12, ${alpha * 0.72})`);
+              bandGrad.addColorStop(1, `rgba(154, 52, 18, ${alpha * 0.35})`);
+            }
+
+            ctx.strokeStyle = bandGrad;
+            ctx.lineWidth = Math.max(2.2, (archRy - horizonPx) * 0.16);
+            ctx.beginPath();
+            if (isUpper) {
+              ctx.ellipse(dopplerShiftX * (1.0 - frac * 0.45), 0, rx, ry, 0, Math.PI * 1.04, Math.PI * 1.96);
+            } else {
+              ctx.ellipse(dopplerShiftX * (1.0 - frac * 0.45), 0, rx, ry, 0, Math.PI * 0.04, Math.PI * 0.96);
+            }
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+
+      // Helper to render the 3D-projected Equatorial Accretion Disk without any y=0 rectangular clip seam:
+      // - isFrontHalf = false renders the rear half (theta in [PI, 2*PI]) behind the event horizon shadow
+      // - isFrontHalf = true renders the foreground belt (theta in [0, PI]) sweeping continuously across the front of the shadow
+      const drawEquatorialDiskHalf = (isFrontHalf: boolean) => {
+        if (!this.params.layers.accretionDisk || this.expansionProgress <= 0.02) return;
+        ctx.save();
+        ctx.translate(bhX, bhY);
+
+        const innerR = horizonPx * Math.max(1.08, 1.38 - 0.28 * this.params.spin);
+        const bandSteps = 22;
+        const startAngle = isFrontHalf ? -0.03 : Math.PI - 0.03;
+        const endAngle = isFrontHalf ? Math.PI + 0.03 : Math.PI * 2 + 0.03;
+
+        for (let i = bandSteps - 1; i >= 0; i--) {
+          const frac = i / Math.max(1, bandSteps - 1);
+          const r = innerR + (diskOuterPx - innerR) * Math.pow(frac, 1.08);
+          const rx = r;
+          const ry = Math.max(2.5, r * yScale);
+
+          // Keplerian differential shear & spiral turbulence modulation
+          const wave =
+            0.72 +
+            0.28 *
+              Math.sin(frac * 14.0 - elapsed * (3.2 - frac * 1.6) + (isFrontHalf ? 0.5 : 2.1));
+          const radialFalloff = Math.pow(1.0 - frac, 0.92) * (frac < 0.08 ? frac / 0.08 : 1.0);
+          const baseAlpha =
+            radialFalloff *
+            wave *
+            (isFrontHalf ? 0.88 : 0.72) *
+            Math.min(1.35, 0.75 + 0.42 * this.params.accretionRate);
+
+          const shiftX = dopplerShiftX * (1.0 - frac * 0.55);
+          const grad = ctx.createLinearGradient(-rx + shiftX, 0, rx + shiftX, 0);
+          if (isXray) {
+            grad.addColorStop(0, `rgba(240, 249, 255, ${Math.min(0.98, baseAlpha * 1.3)})`);
+            grad.addColorStop(0.45, `rgba(56, 189, 248, ${baseAlpha})`);
+            grad.addColorStop(0.82, `rgba(2, 132, 199, ${baseAlpha * 0.65})`);
+            grad.addColorStop(1, `rgba(12, 74, 110, ${baseAlpha * 0.28})`);
+          } else if (isDopplerMode) {
+            grad.addColorStop(0, `rgba(56, 189, 248, ${Math.min(0.98, baseAlpha * 1.3)})`);
+            grad.addColorStop(0.5, `rgba(250, 204, 21, ${baseAlpha * 0.85})`);
+            grad.addColorStop(1, `rgba(225, 29, 72, ${baseAlpha * 0.65})`);
+          } else {
+            const isHotInner = frac < 0.28;
+            grad.addColorStop(
+              0,
+              isHotInner
+                ? `rgba(255, 253, 244, ${Math.min(0.98, baseAlpha * 1.35)})`
+                : `rgba(254, 240, 138, ${Math.min(0.95, baseAlpha * 1.2)})`
+            );
+            grad.addColorStop(
+              0.38,
+              isHotInner
+                ? `rgba(253, 224, 71, ${baseAlpha})`
+                : `rgba(245, 158, 11, ${baseAlpha})`
+            );
+            grad.addColorStop(0.75, `rgba(234, 88, 12, ${baseAlpha * 0.78})`);
+            grad.addColorStop(1, `rgba(154, 52, 18, ${baseAlpha * 0.36})`);
+          }
+
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = Math.max(2.4, ((diskOuterPx - innerR) / bandSteps) * 1.45);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.ellipse(shiftX, 0, rx, ry, 0, startAngle, endAngle);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      };
+
+      // 4b. Draw Rear Half of Equatorial Accretion Disk (occluded behind event horizon shadow)
+      drawEquatorialDiskHalf(false);
+
+      // 4c. Central Event Horizon Shadow (#000000) & Asymmetric Doppler-Boosted Relativistic Photon Ring
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(bhX, bhY, horizonPx, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Asymmetric Relativistic Photon Ring (grazing unstable photon sphere r_ph = 1.5 Rs)
+      const photonRingGrad = ctx.createLinearGradient(
+        bhX - horizonPx * 1.1,
+        bhY,
+        bhX + horizonPx * 1.1,
+        bhY
+      );
+      if (isXray) {
+        photonRingGrad.addColorStop(0, 'rgba(224, 242, 254, 0.96)');
+        photonRingGrad.addColorStop(0.55, 'rgba(56, 189, 248, 0.68)');
+        photonRingGrad.addColorStop(1, 'rgba(2, 132, 199, 0.25)');
+      } else {
+        photonRingGrad.addColorStop(0, 'rgba(255, 251, 235, 0.96)');
+        photonRingGrad.addColorStop(0.55, 'rgba(251, 191, 36, 0.72)');
+        photonRingGrad.addColorStop(1, 'rgba(180, 83, 9, 0.26)');
+      }
+      ctx.strokeStyle = photonRingGrad;
+      ctx.lineWidth = Math.max(1.4, horizonPx * 0.055);
+      ctx.beginPath();
+      ctx.arc(bhX, bhY, horizonPx * 1.015, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Companion star coronal glow & boiling solar surface
-      const coronaGrad = ctx.createRadialGradient(starX, starY, starR * 0.2, starX, starY, starR * 1.85);
-      coronaGrad.addColorStop(0, '#fffbeb');
-      coronaGrad.addColorStop(0.45, '#fbbf24');
-      coronaGrad.addColorStop(0.72, '#ea580c');
-      coronaGrad.addColorStop(1, 'rgba(234, 88, 12, 0)');
-      ctx.fillStyle = coronaGrad;
-      ctx.beginPath();
-      ctx.arc(starX, starY, starR * 1.85, 0, Math.PI * 2);
-      ctx.fill();
+      // 4d. Draw Foreground Half of Equatorial Accretion Disk (sweeping continuously across the front of the shadow)
+      drawEquatorialDiskHalf(true);
+
+      // 4e. Ergosphere Static-Limit Cage (when ergosphereCage layer is enabled)
+      if (this.params.layers.ergosphereCage) {
+        const ergoRx = horizonPx * (1.16 + 0.22 * this.params.spin);
+        const ergoRy = horizonPx * (0.86 - 0.12 * this.params.spin);
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.34)';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.ellipse(bhX, bhY - this.currentExploded * 3.8 * pxPerUnit, ergoRx, ergoRy, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
-    // 3. Relativistic Accretion Disk & Lensed Arches
-    if (this.params.layers.accretionDisk && this.expansionProgress > 0.02) {
-      const diskOuterPx = horizonPx * (this.params.accretionState === 'active' ? 4.4 : 3.8);
-      const isXray = this.params.spectralMode === 'xray';
-
-      // Upper and lower gravitationally lensed Einstein arches
-      const archGrad = ctx.createRadialGradient(bhX, bhY, horizonPx * 0.95, bhX, bhY, horizonPx * 2.4);
-      archGrad.addColorStop(0, isXray ? 'rgba(186, 230, 253, 0.95)' : 'rgba(254, 240, 138, 0.95)');
-      archGrad.addColorStop(0.45, isXray ? 'rgba(56, 189, 248, 0.55)' : 'rgba(245, 158, 11, 0.65)');
-      archGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = archGrad;
+    // 4f. Orbiting S-Star Cluster & S2 Precessing Trail (when orbitalStars layer is enabled)
+    if (this.params.layers.orbitalStars && this.starS2Mesh) {
+      const orbitR = this.params.probeRadiusRs * 1.75 * this.currentScale;
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.28)';
+      ctx.lineWidth = 1.1;
       ctx.beginPath();
-      ctx.arc(bhX, bhY, horizonPx * 2.4, 0, Math.PI * 2);
-      ctx.fill();
+      let started = false;
+      for (let s = 0; s <= 64; s++) {
+        const th = (s / 64) * Math.PI * 2;
+        const pt = projectWorldToScreen(Math.cos(th) * orbitR, 0, -Math.sin(th) * orbitR);
+        if (pt.z < 1.0) {
+          if (!started) {
+            ctx.moveTo(pt.x, pt.y);
+            started = true;
+          } else {
+            ctx.lineTo(pt.x, pt.y);
+          }
+        }
+      }
+      ctx.stroke();
 
-      // Equatorial accretion disk ellipse
-      ctx.save();
-      ctx.translate(bhX, bhY);
-      const tilt = Math.max(0.18, Math.abs(Math.cos(THREE.MathUtils.degToRad(this.params.inclinationDeg))));
-      ctx.scale(1.0, this.params.accretionState === 'active' ? Math.max(0.36, tilt * 1.35) : tilt);
-      const diskGrad = ctx.createRadialGradient(0, 0, horizonPx * 1.05, 0, 0, diskOuterPx);
-      diskGrad.addColorStop(0, isXray ? '#e0f2fe' : '#fffbeb');
-      diskGrad.addColorStop(0.28, isXray ? '#38bdf8' : '#fbbf24');
-      diskGrad.addColorStop(0.68, isXray ? '#0284c7' : '#ea580c');
-      diskGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = diskGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, diskOuterPx, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      const s2Pos = this.starS2Mesh.position;
+      const pS2 = projectWorldToScreen(s2Pos.x, s2Pos.y, s2Pos.z);
+      if (pS2.z < 1.0) {
+        const s2R = Math.max(3.5, 0.36 * pxPerUnit * this.currentScale);
+        const s2Grad = ctx.createRadialGradient(pS2.x, pS2.y, 0, pS2.x, pS2.y, s2R * 2.4);
+        s2Grad.addColorStop(0, '#ffffff');
+        s2Grad.addColorStop(0.4, '#93c5fd');
+        s2Grad.addColorStop(1, 'rgba(59, 130, 246, 0)');
+        ctx.fillStyle = s2Grad;
+        ctx.beginPath();
+        ctx.arc(pS2.x, pS2.y, s2R * 2.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
-    // 4. Event Horizon Shadow & Photon Ring
-    ctx.fillStyle = '#000000';
-    ctx.beginPath();
-    ctx.arc(bhX, bhY, horizonPx, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = this.params.spectralMode === 'xray' ? 'rgba(125, 211, 252, 0.9)' : 'rgba(253, 224, 71, 0.92)';
-    ctx.lineWidth = Math.max(1.5, horizonPx * 0.08);
-    ctx.beginPath();
-    ctx.arc(bhX, bhY, horizonPx * (1.02 + Math.sin(elapsed * 4.0) * 0.01), 0, Math.PI * 2);
-    ctx.stroke();
+    // 4g. Live Relativistic Photon Geodesic Trajectories (when geodesicRays layer is enabled)
+    if (this.params.layers.geodesicRays && this.activeGeodesicPulses.length > 0) {
+      for (const item of this.activeGeodesicPulses) {
+        const lineMat = item.line.material as THREE.LineBasicMaterial;
+        const hexStr = `#${lineMat.color.getHexString()}`;
+        ctx.strokeStyle = hexStr;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        let started = false;
+        const maxIdx = Math.min(item.points.length - 1, Math.ceil(item.progress));
+        for (let i = 0; i <= maxIdx; i++) {
+          const p = item.points[i];
+          const pt = projectWorldToScreen(p.x, p.y, p.z);
+          if (pt.z < 1.0) {
+            if (!started) {
+              ctx.moveTo(pt.x, pt.y);
+              started = true;
+            } else {
+              ctx.lineTo(pt.x, pt.y);
+            }
+          }
+        }
+        ctx.stroke();
+      }
+    }
 
     // 5. Sonic Boom Shockwave Ring
     if (this.isPulseActive && this.pulseStrength > 0.01) {
       const shockPx = this.pulseRadius * pxPerUnit;
       ctx.strokeStyle = `rgba(148, 163, 184, ${Math.min(0.75, this.pulseStrength * 0.65)})`;
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = 2.0;
       ctx.beginPath();
       ctx.arc(bhX, bhY, shockPx, 0, Math.PI * 2);
       ctx.stroke();
+    }
+
+    // 6. Camera-Space Multi-Element Hexagonal Optical Lens Flare & Starburst Needles
+    const flareStrength = this.settings.lensFlareIntensity ?? 1.0;
+    if (flareStrength > 0.01 && _vec3A.z < 1.0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+
+      const flareX = bhX - (isStar ? 0 : horizonPx * 0.42);
+      const flareY = bhY;
+      const centerX = width * 0.5;
+      const centerY = height * 0.5;
+      const axisX = centerX - flareX;
+      const axisY = centerY - flareY;
+
+      // Subtle 8-ray optical diffraction needles at the brightest emission point
+      const rayAlpha = Math.min(0.42, 0.14 * flareStrength);
+      const rayLen = horizonPx * (1.8 + 0.9 * flareStrength);
+      for (let r = 0; r < 4; r++) {
+        const angle = (r / 4) * Math.PI + 0.22;
+        const rx = Math.cos(angle) * rayLen;
+        const ry = Math.sin(angle) * rayLen * (r === 0 ? 1.8 : 0.85);
+        const rayGrad = ctx.createLinearGradient(
+          flareX - rx,
+          flareY - ry,
+          flareX + rx,
+          flareY + ry
+        );
+        rayGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+        rayGrad.addColorStop(0.5, `rgba(254, 243, 199, ${rayAlpha})`);
+        rayGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.strokeStyle = rayGrad;
+        ctx.lineWidth = r === 0 ? 1.6 : 1.0;
+        ctx.beginPath();
+        ctx.moveTo(flareX - rx, flareY - ry);
+        ctx.lineTo(flareX + rx, flareY + ry);
+        ctx.stroke();
+      }
+
+      // Multi-element hexagonal iris ghosts along the optical axis through screen center
+      const ghosts = [
+        { t: 0.55, r: horizonPx * 0.28, color: 'rgba(56, 189, 248, 0.11)' },
+        { t: 1.15, r: horizonPx * 0.46, color: 'rgba(251, 191, 36, 0.09)' },
+        { t: 1.65, r: horizonPx * 0.34, color: 'rgba(129, 140, 248, 0.08)' },
+      ];
+      for (const g of ghosts) {
+        const gx = flareX + axisX * g.t;
+        const gy = flareY + axisY * g.t;
+        ctx.fillStyle = g.color;
+        ctx.beginPath();
+        for (let h = 0; h < 6; h++) {
+          const ha = (h / 6) * Math.PI * 2 + 0.52;
+          const hx = gx + Math.cos(ha) * g.r * Math.min(1.5, flareStrength);
+          const hy = gy + Math.sin(ha) * g.r * Math.min(1.5, flareStrength);
+          if (h === 0) ctx.moveTo(hx, hy);
+          else ctx.lineTo(hx, hy);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.restore();
     }
   }
 
@@ -5496,7 +7082,11 @@ export class BlackHoleSceneController {
 
   public updateSettings(nextSettings: VisualizerSettings) {
     const wasSecret1987 = Boolean(this.settings?.secret1987Mode);
+    const wasPhoneMode = Boolean(this.settings?.phoneMode);
     this.settings = { ...nextSettings };
+    if (wasPhoneMode !== Boolean(nextSettings.phoneMode)) {
+      this.handleResize();
+    }
     const isSecret1987 = Boolean(nextSettings.secret1987Mode);
 
     if (this.secret1987Group) {
@@ -5528,6 +7118,12 @@ export class BlackHoleSceneController {
     if (this.gravitationalLensMat) {
       this.gravitationalLensMat.uniforms.uDiskStyle.value = diskStyleVal;
       this.gravitationalLensMat.uniforms.uBloomIntensity.value = nextSettings.bloomIntensity;
+    }
+    if (this.cameraLensFlareMat) {
+      this.cameraLensFlareMat.uniforms.uFlareIntensity.value = nextSettings.lensFlareIntensity ?? 1.0;
+    }
+    if (this.cameraLensFlareMesh) {
+      this.cameraLensFlareMesh.visible = (nextSettings.lensFlareIntensity ?? 1.0) > 0.001;
     }
     if (this.renderer) {
       this.renderer.toneMappingExposure = 1.03 + nextSettings.bloomIntensity * 0.12;
@@ -5621,6 +7217,270 @@ export class BlackHoleSceneController {
     };
   }
 
+  public getPerformanceTelemetry(): ScenePerformanceTelemetry {
+    const samples =
+      this.frameTimeSamples.length > 0 ? this.frameTimeSamples : [this.currentFrameTimeMs];
+    const sumMs = samples.reduce((acc, v) => acc + v, 0);
+    const avgFrameTimeMs = sumMs / samples.length;
+    const minFrameTimeMs = Math.min(...samples);
+    const maxFrameTimeMs = Math.max(...samples);
+    const sorted = [...samples].sort((a, b) => a - b);
+    const p99Idx = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95));
+    const p99FrameTimeMs = sorted[p99Idx] ?? maxFrameTimeMs;
+    const fps = Math.min(240, Math.round(1000 / Math.max(1.0, avgFrameTimeMs)));
+
+    const renderInfo = this.renderer?.info.render;
+    const memInfo = this.renderer?.info.memory;
+    const programsCount = this.renderer?.info.programs?.length ?? 0;
+
+    const drawCalls = renderInfo?.calls ?? (this.fallbackCtx2D ? 1 : 0);
+    const triangles = renderInfo?.triangles ?? 0;
+    const points = renderInfo?.points ?? 0;
+    const lines = renderInfo?.lines ?? 0;
+    const frameNumber = renderInfo?.frame ?? 0;
+    const geometries = memInfo?.geometries ?? 0;
+    const textures = memInfo?.textures ?? 0;
+
+    const width = this.domElement.width || this.container.clientWidth || 1280;
+    const height = this.domElement.height || this.container.clientHeight || 720;
+    const pixelRatio = this.renderer ? this.renderer.getPixelRatio() : 1;
+
+    // Estimate GPU VRAM from active render targets (3 RGBA8 full-screen buffers + depth) + geometry/texture pools
+    const rtBytesPerTarget = width * height * 4;
+    const activeRtCount = this.renderer ? 3 : 0; // motionBlurRenderTarget + timeLapseTargetA + timeLapseTargetB
+    const framebufferBytes = width * height * 8; // front/back + depth stencil
+    const geometryBytes = geometries * 96 * 1024;
+    const textureBytes = Math.max(0, textures - activeRtCount) * 512 * 1024;
+    const estimatedGpuMemoryMb = Number(
+      ((activeRtCount * rtBytesPerTarget + framebufferBytes + geometryBytes + textureBytes) / (1024 * 1024)).toFixed(1)
+    );
+
+    let jsHeapUsedMb: number | null = null;
+    let jsHeapTotalMb: number | null = null;
+    let jsHeapLimitMb: number | null = null;
+    const perfWithMem = performance as Performance & {
+      memory?: {
+        usedJSHeapSize: number;
+        totalJSHeapSize: number;
+        jsHeapSizeLimit: number;
+      };
+    };
+    if (perfWithMem?.memory) {
+      jsHeapUsedMb = Number((perfWithMem.memory.usedJSHeapSize / (1024 * 1024)).toFixed(1));
+      jsHeapTotalMb = Number((perfWithMem.memory.totalJSHeapSize / (1024 * 1024)).toFixed(1));
+      jsHeapLimitMb = Number((perfWithMem.memory.jsHeapSizeLimit / (1024 * 1024)).toFixed(0));
+    }
+
+    const isStar = isStellarCategory(this.params.objectCategory);
+    const lensingActive = Boolean(this.gravitationalLensMesh?.visible && this.params.gravitationalLensing);
+    const diskActive = Boolean(
+      !isStar && this.accretionDiskGroup?.visible && this.params.layers.accretionDisk
+    );
+    const isRaymarchedDisk = this.settings.accretionDiskStyle === 'raymarched';
+    const flareActive = Boolean(
+      this.cameraLensFlareMesh?.visible && (this.settings.lensFlareIntensity ?? 1.0) > 0.001
+    );
+    const postPassActive = Boolean(
+      this.lastRenderPasses > 1 ||
+        this.settings.motionBlurEnabled ||
+        this.settings.timeLapseEnabled
+    );
+    const gridActive = Boolean(
+      this.spacetimeWellMesh?.visible && this.params.layers.spacetimeGrid
+    );
+    const starfieldActive = Boolean(
+      this.starfieldInstanced?.visible && this.params.backgroundTheme !== 'pure_black'
+    );
+    const binaryActive = Boolean(
+      !isStar && this.params.systemCategory === 'binary' && this.binarySystemGroup?.visible
+    );
+    const ergosphereActive = Boolean(
+      !isStar && this.ergosphereGroup?.visible && this.params.layers.ergosphereCage
+    );
+
+    const layerDiagnostics: ShaderLayerDiagnosticItem[] = [
+      {
+        id: 'gravitationalLensing',
+        name: 'Gravitational Lensing Raymarcher',
+        shaderPass: isRaymarchedDisk
+          ? 'Billboard Volumetric Geodesic Raymarcher'
+          : 'Billboard Kerr Photon-Ring & Einstein Arch Shader',
+        active: lensingActive,
+        gpuCostTier: lensingActive ? (isRaymarchedDisk ? 'EXTREME' : 'HIGH') : 'LOW',
+        estimatedGpuSharePct: lensingActive ? (isRaymarchedDisk ? 44 : 32) : 0,
+        drawCalls: lensingActive ? 1 : 0,
+        details: lensingActive
+          ? isRaymarchedDisk
+            ? 'Raymarching volumetric disk & secondary Einstein rings per pixel'
+            : 'Evaluating Kerr shadow boundary, photon ring & lensed arches'
+          : 'Bypassed (Gravitational Lensing disabled)',
+      },
+      {
+        id: 'accretionDisk',
+        name: isStar ? 'Compact Star Surface & Pulsar Beams' : 'Relativistic Accretion Disk',
+        shaderPass: isStar
+          ? 'Crust Thermal Hotspot + Conical Synchrotron Shaders'
+          : 'Multi-Layer Volumetric Torus + Doppler FBM Shader',
+        active: isStar ? true : diskActive,
+        gpuCostTier: isStar ? 'MODERATE' : diskActive ? 'HIGH' : 'LOW',
+        estimatedGpuSharePct: isStar ? 24 : diskActive ? 28 : 0,
+        drawCalls: isStar ? 4 : diskActive ? (this.params.accretionState === 'active' ? 6 : 2) : 0,
+        details: isStar
+          ? 'Rendering rotating dipole hotspots & volumetric pulsar cones'
+          : diskActive
+          ? `Novikov-Thorne blackbody + 4-octave FBM turbulence (${(
+              this.params.accretionState || 'quiescent'
+            ).toUpperCase()})`
+          : 'Bypassed (Accretion Disk layer hidden)',
+      },
+      {
+        id: 'cameraLensFlare',
+        name: 'Camera-Space Optical Lens Flare',
+        shaderPass: 'Full-Screen NDC Quad (renderOrder 950 · Additive)',
+        active: flareActive,
+        gpuCostTier: flareActive ? 'MODERATE' : 'LOW',
+        estimatedGpuSharePct: flareActive ? 15 : 0,
+        drawCalls: flareActive ? 1 : 0,
+        details: flareActive
+          ? `5-element hexagonal iris ghosts + 12-ray starburst (Intensity ${(
+              (this.settings.lensFlareIntensity ?? 1.0) * 100
+            ).toFixed(0)}%)`
+          : 'Bypassed (Intensity 0% — zero full-screen fragment cost)',
+      },
+      {
+        id: 'postProcessing',
+        name: 'Motion Blur & Time-Lapse Post-Pass',
+        shaderPass:
+          this.lastRenderPasses >= 3
+            ? '3-Pass Ping-Pong RT Accumulation'
+            : this.lastRenderPasses === 2
+            ? '2-Pass 9-Tap Chromatic Dispersion'
+            : 'Direct Single-Pass Framebuffer (Standby)',
+        active: postPassActive,
+        gpuCostTier:
+          this.lastRenderPasses >= 3
+            ? 'HIGH'
+            : this.lastRenderPasses === 2
+            ? 'MODERATE'
+            : 'LOW',
+        estimatedGpuSharePct:
+          this.lastRenderPasses >= 3 ? 18 : this.lastRenderPasses === 2 ? 12 : 2,
+        drawCalls: Math.max(0, this.lastRenderPasses - 1),
+        details:
+          this.lastRenderPasses >= 3
+            ? 'Active temporal render-target ping-pong accumulation'
+            : this.lastRenderPasses === 2
+            ? 'Active 9-tap directional velocity blur pass'
+            : 'Standby when camera is stationary (1 render pass)',
+      },
+      {
+        id: 'spacetimeGrid',
+        name: 'Flamm Paraboloid Spacetime Grid',
+        shaderPass: 'Dynamic Vertex-Deformed Wireframe Manifold',
+        active: gridActive,
+        gpuCostTier: gridActive ? 'MODERATE' : 'LOW',
+        estimatedGpuSharePct: gridActive ? 8 : 0,
+        drawCalls: gridActive ? 1 : 0,
+        details: gridActive
+          ? 'Real-time radial proper distance & frame-dragging vertex grid'
+          : 'Bypassed (Spacetime Grid layer hidden)',
+      },
+      {
+        id: 'starfield',
+        name: 'Deep Space Starfield (5,500 Stars)',
+        shaderPass: 'Hardware InstancedMesh + Lensing Deflection',
+        active: starfieldActive,
+        gpuCostTier: 'LOW',
+        estimatedGpuSharePct: starfieldActive ? 5 : 0,
+        drawCalls: starfieldActive ? 1 : 0,
+        details: starfieldActive
+          ? '5,500 hardware-instanced stars in 1 draw call'
+          : 'Bypassed (Pure Black Vacuum background)',
+      },
+    ];
+
+    if (binaryActive) {
+      layerDiagnostics.push({
+        id: 'binaryStream',
+        name: 'Binary Roche-Lobe Donor & Stream',
+        shaderPass: 'Boiling Photosphere + 560 Instanced Stream Parcels',
+        active: true,
+        gpuCostTier: 'MODERATE',
+        estimatedGpuSharePct: 10,
+        drawCalls: 5,
+        details: 'Companion donor star + cubic Bezier plasma stream',
+      });
+    }
+
+    if (ergosphereActive) {
+      layerDiagnostics.push({
+        id: 'ergosphere',
+        name: 'Ergosphere Static-Limit Cage',
+        shaderPass: 'Lense-Thirring Oblate Wireframe Shell',
+        active: true,
+        gpuCostTier: 'LOW',
+        estimatedGpuSharePct: 3,
+        drawCalls: 2,
+        details: 'Rotating oblate ergosphere boundary',
+      });
+    }
+
+    const sortedActiveLayers = [...layerDiagnostics]
+      .filter((l) => l.active)
+      .sort((a, b) => b.estimatedGpuSharePct - a.estimatedGpuSharePct);
+
+    const primaryBottleneckLayer =
+      sortedActiveLayers[0]?.name || 'Core Scene Geometry';
+
+    const bottleneckStatus: 'OPTIMAL' | 'ELEVATED' | 'BOTTLENECK' =
+      avgFrameTimeMs > 28.0 || p99FrameTimeMs > 42.0
+        ? 'BOTTLENECK'
+        : avgFrameTimeMs > 18.5 || p99FrameTimeMs > 26.0
+        ? 'ELEVATED'
+        : 'OPTIMAL';
+
+    const rendererBackend: ScenePerformanceTelemetry['rendererBackend'] = !this.renderer
+      ? '2D Canvas Fallback'
+      : isSoftwareGl
+      ? 'Software WebGL'
+      : this.isWebGL2Context
+      ? 'WebGL2 Hardware'
+      : 'WebGL1 Hardware';
+
+    return {
+      frameTimeMs: Number(this.currentFrameTimeMs.toFixed(2)),
+      avgFrameTimeMs: Number(avgFrameTimeMs.toFixed(2)),
+      minFrameTimeMs: Number(minFrameTimeMs.toFixed(2)),
+      maxFrameTimeMs: Number(maxFrameTimeMs.toFixed(2)),
+      p99FrameTimeMs: Number(p99FrameTimeMs.toFixed(2)),
+      fps,
+      frameTimeHistory: [...samples],
+      drawCalls,
+      triangles,
+      points,
+      lines,
+      renderPasses: this.lastRenderPasses,
+      frameNumber,
+      geometries,
+      textures,
+      shaderPrograms: programsCount,
+      estimatedGpuMemoryMb,
+      jsHeapUsedMb,
+      jsHeapTotalMb,
+      jsHeapLimitMb,
+      rendererBackend,
+      gpuRendererName: this.gpuRendererName,
+      pixelRatio,
+      canvasWidth: width,
+      canvasHeight: height,
+      bottleneckStatus,
+      primaryBottleneckLayer,
+      shaderNanGuardActive: true,
+      layerDiagnostics,
+      gpuCache: gpuResourceCache.getMetrics(programsCount),
+    };
+  }
+
   public getCanvas(): HTMLCanvasElement {
     return this.domElement;
   }
@@ -5637,11 +7497,29 @@ export class BlackHoleSceneController {
     return this.domElement.toDataURL('image/png');
   }
 
+  public resize() {
+    this.handleResize();
+  }
+
+  public syncCameraPose(
+    pos: { x: number; y: number; z: number },
+    target: { x: number; y: number; z: number }
+  ) {
+    if (this.isUserInteracting) return;
+    this.cameraTransitionActive = false;
+    this.followStarMode = false;
+    this.camera.position.set(pos.x, pos.y, pos.z);
+    this.controls.target.set(target.x, target.y, target.z);
+    this.camera.lookAt(target.x, target.y, target.z);
+  }
+
   public dispose() {
     this.isDisposed = true;
     cancelAnimationFrame(this.frameId);
     clearTimeout(this.frameId);
     window.removeEventListener('resize', this.handleResize);
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
     this.domElement.removeEventListener('pointerdown', this.handlePointerDown);
     this.domElement.removeEventListener('pointermove', this.handlePointerMove);
     this.domElement.removeEventListener('click', this.handleCanvasClick);
@@ -5674,6 +7552,8 @@ export class BlackHoleSceneController {
     this.timeLapseTargetB?.dispose();
     this.postMaterial?.dispose();
     this.postQuad?.geometry?.dispose();
+    this.cameraLensFlareMat?.dispose();
+    this.cameraLensFlareMesh?.geometry?.dispose();
     this.microlensSourceStarMesh?.geometry?.dispose();
     this.microlensPrimaryImageMesh?.geometry?.dispose();
     this.microlensSecondaryImageMesh?.geometry?.dispose();

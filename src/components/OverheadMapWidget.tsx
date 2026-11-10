@@ -52,21 +52,29 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
   // Pulse animation phase for real-time radar sweep / beacon effect
   const radarSweepAngleRef = useRef<number>(0);
 
-  // Animation render loop for 60fps canvas
+  // Animation render loop throttled to 30fps via requestAnimationFrame
   useEffect(() => {
     let animId = 0;
+    const TARGET_FPS = 30;
+    const FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
+    let lastFrameTime = 0;
     let lastTelemetryUpdate = 0;
 
     const render = (time: number) => {
       animId = requestAnimationFrame(render);
-      radarSweepAngleRef.current += 0.035;
+      const elapsedMs = time - lastFrameTime;
+      if (elapsedMs < FRAME_INTERVAL_MS) {
+        return;
+      }
+      lastFrameTime = time - (elapsedMs % FRAME_INTERVAL_MS);
+      radarSweepAngleRef.current += 0.07;
 
       const canvas = canvasRef.current;
       if (!canvas || !sceneController || isMinimized) return;
 
       const data: OverheadTelemetryData = sceneController.getOverheadTelemetry();
 
-      // Throttle React state update to ~15fps for text stats to avoid unnecessary re-renders
+      // Throttle React state update for text stats to avoid unnecessary re-renders
       if (time - lastTelemetryUpdate > 65) {
         lastTelemetryUpdate = time;
         setTelemetry({

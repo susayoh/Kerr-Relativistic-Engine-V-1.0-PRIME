@@ -79,6 +79,8 @@ export interface UiTranslations {
   classicDisk: string;
   volumetricRaymarched: string;
   bloomIntensityTitle: string;
+  lensFlareIntensityTitle: string;
+  lensFlareIntensityDesc: string;
   nakedDistortionTitle: string;
   cameraMotionBlurTitle: string;
   timeLapseTitle: string;
@@ -172,6 +174,9 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     classicDisk: 'Classic 3D Disk (Original)',
     volumetricRaymarched: 'Volumetric Raymarched',
     bloomIntensityTitle: 'Bloom Intensity',
+    lensFlareIntensityTitle: 'Lens Flare Intensity',
+    lensFlareIntensityDesc:
+      'Controls the strength of camera-space anamorphic streaks, diffraction starbursts, chromatic aperture ghosts, and grazing-angle lens artifacts when viewing the star or black hole from different angles.',
     nakedDistortionTitle: 'Naked Spacetime Distortion Intensity (No Accretion Disk)',
     cameraMotionBlurTitle: 'Relativistic Camera Motion Blur',
     timeLapseTitle: 'Time Lapse (Long-Exposure Astrophotography)',
@@ -266,6 +271,9 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     classicDisk: 'Klassische 3D-Scheibe (Original)',
     volumetricRaymarched: 'Volumetrisches Raymarching',
     bloomIntensityTitle: 'Leuchtintensität (Bloom)',
+    lensFlareIntensityTitle: 'Lens Flare Intensity (Linsenreflexions-Intensität)',
+    lensFlareIntensityDesc:
+      'Steuert die Stärke der kameraseitigen anamorphotischen Streifen, Beugungssterne und chromatischen Blendenreflexe beim Betrachten des Sterns oder Schwarzen Lochs aus verschiedenen Winkeln.',
     nakedDistortionTitle: 'Reine Raumzeit-Verzerrung (Ohne Akkretionsscheibe)',
     cameraMotionBlurTitle: 'Relativistische Kamerabewegungsunschärfe',
     timeLapseTitle: 'Zeitraffer (Langzeitbelichtungs-Astrofotografie)',
@@ -360,6 +368,9 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     classicDisk: 'クラシック3D円盤（標準）',
     volumetricRaymarched: 'ボリューメトリック・レイマーチング',
     bloomIntensityTitle: 'ブルーム（発光）強度',
+    lensFlareIntensityTitle: 'Lens Flare Intensity (レンズフレア強度)',
+    lensFlareIntensityDesc:
+      'ブラックホールや恒星をさまざまな角度から観測した際に発生する、カメラ空間のアナモルフィック光条、回折スパイク、色収差ゴーストの強度を制御します。',
     nakedDistortionTitle: '裸の時空歪曲強度（降着円盤オフ時）',
     cameraMotionBlurTitle: '相対論的カメラモーションブラー',
     timeLapseTitle: 'タイムラプス（長時間露光天体写真）',
@@ -454,6 +465,9 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     classicDisk: 'Disco 3D Clásico (Original)',
     volumetricRaymarched: 'Raymarching Volumétrico',
     bloomIntensityTitle: 'Intensidad de Resplandor (Bloom)',
+    lensFlareIntensityTitle: 'Lens Flare Intensity (Intensidad de Destello de Lente)',
+    lensFlareIntensityDesc:
+      'Controla la intensidad de los destellos anamórficos en el espacio de cámara, picos de difracción y reflejos ópticos cromáticos al observar la estrella o el agujero negro desde distintos ángulos.',
     nakedDistortionTitle: 'Distorsión del Espacio-Tiempo Desnudo (Sin Disco)',
     cameraMotionBlurTitle: 'Desenfoque de Movimiento Relativista',
     timeLapseTitle: 'Time Lapse (Astrofotografía de Larga Exposición)',
@@ -548,6 +562,9 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     classicDisk: '经典 3D 吸积盘（原版）',
     volumetricRaymarched: '体光线步进渲染 (Raymarched)',
     bloomIntensityTitle: '辉光强度 (Bloom)',
+    lensFlareIntensityTitle: 'Lens Flare Intensity (镜头眩光强度)',
+    lensFlareIntensityDesc:
+      '控制从不同视角观测恒星或黑洞时，相机空间变形宽银幕光斑、衍射星芒与色散光圈重影的伪影强度。',
     nakedDistortionTitle: '裸奇点时空引力透镜强度（关闭吸积盘时）',
     cameraMotionBlurTitle: '相对论相机动态模糊',
     timeLapseTitle: '延时摄影（长曝光深空天体摄影）',

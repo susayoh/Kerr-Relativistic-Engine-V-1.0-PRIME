@@ -129,14 +129,24 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
 
   useEffect(() => {
     let animId = 0;
-    let lastStateUpdate = 0;
+    const TARGET_FPS = 30;
+    const FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
+    let lastFrameTime = 0;
     let lastSamplePush = 0;
 
     const renderLoop = (now: number) => {
       animId = requestAnimationFrame(renderLoop);
 
+      // 30fps requestAnimationFrame-throttling (~33.33ms interval)
+      const elapsedFrameMs = now - lastFrameTime;
+      if (elapsedFrameMs < FRAME_INTERVAL_MS) {
+        return;
+      }
+      const dtSeconds = Math.min(0.1, elapsedFrameMs > 0 && lastFrameTime > 0 ? elapsedFrameMs / 1000 : 1 / TARGET_FPS);
+      lastFrameTime = now - (elapsedFrameMs % FRAME_INTERVAL_MS);
+
       // Advance relativistic epicyclic phase when simulation is unpaused
-      const dt = 0.016 * (params.timeScale ?? 1.0);
+      const dt = dtSeconds * (params.timeScale ?? 1.0);
       const orbitalFreq = 1.6 / Math.pow(Math.max(1.2, params.probeRadiusRs), 1.5);
       phaseRef.current += dt * orbitalFreq * 2.4;
 
@@ -175,8 +185,8 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
         ...evaluated,
       };
 
-      // Push sample into rolling 140-point buffer at ~30Hz
-      if (now - lastSamplePush > 32) {
+      // Push sample into rolling 140-point buffer at 30Hz
+      if (now - lastSamplePush >= FRAME_INTERVAL_MS * 0.9) {
         lastSamplePush = now;
         const buf = historyRef.current;
         buf.push(sample);
@@ -185,11 +195,8 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
         }
       }
 
-      // Throttle React numeric text updates to ~15fps
-      if (now - lastStateUpdate > 65) {
-        lastStateUpdate = now;
-        setLiveSample(sample);
-      }
+      // Synchronize numeric telemetry readout at 30fps
+      setLiveSample(sample);
 
       const canvas = canvasRef.current;
       if (!canvas || isMinimized) return;
@@ -445,7 +452,7 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
         isPhoneMode ? 'w-[260px]' : 'w-80 sm:w-[340px]'
       }`}
     >
-      <div className="bg-[#050811]/95 border border-purple-500/40 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.85)] backdrop-blur-md overflow-hidden">
+      <div className="bg-[#050811]/95 border border-purple-500/40 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.85)] overflow-hidden">
         {/* Header Bar */}
         <div className="px-3 py-2 bg-neutral-950/90 border-b border-slate-800/90 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">

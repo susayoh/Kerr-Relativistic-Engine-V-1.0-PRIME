@@ -111,7 +111,7 @@ export const EventLogOverlay: React.FC<EventLogOverlayProps> = ({
         isPhoneMode ? 'w-[240px]' : 'w-72 sm:w-80'
       }`}
     >
-      <div className="bg-[#050811]/95 border border-slate-800/85 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden">
+      <div className="bg-[#050811]/95 border border-slate-800/85 rounded-xl shadow-2xl overflow-hidden">
         {/* Header Bar */}
         <div className="px-3 py-2 border-b border-slate-800/80 bg-neutral-950/70 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">

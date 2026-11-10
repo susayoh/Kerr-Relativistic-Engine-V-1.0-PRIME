@@ -25,6 +25,7 @@ import {
   EyeOff,
   Radio,
   BookOpen,
+  Download,
 } from 'lucide-react';
 import {
   ASTROPHYSICAL_PRESETS,
@@ -53,6 +54,7 @@ interface ControlDockProps {
   activeCamera: CameraPresetId;
   onLaunchPhoton: (impactB: number) => void;
   onClearPhotons: () => void;
+  onExportGeodesicCsv?: (impactB: number) => void;
   lastTrajectory: GeodesicTrajectory | null;
   audioEnabled: boolean;
   onToggleAudio: () => void;
@@ -80,6 +82,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   activeCamera,
   onLaunchPhoton,
   onClearPhotons,
+  onExportGeodesicCsv,
   audioEnabled,
   onToggleAudio,
   onOpenCosmicScaleModal,
@@ -875,6 +878,22 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   <Send className="w-3 h-3" />
                   <span>Fire Ray Pulse</span>
                 </button>
+
+                {onExportGeodesicCsv && (
+                  <button
+                    type="button"
+                    data-testid="export-geodesic-csv-btn-phone"
+                    onClick={() => {
+                      haptics.medium();
+                      onExportGeodesicCsv(impactB);
+                    }}
+                    className="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs font-mono font-semibold text-cyan-300 bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-500/40 rounded-lg cursor-pointer"
+                    title="Export live geodesic trajectory data as CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>CSV</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -2334,6 +2353,21 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                     <span>Fire Ray</span>
                   </button>
 
+                  {onExportGeodesicCsv && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptics.medium();
+                        onExportGeodesicCsv(impactB);
+                      }}
+                      className="flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-mono font-semibold text-cyan-300 bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-500/40 rounded-lg cursor-pointer"
+                      title="Export live geodesic trajectory data as CSV"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>CSV</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => {
@@ -2351,8 +2385,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
           ) : (
             /* Desktop Geodesics Launcher */
             <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-center">
-              {/* Cell 1: Impact Parameter Slider (Cols 1-6) */}
-              <div className="md:col-span-6 flex flex-col justify-between gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
+              {/* Cell 1: Impact Parameter Slider (Cols 1-5) */}
+              <div className="md:col-span-5 flex flex-col justify-between gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-neutral-300 font-medium flex items-center gap-1.5">
                     <Orbit className="w-3 h-3 text-amber-400/90" />
@@ -2380,7 +2414,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 </div>
               </div>
 
-              {/* Cell 2: Trajectory Outcome Prediction (Cols 7-9) */}
+              {/* Cell 2: Trajectory Outcome Prediction (Cols 6-8) */}
               <div className="md:col-span-3 flex flex-col justify-between gap-1 p-2 rounded-lg bg-neutral-950 border border-neutral-800/80 h-full">
                 <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider">
                   Trajectory Outcome
@@ -2405,33 +2439,53 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 </span>
               </div>
 
-              {/* Cell 3: Action Buttons (Cols 10-12) */}
-              <div className="md:col-span-3 flex flex-row md:flex-col justify-center gap-1.5 h-full">
+              {/* Cell 3: Action Buttons (Cols 9-12) */}
+              <div className="md:col-span-4 flex flex-col justify-center gap-1.5 h-full">
                 <button
                   type="button"
                   onClick={() => {
                     haptics.medium();
                     onLaunchPhoton(impactB);
                   }}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-neutral-700 transition-colors cursor-pointer shadow-md"
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-neutral-700 transition-colors cursor-pointer shadow-md"
                   title="Fire a single test photon pulse to trace general-relativistic light bending"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Fire Single Ray</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    haptics.light();
-                    onClearPhotons();
-                  }}
-                  className="flex items-center justify-center gap-1.5 px-2.5 py-1 text-xs text-neutral-400 hover:text-rose-400 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 rounded-lg transition-colors cursor-pointer"
-                  title="Clear all active photon trajectories"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>Clear Rays</span>
-                </button>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {onExportGeodesicCsv && (
+                    <button
+                      type="button"
+                      data-testid="export-geodesic-csv-btn"
+                      onClick={() => {
+                        haptics.medium();
+                        onExportGeodesicCsv(impactB);
+                      }}
+                      className="flex items-center justify-center gap-1.5 px-2.5 py-1 text-xs font-mono font-semibold text-cyan-300 hover:text-cyan-100 bg-cyan-950/50 hover:bg-cyan-900/60 border border-cyan-500/40 rounded-lg transition-colors cursor-pointer"
+                      title="Export live geodesic trajectory data as a CSV file for external relativistic analysis"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Export CSV</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptics.light();
+                      onClearPhotons();
+                    }}
+                    className={`flex items-center justify-center gap-1.5 px-2.5 py-1 text-xs text-neutral-400 hover:text-rose-400 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 rounded-lg transition-colors cursor-pointer ${
+                      onExportGeodesicCsv ? '' : 'col-span-2'
+                    }`}
+                    title="Clear all active photon trajectories"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Clear Rays</span>
+                  </button>
+                </div>
               </div>
             </div>
           )

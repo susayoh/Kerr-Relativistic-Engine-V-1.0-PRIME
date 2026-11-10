@@ -64,6 +64,7 @@ interface SettingsModalProps {
   kerrEngineLogs?: KerrEngineRunLog[];
   onOpenKerrLogModal?: () => void;
   onTriggerKerrCalculation?: (tierOverride?: KerrEngineTierId) => void;
+  onExportGeodesicCsv?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -82,6 +83,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   kerrEngineLogs = [],
   onOpenKerrLogModal,
   onTriggerKerrCalculation,
+  onExportGeodesicCsv,
 }) => {
   const haptics = useHaptics({
     enabled: settings.hapticsEnabled !== false,
@@ -461,48 +463,77 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <span
                   className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
-                    settings.kerrEngineEnabled !== false
+                    (settings.kerrEngineTier || 'standard') !== 'ultra' || settings.kerrEngineEnabled !== false
                       ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                      : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                      : 'bg-amber-500/20 text-amber-200 border-amber-500/40'
                   }`}
                 >
-                  {settings.kerrEngineEnabled !== false ? 'ENGINE ACTIVE' : 'BYPASSED'}
+                  {(settings.kerrEngineTier || 'standard') !== 'ultra'
+                    ? 'ALWAYS ACTIVE'
+                    : settings.kerrEngineEnabled !== false
+                      ? 'ENGINE ACTIVE'
+                      : 'ULTRA BYPASSED'}
                 </span>
               </div>
             </div>
 
-            {/* Enable / Disable Pre-Load Kerr Relativity Engine Terminal */}
+            {/* Pre-Load Kerr Relativity Engine Terminal (Always Active; Bypass requires Ultra Tier) */}
             <div className="flex items-start justify-between gap-4 pt-1">
               <div className="space-y-1">
                 <div className="text-neutral-100 font-semibold text-xs flex items-center gap-2 flex-wrap">
                   <span>Pre-Load Kerr Relativity Engine Terminal</span>
                   <span className="text-[10px] font-mono text-amber-300 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.2 rounded">
-                    {KERR_ENGINE_TIERS[settings.kerrEngineTier || 'advanced'].modelCode}
+                    {KERR_ENGINE_TIERS[settings.kerrEngineTier || 'standard'].modelCode}
                   </span>
+                  {(settings.kerrEngineTier || 'standard') !== 'ultra' && (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-mono text-rose-300 bg-rose-950/60 border border-rose-500/40 px-1.5 py-0.2 rounded">
+                      <Lock className="w-2.5 h-2.5" /> Bypass Requires Ultra ($499/mo)
+                    </span>
+                  )}
                 </div>
                 <p className="text-[11px] text-neutral-400 leading-relaxed">
-                  Executes the <strong className="text-amber-200">Kerr Relativity Engine</strong> terminal before any black hole or star loads, streaming exact Boyer-Lindquist metric tensors (<span className="font-mono text-cyan-300">g_μν</span>), Christoffel symbols, ISCO roots, and radiative transfer telemetry. Calculation speed, tensor precision, and compute cost scale directly with your selected tier.
+                  Executes the <strong className="text-amber-200">Kerr Relativity Engine</strong> terminal before any black hole or star loads, streaming exact Boyer-Lindquist metric tensors (<span className="font-mono text-cyan-300">g_μν</span>), Christoffel symbols, ISCO roots, and radiative transfer telemetry. Always active on Standard, Linear, and Advanced tiers — only the flagship <strong className="text-amber-300">Ultra</strong> model unlocks optional terminal bypass.
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={() => toggleSetting('kerrEngineEnabled')}
-                className={`w-12 h-6.5 rounded-full transition-colors p-0.5 shrink-0 cursor-pointer border ${
-                  settings.kerrEngineEnabled !== false
-                    ? 'bg-amber-500/40 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                    : 'bg-neutral-900 border-neutral-700'
+                disabled={(settings.kerrEngineTier || 'standard') !== 'ultra'}
+                onClick={() => {
+                  if ((settings.kerrEngineTier || 'standard') === 'ultra') {
+                    toggleSetting('kerrEngineEnabled');
+                  } else {
+                    haptics.heavy();
+                  }
+                }}
+                title={
+                  (settings.kerrEngineTier || 'standard') === 'ultra'
+                    ? 'Toggle Ultra Instant Bypass'
+                    : 'Engine is always active. Select the Ultra ($499/mo) tier to unlock engine bypass.'
+                }
+                className={`w-12 h-6.5 rounded-full transition-colors p-0.5 shrink-0 border ${
+                  (settings.kerrEngineTier || 'standard') !== 'ultra'
+                    ? 'bg-emerald-500/30 border-emerald-500/50 opacity-80 cursor-not-allowed'
+                    : settings.kerrEngineEnabled !== false
+                      ? 'bg-amber-500/40 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)] cursor-pointer'
+                      : 'bg-neutral-900 border-neutral-700 cursor-pointer'
                 }`}
-                aria-pressed={settings.kerrEngineEnabled !== false}
+                aria-pressed={
+                  (settings.kerrEngineTier || 'standard') !== 'ultra' || settings.kerrEngineEnabled !== false
+                }
                 aria-label="Toggle Real-Time Kerr Relativity Engine Calculation"
               >
                 <div
-                  className={`w-5 h-5 rounded-full transition-transform ${
-                    settings.kerrEngineEnabled !== false
-                      ? 'translate-x-5.5 bg-amber-300'
-                      : 'translate-x-0 bg-neutral-500'
+                  className={`w-5 h-5 rounded-full transition-transform flex items-center justify-center ${
+                    (settings.kerrEngineTier || 'standard') !== 'ultra' || settings.kerrEngineEnabled !== false
+                      ? 'translate-x-5.5 bg-amber-300 text-neutral-950'
+                      : 'translate-x-0 bg-neutral-500 text-neutral-200'
                   }`}
-                />
+                >
+                  {(settings.kerrEngineTier || 'standard') !== 'ultra' && (
+                    <Lock className="w-2.5 h-2.5 text-neutral-950" />
+                  )}
+                </div>
               </button>
             </div>
 
@@ -510,7 +541,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
               {(Object.keys(KERR_ENGINE_TIERS) as KerrEngineTierId[]).map((tierKey) => {
                 const tier = KERR_ENGINE_TIERS[tierKey];
-                const isSelected = (settings.kerrEngineTier || 'advanced') === tierKey;
+                const isSelected = (settings.kerrEngineTier || 'standard') === tierKey;
 
                 return (
                   <button
@@ -521,7 +552,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       haptics.medium();
                       onUpdateSettings((prev) => ({
                         ...prev,
-                        kerrEngineEnabled: true,
+                        // Non-ultra tiers always force engine active
+                        kerrEngineEnabled: tier.id === 'ultra' ? prev.kerrEngineEnabled : true,
                         kerrEngineTier: tier.id,
                       }));
                     }}
@@ -640,7 +672,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={() => {
                       haptics.medium();
                       onClose();
-                      onTriggerKerrCalculation(settings.kerrEngineTier || 'advanced');
+                      onTriggerKerrCalculation(settings.kerrEngineTier || 'standard');
                     }}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 font-bold cursor-pointer transition-colors"
                   >
@@ -1099,7 +1131,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="pt-1 pb-2 border-b border-neutral-900">
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-neutral-100 font-medium text-xs">
-                  Bloom Intensity
+                  {t.bloomIntensityTitle}
                 </span>
                 <span className="font-mono text-amber-300 text-xs">
                   {settings.bloomIntensity.toFixed(2)}×
@@ -1107,6 +1139,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               <input
                 type="range"
+                aria-label="Bloom Intensity"
                 min={0.0}
                 max={2.5}
                 step={0.05}
@@ -1118,6 +1151,56 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               />
               <p className="text-[11px] text-neutral-400 mt-1">
                 Controls the relativistic glow, corona halo, and luminous emission intensity on the accretion disk and photon ring.
+              </p>
+            </div>
+
+            {/* Lens Flare Intensity Slider */}
+            <div
+              data-testid="lens-flare-intensity-section"
+              className="pt-1 pb-2 border-b border-neutral-900"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-neutral-100 font-medium text-xs">
+                    {t.lensFlareIntensityTitle}
+                  </span>
+                  <span
+                    className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold ${
+                      (settings.lensFlareIntensity ?? 1.0) > 0.01
+                        ? 'border-sky-500/40 bg-sky-500/15 text-sky-300'
+                        : 'border-neutral-700 bg-neutral-900 text-neutral-400'
+                    }`}
+                  >
+                    {(settings.lensFlareIntensity ?? 1.0) > 0.01 ? 'CAMERA OPTICS' : 'OFF'}
+                  </span>
+                </div>
+                <span
+                  data-testid="lens-flare-intensity-value"
+                  className="font-mono text-amber-300 text-xs tabular-nums"
+                >
+                  {(settings.lensFlareIntensity ?? 1.0).toFixed(2)}×
+                </span>
+              </div>
+              <input
+                type="range"
+                data-testid="lens-flare-intensity-slider"
+                aria-label="Lens Flare Intensity"
+                min={0.0}
+                max={2.5}
+                step={0.05}
+                value={settings.lensFlareIntensity ?? 1.0}
+                onChange={(e) =>
+                  setNumericSetting('lensFlareIntensity', parseFloat(e.target.value))
+                }
+                className="w-full accent-amber-400 cursor-pointer"
+              />
+              <div className="flex justify-between text-[10px] font-mono text-neutral-500 mt-0.5">
+                <span>0.00× (Off)</span>
+                <span>1.00× (Standard)</span>
+                <span>2.50× (Cinema Anamorphic)</span>
+              </div>
+              <p className="text-[11px] text-neutral-400 mt-1">
+                {t.lensFlareIntensityDesc}
               </p>
             </div>
 
@@ -1485,6 +1568,61 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 />
               </button>
             </div>
+
+            {/* Show Performance Monitor Checkbox (Three.js Frame Time, Draw Calls, Memory & Shader Layer Bottleneck Diagnostics) */}
+            <div className="flex items-center justify-between gap-4 pt-3 border-t border-neutral-900">
+              <label
+                htmlFor="show-performance-monitor-checkbox"
+                className="flex items-start gap-2.5 cursor-pointer select-none"
+              >
+                <input
+                  id="show-performance-monitor-checkbox"
+                  type="checkbox"
+                  checked={Boolean(settings.showPerformanceMonitor)}
+                  onChange={() => toggleSetting('showPerformanceMonitor')}
+                  className="mt-0.5 h-4 w-4 rounded border-neutral-700 bg-neutral-900 accent-cyan-400 cursor-pointer shrink-0"
+                />
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-neutral-100 font-medium text-xs">
+                      Show Performance Monitor (Three.js GPU Diagnostics)
+                    </span>
+                    <span
+                      className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold ${
+                        settings.showPerformanceMonitor
+                          ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300'
+                          : 'border-neutral-700 bg-neutral-900 text-neutral-400'
+                      }`}
+                    >
+                      {settings.showPerformanceMonitor ? 'LIVE TELEMETRY' : 'OFF'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 leading-relaxed">
+                    Displays real-time frame time (ms/FPS), WebGL draw calls, GPU/heap memory usage, and interactive shader layer toggles to diagnose desktop GPU bottlenecks.
+                  </p>
+                </div>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => toggleSetting('showPerformanceMonitor')}
+                className={`w-11 h-6 rounded-full transition-colors p-0.5 shrink-0 cursor-pointer border ${
+                  settings.showPerformanceMonitor
+                    ? 'bg-cyan-500/30 border-cyan-400/70'
+                    : 'bg-neutral-900 border-neutral-700'
+                }`}
+                aria-pressed={Boolean(settings.showPerformanceMonitor)}
+                aria-label="Toggle Show Performance Monitor"
+              >
+                <div
+                  className={`w-4.5 h-4.5 rounded-full transition-transform ${
+                    settings.showPerformanceMonitor
+                      ? 'translate-x-5 bg-cyan-300'
+                      : 'translate-x-0 bg-neutral-500'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
 
           {/* Section 6: Snapshot & Video Recording Export */}
@@ -1495,7 +1633,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span>{t.snapshotVideoSectionTitle}</span>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {onExportGeodesicCsv && (
+                  <button
+                    type="button"
+                    data-testid="settings-export-geodesic-csv-btn"
+                    onClick={() => {
+                      haptics.medium();
+                      onExportGeodesicCsv();
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[10px] font-bold bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-500/40 text-cyan-200 transition-all cursor-pointer"
+                    title="Export live geodesic trajectory coordinates, velocity vectors, redshift, and Boyer-Lindquist metric tensors as CSV"
+                  >
+                    <Download className="w-3 h-3 text-cyan-400" />
+                    <span>Export Geodesic CSV</span>
+                  </button>
+                )}
+
                 {onToggleRecording && (
                   <button
                     type="button"

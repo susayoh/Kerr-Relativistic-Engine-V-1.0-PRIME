@@ -12,6 +12,7 @@ import {
   Activity,
   ShieldCheck,
   Layers,
+  Lock,
   X,
 } from 'lucide-react';
 import {
@@ -53,27 +54,27 @@ export const KERR_ENGINE_TIERS: Record<KerrEngineTierId, KerrEngineTierConfig> =
   standard: {
     id: 'standard',
     name: 'Standard',
-    modelCode: 'Kerr-1S Baseline',
+    modelCode: 'Kerr-1S Baseline (Default)',
     tagline: '1st-Order Weak-Field & Schwarzschild Approximation',
     monthlyPriceDisplay: '$0 / mo',
     costPerSolveUsd: 0.004,
     costPerSolveDisplay: '$0.004 / solve',
     tflops: 14.2,
     tflopsDisplay: '14.2 TFLOPS',
-    stepDelayMs: 145,
-    holdAfterCompleteMs: 420,
-    expectedLatencyDisplay: '~1.85s',
+    stepDelayMs: 280,
+    holdAfterCompleteMs: 550,
+    expectedLatencyDisplay: '~2.80s',
     precisionLabel: 'FP16 Weak-Field',
     fidelityPercent: '84.2%',
     gridResolution: '64³ Mesh',
-    speedScore: 34,
-    performanceScore: 46,
-    qualityScore: 62,
+    speedScore: 22,
+    performanceScore: 42,
+    qualityScore: 60,
     badgeClass: 'bg-slate-500/20 text-slate-300 border-slate-500/40',
     borderClass: 'border-slate-700/80',
     accentColor: '#94a3b8',
     description:
-      'Single-threaded sequential solver using 1st-order Post-Newtonian and static Schwarzschild approximations. Suitable for baseline inspections.',
+      'Default single-threaded sequential solver using 1st-order Post-Newtonian and static Schwarzschild approximations. Cannot be bypassed.',
   },
   linear: {
     id: 'linear',
@@ -85,15 +86,15 @@ export const KERR_ENGINE_TIERS: Record<KerrEngineTierId, KerrEngineTierConfig> =
     costPerSolveDisplay: '$0.018 / solve',
     tflops: 88.5,
     tflopsDisplay: '88.5 TFLOPS',
-    stepDelayMs: 95,
-    holdAfterCompleteMs: 340,
-    expectedLatencyDisplay: '~1.20s',
+    stepDelayMs: 185,
+    holdAfterCompleteMs: 440,
+    expectedLatencyDisplay: '~1.92s',
     precisionLabel: 'FP32 Linearized Kerr',
     fidelityPercent: '92.8%',
     gridResolution: '128³ Mesh',
-    speedScore: 58,
-    performanceScore: 68,
-    qualityScore: 79,
+    speedScore: 48,
+    performanceScore: 66,
+    qualityScore: 78,
     badgeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
     borderClass: 'border-cyan-500/50',
     accentColor: '#22d3ee',
@@ -630,8 +631,10 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
               <button
                 type="button"
                 onClick={() => {
-                  completedRef.current = true;
-                  onCompleteDeploy(activeRun);
+                  if (activeRun.tierId === 'ultra' || isFinished) {
+                    completedRef.current = true;
+                    onCompleteDeploy(activeRun);
+                  }
                   onOpenSettingsLog();
                 }}
                 className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-slate-700 text-slate-300 hover:text-white font-mono text-[10px] cursor-pointer transition-colors"
@@ -658,17 +661,27 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                completedRef.current = true;
-                onCompleteDeploy(activeRun);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-mono text-[10px] font-bold cursor-pointer transition-colors shadow-sm"
-            >
-              <FastForward className="w-3 h-3 fill-current" />
-              <span>Deploy Now</span>
-            </button>
+            {activeRun.tierId === 'ultra' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  completedRef.current = true;
+                  onCompleteDeploy(activeRun);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-mono text-[10px] font-bold cursor-pointer transition-colors shadow-sm"
+              >
+                <FastForward className="w-3 h-3 fill-current" />
+                <span>Ultra Bypass (Deploy Now)</span>
+              </button>
+            ) : (
+              <div
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-900/90 border border-slate-800 text-slate-500 font-mono text-[10px] cursor-not-allowed"
+                title="Engine calculation is always active. Upgrade to Ultra ($499/mo) to unlock instant bypass."
+              >
+                <Lock className="w-3 h-3 text-amber-500/70" />
+                <span>Bypass Locked (Ultra Required)</span>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1190,6 +1190,10 @@ export interface GeodesicTrajectory {
   outcome: 'captured' | 'scattered' | 'critical-orbit';
   points: Array<{ x: number; y: number; z: number }>;
   colorHex: number;
+  /** Current live pulse fractional step index along points[] when exported from the live 3D scene */
+  liveProgressStep?: number;
+  /** Visual Schwarzschild horizon scale used when integrating the ray */
+  visualHorizonRadius?: number;
 }
 
 /**
@@ -1259,7 +1263,7 @@ export function computeNullGeodesic(
     const speed = Math.hypot(vx, vy, vz) || 1;
     vx /= speed;
     vy /= speed;
-    vy /= speed;
+    vz /= speed;
 
     x += vx * dt;
     y += vy * dt;
@@ -1283,5 +1287,153 @@ export function computeNullGeodesic(
     outcome,
     points,
     colorHex,
+    visualHorizonRadius: rs,
   };
+}
+
+/**
+ * Generates a scientific CSV dataset from live geodesic trajectories, including
+ * Boyer-Lindquist spacetime coordinates, velocity components, effective potential,
+ * Lense-Thirring frame-dragging rate, gravitational redshift, and metric tensor components (g_tt, g_rr, g_tphi).
+ */
+export function buildGeodesicTrajectoryCsv(
+  trajectories: GeodesicTrajectory[],
+  params: BlackHoleParams,
+  defaultVisualHorizonRadius = 1.75
+): string {
+  const metrics = computeRelativisticMetrics(params);
+  const spin = params.spin;
+  const trueMass = params.trueMassSolar ?? params.massSolar;
+  const rsKm = metrics.schwarzschildRadiusKm;
+  const horizonRs = metrics.eventHorizonRg * 0.5;
+  const photonSphereRs = metrics.photonSphereRg * 0.5;
+  const iscoRs = metrics.iscoProgradeRg * 0.5;
+  const presetId = params.presetId || 'custom';
+  const dtLambda = 0.14;
+
+  const headers = [
+    'ray_id',
+    'step_index',
+    'is_live_pulse_head',
+    'outcome',
+    'impact_param_b_Rs',
+    'affine_lambda',
+    'x_Rs',
+    'y_Rs',
+    'z_Rs',
+    'r_Rs',
+    'r_Rg',
+    'r_km',
+    'phi_rad',
+    'phi_deg',
+    'vx_c',
+    'vy_c',
+    'vz_c',
+    'effective_potential_Veff',
+    'frame_dragging_omega',
+    'gravitational_redshift_z',
+    'time_dilation_dt_dtau',
+    'metric_g_tt',
+    'metric_g_rr',
+    'metric_g_tphi',
+    'preset_id',
+    'true_mass_solar',
+    'kerr_spin_a',
+    'event_horizon_Rs',
+    'photon_sphere_Rs',
+    'isco_prograde_Rs',
+  ];
+
+  const rows: string[] = [headers.join(',')];
+
+  for (let tIdx = 0; tIdx < trajectories.length; tIdx++) {
+    const traj = trajectories[tIdx];
+    const scaleRs = Math.max(0.1, traj.visualHorizonRadius || defaultVisualHorizonRadius);
+    const pts = traj.points;
+    const liveStepIdx =
+      typeof traj.liveProgressStep === 'number'
+        ? Math.min(pts.length - 1, Math.max(0, Math.round(traj.liveProgressStep)))
+        : pts.length - 1;
+    const bRs = traj.impactParameterB / scaleRs;
+
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      const nextP = pts[Math.min(pts.length - 1, i + 1)];
+      const prevP = pts[Math.max(0, i - 1)];
+
+      const xRs = p.x / scaleRs;
+      const yRs = p.y / scaleRs;
+      const zRs = p.z / scaleRs;
+      const rRs = Math.max(0.05, Math.hypot(xRs, yRs, zRs));
+      const rRg = rRs * 2.0; // r in units of GM/c^2
+      const rKm = rRs * rsKm;
+      const phiRad = Math.atan2(zRs, xRs);
+      const phiDeg = ((phiRad * 180.0) / Math.PI + 360.0) % 360.0;
+
+      // Finite-difference tangent velocity normalized to c = 1
+      const dx = nextP.x - prevP.x;
+      const dy = nextP.y - prevP.y;
+      const dz = nextP.z - prevP.z;
+      const dLen = Math.hypot(dx, dy, dz) || 1.0;
+      const vx = dx / dLen;
+      const vy = dy / dLen;
+      const vz = dz / dLen;
+
+      // Relativistic null effective potential & Kerr Boyer-Lindquist metric components at r_Rg
+      const safeR = Math.max(metrics.eventHorizonRg * 1.005, rRg);
+      const r2 = safeR * safeR;
+      const a2 = spin * spin;
+      const delta = Math.max(0.001, r2 - 2.0 * safeR + a2);
+
+      const vEff = ((bRs * bRs) / Math.max(0.01, rRs * rRs)) * (1.0 - 1.0 / Math.max(0.51, rRs));
+      const omegaDrag = (2.0 * spin * safeR) / Math.max(0.01, Math.pow(r2 + a2, 2) - a2 * delta);
+      const g_tt = -(1.0 - 2.0 / safeR);
+      const g_rr = r2 / delta;
+      const g_tphi = (-2.0 * spin) / safeR;
+
+      const lapseSq = Math.max(0.0004, 1.0 - horizonRs / Math.max(horizonRs * 1.002, rRs));
+      const dtDtau = 1.0 / Math.sqrt(lapseSq);
+      const redshiftZ = dtDtau - 1.0;
+
+      const isLiveHead = i === liveStepIdx ? 1 : 0;
+      const lambda = i * dtLambda;
+
+      rows.push(
+        [
+          traj.id,
+          i,
+          isLiveHead,
+          traj.outcome,
+          bRs.toFixed(4),
+          lambda.toFixed(3),
+          xRs.toFixed(5),
+          yRs.toFixed(5),
+          zRs.toFixed(5),
+          rRs.toFixed(5),
+          rRg.toFixed(5),
+          rKm.toExponential(4),
+          phiRad.toFixed(5),
+          phiDeg.toFixed(2),
+          vx.toFixed(5),
+          vy.toFixed(5),
+          vz.toFixed(5),
+          vEff.toFixed(6),
+          omegaDrag.toFixed(6),
+          redshiftZ.toFixed(5),
+          dtDtau.toFixed(5),
+          g_tt.toFixed(5),
+          g_rr.toFixed(5),
+          g_tphi.toFixed(5),
+          presetId,
+          trueMass.toExponential(3),
+          spin.toFixed(4),
+          horizonRs.toFixed(4),
+          photonSphereRs.toFixed(4),
+          iscoRs.toFixed(4),
+        ].join(',')
+      );
+    }
+  }
+
+  return rows.join('\n');
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Layers, Activity, Download, Maximize2, Zap, Sun, Eye, EyeOff, Settings, Orbit, ChevronDown, BookOpen, Video, Square } from 'lucide-react';
+import { Sparkles, Layers, Activity, Download, Maximize2, Zap, Sun, Eye, EyeOff, Settings, Orbit, ChevronDown, BookOpen, Video, Square, Columns2 } from 'lucide-react';
 import { ASTROPHYSICAL_PRESETS, BackgroundThemeId, BACKGROUND_THEMES, SystemCategory } from '../physics/gravitationalPhysics';
 import { useHaptics } from '../hooks/useHaptics';
 import { AppLanguage, TRANSLATIONS } from '../i18n/translations';
@@ -24,6 +24,10 @@ interface TopBarProps {
   onToggleRecording?: () => void;
   isCleanMode?: boolean;
   onToggleCleanMode?: () => void;
+  isCompareMode?: boolean;
+  onToggleCompareMode?: () => void;
+  isPerfMonitorVisible?: boolean;
+  onTogglePerfMonitor?: () => void;
   isPhoneMode?: boolean;
   hapticsEnabled?: boolean;
   language?: AppLanguage;
@@ -49,6 +53,10 @@ export const TopBar: React.FC<TopBarProps> = ({
   onToggleRecording,
   isCleanMode = false,
   onToggleCleanMode,
+  isCompareMode = false,
+  onToggleCompareMode,
+  isPerfMonitorVisible = false,
+  onTogglePerfMonitor,
   isPhoneMode = false,
   hapticsEnabled = true,
   language = 'en',
@@ -149,6 +157,27 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Zone 3: Actions */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        {/* Side-by-Side Compare Mode Toggle */}
+        {onToggleCompareMode && (
+          <button
+            type="button"
+            data-testid="topbar-compare-btn"
+            onClick={() => {
+              haptics.medium();
+              onToggleCompareMode();
+            }}
+            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
+              isCompareMode
+                ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.25)] font-bold'
+                : 'bg-neutral-900 text-cyan-300 border-cyan-500/40 hover:text-white hover:bg-neutral-800 hover:border-cyan-400'
+            }`}
+            title="Toggle Side-by-Side Compare Mode to contrast two black hole presets with synchronized physics parameters"
+          >
+            <Columns2 className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Compare</span>
+          </button>
+        )}
+
         {/* Clean View / Hide UI Toggle */}
         <button
           type="button"
@@ -252,6 +281,31 @@ export const TopBar: React.FC<TopBarProps> = ({
           <Activity className="w-3.5 h-3.5 text-neutral-400" />
           <span>{t.metrics}</span>
         </button>
+
+        {/* Three.js Performance Monitor Toggle */}
+        {onTogglePerfMonitor && (
+          <button
+            type="button"
+            data-testid="topbar-perf-monitor-btn"
+            onClick={() => {
+              haptics.light();
+              onTogglePerfMonitor();
+            }}
+            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
+              isPerfMonitorVisible
+                ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/50 font-semibold'
+                : 'bg-neutral-900 text-neutral-300 border-neutral-800 hover:text-white hover:bg-neutral-800'
+            }`}
+            title="Toggle Three.js Performance Monitor (Frame Time, Draw Calls, GPU Memory & Shader Bottleneck Diagnostics)"
+          >
+            <Activity
+              className={`w-3.5 h-3.5 ${
+                isPerfMonitorVisible ? 'text-emerald-400' : 'text-neutral-400'
+              }`}
+            />
+            <span className="hidden sm:inline">Perf</span>
+          </button>
+        )}
 
         {/* Settings Button */}
         <button

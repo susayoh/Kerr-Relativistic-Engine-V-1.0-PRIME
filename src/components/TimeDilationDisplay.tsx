@@ -41,10 +41,17 @@ export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
 
   useEffect(() => {
     let animId = 0;
+    const TARGET_FPS = 30;
+    const FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
+    let lastFrameTime = 0;
     let lastRenderUpdate = 0;
 
     const tick = (now: number) => {
       animId = requestAnimationFrame(tick);
+      if (now - lastFrameTime < FRAME_INTERVAL_MS) {
+        return;
+      }
+      lastFrameTime = now;
       const deltaMs = Math.min(100, now - lastAnimTimeRef.current);
       lastAnimTimeRef.current = now;
 
@@ -79,7 +86,7 @@ export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
       <button
         type="button"
         onClick={() => setIsCollapsed(false)}
-        className="flex items-center gap-2 px-3 py-1.5 bg-black/95 backdrop-blur-md border border-neutral-800 rounded-lg shadow-lg hover:border-neutral-700 hover:bg-neutral-900 transition-all text-xs font-mono cursor-pointer group"
+        className="flex items-center gap-2 px-3 py-1.5 bg-black/95 border border-neutral-800 rounded-lg shadow-lg hover:border-neutral-700 hover:bg-neutral-900 transition-all text-xs font-mono cursor-pointer group"
         title="Click to view time dilation details"
       >
         <Clock className="w-3.5 h-3.5 text-amber-400/90 group-hover:rotate-12 transition-transform" />
@@ -94,7 +101,7 @@ export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
 
   // Expanded: Compact, friendly card in plain English
   return (
-    <div className="w-64 sm:w-72 bg-black/95 backdrop-blur-md border border-neutral-800 rounded-xl shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
+    <div className="w-64 sm:w-72 bg-black/95 border border-neutral-800 rounded-xl shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
       {/* Header Bar */}
       <div className="flex items-center justify-between px-3 py-2 bg-neutral-950 border-b border-neutral-800/80">
         <div className="flex items-center gap-1.5">

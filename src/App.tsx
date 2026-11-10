@@ -13,6 +13,8 @@ import {
   SystemCategory,
   PhysicsPresetId,
   computeRelativisticMetrics,
+  computeNullGeodesic,
+  buildGeodesicTrajectoryCsv,
   isStellarCategory,
 } from './physics/gravitationalPhysics';
 import {
@@ -47,6 +49,8 @@ import {
   KerrEngineTierId,
   generateKerrEngineCalculationRun,
 } from './components/KerrRelativityEngineModal';
+import { CompareModeOverlay } from './components/CompareModeOverlay';
+import { PerformanceMonitorOverlay } from './components/PerformanceMonitorOverlay';
 import { useHaptics, setGlobalHapticIntensity } from './hooks/useHaptics';
 import { TRANSLATIONS } from './i18n/translations';
 import { toPng, toCanvas } from 'html-to-image';
@@ -86,12 +90,18 @@ const DEFAULT_PARAMS: BlackHoleParams = {
 export default function App() {
   const appContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
+  const compareCanvasMountRef = useRef<HTMLDivElement | null>(null);
   const sceneControllerRef = useRef<BlackHoleSceneController | null>(null);
+  const compareSceneControllerRef = useRef<BlackHoleSceneController | null>(null);
   const [controllerInstance, setControllerInstance] = useState<BlackHoleSceneController | null>(null);
 
   const [params, setParams] = useState<BlackHoleParams>(DEFAULT_PARAMS);
   const [settings, setSettings] = useState<VisualizerSettings>(DEFAULT_VISUALIZER_SETTINGS);
   const [activePresetId, setActivePresetId] = useState<string>('ton618');
+  const [isCompareMode, setIsCompareMode] = useState<boolean>(false);
+  const [comparePresetId, setComparePresetId] = useState<string>('sgra');
+  const [compareSpinOverride, setCompareSpinOverride] = useState<number>(0.15);
+  const [syncSpinInCompare, setSyncSpinInCompare] = useState<boolean>(false);
   const [activeCamera, setActiveCamera] = useState<CameraPresetId>('equatorial');
   const [isDockCollapsed, setIsDockCollapsed] = useState<boolean>(false);
   const [isCleanMode, setIsCleanMode] = useState<boolean>(false);
@@ -111,7 +121,7 @@ export default function App() {
     ),
   ]);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
-  const [isSingularityCollapsed, setIsSingularityCollapsed] = useState<boolean>(true);
+  const [isSingularityCollapsed, setIsSingularityCollapsed] = useState<boolean>(false);
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
 
@@ -252,6 +262,30 @@ export default function App() {
     [activePresetId]
   );
 
+  const comparePreset = useMemo(
+    () => ASTROPHYSICAL_PRESETS.find((p) => p.id === comparePresetId) || ASTROPHYSICAL_PRESETS[1],
+    [comparePresetId]
+  );
+
+  // Synchronized physics parameters for Viewport B in Compare Mode:
+  // Shares accretionRate, inclinationDeg, dopplerStrength, probeRadiusRs, timeScale, wellDepthMultiplier,
+  // spectralMode, backgroundTheme, and layers with Viewport A while contrasting preset mass & Kerr spin a*
+  const compareParams = useMemo<BlackHoleParams>(() => {
+    return {
+      ...params,
+      presetId: comparePreset.id,
+      objectCategory: comparePreset.category,
+      trueMassSolar: comparePreset.trueMassSolar,
+      massSolar: comparePreset.params.massSolar ?? params.massSolar,
+      spin: syncSpinInCompare ? params.spin : compareSpinOverride,
+    };
+  }, [params, comparePreset, syncSpinInCompare, compareSpinOverride]);
+
+  const compareMetrics = useMemo(
+    () => computeRelativisticMetrics(compareParams),
+    [compareParams]
+  );
+
   const formatLogTimestamp = useCallback(() => {
     const now = new Date();
     return now.toTimeString().slice(0, 8);
@@ -341,6 +375,9 @@ export default function App() {
           );
         }
       },
+      onCameraChange: (pos, target) => {
+        compareSceneControllerRef.current?.syncCameraPose(pos, target);
+      },
     });
     sceneControllerRef.current = controller;
     setControllerInstance(controller);
@@ -353,11 +390,54 @@ export default function App() {
     };
   }, [appendLogEvent]);
 
-  // Push parameter updates to Three.js controller and Web Audio synthesizer
+  // Initialize & synchronize secondary Three.js WebGL scene when Side-by-Side Compare Mode is active
+  useEffect(() => {
+    if (!isCompareMode) {
+      compareSceneControllerRef.current?.dispose();
+      compareSceneControllerRef.current = null;
+      window.setTimeout(() => sceneControllerRef.current?.resize(), 30);
+      return;
+    }
+
+    const mountB = compareCanvasMountRef.current;
+    if (!mountB) return;
+
+    const compareCtrl = new BlackHoleSceneController(mountB, compareParams, {
+      onFeatureSelect: (feat) => {
+        setInspectedFeature(feat);
+      },
+      onHoverCoordsChange: (coords) => setHoverCoords(coords),
+      onCameraChange: (pos, target) => {
+        sceneControllerRef.current?.syncCameraPose(pos, target);
+      },
+    });
+    compareCtrl.updateSettings(settings);
+    compareCtrl.expandFromSingularity();
+    compareSceneControllerRef.current = compareCtrl;
+
+    // Also ensure primary scene is expanded and resized for side-by-side comparison
+    sceneControllerRef.current?.expandFromSingularity();
+    window.setTimeout(() => {
+      sceneControllerRef.current?.resize();
+      compareCtrl.resize();
+    }, 30);
+
+    return () => {
+      compareCtrl.dispose();
+      compareSceneControllerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCompareMode]);
+
+  // Push parameter updates to Three.js controller(s) and Web Audio synthesizer
   useEffect(() => {
     sceneControllerRef.current?.updateParams(params);
     relativisticAudio.updateParameters(params);
   }, [params]);
+
+  useEffect(() => {
+    compareSceneControllerRef.current?.updateParams(compareParams);
+  }, [compareParams]);
 
   // Track real-time parameter transitions (Accretion Rate spikes, Kerr spin shifts, Well depth, Spectral filters)
   const loggedParamsRef = useRef({
@@ -546,9 +626,10 @@ export default function App() {
     appendLogEvent,
   ]);
 
-  // Push visualizer settings updates to Three.js controller
+  // Push visualizer settings updates to Three.js controller(s)
   useEffect(() => {
     sceneControllerRef.current?.updateSettings(settings);
+    compareSceneControllerRef.current?.updateSettings(settings);
   }, [settings]);
 
   // Keyboard shortcut 'H' for dock collapse, 'C' for clean mode, 'Escape' to restore UI
@@ -581,6 +662,7 @@ export default function App() {
 
       if (found.category === 'black_hole') {
         sceneControllerRef.current?.replaySingularityExpansion();
+        compareSceneControllerRef.current?.expandFromSingularity();
       } else {
         sceneControllerRef.current?.triggerEventHorizonPulse(found.category);
       }
@@ -598,13 +680,18 @@ export default function App() {
     (tierOverride?: KerrEngineTierId) => {
       const currentPreset =
         ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
-      const tierToUse = tierOverride || settings.kerrEngineTier || 'advanced';
+      const tierToUse = tierOverride || settings.kerrEngineTier || 'standard';
       const run = generateKerrEngineCalculationRun(currentPreset, params, tierToUse);
       setKerrEngineLogs((prev) => [run, ...prev.slice(0, 29)]);
       setActiveKerrTerminalRun(run);
     },
     [activePresetId, params, settings.kerrEngineTier]
   );
+
+  // Kerr Relativity Engine is ALWAYS active on Standard, Linear, and Advanced tiers,
+  // and can only be bypassed when the Ultra tier is selected and toggled off.
+  const isKerrEngineActive =
+    (settings.kerrEngineTier || 'standard') !== 'ultra' || settings.kerrEngineEnabled !== false;
 
   const handleSelectPreset = useCallback(
     (presetId: string) => {
@@ -634,7 +721,7 @@ export default function App() {
       const run = generateKerrEngineCalculationRun(
         found,
         nextParams,
-        settings.kerrEngineTier || 'advanced'
+        settings.kerrEngineTier || 'standard'
       );
       setKerrEngineLogs((prev) => [run, ...prev.slice(0, 29)]);
 
@@ -644,8 +731,7 @@ export default function App() {
         `${found.classification} · Mass: ${found.plainMassExplanation}`
       );
 
-      // If Real-Time Kerr Relativity Engine pre-load terminal is enabled, stream calculation before deploying 3D expansion
-      if (settings.kerrEngineEnabled !== false) {
+      if (isKerrEngineActive) {
         setActiveKerrTerminalRun(run);
       } else {
         if (found.category === 'black_hole') {
@@ -656,7 +742,55 @@ export default function App() {
         relativisticAudio.triggerAccretionShockPulse(isStellarCategory(found.category));
       }
     },
-    [appendLogEvent, params, settings.kerrEngineEnabled, settings.kerrEngineTier]
+    [appendLogEvent, params, isKerrEngineActive, settings.kerrEngineTier]
+  );
+
+  const handleSelectComparePreset = useCallback(
+    (presetId: string) => {
+      const found = ASTROPHYSICAL_PRESETS.find((p) => p.id === presetId);
+      if (!found) return;
+      setComparePresetId(found.id);
+      if (typeof found.params.spin === 'number') {
+        setCompareSpinOverride(found.params.spin);
+      }
+
+      const nextCompareParams: BlackHoleParams = {
+        ...compareParams,
+        presetId: found.id,
+        objectCategory: found.category,
+        trueMassSolar: found.trueMassSolar,
+        massSolar: found.params.massSolar ?? compareParams.massSolar,
+        spin: syncSpinInCompare ? params.spin : found.params.spin ?? compareSpinOverride,
+      };
+
+      const run = generateKerrEngineCalculationRun(
+        found,
+        nextCompareParams,
+        settings.kerrEngineTier || 'standard'
+      );
+      setKerrEngineLogs((prev) => [run, ...prev.slice(0, 29)]);
+
+      appendLogEvent(
+        'system',
+        `Compare Viewport B locked: ${found.name}`,
+        `${found.classification} · Spin a* = ${nextCompareParams.spin.toFixed(3)}`
+      );
+
+      if (isKerrEngineActive) {
+        setActiveKerrTerminalRun(run);
+      } else {
+        compareSceneControllerRef.current?.expandFromSingularity();
+      }
+    },
+    [
+      appendLogEvent,
+      compareParams,
+      compareSpinOverride,
+      isKerrEngineActive,
+      params.spin,
+      settings.kerrEngineTier,
+      syncSpinInCompare,
+    ]
   );
 
   const handleResetParams = useCallback(() => {
@@ -684,6 +818,7 @@ export default function App() {
     const targetCam: CameraPresetId = isStellarCategory(currentPreset.category) ? 'polar' : 'equatorial';
     setActiveCamera(targetCam);
     sceneControllerRef.current?.setCameraPreset(targetCam);
+    compareSceneControllerRef.current?.setCameraPreset(targetCam);
     sceneControllerRef.current?.triggerEventHorizonPulse(currentPreset.category);
     appendLogEvent('system', 'Relativistic parameters reset to baseline', currentPreset.name);
   }, [activePresetId, appendLogEvent]);
@@ -691,6 +826,7 @@ export default function App() {
   const handleSelectCamera = useCallback((preset: CameraPresetId) => {
     setActiveCamera(preset);
     sceneControllerRef.current?.setCameraPreset(preset);
+    compareSceneControllerRef.current?.setCameraPreset(preset);
   }, []);
 
   const handleChangeSystemCategory = useCallback((nextCategory: SystemCategory) => {
@@ -751,6 +887,7 @@ export default function App() {
     });
 
     sceneControllerRef.current?.triggerEventHorizonPulse('black_hole');
+    compareSceneControllerRef.current?.triggerEventHorizonPulse('black_hole');
     relativisticAudio.triggerAccretionShockPulse(false);
     appendLogEvent(
       'metric',
@@ -763,12 +900,44 @@ export default function App() {
 
   const handleLaunchPhoton = useCallback((impactB: number) => {
     sceneControllerRef.current?.launchPhotonGeodesic(impactB, 0);
+    compareSceneControllerRef.current?.launchPhotonGeodesic(impactB, 0);
   }, []);
 
   const handleClearPhotons = useCallback(() => {
     sceneControllerRef.current?.clearGeodesics();
+    compareSceneControllerRef.current?.clearGeodesics();
     setLastTrajectory(null);
   }, []);
+
+  const handleExportGeodesicCsv = useCallback(
+    (impactBOverride?: number) => {
+      haptics.success();
+      const bVal = typeof impactBOverride === 'number' ? impactBOverride : 2.4;
+      const csvContent = sceneControllerRef.current
+        ? sceneControllerRef.current.exportLiveGeodesicCsv(bVal)
+        : buildGeodesicTrajectoryCsv(
+            [lastTrajectory || computeNullGeodesic(bVal * 1.75, 1.75, params.spin, 0)],
+            params,
+            1.75
+          );
+
+      const rowCount = Math.max(0, csvContent.split('\n').length - 1);
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `kerr-geodesic-trajectories-${activePresetId}-${Date.now()}.csv`;
+      link.href = url;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+      appendLogEvent(
+        'geodesic',
+        'Live Geodesic Trajectory CSV exported',
+        `${rowCount} relativistic integration steps · Boyer-Lindquist g_μν & null geodesic telemetry saved`
+      );
+    },
+    [activePresetId, appendLogEvent, haptics, lastTrajectory, params]
+  );
 
   const handleToggleAudio = useCallback(() => {
     const enabled = relativisticAudio.toggleAudio(params);
@@ -1038,19 +1207,125 @@ export default function App() {
           onToggleRecording={handleToggleRecording}
           isCleanMode={isCleanMode}
           onToggleCleanMode={handleToggleCleanMode}
+          isCompareMode={isCompareMode}
+          onToggleCompareMode={() => {
+            setIsCompareMode((prev) => {
+              const next = !prev;
+              appendLogEvent(
+                'system',
+                next
+                  ? 'Side-by-Side Compare Mode engaged'
+                  : 'Single-viewport visualization restored',
+                next
+                  ? `Synchronizing physics parameters between ${activePreset.name} and ${comparePreset.name}`
+                  : activePreset.name
+              );
+              return next;
+            });
+          }}
+          isPerfMonitorVisible={Boolean(settings.showPerformanceMonitor)}
+          onTogglePerfMonitor={() =>
+            setSettings((prev) => ({
+              ...prev,
+              showPerformanceMonitor: !prev.showPerformanceMonitor,
+            }))
+          }
           isPhoneMode={isPhone}
           hapticsEnabled={settings.hapticsEnabled !== false}
           language={settings.language || 'en'}
         />
       )}
 
-      {/* Main 3D Viewport Stage */}
+      {/* Main 3D Viewport Stage (Supports Single View or Side-by-Side Synchronized Compare Mode) */}
       <main className="relative flex-1 w-full h-full overflow-hidden">
-        {/* Isolated WebGL Canvas Container */}
         <div
-          ref={canvasMountRef}
-          className="absolute inset-0 w-full h-full cursor-crosshair touch-none select-none overscroll-none"
-        />
+          className={`absolute inset-0 w-full h-full flex ${
+            isCompareMode ? 'flex-col md:flex-row' : 'flex-col'
+          }`}
+        >
+          {/* Primary Viewport A */}
+          <div
+            data-testid="viewport-primary"
+            className={`relative h-full ${
+              isCompareMode
+                ? 'w-full md:w-1/2 border-b md:border-b-0 md:border-r border-amber-500/30'
+                : 'w-full'
+            }`}
+          >
+            <div
+              ref={canvasMountRef}
+              className="absolute inset-0 w-full h-full cursor-crosshair touch-none select-none overscroll-none"
+            />
+            {isCompareMode && !isCleanMode && (
+              <div className="absolute bottom-44 sm:bottom-48 left-3 z-10 pointer-events-none px-2.5 py-1 rounded-lg bg-black/80 border border-amber-500/40 font-mono text-[10px] text-amber-200">
+                <strong>A: {activePreset.name}</strong> · Spin a* = {params.spin.toFixed(3)} · ISCO ={' '}
+                {(metrics.iscoProgradeRg * 0.5).toFixed(2)} Rₛ
+              </div>
+            )}
+          </div>
+
+          {/* Secondary Viewport B (Mounted in Compare Mode) */}
+          {isCompareMode && (
+            <div
+              data-testid="viewport-compare"
+              className="relative w-full md:w-1/2 h-full"
+            >
+              <div
+                ref={compareCanvasMountRef}
+                className="absolute inset-0 w-full h-full cursor-crosshair touch-none select-none overscroll-none"
+              />
+              {!isCleanMode && (
+                <div className="absolute bottom-44 sm:bottom-48 right-3 z-10 pointer-events-none px-2.5 py-1 rounded-lg bg-black/80 border border-cyan-500/40 font-mono text-[10px] text-cyan-200">
+                  <strong>B: {comparePreset.name}</strong> · Spin a* ={' '}
+                  {compareParams.spin.toFixed(3)} · ISCO ={' '}
+                  {(compareMetrics.iscoProgradeRg * 0.5).toFixed(2)} Rₛ
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Side-by-Side Compare Mode Control Header & Spin Contrast HUD */}
+        {!isCleanMode && isCompareMode && (
+          <CompareModeOverlay
+            presetAId={activePresetId}
+            presetBId={comparePresetId}
+            paramsA={params}
+            paramsB={compareParams}
+            metricsA={metrics}
+            metricsB={compareMetrics}
+            syncSpinInCompare={syncSpinInCompare}
+            onToggleSyncSpin={() => setSyncSpinInCompare((prev) => !prev)}
+            onSelectPresetA={handleSelectPreset}
+            onSelectPresetB={handleSelectComparePreset}
+            onChangeSpinA={(nextSpin) => setParams((p) => ({ ...p, spin: nextSpin }))}
+            onChangeSpinB={(nextSpin) => {
+              setSyncSpinInCompare(false);
+              setCompareSpinOverride(nextSpin);
+            }}
+            onApplySpinContrastPreset={(spinA, spinB) => {
+              setSyncSpinInCompare(false);
+              setParams((p) => ({ ...p, spin: spinA }));
+              setCompareSpinOverride(spinB);
+              appendLogEvent(
+                'metric',
+                'Kerr Spin Contrast Preset applied',
+                `Viewport A: a* = ${spinA.toFixed(3)} vs Viewport B: a* = ${spinB.toFixed(3)}`
+              );
+            }}
+            onSwapPresets={() => {
+              const prevA = activePresetId;
+              const prevSpinA = params.spin;
+              const prevSpinB = compareParams.spin;
+              setActivePresetId(comparePresetId);
+              setComparePresetId(prevA);
+              setParams((p) => ({ ...p, spin: prevSpinB }));
+              setCompareSpinOverride(prevSpinA);
+            }}
+            onCloseCompare={() => setIsCompareMode(false)}
+            isPhoneMode={isPhone}
+          />
+        )}
 
         {/* High-Visibility Simulation Paused Status Pill */}
         {params.timeScale === 0 && (
@@ -1069,7 +1344,7 @@ export default function App() {
         )}
 
         {/* Dynamic Relativistic Anatomy & Leader Lines Overlay */}
-        {!isCleanMode && (
+        {!isCleanMode && !isCompareMode && (
           <BlackHoleAnatomyOverlay
             sceneController={controllerInstance || sceneControllerRef.current}
             isVisible={isAnatomyVisible}
@@ -1080,7 +1355,7 @@ export default function App() {
         )}
 
         {/* Left HUD Column: Target Specification Badge + Overhead Radar (with optional Time Dilation UI from Settings) */}
-        {!isCleanMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation) && (
+        {!isCleanMode && !isCompareMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation) && (
           <div className={`absolute top-2 sm:top-3 left-2 sm:left-4 z-10 flex flex-col items-start gap-2 pointer-events-none ${isPhone ? 'max-w-[210px]' : 'max-w-xs sm:max-w-sm'}`}>
             {/* Target Spec Badge */}
             {settings.showLeftHud && (
@@ -1312,6 +1587,22 @@ export default function App() {
           />
         )}
 
+        {/* Real-Time Three.js Performance Monitor & GPU Shader Bottleneck Diagnostics Overlay */}
+        {!isCleanMode && Boolean(settings.showPerformanceMonitor) && (
+          <PerformanceMonitorOverlay
+            sceneController={controllerInstance || sceneControllerRef.current}
+            params={params}
+            settings={settings}
+            onChangeParams={setParams}
+            onUpdateSettings={setSettings}
+            onClose={() =>
+              setSettings((prev) => ({ ...prev, showPerformanceMonitor: false }))
+            }
+            isPhoneMode={isPhone}
+            offsetTopForMetricOverlay={Boolean(settings.showMetricTelemetry)}
+          />
+        )}
+
         {/* Bottom-Left Real-Time Astrophysical Event Log Overlay */}
         {!isCleanMode && settings.showEventLog !== false && (
           <EventLogOverlay
@@ -1340,6 +1631,7 @@ export default function App() {
             activeCamera={activeCamera}
             onLaunchPhoton={handleLaunchPhoton}
             onClearPhotons={handleClearPhotons}
+            onExportGeodesicCsv={handleExportGeodesicCsv}
             lastTrajectory={lastTrajectory}
             audioEnabled={audioEnabled}
             onToggleAudio={handleToggleAudio}
@@ -1372,6 +1664,7 @@ export default function App() {
         onClose={() => setIsTheoryModalOpen(false)}
         params={params}
         metrics={metrics}
+        onExportGeodesicCsv={() => handleExportGeodesicCsv()}
       />
 
       {/* Plain-English Physics Quick-Guide Modal */}
@@ -1427,6 +1720,7 @@ export default function App() {
         kerrEngineLogs={kerrEngineLogs}
         onOpenKerrLogModal={() => setIsKerrLogModalOpen(true)}
         onTriggerKerrCalculation={handleTriggerManualKerrSolve}
+        onExportGeodesicCsv={() => handleExportGeodesicCsv()}
       />
 
       {/* Real-Time Kerr Relativity Engine Pre-Load Terminal Modal */}
@@ -1444,11 +1738,11 @@ export default function App() {
         isOpen={isKerrLogModalOpen}
         onClose={() => setIsKerrLogModalOpen(false)}
         logs={kerrEngineLogs}
-        activeTierId={settings.kerrEngineTier || 'advanced'}
+        activeTierId={settings.kerrEngineTier || 'standard'}
         onSelectTier={(nextTier) =>
           setSettings((prev) => ({
             ...prev,
-            kerrEngineEnabled: true,
+            kerrEngineEnabled: nextTier === 'ultra' ? prev.kerrEngineEnabled : true,
             kerrEngineTier: nextTier,
           }))
         }

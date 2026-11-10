@@ -1,5 +1,5 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { X, Download } from 'lucide-react';
 import { BlackHoleParams, DerivedRelativisticMetrics } from '../physics/gravitationalPhysics';
 
 interface PhysicsModalProps {
@@ -7,6 +7,7 @@ interface PhysicsModalProps {
   onClose: () => void;
   params: BlackHoleParams;
   metrics: DerivedRelativisticMetrics;
+  onExportGeodesicCsv?: () => void;
 }
 
 export const PhysicsModal: React.FC<PhysicsModalProps> = ({
@@ -14,6 +15,7 @@ export const PhysicsModal: React.FC<PhysicsModalProps> = ({
   onClose,
   params,
   metrics,
+  onExportGeodesicCsv,
 }) => {
   if (!isOpen) return null;
 
@@ -40,7 +42,7 @@ export const PhysicsModal: React.FC<PhysicsModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 pointer-events-auto">
       <div className="w-full max-w-3xl bg-black border border-neutral-800 rounded-xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-950">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-950 gap-3">
           <div>
             <h2 className="font-display text-lg font-bold text-neutral-100">
               Kerr Spacetime Telemetry & Effective Potential
@@ -49,13 +51,27 @@ export const PhysicsModal: React.FC<PhysicsModalProps> = ({
               Exact Boyer-Lindquist & Bardeen-Press-Teukolsky general-relativistic diagnostics
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-neutral-400 hover:text-white bg-neutral-900 rounded-md border border-neutral-800 cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {onExportGeodesicCsv && (
+              <button
+                type="button"
+                data-testid="physics-modal-export-csv-btn"
+                onClick={onExportGeodesicCsv}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-500/40 text-cyan-200 font-mono text-xs font-semibold transition-colors cursor-pointer"
+                title="Export live geodesic trajectory data as CSV"
+              >
+                <Download className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Export Geodesic CSV</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-neutral-400 hover:text-white bg-neutral-900 rounded-md border border-neutral-800 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">

@@ -132,8 +132,8 @@ export const COMPACT_STAR_VERTEX_SHADER = /* glsl */ `
     vec4 worldPos4 = modelMatrix * vec4(displacedPosition, 1.0);
     vWorldPosition = worldPos4.xyz;
 
-    // Transform normal to world space accurately
-    vNormal = normalize(mat3(transpose(inverse(modelMatrix))) * normal);
+    // Transform normal to world space accurately (GLSL ES 1.00 compatible for uniform scale)
+    vNormal = normalize(mat3(modelMatrix) * normal);
 
     // World-space view vector pointing from the surface fragment toward the camera
     vViewVector = cameraPosition - vWorldPosition;
@@ -166,7 +166,7 @@ export const COMPACT_STAR_FRAGMENT_SHADER = /* glsl */ `
   varying float vSeismicDisplacement;
 
   // ============================================================================
-  // 1. 3D SIMPLEX NOISE & 4-OCTAVE FRACTIONAL BROWNIAN MOTION (fBM)
+  // 1. 3D SIMPLEX NOISE & OPTIMIZED FRACTIONAL BROWNIAN MOTION (fBM)
   // ============================================================================
   vec3 mod289(vec3 x) {
     return x - floor(x * (1.0 / 289.0)) * 289.0;
@@ -251,23 +251,32 @@ export const COMPACT_STAR_FRAGMENT_SHADER = /* glsl */ `
     return 42.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
   }
 
-  // 4-Octave Fractional Brownian Motion (fBM) operating on positive-offset coordinates
+  // Ultra-fast 3D trigonometric gyroid warp field (zero texture/hash cost, seamless in 3D)
+  vec3 gyroidWarp3D(vec3 pos, float baseFreq) {
+    vec3 p = (pos + vec3(128.0)) * baseFreq;
+    float gx = dot(sin(p), cos(p.yzx));
+    float gy = dot(sin(p * 1.62 + vec3(4.2, 1.7, 8.3)), cos(p.zxy * 1.62));
+    float gz = dot(sin(p * 2.35 + vec3(9.1, 6.4, 3.8)), cos(p.yzx * 2.35));
+    return clamp(vec3(gx, gy, gz) * 0.25 + 0.5, 0.0, 1.0);
+  }
+
+  // 3-Octave Fractional Brownian Motion (fBM) operating on positive-offset coordinates
   float fbm4(vec3 pos, float baseFreq) {
     // Offset position domain by a large positive vector (+128.0) before scaling by frequency
     // to prevent hash/gradient sampling failure or banding across negative coordinate space
     vec3 noiseCoord = (pos + vec3(128.0)) * baseFreq;
 
     float value = 0.0;
-    float amplitude = 0.5;
+    float amplitude = 0.533;
     const mat3 rot = mat3(
        0.80,  0.60,  0.00,
       -0.60,  0.80,  0.00,
        0.00,  0.00,  1.00
     );
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 3; i++) {
       value += amplitude * snoise(noiseCoord);
-      noiseCoord = rot * noiseCoord * 2.03 + vec3(17.3, 31.7, 23.9);
+      noiseCoord = rot * noiseCoord * 2.05 + vec3(17.3, 31.7, 23.9);
       amplitude *= 0.5;
     }
     return clamp(value * 0.5 + 0.5, 0.0, 1.0);
@@ -292,7 +301,7 @@ export const COMPACT_STAR_FRAGMENT_SHADER = /* glsl */ `
     vec3 tangentPart = N - V * rawMu;
     float tangentLen = length(tangentPart);
     vec3 tangentAwayFromView = tangentLen > 1e-4 ? (tangentPart / tangentLen) : N;
-    float deflectionAngle = compactness * pow(1.0 - mu, 0.85) * 1.35;
+    float deflectionAngle = compactness * pow(max(0.0001, 1.0 - mu), 0.85) * 1.35;
     vec3 N_lensed = normalize(N * cos(deflectionAngle) + tangentAwayFromView * sin(deflectionAngle));
 
     // ============================================================================
@@ -305,7 +314,7 @@ export const COMPACT_STAR_FRAGMENT_SHADER = /* glsl */ `
     float effectivePoleAlign = max(polarAlignment, lensedPolarAlignment * 0.96);
 
     // ============================================================================
-    // 4. POSITIVE-DOMAIN 4-OCTAVE fBM SURFACE GRANULATION & PLASMA SHEAR
+    // 4. POSITIVE-DOMAIN fBM SURFACE GRANULATION & PLASMA SHEAR
     // ============================================================================
     // Symmetric zonal shear flow driven by bilateral polar alignment (no negative latitude discontinuity)
     vec3 flowOffset = vec3(
@@ -317,14 +326,10 @@ export const COMPACT_STAR_FRAGMENT_SHADER = /* glsl */ `
     // Sample 3D fBM using (vPosition + vec3(128.0)) * frequency so North & South hemispheres
     // share identical, richly detailed plasma granulation without bleaching or horizontal banding
     vec3 samplePos = vPosition + flowOffset;
-    vec3 warpVec = vec3(
-      fbm4(samplePos, 1.85),
-      fbm4(samplePos + vec3(7.4, 3.1, 11.8), 1.85),
-      fbm4(samplePos + vec3(13.2, 9.7, 5.3), 1.85)
-    );
+    vec3 warpVec = gyroidWarp3D(samplePos, 2.2);
 
     float granulation = fbm4(samplePos + (warpVec - 0.5) * 1.15, 3.2);
-    float fineShear = fbm4(samplePos - flowOffset * 1.6 + warpVec * 0.85, 6.8);
+    float fineShear = snoise((samplePos - flowOffset * 1.6 + warpVec * 0.85 + vec3(128.0)) * 7.2) * 0.5 + 0.5;
 
     float surfacePattern = clamp(granulation * 0.68 + fineShear * 0.32 + vSeismicDisplacement * 0.08, 0.0, 1.0);
 
@@ -342,7 +347,7 @@ export const COMPACT_STAR_FRAGMENT_SHADER = /* glsl */ `
     float outerPolarHalo = smoothstep(0.64, 0.94, effectivePoleAlign);
     float innerPolarCore = smoothstep(0.85, 0.992, effectivePoleAlign);
 
-    float polarTurbulence = 0.84 + 0.32 * fbm4(vPosition + vec3(uTime * 1.2), 5.4);
+    float polarTurbulence = 0.84 + 0.32 * (snoise((vPosition + vec3(uTime * 1.2 + 128.0)) * 5.6) * 0.5 + 0.5);
 
     vec3 polarHaloColor = mix(uBaseColor, vec3(0.38, 0.78, 1.0), 0.48) * 2.2;
     vec3 polarCoreColor = mix(uBaseColor, vec3(0.94, 0.98, 1.0), 0.82) * 4.2;
@@ -355,10 +360,10 @@ export const COMPACT_STAR_FRAGMENT_SHADER = /* glsl */ `
     // ============================================================================
     // 6. ATMOSPHERIC CORONAL FRESNEL GLOW & LIMB BRIGHTENING
     // ============================================================================
-    float effectiveMu = clamp(pow(max(mu, 0.001), 1.0 / grFactor), 0.0, 1.0);
+    float effectiveMu = clamp(pow(max(mu, 0.001), 1.0 / grFactor), 0.0001, 1.0);
     float limbDarkening = mix(0.74, 1.12, pow(effectiveMu, 0.42));
 
-    float grazing = clamp(1.0 - mu, 0.0, 1.0);
+    float grazing = clamp(1.0 - mu, 0.0001, 1.0);
     float fresnel = pow(grazing, 2.35);
     float rimFlare = pow(grazing, 4.8);
 
@@ -400,7 +405,7 @@ export const PULSAR_BEAM_VERTEX_SHADER = /* glsl */ `
     vec3 displacedPos = position + normal * helicalWave;
 
     vec4 worldPos = modelMatrix * vec4(displacedPos, 1.0);
-    vWorldNormal = normalize(mat3(transpose(inverse(modelMatrix))) * normal);
+    vWorldNormal = normalize(mat3(modelMatrix) * normal);
     vViewDir = normalize(cameraPosition - worldPos.xyz);
 
     gl_Position = projectionMatrix * viewMatrix * worldPos;
@@ -454,7 +459,7 @@ export const PULSAR_BEAM_FRAGMENT_SHADER = /* glsl */ `
     float sigmaSheath = 0.52;
     float gaussianSheath = exp(-(rTransverse * rTransverse) / (2.0 * sigmaSheath * sigmaSheath));
 
-    float edgeFade = smoothstep(1.0, 0.35, rTransverse);
+    float edgeFade = 1.0 - smoothstep(0.35, 1.0, rTransverse);
     gaussianCore *= edgeFade;
     gaussianSheath *= edgeFade;
 
@@ -468,7 +473,7 @@ export const PULSAR_BEAM_FRAGMENT_SHADER = /* glsl */ `
     float baseContactFade = smoothstep(0.0, 0.05, y);
 
     // Relativistic inverse-square + exponential synchrotron cooling along the jet length
-    float distalDecay = exp(-y * 2.15) * smoothstep(1.0, 0.18, y);
+    float distalDecay = exp(-y * 2.15) * (1.0 - smoothstep(0.18, 1.0, y));
 
     float longitudinalProfile = baseContactFade * distalDecay;
 
@@ -495,7 +500,7 @@ export const PULSAR_BEAM_FRAGMENT_SHADER = /* glsl */ `
 
     vec3 beamRgb = (
       outerSheathRgb * gaussianSheath * 0.95 +
-      coreRgb * pow(gaussianCore, 1.35) * 1.65
+      coreRgb * pow(max(0.0001, gaussianCore), 1.35) * 1.65
     ) * longitudinalProfile * streamModulation * launchZoneBoost * uBeamIntensity;
 
     float alpha = clamp((gaussianSheath * 0.75 + gaussianCore * 0.85) * longitudinalProfile, 0.0, 1.0);
