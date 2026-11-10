@@ -11,6 +11,7 @@ import {
   BlackHoleParams,
   GeodesicTrajectory,
   SystemCategory,
+  PhysicsPresetId,
   computeRelativisticMetrics,
 } from './physics/gravitationalPhysics';
 import {
@@ -32,6 +33,7 @@ import { OverheadMapWidget } from './components/OverheadMapWidget';
 import { TimeDilationDisplay } from './components/TimeDilationDisplay';
 import { SettingsModal } from './components/SettingsModal';
 import { useHaptics } from './hooks/useHaptics';
+import { toPng } from 'html-to-image';
 
 const DEFAULT_PARAMS: BlackHoleParams = {
   objectCategory: 'black_hole',
@@ -66,6 +68,7 @@ const DEFAULT_PARAMS: BlackHoleParams = {
 };
 
 export default function App() {
+  const appContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const sceneControllerRef = useRef<BlackHoleSceneController | null>(null);
   const [controllerInstance, setControllerInstance] = useState<BlackHoleSceneController | null>(null);
@@ -83,6 +86,25 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
   const [isSingularityCollapsed, setIsSingularityCollapsed] = useState<boolean>(true);
+
+  // Responsive mobile viewport tracking (screen width <= 768px)
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth <= 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Effective phone mode: active either via Settings toggle or mobile viewport
+  const isPhone = settings.phoneMode || isMobileScreen;
 
   const haptics = useHaptics({ enabled: settings.hapticsEnabled !== false });
 
@@ -314,6 +336,50 @@ export default function App() {
     }));
   }, []);
 
+  const handleSelectPhysicsPreset = useCallback((presetId: PhysicsPresetId) => {
+    haptics.medium();
+    setParams((prev) => {
+      let nextSpin = 0.0;
+      let nextAccretion = prev.accretionRate;
+      let nextDoppler = prev.dopplerStrength;
+      let nextErgoCage = prev.layers.ergosphereCage;
+
+      if (presetId === 'schwarzschild') {
+        nextSpin = 0.0;
+        nextAccretion = Math.min(prev.accretionRate, 0.90);
+        nextDoppler = 0.20;
+        nextErgoCage = false; // Schwarzschild spacetime has zero ergosphere
+      } else if (presetId === 'moderate_kerr') {
+        nextSpin = 0.70;
+        nextAccretion = 1.30;
+        nextDoppler = 0.55;
+      } else if (presetId === 'kerr_max') {
+        nextSpin = 0.998;
+        nextAccretion = Math.max(prev.accretionRate, 1.85);
+        nextDoppler = 0.80;
+      } else if (presetId === 'extreme_kerr') {
+        nextSpin = 1.0;
+        nextAccretion = Math.max(prev.accretionRate, 1.95);
+        nextDoppler = 0.95;
+      }
+
+      return {
+        ...prev,
+        objectCategory: 'black_hole',
+        spin: nextSpin,
+        accretionRate: nextAccretion,
+        dopplerStrength: nextDoppler,
+        layers: {
+          ...prev.layers,
+          ergosphereCage: nextErgoCage,
+        },
+      };
+    });
+
+    sceneControllerRef.current?.triggerEventHorizonPulse('black_hole');
+    relativisticAudio.triggerAccretionShockPulse(false);
+  }, [haptics]);
+
   const handleLaunchPhoton = useCallback((impactB: number) => {
     sceneControllerRef.current?.launchPhotonGeodesic(impactB, 0);
   }, []);
@@ -328,20 +394,82 @@ export default function App() {
     setAudioEnabled(enabled);
   }, [params]);
 
-  const handleExportSnapshot = useCallback(() => {
+  const handleExportSnapshot = useCallback(async () => {
     if (!sceneControllerRef.current) return;
     haptics.success();
+    const timestamp = Date.now();
+    const filename = `cosmic-vis-${activePresetId}-${timestamp}.png`;
+
+    // If UI export is enabled, composite the HTML interface over the clean 3D WebGL render
+    if (settings.includeUiInExport && appContainerRef.current) {
+      try {
+        const webglDataUrl = sceneControllerRef.current.captureSnapshotDataUrl();
+        const uiDataUrl = await toPng(appContainerRef.current, {
+          backgroundColor: 'transparent',
+          style: {
+            backgroundColor: 'transparent',
+          },
+          filter: (node: HTMLElement) => {
+            // Do not capture the WebGL canvas in the DOM snapshot (it is composited directly)
+            if (node.tagName === 'CANVAS') return false;
+            // Exclude modal dialogs if open during export
+            if (node.getAttribute?.('role') === 'dialog') return false;
+            return true;
+          },
+          pixelRatio: window.devicePixelRatio || 1,
+          cacheBust: true,
+        });
+
+        const compositeCanvas = document.createElement('canvas');
+        const bgImg = new Image();
+        const uiImg = new Image();
+
+        await Promise.all([
+          new Promise<void>((resolve, reject) => {
+            bgImg.onload = () => resolve();
+            bgImg.onerror = reject;
+            bgImg.src = webglDataUrl;
+          }),
+          new Promise<void>((resolve, reject) => {
+            uiImg.onload = () => resolve();
+            uiImg.onerror = reject;
+            uiImg.src = uiDataUrl;
+          }),
+        ]);
+
+        compositeCanvas.width = bgImg.naturalWidth || bgImg.width;
+        compositeCanvas.height = bgImg.naturalHeight || bgImg.height;
+        const ctx = compositeCanvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(bgImg, 0, 0, compositeCanvas.width, compositeCanvas.height);
+          ctx.drawImage(uiImg, 0, 0, compositeCanvas.width, compositeCanvas.height);
+          const compositeUrl = compositeCanvas.toDataURL('image/png');
+          const link = document.createElement('a');
+          link.download = filename;
+          link.href = compositeUrl;
+          link.click();
+          return;
+        }
+      } catch (err) {
+        console.warn('UI composite snapshot failed, falling back to clean WebGL render', err);
+      }
+    }
+
+    // Default clean 3D WebGL render (auto-off behavior)
     const dataUrl = sceneControllerRef.current.captureSnapshotDataUrl();
     const link = document.createElement('a');
-    link.download = `cosmic-vis-${activePresetId}-${Date.now()}.png`;
+    link.download = filename;
     link.href = dataUrl;
     link.click();
-  }, [activePresetId, haptics]);
+  }, [activePresetId, haptics, settings.includeUiInExport]);
 
   const isStar = params.objectCategory === 'star';
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black select-none flex flex-col">
+    <div
+      ref={appContainerRef}
+      className="relative w-screen h-screen overflow-hidden bg-black select-none flex flex-col"
+    >
       {/* Zone 1-3 Top Navigation Bar (Hidden in Clean Mode) */}
       {!isCleanMode && (
         <TopBar
@@ -360,7 +488,7 @@ export default function App() {
           onExportSnapshot={handleExportSnapshot}
           isCleanMode={isCleanMode}
           onToggleCleanMode={handleToggleCleanMode}
-          isPhoneMode={settings.phoneMode}
+          isPhoneMode={isPhone}
           hapticsEnabled={settings.hapticsEnabled !== false}
         />
       )}
@@ -402,51 +530,53 @@ export default function App() {
 
         {/* Left HUD Column: Target Specification Badge + Overhead Radar (with optional Time Dilation UI from Settings) */}
         {!isCleanMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation) && (
-          <div className={`absolute top-2 sm:top-3 left-2 sm:left-4 z-10 flex flex-col items-start gap-2 pointer-events-none ${settings.phoneMode ? 'max-w-[250px]' : 'max-w-xs sm:max-w-sm'}`}>
+          <div className={`absolute top-2 sm:top-3 left-2 sm:left-4 z-10 flex flex-col items-start gap-2 pointer-events-none ${isPhone ? 'max-w-[210px]' : 'max-w-xs sm:max-w-sm'}`}>
             {/* Target Spec Badge */}
             {settings.showLeftHud && (
-              <div className={`pointer-events-auto bg-[#050811]/95 border border-slate-800/80 rounded-xl ${settings.phoneMode ? 'p-2' : 'p-3'} shadow-xl transition-all w-full`}>
+              <div className={`pointer-events-auto bg-[#050811]/95 border border-slate-800/80 rounded-xl ${isPhone ? 'p-1.5' : 'p-3'} shadow-xl transition-all w-full`}>
                 <div className="flex items-center justify-between gap-2">
                   <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border ${
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border ${
                       ARCHETYPE_DEFINITIONS[activePreset.archetype].badgeBg
                     }`}
                   >
                     {activePreset.classification}
                   </span>
-                  <span className="text-[10px] font-mono text-slate-400 truncate">
+                  <span className="text-[9px] font-mono text-slate-400 truncate">
                     {activePreset.designation}
                   </span>
                 </div>
 
-                <div className="flex items-baseline justify-between gap-2 mt-1">
-                  <h1 className={`font-display ${settings.phoneMode ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl'} font-bold text-slate-100 tracking-tight flex items-center gap-1.5`}>
+                <div className="flex items-baseline justify-between gap-1 mt-0.5">
+                  <h1 className={`font-display ${isPhone ? 'text-sm' : 'text-xl sm:text-2xl'} font-bold text-slate-100 tracking-tight flex items-center gap-1`}>
                     <span>{activePreset.name}</span>
                     {activePreset.id === 'ton618' && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-normal flex items-center gap-0.5">
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-normal flex items-center gap-0.5">
                         <Sparkles className="w-2.5 h-2.5 text-amber-400" />
                         Titan
                       </span>
                     )}
                     {isStar && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-normal flex items-center gap-0.5">
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-normal flex items-center gap-0.5">
                         <Zap className="w-2.5 h-2.5 text-emerald-400" />
                         Pulsar
                       </span>
                     )}
                   </h1>
-                  <span className="font-mono text-amber-300 font-bold text-xs sm:text-sm">
+                  <span className="font-mono text-amber-300 font-bold text-xs">
                     {activePreset.plainMassExplanation}
                   </span>
                 </div>
 
-                <p className="text-[11px] text-slate-300 leading-snug mt-1">
-                  {activePreset.solarEquivalence}
-                </p>
+                {!isPhone && (
+                  <p className="text-[11px] text-slate-300 leading-snug mt-1">
+                    {activePreset.solarEquivalence}
+                  </p>
+                )}
 
-                <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-1.5 mt-1.5 border-t border-slate-800/60">
-                  <span>{isStar ? 'Physical Crust' : 'Horizon'} <strong className="text-slate-200">{activePreset.horizonDiameterKmDisplay}</strong></span>
-                  <span>Spin a* <strong className="text-cyan-300">{params.spin.toFixed(3)}</strong></span>
+                <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 pt-1 mt-1 border-t border-slate-800/60">
+                  <span>{isStar ? 'Crust' : 'Horizon'} <strong className="text-slate-200">{activePreset.horizonDiameterKmDisplay}</strong></span>
+                  <span>a* <strong className="text-cyan-300">{params.spin.toFixed(3)}</strong></span>
                 </div>
 
                 {/* Quick Link to Real Scale Explorer if TON 618 is selected */}
@@ -533,7 +663,7 @@ export default function App() {
 
         {/* Interactive Singularity Ball Prompt (Displayed when compressed as a small singularity ball) */}
         {!isCleanMode && !isStar && isSingularityCollapsed && (
-          <div className={`absolute ${settings.phoneMode ? (isDockCollapsed ? 'bottom-12' : 'bottom-[51vh]') : 'bottom-20 sm:bottom-24'} left-1/2 -translate-x-1/2 z-20 pointer-events-auto px-2 w-full max-w-sm flex justify-center transition-all`}>
+          <div className={`absolute ${isPhone ? (isDockCollapsed ? 'bottom-14' : 'bottom-[200px]') : 'bottom-20 sm:bottom-24'} left-1/2 -translate-x-1/2 z-20 pointer-events-auto px-2 w-full max-w-sm flex justify-center transition-all`}>
             <button
               type="button"
               onClick={() => {
@@ -602,7 +732,7 @@ export default function App() {
             onToggleAudio={handleToggleAudio}
             onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
             onChangeSystemCategory={handleChangeSystemCategory}
-            isPhoneMode={settings.phoneMode}
+            isPhoneMode={isPhone}
             hapticsEnabled={settings.hapticsEnabled !== false}
             onTriggerPulse={() => {
               haptics.pulseBoom();
@@ -662,6 +792,8 @@ export default function App() {
           setParams((prev) => ({ ...prev, accretionState: nextState }))
         }
         onResetPhysics={handleResetParams}
+        currentSpin={params.spin}
+        onSelectPhysicsPreset={handleSelectPhysicsPreset}
       />
     </div>
   );

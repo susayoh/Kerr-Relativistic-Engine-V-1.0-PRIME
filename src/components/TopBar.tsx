@@ -233,9 +233,9 @@ export const TopBar: React.FC<TopBarProps> = ({
           <Settings className={`w-3.5 h-3.5 ${isPhoneMode ? 'text-emerald-400' : 'text-amber-400/90'}`} />
           <span className="hidden sm:inline">Settings</span>
           {isPhoneMode && (
-            <span className="flex items-center gap-1 text-[10px] font-mono text-emerald-300 font-bold">
+            <span className="flex items-center gap-1 text-[10px] font-mono text-emerald-300 font-bold" title="Phone Mode Active">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>PHONE</span>
+              <span className="hidden sm:inline">PHONE</span>
             </span>
           )}
         </button>

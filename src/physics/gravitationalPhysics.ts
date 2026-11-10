@@ -549,6 +549,100 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
   },
 ];
 
+export type PhysicsPresetId = 'schwarzschild' | 'kerr_max' | 'extreme_kerr' | 'moderate_kerr';
+
+export interface PhysicsPresetDef {
+  id: PhysicsPresetId;
+  name: string;
+  tagline: string;
+  metricName: string;
+  spin: number;
+  spinDisplay: string;
+  badgeBg: string;
+  horizonRs: string;
+  iscoRs: string;
+  photonSphereRs: string;
+  frameDragging: string;
+  description: string;
+  accretionRate: number;
+  dopplerStrength: number;
+}
+
+export const PHYSICS_PRESETS_CONFIG: Record<PhysicsPresetId, PhysicsPresetDef> = {
+  schwarzschild: {
+    id: 'schwarzschild',
+    name: 'Schwarzschild',
+    tagline: 'Static, Non-Rotating Singularity',
+    metricName: 'Schwarzschild Metric (1916)',
+    spin: 0.0,
+    spinDisplay: 'a* = 0.00',
+    badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    horizonRs: '1.00 Rs (2.0 Rg)',
+    iscoRs: '3.00 Rs (6.0 Rg)',
+    photonSphereRs: '1.50 Rs (3.0 Rg)',
+    frameDragging: 'Zero (Static Spacetime)',
+    description: 'Spherically symmetric, static solution with zero frame-dragging and a wide stable orbit gap.',
+    accretionRate: 0.90,
+    dopplerStrength: 0.20,
+  },
+  kerr_max: {
+    id: 'kerr_max',
+    name: 'Kerr (Max Spin)',
+    tagline: 'Astrophysical Thorne Equilibrium Limit',
+    metricName: 'Kerr Metric · Thorne Limit (1974)',
+    spin: 0.998,
+    spinDisplay: 'a* = 0.998',
+    badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    horizonRs: '0.53 Rs (1.06 Rg)',
+    iscoRs: '0.62 Rs (1.23 Rg)',
+    photonSphereRs: '0.54 Rs (1.07 Rg)',
+    frameDragging: 'Rapid (Ω_H ≈ 0.47 c/Rg)',
+    description: 'Astrophysical equilibrium limit where radiation back-reaction caps spin. Prominent oblate ergosphere.',
+    accretionRate: 1.85,
+    dopplerStrength: 0.80,
+  },
+  extreme_kerr: {
+    id: 'extreme_kerr',
+    name: 'Extreme Kerr',
+    tagline: 'Theoretical Extremal Horizon',
+    metricName: 'Extremal Kerr Solution (M = a*)',
+    spin: 1.0,
+    spinDisplay: 'a* = 1.00',
+    badgeBg: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+    horizonRs: '0.50 Rs (1.00 Rg)',
+    iscoRs: '0.50 Rs (Touches Horizon)',
+    photonSphereRs: '0.50 Rs (1.00 Rg)',
+    frameDragging: 'Maximal (Coincident Horizons)',
+    description: 'Theoretical limit where Cauchy and event horizons coalesce. Up to 42.3% Penrose energy extraction.',
+    accretionRate: 2.0,
+    dopplerStrength: 0.95,
+  },
+  moderate_kerr: {
+    id: 'moderate_kerr',
+    name: 'Moderate Kerr',
+    tagline: 'Binary Merger Remnant Spin',
+    metricName: 'Kerr Metric · Moderate Spin',
+    spin: 0.70,
+    spinDisplay: 'a* = 0.70',
+    badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+    horizonRs: '0.86 Rs (1.71 Rg)',
+    iscoRs: '1.70 Rs (3.39 Rg)',
+    photonSphereRs: '1.15 Rs (2.31 Rg)',
+    frameDragging: 'Moderate (Ω_H ≈ 0.20 c/Rg)',
+    description: 'Typical spin for black holes born from binary mergers (e.g. GW150914). Balanced relativistic beaming.',
+    accretionRate: 1.30,
+    dopplerStrength: 0.55,
+  },
+};
+
+export function getActivePhysicsPresetId(spin: number): PhysicsPresetId | null {
+  if (spin < 0.05) return 'schwarzschild';
+  if (spin >= 0.999) return 'extreme_kerr';
+  if (spin >= 0.95 && spin <= 0.9985) return 'kerr_max';
+  if (spin >= 0.65 && spin <= 0.75) return 'moderate_kerr';
+  return null;
+}
+
 export interface DerivedRelativisticMetrics {
   /** Schwarzschild radius Rs = 2GM/c^2 in km (scaled to massSolar) */
   schwarzschildRadiusKm: number;
@@ -588,7 +682,7 @@ export interface DerivedRelativisticMetrics {
  */
 export function computeRelativisticMetrics(params: BlackHoleParams): DerivedRelativisticMetrics {
   const M = Math.max(1.4, params.massSolar);
-  const a = Math.min(0.998, Math.max(0, params.spin));
+  const a = Math.min(0.9999, Math.max(0, params.spin));
   const isStar = params.objectCategory === 'star';
 
   // 1 Solar Mass gravitational radius Rg = GM/c^2 ≈ 1.476625 km; Schwarzschild Rs = 2 * Rg ≈ 2.95325 km
@@ -677,7 +771,7 @@ export function computeDetailedTimeDilation(
   probeRadiusRs: number,
   spin: number
 ): DetailedTimeDilationMetrics {
-  const a = Math.min(0.998, Math.max(0, spin));
+  const a = Math.min(0.9999, Math.max(0, spin));
   const eventHorizonRg = 1.0 + Math.sqrt(Math.max(0, 1.0 - a * a));
   const probeRg = Math.max(eventHorizonRg * 1.02, probeRadiusRs * 2.0);
 

@@ -12,12 +12,19 @@ import {
   Smartphone,
   Check,
   Vibrate,
+  Download,
+  Atom,
 } from 'lucide-react';
 import {
   VisualizerSettings,
   DEFAULT_VISUALIZER_SETTINGS,
 } from '../scene/BlackHoleScene';
-import { AccretionState } from '../physics/gravitationalPhysics';
+import {
+  AccretionState,
+  PhysicsPresetId,
+  PHYSICS_PRESETS_CONFIG,
+  getActivePhysicsPresetId,
+} from '../physics/gravitationalPhysics';
 import { useHaptics } from '../hooks/useHaptics';
 
 interface SettingsModalProps {
@@ -28,6 +35,8 @@ interface SettingsModalProps {
   accretionState?: AccretionState;
   onChangeAccretionState?: (state: AccretionState) => void;
   onResetPhysics?: () => void;
+  currentSpin?: number;
+  onSelectPhysicsPreset?: (presetId: PhysicsPresetId) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -38,8 +47,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   accretionState = 'quiescent',
   onChangeAccretionState,
   onResetPhysics,
+  currentSpin,
+  onSelectPhysicsPreset,
 }) => {
   const haptics = useHaptics({ enabled: settings.hapticsEnabled !== false });
+  const activePhysicsPresetId =
+    typeof currentSpin === 'number' ? getActivePhysicsPresetId(currentSpin) : null;
 
   if (!isOpen) return null;
 
@@ -242,7 +255,126 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Section 1: Background & Screen Lock */}
+          {/* Section 1: Physics Presets (General Relativistic Configurations) */}
+          <div className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-4 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-amber-400 font-mono text-[11px] uppercase tracking-wider font-semibold">
+                <Atom className="w-4 h-4 text-amber-400" />
+                <span>Physics Presets (GR Configurations)</span>
+              </div>
+              <span className="font-mono text-[10px] text-amber-300/80 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                EXACT EINSTEIN METRICS
+              </span>
+            </div>
+
+            <p className="text-[11px] text-neutral-400 leading-relaxed">
+              Quickly switch between exact General Relativistic spacetime metrics. Dynamically shifts the dimensionless spin parameter <span className="font-mono text-amber-300">a*</span>, recalculates frame-dragging, contracts/expands the event horizon, and snaps the accretion disk to the exact prograde Innermost Stable Circular Orbit (ISCO).
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {(Object.keys(PHYSICS_PRESETS_CONFIG) as PhysicsPresetId[]).map((presetKey) => {
+                const preset = PHYSICS_PRESETS_CONFIG[presetKey];
+                const isActive = activePhysicsPresetId === presetKey;
+
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => {
+                      haptics.medium();
+                      onSelectPhysicsPreset?.(preset.id);
+                    }}
+                    className={`relative p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between group ${
+                      isActive
+                        ? 'bg-amber-500/15 border-amber-500/60 shadow-[0_0_20px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/40 text-neutral-100'
+                        : 'bg-neutral-900/70 border-neutral-800/90 hover:border-neutral-700 hover:bg-neutral-900 text-neutral-300'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1.5 mb-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`font-semibold text-xs ${isActive ? 'text-amber-200' : 'text-neutral-200'}`}>
+                            {preset.name}
+                          </span>
+                          {isActive && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-amber-500/25 text-amber-300 border border-amber-500/50">
+                              <Check className="w-2.5 h-2.5" /> ACTIVE
+                            </span>
+                          )}
+                        </div>
+                        <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded border font-semibold shrink-0 ${preset.badgeBg}`}>
+                          {preset.spinDisplay}
+                        </span>
+                      </div>
+
+                      <div className="font-mono text-[10px] text-neutral-400 mb-1.5">
+                        {preset.tagline}
+                      </div>
+
+                      <p className="text-[10px] text-neutral-400 leading-snug">
+                        {preset.description}
+                      </p>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-neutral-800/80 grid grid-cols-2 gap-1.5 font-mono text-[9px]">
+                      <div className="bg-neutral-950/80 px-2 py-1 rounded border border-neutral-800/60">
+                        <span className="text-neutral-400 block text-[8px] uppercase tracking-wider">Horizon r_H</span>
+                        <span className="text-neutral-200 font-medium">{preset.horizonRs}</span>
+                      </div>
+                      <div className="bg-neutral-950/80 px-2 py-1 rounded border border-neutral-800/60">
+                        <span className="text-neutral-400 block text-[8px] uppercase tracking-wider">ISCO Gap</span>
+                        <span className="text-neutral-200 font-medium">{preset.iscoRs}</span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Rapid Parameter Adjustment Ripples Toggle */}
+            <div className="flex items-center justify-between gap-4 pt-3 border-t border-neutral-900">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-neutral-100 font-medium text-xs">
+                    Rapid Parameter Adjustment Ripples
+                  </span>
+                  <span
+                    className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold ${
+                      settings.rapidAdjustmentRipples !== false
+                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                        : 'border-neutral-700 bg-neutral-900 text-neutral-400'
+                    }`}
+                  >
+                    {settings.rapidAdjustmentRipples !== false ? 'ENABLED' : 'DISABLED'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Generates propagating relativistic gravitational wave ripples from the black hole when spin or accretion rate are rapidly adjusted.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSetting('rapidAdjustmentRipples')}
+                className={`w-11 h-6 rounded-full transition-colors p-0.5 shrink-0 cursor-pointer border ${
+                  settings.rapidAdjustmentRipples !== false
+                    ? 'bg-amber-500/30 border-amber-400/70'
+                    : 'bg-neutral-900 border-neutral-700'
+                }`}
+                aria-pressed={settings.rapidAdjustmentRipples !== false}
+                aria-label="Toggle rapid adjustment ripples"
+              >
+                <div
+                  className={`w-4.5 h-4.5 rounded-full transition-transform ${
+                    settings.rapidAdjustmentRipples !== false
+                      ? 'translate-x-5 bg-amber-300'
+                      : 'translate-x-0 bg-neutral-500'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* Section 2: Background & Screen Lock */}
           <div className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-4 space-y-3.5">
             <div className="flex items-center gap-2 text-amber-300 font-mono text-[11px] uppercase tracking-wider font-semibold">
               <Lock className="w-3.5 h-3.5" />
@@ -337,7 +469,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Accretion Disk Style & Spacetime Lensing Optics */}
+          {/* Section 3: Accretion Disk Style & Spacetime Lensing Optics */}
           <div className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-4 space-y-3.5">
             <div className="flex items-center gap-2 text-sky-300 font-mono text-[11px] uppercase tracking-wider font-semibold">
               <Sparkles className="w-3.5 h-3.5" />
@@ -383,6 +515,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Accretion State Change & Threshold Shockwave Toggle */}
+            <div className="flex items-center justify-between gap-4 pt-2.5 pb-2 border-b border-neutral-900">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-neutral-100 font-medium text-xs">
+                    Accretion Shockwave Animation
+                  </span>
+                  <span
+                    className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold ${
+                      settings.accretionShockwaveEnabled !== false
+                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                        : 'border-neutral-700 bg-neutral-900 text-neutral-400'
+                    }`}
+                  >
+                    {settings.accretionShockwaveEnabled !== false ? 'ENABLED' : 'DISABLED'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Propagates a high-energy thermal and radiation-pressure shockwave outward from the event horizon boundary when accretion rate changes rapidly or crosses critical state thresholds.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSetting('accretionShockwaveEnabled')}
+                className={`w-11 h-6 rounded-full transition-colors p-0.5 shrink-0 cursor-pointer border ${
+                  settings.accretionShockwaveEnabled !== false
+                    ? 'bg-amber-500/30 border-amber-400/70'
+                    : 'bg-neutral-900 border-neutral-700'
+                }`}
+                aria-pressed={settings.accretionShockwaveEnabled !== false}
+                aria-label="Toggle accretion shockwave animation"
+              >
+                <div
+                  className={`w-4.5 h-4.5 rounded-full transition-transform ${
+                    settings.accretionShockwaveEnabled !== false
+                      ? 'translate-x-5 bg-amber-300'
+                      : 'translate-x-0 bg-neutral-500'
+                  }`}
+                />
+              </button>
+            </div>
 
             {/* Accretion Disk Renderer Toggle (Classic vs Raymarched) */}
             <div className="pt-1 pb-2 border-b border-neutral-900">
@@ -513,7 +687,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Section 3: Camera & Orbit Controls */}
+          {/* Section 4: Camera & Orbit Controls */}
           <div className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-4 space-y-3.5">
             <div className="flex items-center gap-2 text-emerald-300 font-mono text-[11px] uppercase tracking-wider font-semibold">
               <Camera className="w-3.5 h-3.5" />
@@ -619,7 +793,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
           </div>
 
-          {/* Section 4: HUD & Telemetry Panels */}
+          {/* Section 5: HUD & Telemetry Panels */}
           <div className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2 text-purple-300 font-mono text-[11px] uppercase tracking-wider font-semibold">
               <Eye className="w-3.5 h-3.5" />
@@ -693,6 +867,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="font-semibold text-xs mt-0.5">
                   {settings.showCursorTelemetry ? 'Visible' : 'Hidden'}
                 </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Section 6: Snapshot & Image Export */}
+          <div className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-cyan-300 font-mono text-[11px] uppercase tracking-wider font-semibold">
+                <Download className="w-3.5 h-3.5" />
+                <span>Snapshot & Image Export</span>
+              </div>
+              <span
+                className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                  settings.includeUiInExport
+                    ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
+                    : 'border-neutral-700 bg-neutral-900 text-neutral-400'
+                }`}
+              >
+                {settings.includeUiInExport ? 'UI OVERLAY ON' : 'AUTO-OFF (CLEAN)'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 p-3 rounded-lg bg-neutral-900/60 border border-neutral-800/80">
+              <div className="space-y-0.5 pr-2">
+                <div className="text-xs font-medium text-neutral-200">
+                  Include UI Elements in Export
+                </div>
+                <div className="text-[11px] text-neutral-400 leading-snug">
+                  When enabled, exported PNG captures include the top bar, HUD metrics, and dock overlay. Defaults to off for clean, cinematic 3D wallpapers.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSetting('includeUiInExport')}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  settings.includeUiInExport ? 'bg-cyan-500' : 'bg-neutral-800'
+                }`}
+                aria-pressed={settings.includeUiInExport}
+                aria-label="Toggle UI elements in export"
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                    settings.includeUiInExport ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
               </button>
             </div>
           </div>

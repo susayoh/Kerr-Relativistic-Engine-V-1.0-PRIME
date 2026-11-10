@@ -116,6 +116,761 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   const isCaptured = absB < bCrit - 0.12;
   const isResonant = absB >= bCrit - 0.12 && absB <= bCrit + 0.18;
 
+  // Dedicated Mobile / Phone Viewport Layout:
+  // Ultra-compact, non-scrollable, fits 100% on phone screens (<190px total height)
+  // Leaves 75-80% of screen unblocked for viewing the 3D black hole
+  if (isPhoneMode) {
+    if (isCollapsed) {
+      return (
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-2 z-20 pointer-events-auto w-[calc(100vw-1rem)] max-w-sm">
+          <div className="flex items-center justify-between gap-1.5 px-3 py-1.5 bg-[#060911]/95 border border-amber-500/40 rounded-full shadow-2xl backdrop-blur-md">
+            {/* Target Preset Pill */}
+            <button
+              type="button"
+              onClick={() => {
+                haptics.medium();
+                onToggleCollapse();
+              }}
+              className="flex items-center gap-1.5 text-xs font-semibold text-amber-200 hover:text-white truncate max-w-[125px] cursor-pointer"
+            >
+              {isStar ? (
+                <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              ) : (
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              )}
+              <span className="truncate">{activePreset.name.split(' ')[0]}</span>
+              <ChevronUp className="w-3 h-3 text-neutral-400 shrink-0" />
+            </button>
+
+            {/* Quick Play/Pause */}
+            <button
+              type="button"
+              onClick={() => {
+                haptics.medium();
+                onChangeParams((prev) => ({
+                  ...prev,
+                  timeScale: prev.timeScale === 0 ? 1.0 : 0.0,
+                }));
+              }}
+              className={`p-1.5 rounded-full border transition-all cursor-pointer ${
+                isPaused
+                  ? 'bg-amber-500/30 text-amber-300 border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.3)]'
+                  : 'bg-neutral-900 text-neutral-300 border-neutral-800 hover:text-white'
+              }`}
+              title={isPaused ? 'Resume Simulation' : 'Pause Simulation'}
+            >
+              {isPaused ? (
+                <Play className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              ) : (
+                <Pause className="w-3.5 h-3.5" />
+              )}
+            </button>
+
+            {/* Quick Sonic Boom Shockwave Pulse */}
+            <button
+              type="button"
+              onClick={() => {
+                haptics.pulseBoom();
+                if (isPaused) {
+                  onChangeParams((prev) => ({ ...prev, timeScale: 1.0 }));
+                }
+                onTriggerPulse();
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-neutral-900 hover:bg-neutral-850 text-amber-300 border border-neutral-800 cursor-pointer"
+              title="Trigger Sonic Boom Pulse"
+            >
+              <Waves className="w-3 h-3 text-amber-400" />
+              <span>Pulse</span>
+            </button>
+
+            {/* Expand Controls Drawer */}
+            <button
+              type="button"
+              onClick={() => {
+                haptics.light();
+                onToggleCollapse();
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-white bg-amber-500/25 border border-amber-500/60 rounded-full hover:bg-amber-500/40 transition-colors cursor-pointer"
+            >
+              <Sliders className="w-3.5 h-3.5 text-amber-300" />
+              <span>Controls</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Expanded Phone Mode Drawer
+    return (
+      <div className="fixed left-1/2 -translate-x-1/2 bottom-1 z-20 pointer-events-auto w-[calc(100vw-0.75rem)] max-w-sm sm:max-w-md">
+        <div className="bg-[#060911]/98 border border-neutral-800/90 rounded-2xl shadow-2xl p-2 flex flex-col gap-1.5 backdrop-blur-md">
+          {/* Header Row: Minimize + Target Switcher + Quick Actions */}
+          <div className="flex items-center justify-between gap-1 pb-1 border-b border-neutral-800/80">
+            {/* Minimize Button */}
+            <button
+              type="button"
+              onClick={() => {
+                haptics.light();
+                onToggleCollapse();
+              }}
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono text-neutral-300 bg-neutral-900 hover:bg-neutral-850 rounded-md border border-neutral-800 cursor-pointer shrink-0"
+              title="Minimize Controls"
+            >
+              <ChevronDown className="w-3 h-3 text-amber-400" />
+              <span>Min</span>
+            </button>
+
+            {/* Target Preset Selector with Prev/Next buttons */}
+            <div className="flex items-center gap-0.5 flex-1 min-w-0">
+              <button
+                type="button"
+                onClick={handlePrevPreset}
+                className="p-1 rounded bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-400 hover:text-white cursor-pointer shrink-0"
+                title="Previous Preset"
+              >
+                <ChevronLeft className="w-3 h-3" />
+              </button>
+
+              <div className="relative flex-1 min-w-0">
+                <select
+                  value={activePresetId}
+                  onChange={(e) => {
+                    haptics.medium();
+                    onSelectPreset(e.target.value);
+                  }}
+                  className="w-full pl-1.5 pr-4 py-0.5 text-[11px] font-bold bg-neutral-900 border border-neutral-700/80 text-amber-200 rounded appearance-none outline-none truncate cursor-pointer"
+                >
+                  <optgroup label="Black Holes" className="bg-neutral-950 text-neutral-200">
+                    {ASTROPHYSICAL_PRESETS.filter((p) => p.category === 'black_hole').map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.plainMassExplanation})
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Compact Relativistic Stars" className="bg-neutral-950 text-neutral-200">
+                    {ASTROPHYSICAL_PRESETS.filter((p) => p.category === 'star').map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.plainMassExplanation})
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
+                  <ChevronDown className="w-2.5 h-2.5" />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleNextPreset}
+                className="p-1 rounded bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-400 hover:text-white cursor-pointer shrink-0"
+                title="Next Preset"
+              >
+                <ChevronRight className="w-3 h-3" />
+              </button>
+            </div>
+
+            {/* Quick Transport Icons */}
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  haptics.medium();
+                  onChangeParams((prev) => ({
+                    ...prev,
+                    timeScale: prev.timeScale === 0 ? 1.0 : 0.0,
+                  }));
+                }}
+                className={`p-1 rounded border transition-all cursor-pointer ${
+                  isPaused
+                    ? 'bg-amber-500/25 text-amber-200 border-amber-400'
+                    : 'text-neutral-300 bg-neutral-900 border-neutral-800 hover:bg-neutral-850'
+                }`}
+                title={isPaused ? 'Resume Simulation' : 'Pause Simulation'}
+              >
+                {isPaused ? (
+                  <Play className="w-3 h-3 fill-amber-400 text-amber-400" />
+                ) : (
+                  <Pause className="w-3 h-3" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  haptics.pulseBoom();
+                  if (isPaused) {
+                    onChangeParams((prev) => ({ ...prev, timeScale: 1.0 }));
+                  }
+                  onTriggerPulse();
+                }}
+                className="p-1 rounded text-neutral-200 bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 cursor-pointer"
+                title="Trigger Sonic Boom Pulse"
+              >
+                <Waves className="w-3 h-3 text-amber-300" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  haptics.light();
+                  onToggleAudio();
+                }}
+                className={`p-1 rounded border transition-colors cursor-pointer ${
+                  audioEnabled
+                    ? 'bg-neutral-800 text-amber-300 border-neutral-700'
+                    : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                }`}
+                title="Toggle Audio"
+              >
+                {audioEnabled ? (
+                  <Volume2 className="w-3 h-3 text-amber-400" />
+                ) : (
+                  <VolumeX className="w-3 h-3" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  haptics.heavy();
+                  onResetParams();
+                }}
+                className="p-1 text-neutral-400 hover:text-white bg-neutral-900 border border-neutral-800 rounded cursor-pointer"
+                title="Reset Parameters"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </button>
+
+              {onToggleCleanMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.medium();
+                    onToggleCleanMode();
+                  }}
+                  className="p-1 text-amber-400 bg-neutral-900 border border-neutral-800 rounded cursor-pointer"
+                  title="Hide UI"
+                >
+                  <EyeOff className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Segmented Mode Tabs */}
+          <div className="flex items-center gap-1 p-0.5 bg-neutral-950 rounded-lg border border-neutral-800/90">
+            {(
+              [
+                { id: 'spacetime', label: 'Space', icon: Sliders },
+                { id: 'spectral', label: 'Layers', icon: Layers },
+                { id: 'camera', label: 'Cam', icon: Camera },
+                { id: 'geodesics', label: 'Rays', icon: Orbit },
+              ] as const
+            ).map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    haptics.light();
+                    setActiveTab(tab.id);
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-1 py-1 text-[11px] font-medium rounded transition-all whitespace-nowrap cursor-pointer ${
+                    isActive
+                      ? 'bg-neutral-800 text-amber-300 font-semibold border border-neutral-700/80 shadow-sm'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  <Icon className="w-3 h-3 shrink-0" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Tab 1: Spacetime Parameters */}
+          {activeTab === 'spacetime' && (
+            <div className="flex flex-col gap-1.5">
+              {/* 2x2 Ultra-Compact Sliders */}
+              <div className="grid grid-cols-2 gap-1.5">
+                {/* Mass */}
+                <div className="flex flex-col justify-between px-1.5 py-1 rounded-md bg-neutral-950 border border-neutral-800/80">
+                  <div className="flex items-center justify-between text-[10px] leading-tight">
+                    <span className="text-neutral-400 font-medium flex items-center gap-1">
+                      <Scale className="w-2.5 h-2.5 text-amber-400" />
+                      <span>{isStar ? 'Mass' : 'Mass'}</span>
+                    </span>
+                    <span className="font-mono text-neutral-100 font-bold tabular-nums">
+                      {params.massSolar.toFixed(1)} <span className="text-amber-400/80 text-[9px]">M☉</span>
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={isStar ? 1.4 : 5}
+                    max={100}
+                    step={0.5}
+                    value={params.massSolar}
+                    onChange={(e) => {
+                      haptics.sliderTick();
+                      onChangeParams((prev) => ({ ...prev, massSolar: parseFloat(e.target.value) }));
+                    }}
+                    className="sci-slider w-full !my-0.5"
+                  />
+                </div>
+
+                {/* Kerr Spin */}
+                <div className="flex flex-col justify-between px-1.5 py-1 rounded-md bg-neutral-950 border border-neutral-800/80">
+                  <div className="flex items-center justify-between text-[10px] leading-tight">
+                    <span className="text-neutral-400 font-medium flex items-center gap-1">
+                      <Orbit className="w-2.5 h-2.5 text-amber-400" />
+                      <span>Spin (a*)</span>
+                    </span>
+                    <span className="font-mono text-amber-300 font-bold tabular-nums">
+                      {params.spin.toFixed(3)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={0.998}
+                    step={0.002}
+                    value={params.spin}
+                    onChange={(e) => {
+                      haptics.sliderTick();
+                      onChangeParams((prev) => ({ ...prev, spin: parseFloat(e.target.value) }));
+                    }}
+                    className="sci-slider w-full !my-0.5"
+                  />
+                </div>
+
+                {/* Accretion Rate */}
+                <div className="flex flex-col justify-between px-1.5 py-1 rounded-md bg-neutral-950 border border-neutral-800/80">
+                  <div className="flex items-center justify-between text-[10px] leading-tight">
+                    <span className="text-neutral-400 font-medium flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                      <span>{isStar ? 'Wind' : 'Accretion'}</span>
+                    </span>
+                    <span className="font-mono text-neutral-100 font-bold tabular-nums">
+                      {params.accretionRate.toFixed(2)} <span className="text-neutral-500 text-[9px]">Ṁ</span>
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0.1}
+                    max={2.0}
+                    step={0.05}
+                    value={params.accretionRate}
+                    onChange={(e) => {
+                      haptics.sliderTick();
+                      onChangeParams((prev) => ({ ...prev, accretionRate: parseFloat(e.target.value) }));
+                    }}
+                    className="sci-slider w-full !my-0.5"
+                  />
+                </div>
+
+                {/* Gravity Well Depth */}
+                <div className="flex flex-col justify-between px-1.5 py-1 rounded-md bg-neutral-950 border border-neutral-800/80">
+                  <div className="flex items-center justify-between text-[10px] leading-tight">
+                    <span className="text-neutral-400 font-medium flex items-center gap-1">
+                      <Compass className="w-2.5 h-2.5 text-cyan-400" />
+                      <span>Well Depth</span>
+                    </span>
+                    <span className="font-mono text-neutral-200 font-bold tabular-nums">
+                      {(params.wellDepthMultiplier || 2.2).toFixed(1)}×
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0.8}
+                    max={3.5}
+                    step={0.1}
+                    value={params.wellDepthMultiplier || 2.2}
+                    onChange={(e) => {
+                      haptics.sliderTick();
+                      onChangeParams((prev) => ({ ...prev, wellDepthMultiplier: parseFloat(e.target.value) }));
+                    }}
+                    className="sci-slider w-full !my-0.5"
+                  />
+                </div>
+              </div>
+
+              {/* Bottom Quick Toggles Row */}
+              <div className="flex items-center justify-between gap-1 text-[10px] pt-1 border-t border-neutral-800/80">
+                {/* Accretion State Toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.light();
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      accretionState: prev.accretionState === 'active' ? 'quiescent' : 'active',
+                    }));
+                  }}
+                  className={`flex-1 py-1 px-1.5 rounded border font-mono uppercase tracking-wider text-center transition-colors cursor-pointer truncate ${
+                    params.accretionState === 'active'
+                      ? 'bg-amber-500/20 text-amber-200 border-amber-400/70 font-bold'
+                      : 'bg-neutral-950 text-neutral-400 border-neutral-800'
+                  }`}
+                >
+                  {params.accretionState === 'active' ? 'Disk: Active' : 'Disk: Thin'}
+                </button>
+
+                {/* Gravitational Lensing Toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.light();
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      gravitationalLensing: !prev.gravitationalLensing,
+                    }));
+                  }}
+                  className={`flex-1 py-1 px-1.5 rounded border font-mono uppercase tracking-wider text-center transition-colors cursor-pointer truncate ${
+                    params.gravitationalLensing
+                      ? 'bg-neutral-800 text-amber-300 border-neutral-700 font-bold'
+                      : 'bg-neutral-950 text-neutral-400 border-neutral-800'
+                  }`}
+                >
+                  {params.gravitationalLensing ? 'Lens: On' : 'Lens: Off'}
+                </button>
+
+                {/* Doppler Beaming Quick Step */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.sliderTick();
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      dopplerStrength: prev.dopplerStrength >= 1.0 ? 0.0 : Math.round((prev.dopplerStrength + 0.35) * 100) / 100,
+                    }));
+                  }}
+                  className="flex-1 py-1 px-1.5 rounded border border-neutral-800 bg-neutral-950 text-neutral-300 font-mono text-center cursor-pointer truncate"
+                  title="Cycle Doppler Beaming (0% -> 35% -> 70% -> 100%)"
+                >
+                  Doppler: {(params.dopplerStrength * 100).toFixed(0)}%
+                </button>
+
+                {/* System Category: Isolated vs Binary */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.medium();
+                    const nextCat: SystemCategory = params.systemCategory === 'binary' ? 'isolated' : 'binary';
+                    if (onChangeSystemCategory) {
+                      onChangeSystemCategory(nextCat);
+                    } else {
+                      onChangeParams((prev) => ({
+                        ...prev,
+                        objectCategory: 'black_hole',
+                        systemCategory: nextCat,
+                      }));
+                    }
+                  }}
+                  className={`flex-1 py-1 px-1.5 rounded border font-mono uppercase tracking-wider text-center transition-colors cursor-pointer truncate ${
+                    params.systemCategory === 'binary'
+                      ? 'bg-amber-500/20 text-amber-200 border-amber-400/70 font-bold'
+                      : 'bg-neutral-950 text-neutral-400 border-neutral-800'
+                  }`}
+                >
+                  {params.systemCategory === 'binary' ? 'Binary' : 'Single'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: Spectral & Layers */}
+          {activeTab === 'spectral' && (
+            <div className="flex flex-col gap-1.5 text-xs">
+              {/* Row 1: Spectral Filters */}
+              <div className="flex items-center gap-1">
+                {(
+                  [
+                    { id: 'blackbody', label: 'Optical' },
+                    { id: 'eht230ghz', label: '230GHz' },
+                    { id: 'xray', label: 'Chandra' },
+                    { id: 'doppler', label: 'Doppler' },
+                  ] as const
+                ).map((mode) => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    onClick={() => {
+                      haptics.light();
+                      onChangeParams((prev) => ({ ...prev, spectralMode: mode.id }));
+                    }}
+                    className={`flex-1 py-1 text-[10px] font-medium rounded border transition-colors cursor-pointer text-center truncate ${
+                      params.spectralMode === mode.id
+                        ? 'bg-neutral-800 text-amber-300 font-semibold border-neutral-700 shadow-sm'
+                        : 'bg-neutral-950 text-neutral-400 border-neutral-800'
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Row 2: Subsystem Layers */}
+              <div className="grid grid-cols-4 gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.light();
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      layers: { ...prev.layers, accretionDisk: !prev.layers.accretionDisk },
+                    }));
+                  }}
+                  className={`py-1 text-[10px] rounded border transition-colors cursor-pointer text-center truncate ${
+                    params.layers.accretionDisk
+                      ? 'bg-neutral-800 text-neutral-200 border-neutral-700 font-medium'
+                      : 'bg-neutral-950 text-neutral-500 border-neutral-800'
+                  }`}
+                >
+                  Disk
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.light();
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      layers: { ...prev.layers, spacetimeGrid: !prev.layers.spacetimeGrid },
+                    }));
+                  }}
+                  className={`py-1 text-[10px] rounded border transition-colors cursor-pointer text-center truncate ${
+                    params.layers.spacetimeGrid
+                      ? 'bg-neutral-800 text-neutral-200 border-neutral-700 font-medium'
+                      : 'bg-neutral-950 text-neutral-500 border-neutral-800'
+                  }`}
+                >
+                  Grid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.light();
+                    const nextOrbitalStars = !params.layers.orbitalStars;
+                    if (!nextOrbitalStars && activeCamera === 'star') {
+                      onSelectCamera('equatorial');
+                    }
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      layers: { ...prev.layers, orbitalStars: nextOrbitalStars },
+                    }));
+                  }}
+                  className={`py-1 text-[10px] rounded border transition-colors cursor-pointer text-center truncate ${
+                    params.layers.orbitalStars
+                      ? 'bg-neutral-800 text-neutral-200 border-neutral-700 font-medium'
+                      : 'bg-neutral-950 text-neutral-500 border-neutral-800'
+                  }`}
+                >
+                  S-Stars
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.light();
+                    onChangeParams((prev) => ({
+                      ...prev,
+                      layers: {
+                        ...prev.layers,
+                        anatomyLines: !(prev.layers.anatomyLines ?? false),
+                      },
+                    }));
+                  }}
+                  className={`py-1 text-[10px] rounded border transition-colors cursor-pointer text-center truncate ${
+                    params.layers.anatomyLines ?? false
+                      ? 'bg-neutral-800 text-amber-300 font-medium border-neutral-700'
+                      : 'bg-neutral-950 text-neutral-500 border-neutral-800'
+                  }`}
+                >
+                  Anatomy
+                </button>
+              </div>
+
+              {/* Row 3: Exploded View Scrubber & Background Theme */}
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800/60">
+                <div className="flex-1 flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono text-neutral-400 whitespace-nowrap">Explode:</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.02}
+                    value={params.explodedSeparation}
+                    onChange={(e) => {
+                      haptics.sliderTick();
+                      onChangeParams((prev) => ({
+                        ...prev,
+                        explodedSeparation: parseFloat(e.target.value),
+                      }));
+                    }}
+                    className="sci-slider flex-1 !my-0.5"
+                  />
+                  <span className="font-mono text-[9px] text-amber-300 font-bold tabular-nums">
+                    {(params.explodedSeparation * 100).toFixed(0)}%
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  {Object.values(BACKGROUND_THEMES).slice(0, 3).map((theme) => {
+                    const isActive = (params.backgroundTheme || 'galactic_core') === theme.id;
+                    return (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        onClick={() => {
+                          haptics.light();
+                          onChangeParams((prev) => ({
+                            ...prev,
+                            backgroundTheme: theme.id,
+                          }));
+                        }}
+                        className={`px-1.5 py-0.5 text-[9px] rounded border transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-neutral-800 text-amber-300 font-bold border-neutral-700'
+                            : 'bg-neutral-950 text-neutral-400 border-neutral-800'
+                        }`}
+                      >
+                        {theme.id === 'pure_black' ? 'Black' : theme.name.split(' ')[0]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 3: Camera Viewports */}
+          {activeTab === 'camera' && (
+            <div className="grid grid-cols-3 gap-1">
+              {(
+                [
+                  { id: 'equatorial', label: 'Equatorial' },
+                  { id: 'polar', label: 'Polar Jet' },
+                  { id: 'grazing', label: 'Grazing' },
+                  { id: 'well', label: 'Gravity Well' },
+                  ...(params.layers.orbitalStars
+                    ? ([{ id: 'star', label: 'S2 Star' }] as const)
+                    : []),
+                ] as const
+              ).map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => {
+                    haptics.light();
+                    onSelectCamera(preset.id);
+                  }}
+                  className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-md border text-center transition-all cursor-pointer ${
+                    activeCamera === preset.id
+                      ? 'bg-neutral-800 text-amber-300 font-semibold border-neutral-700 shadow-sm'
+                      : 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:text-white'
+                  }`}
+                >
+                  <Camera className="w-3 h-3 text-neutral-400 shrink-0" />
+                  <span className="text-[10px] font-medium truncate">{preset.label}</span>
+                </button>
+              ))}
+
+              {/* True Scale Visualizer */}
+              <button
+                type="button"
+                onClick={() => {
+                  haptics.medium();
+                  onChangeParams((prev) => ({
+                    ...prev,
+                    trueCosmicScale: !prev.trueCosmicScale,
+                  }));
+                }}
+                className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-md border text-center transition-all cursor-pointer ${
+                  params.trueCosmicScale
+                    ? 'bg-neutral-800 text-amber-300 font-semibold border-neutral-700 shadow-sm'
+                    : 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:text-white'
+                }`}
+              >
+                <Maximize2 className="w-3 h-3 text-neutral-400 shrink-0" />
+                <span className="text-[10px] font-medium truncate">
+                  {params.trueCosmicScale ? 'Scale: True' : 'True Scale'}
+                </span>
+              </button>
+            </div>
+          )}
+
+          {/* Tab 4: Geodesic Photon Launcher */}
+          {activeTab === 'geodesics' && (
+            <div className="flex flex-col gap-1.5">
+              {/* Impact Parameter Slider */}
+              <div className="flex flex-col justify-between px-1.5 py-1 rounded-md bg-neutral-950 border border-neutral-800/80">
+                <div className="flex items-center justify-between text-[10px] leading-tight">
+                  <span className="text-neutral-400 font-medium flex items-center gap-1">
+                    <Orbit className="w-2.5 h-2.5 text-amber-400" />
+                    <span>Impact (b)</span>
+                  </span>
+                  <span className="font-mono text-amber-300 font-bold tabular-nums">
+                    {impactB >= 0 ? `+${impactB.toFixed(1)}` : impactB.toFixed(1)} Rₛ
+                  </span>
+                  <span className="text-[9px] font-mono">
+                    {isCaptured ? (
+                      <span className="text-rose-400 font-bold">Plunge</span>
+                    ) : isResonant ? (
+                      <span className="text-amber-400 font-bold">Orbit</span>
+                    ) : (
+                      <span className="text-emerald-400 font-bold">Escape</span>
+                    )}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={-6.0}
+                  max={6.0}
+                  step={0.1}
+                  value={impactB}
+                  onChange={(e) => {
+                    haptics.sliderTick();
+                    setImpactB(parseFloat(e.target.value));
+                  }}
+                  className="sci-slider w-full !my-0.5"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.medium();
+                    onLaunchPhoton(impactB);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-lg bg-neutral-800 hover:bg-neutral-750 text-amber-300 border border-neutral-700 transition-colors cursor-pointer shadow-sm"
+                >
+                  <Send className="w-3 h-3" />
+                  <span>Fire Ray Pulse</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.light();
+                    onClearPhotons();
+                  }}
+                  className="p-1.5 text-neutral-400 hover:text-rose-400 bg-neutral-900 border border-neutral-800 rounded-lg cursor-pointer"
+                  title="Clear active rays"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop Control Dock Layout
   return (
     <div
       className={`fixed left-1/2 -translate-x-1/2 bottom-1 sm:bottom-3 z-20 pointer-events-auto transition-transform duration-200 ease-out ${

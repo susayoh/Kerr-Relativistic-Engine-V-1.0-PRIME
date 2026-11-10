@@ -44,6 +44,9 @@ export interface VisualizerSettings {
   showCursorTelemetry: boolean;
   phoneMode: boolean;
   hapticsEnabled: boolean;
+  includeUiInExport: boolean;
+  rapidAdjustmentRipples: boolean;
+  accretionShockwaveEnabled: boolean;
 }
 
 export const isMobileDevice = (() => {
@@ -69,6 +72,9 @@ export const DEFAULT_VISUALIZER_SETTINGS: VisualizerSettings = {
   showCursorTelemetry: !isMobileDevice,
   phoneMode: isMobileDevice,
   hapticsEnabled: true,
+  includeUiInExport: false,
+  rapidAdjustmentRipples: true,
+  accretionShockwaveEnabled: true,
 };
 
 
@@ -246,7 +252,7 @@ const ACCRETION_FRAGMENT_SHADER = `
     }
 
     float r = length(vLocalPos.xy);
-    float spin = clamp(uDiskParams.x, 0.0, 0.998);
+    float spin = clamp(uDiskParams.x, 0.0, 1.0);
     float accretionRate = uDiskParams.y;
     int spectralMode = int(uDiskParams.z);
     float absLayer = abs(vVerticalLayer);
@@ -819,7 +825,7 @@ const LENSING_FRAGMENT_SHADER = `
   void main() {
     vec2 uvCentered = (vUv - vec2(0.5)) * 44.0;
     float rQuad = length(uvCentered);
-    float spin = clamp(uSpin, 0.0, 0.998);
+    float spin = clamp(uSpin, 0.0, 1.0);
 
     // Smooth edge fade of expanded outer quad
     float quadFade = 1.0 - smoothstep(18.5, 21.8, rQuad);
@@ -1692,6 +1698,41 @@ export class BlackHoleSceneController {
   private shakeElapsed = 0.0;
   private shakeDuration = 1.65;
 
+  // Rapid parameter adjustment gravitational wave ripple subsystem
+  private parameterRippleGroup = new THREE.Group();
+  private parameterRipples: Array<{
+    ringMesh: THREE.Mesh;
+    shellMesh: THREE.Mesh;
+    active: boolean;
+    progress: number;
+    speed: number;
+    intensity: number;
+    type: 'spin' | 'accretion' | 'mixed';
+    startRadius: number;
+    maxRadius: number;
+  }> = [];
+  private lastParamUpdateTime = 0;
+  private lastObservedSpin: number | null = null;
+  private lastObservedAccretionRate: number | null = null;
+  private lastRippleSpawnTime = 0;
+
+  // Accretion state change & threshold burst shockwave subsystem
+  private accretionShockwaveGroup = new THREE.Group();
+  private accretionShockPrimaryMesh!: THREE.Mesh;
+  private accretionShockSecondaryMesh!: THREE.Mesh;
+  private accretionShockShellMesh!: THREE.Mesh;
+  private accretionHorizonFlashMesh!: THREE.Mesh;
+  private isAccretionShockActive = false;
+  private accretionShockProgress = 0.0;
+  private accretionShockDuration = 1.65;
+  private accretionShockIntensity = 1.0;
+  private accretionShockRadius = 2.0;
+  private accretionShockColor = new THREE.Color(0xf59e0b);
+  private lastShockAccretionRate: number | null = null;
+  private lastShockAccretionState: string | null = null;
+  private accretionRateAccumDelta = 0;
+  private lastAccretionUpdateTime = 0;
+
   // Damped state variables
   private currentScale = 1.0;
   private targetScale = 1.0;
@@ -1847,6 +1888,8 @@ export class BlackHoleSceneController {
     this.buildCosmicSkyDome();
     this.buildCompositeBlackHole();
     this.buildEventHorizonPulseSystem();
+    this.buildParameterRippleSystem();
+    this.buildAccretionShockwaveSystem();
     this.buildPrototypeNeutronStar();
     this.buildBinaryAccretionSystem();
     this.buildSpacetimeWellManifold();
@@ -2219,6 +2262,341 @@ export class BlackHoleSceneController {
     this.eventHorizonPulseGroup.add(this.horizonFlashMesh);
 
     this.blackHoleGroup.add(this.eventHorizonPulseGroup);
+  }
+
+  private buildParameterRippleSystem() {
+    this.parameterRippleGroup = new THREE.Group();
+
+    // Concentric relativistic ring geometry
+    const ringGeo = new THREE.RingGeometry(0.85, 1.48, 96);
+    ringGeo.rotateX(-Math.PI / 2);
+
+    const shellGeo = new THREE.SphereGeometry(1.0, 32, 24);
+
+    const poolSize = 10;
+    this.parameterRipples = [];
+
+    for (let i = 0; i < poolSize; i++) {
+      const ringMat = new THREE.ShaderMaterial({
+        uniforms: {
+          uColor: { value: new THREE.Color(0x38bdf8) },
+          uOpacity: { value: 0.0 },
+          uPhase: { value: 0.0 },
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 uColor;
+          uniform float uOpacity;
+          uniform float uPhase;
+          varying vec2 vUv;
+          void main() {
+            float radial = length(vUv - 0.5) * 2.0;
+            float delta = radial - 0.88;
+            // Razor-sharp leading wave crest
+            float crest = exp(-pow(delta * 26.0, 2.0));
+            // Quasinormal oscillatory trailing ripples (damping harmonic wave train)
+            float harmonic1 = exp(-pow((delta + 0.12) * 18.0, 2.0)) * 0.65 * (0.6 + 0.4 * cos(delta * 65.0 - uPhase));
+            float harmonic2 = exp(-pow((delta + 0.24) * 14.0, 2.0)) * 0.40 * (0.6 + 0.4 * sin(delta * 85.0 - uPhase * 1.5));
+            float harmonic3 = exp(-pow((delta + 0.36) * 11.0, 2.0)) * 0.22;
+            float wave = crest + harmonic1 + harmonic2 + harmonic3;
+            vec3 crestTone = mix(uColor, vec3(1.0, 1.0, 1.0), crest * 0.75);
+            float alpha = clamp(wave, 0.0, 1.0) * uOpacity;
+            gl_FragColor = vec4(crestTone, alpha);
+          }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+
+      const ringMesh = new THREE.Mesh(ringGeo.clone(), ringMat);
+      ringMesh.visible = false;
+      this.parameterRippleGroup.add(ringMesh);
+
+      const shellMat = new THREE.ShaderMaterial({
+        uniforms: {
+          uColor: { value: new THREE.Color(0x38bdf8) },
+          uOpacity: { value: 0.0 },
+        },
+        vertexShader: `
+          varying vec3 vNormalVec;
+          void main() {
+            vNormalVec = normalize(normalMatrix * normal);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 uColor;
+          uniform float uOpacity;
+          varying vec3 vNormalVec;
+          void main() {
+            float viewCos = abs(vNormalVec.z);
+            float rim = exp(-pow(viewCos * 5.2, 2.0));
+            vec3 rgb = mix(uColor, vec3(0.92, 0.96, 1.0), 0.45);
+            float alpha = rim * uOpacity * 0.38;
+            gl_FragColor = vec4(rgb, alpha);
+          }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        side: THREE.BackSide,
+        depthWrite: false,
+      });
+
+      const shellMesh = new THREE.Mesh(shellGeo.clone(), shellMat);
+      shellMesh.visible = false;
+      this.parameterRippleGroup.add(shellMesh);
+
+      this.parameterRipples.push({
+        ringMesh,
+        shellMesh,
+        active: false,
+        progress: 0.0,
+        speed: 0.72,
+        intensity: 1.0,
+        type: 'mixed',
+        startRadius: 2.0,
+        maxRadius: 32.0,
+      });
+    }
+
+    this.blackHoleGroup.add(this.parameterRippleGroup);
+  }
+
+  public spawnParameterRipple(type: 'spin' | 'accretion' | 'mixed' = 'mixed', intensity: number = 1.0) {
+    if (this.settings.rapidAdjustmentRipples === false) return;
+
+    let candidate = this.parameterRipples.find((r) => !r.active);
+    if (!candidate) {
+      candidate = this.parameterRipples.reduce((prev, curr) => (curr.progress > prev.progress ? curr : prev));
+    }
+
+    const isStar = this.params?.objectCategory === 'star';
+    const effectiveScale = isStar ? 0.45 : this.currentScale;
+    const startR = isStar ? 1.4 * effectiveScale : Math.max(0.4, 2.15 * effectiveScale);
+    const maxR = Math.max(18.0, 34.0 * effectiveScale);
+
+    candidate.active = true;
+    candidate.progress = 0.0;
+    candidate.speed = 0.68 + Math.random() * 0.18;
+    candidate.intensity = Math.min(1.4, Math.max(0.65, intensity));
+    candidate.type = type;
+    candidate.startRadius = startR;
+    candidate.maxRadius = maxR;
+
+    let colHex = 0x38bdf8; // electric cyan for spin
+    if (type === 'accretion') {
+      colHex = 0xf59e0b; // fiery amber for accretion
+    } else if (type === 'mixed') {
+      colHex = 0xa855f7; // purple-magenta superradiant
+    }
+    const color = new THREE.Color(colHex);
+
+    const ringMat = candidate.ringMesh.material as THREE.ShaderMaterial;
+    ringMat.uniforms.uColor.value.copy(color);
+    ringMat.uniforms.uOpacity.value = candidate.intensity * 0.88;
+    candidate.ringMesh.scale.set(startR, 1.0, startR);
+    candidate.ringMesh.visible = true;
+
+    const shellMat = candidate.shellMesh.material as THREE.ShaderMaterial;
+    shellMat.uniforms.uColor.value.copy(color);
+    shellMat.uniforms.uOpacity.value = candidate.intensity * 0.38;
+    candidate.shellMesh.scale.set(startR, startR, startR);
+    candidate.shellMesh.visible = true;
+  }
+
+  public clearParameterRipples() {
+    for (const rip of this.parameterRipples) {
+      rip.active = false;
+      rip.ringMesh.visible = false;
+      rip.shellMesh.visible = false;
+    }
+  }
+
+  private buildAccretionShockwaveSystem() {
+    this.accretionShockwaveGroup = new THREE.Group();
+
+    // 1. Primary Accretion Blast Ring (Mach compression front with thermal ionization wake)
+    const shockRingGeo = new THREE.RingGeometry(0.82, 1.56, 96);
+    shockRingGeo.rotateX(-Math.PI / 2);
+
+    const primaryMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(0xf59e0b) },
+        uOpacity: { value: 0.0 },
+        uProgress: { value: 0.0 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        uniform float uProgress;
+        varying vec2 vUv;
+        void main() {
+          float radial = length(vUv - 0.5) * 2.0;
+          float delta = radial - 0.90;
+          // Searing ionizing shock front
+          float leadShock = exp(-pow(delta * 28.0, 2.0));
+          // Thermal plasma compression wake with acoustic striations
+          float wake = exp(-pow((delta + 0.14) * 14.0, 2.0)) * (0.6 + 0.4 * cos(delta * 70.0));
+          float trailingMist = exp(-pow((delta + 0.28) * 9.0, 2.0)) * 0.35;
+          float shockProfile = leadShock + wake + trailingMist;
+          vec3 coreColor = vec3(1.0, 0.98, 0.92);
+          vec3 blastColor = mix(uColor, coreColor, leadShock * 0.85);
+          float alpha = clamp(shockProfile, 0.0, 1.0) * uOpacity;
+          gl_FragColor = vec4(blastColor, alpha);
+        }
+      `,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.accretionShockPrimaryMesh = new THREE.Mesh(shockRingGeo, primaryMat);
+    this.accretionShockPrimaryMesh.visible = false;
+    this.accretionShockwaveGroup.add(this.accretionShockPrimaryMesh);
+
+    // 2. Secondary Trailing Acoustic Compression Ring
+    const secondaryMat = primaryMat.clone();
+    this.accretionShockSecondaryMesh = new THREE.Mesh(shockRingGeo.clone(), secondaryMat);
+    this.accretionShockSecondaryMesh.visible = false;
+    this.accretionShockwaveGroup.add(this.accretionShockSecondaryMesh);
+
+    // 3. 3D Spherical Radiation-Pressure Blast Wave Shell
+    const shellGeo = new THREE.SphereGeometry(1.0, 36, 28);
+    const shellMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(0xf59e0b) },
+        uOpacity: { value: 0.0 },
+      },
+      vertexShader: `
+        varying vec3 vNormalVec;
+        varying vec3 vPos;
+        void main() {
+          vNormalVec = normalize(normalMatrix * normal);
+          vPos = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        varying vec3 vNormalVec;
+        varying vec3 vPos;
+        void main() {
+          float viewCos = abs(vNormalVec.z);
+          float rim = exp(-pow(viewCos * 4.8, 2.0));
+          float poleFade = clamp(1.0 - abs(vPos.y) * 0.35, 0.0, 1.0);
+          vec3 rgb = mix(uColor, vec3(1.0, 0.95, 0.85), rim * 0.7);
+          float alpha = rim * uOpacity * 0.65 * poleFade;
+          gl_FragColor = vec4(rgb, alpha);
+        }
+      `,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.accretionShockShellMesh = new THREE.Mesh(shellGeo, shellMat);
+    this.accretionShockShellMesh.visible = false;
+    this.accretionShockwaveGroup.add(this.accretionShockShellMesh);
+
+    // 4. Horizon Ionization Flash Sphere (originates directly hugging the event horizon r_H)
+    const flashGeo = new THREE.SphereGeometry(1.0, 32, 32);
+    const flashMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(0xffeedd) },
+        uOpacity: { value: 0.0 },
+      },
+      vertexShader: `
+        varying vec3 vNormalVec;
+        void main() {
+          vNormalVec = normalize(normalMatrix * normal);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        varying vec3 vNormalVec;
+        void main() {
+          float rim = 0.5 + 0.5 * abs(vNormalVec.z);
+          gl_FragColor = vec4(uColor, rim * uOpacity);
+        }
+      `,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.accretionHorizonFlashMesh = new THREE.Mesh(flashGeo, flashMat);
+    this.accretionHorizonFlashMesh.visible = false;
+    this.accretionShockwaveGroup.add(this.accretionHorizonFlashMesh);
+
+    this.blackHoleGroup.add(this.accretionShockwaveGroup);
+  }
+
+  public triggerAccretionShockwave(intensity: number = 1.0, isSurge: boolean = true) {
+    if (this.settings.accretionShockwaveEnabled === false) return;
+
+    const isStar = this.params?.objectCategory === 'star';
+    const effectiveScale = isStar ? 0.45 : this.currentScale;
+    const horizonR = isStar ? 1.65 * effectiveScale : 2.26 * effectiveScale;
+
+    this.isAccretionShockActive = true;
+    this.accretionShockProgress = 0.0;
+    this.accretionShockIntensity = Math.min(1.6, Math.max(0.7, intensity));
+    this.accretionShockRadius = horizonR;
+
+    // Distinctive color: Fiery radiant amber/gold for accretion surge, or electric cyan/blue for rapid cooling
+    const hexColor = isSurge ? 0xf59e0b : 0x38bdf8;
+    this.accretionShockColor.set(hexColor);
+
+    const primaryMat = this.accretionShockPrimaryMesh.material as THREE.ShaderMaterial;
+    primaryMat.uniforms.uColor.value.copy(this.accretionShockColor);
+    primaryMat.uniforms.uOpacity.value = this.accretionShockIntensity * 0.95;
+    this.accretionShockPrimaryMesh.scale.set(horizonR, horizonR, horizonR);
+    this.accretionShockPrimaryMesh.visible = true;
+
+    const secondaryMat = this.accretionShockSecondaryMesh.material as THREE.ShaderMaterial;
+    secondaryMat.uniforms.uColor.value.copy(this.accretionShockColor);
+    secondaryMat.uniforms.uOpacity.value = this.accretionShockIntensity * 0.60;
+    this.accretionShockSecondaryMesh.scale.set(horizonR * 0.95, horizonR * 0.95, horizonR * 0.95);
+    this.accretionShockSecondaryMesh.visible = true;
+
+    const shellMat = this.accretionShockShellMesh.material as THREE.ShaderMaterial;
+    shellMat.uniforms.uColor.value.copy(this.accretionShockColor);
+    shellMat.uniforms.uOpacity.value = this.accretionShockIntensity * 0.48;
+    this.accretionShockShellMesh.scale.set(horizonR, horizonR, horizonR);
+    this.accretionShockShellMesh.visible = true;
+
+    const flashMat = this.accretionHorizonFlashMesh.material as THREE.ShaderMaterial;
+    flashMat.uniforms.uColor.value.set(isSurge ? 0xfff3db : 0xbae6fd);
+    flashMat.uniforms.uOpacity.value = this.accretionShockIntensity * 0.85;
+    this.accretionHorizonFlashMesh.scale.set(horizonR, horizonR, horizonR);
+    this.accretionHorizonFlashMesh.visible = true;
+  }
+
+  public clearAccretionShockwave() {
+    this.isAccretionShockActive = false;
+    this.accretionShockProgress = 1.0;
+    if (this.accretionShockPrimaryMesh) this.accretionShockPrimaryMesh.visible = false;
+    if (this.accretionShockSecondaryMesh) this.accretionShockSecondaryMesh.visible = false;
+    if (this.accretionShockShellMesh) this.accretionShockShellMesh.visible = false;
+    if (this.accretionHorizonFlashMesh) this.accretionHorizonFlashMesh.visible = false;
   }
 
   private buildPrototypeNeutronStar() {
@@ -2623,7 +3001,37 @@ export class BlackHoleSceneController {
           radialFalloff;
       }
 
-      posAttr.setY(i, depth + companionWellDip + frameDragSpiral + pulseWave);
+      // Propagating metric ripples from rapid spin or accretion rate adjustments
+      let paramRippleWave = 0.0;
+      if (this.settings.rapidAdjustmentRipples !== false) {
+        for (const rip of this.parameterRipples) {
+          if (!rip.active) continue;
+          const ease = 1.0 - Math.pow(1.0 - rip.progress, 2.2);
+          const curR = THREE.MathUtils.lerp(rip.startRadius, rip.maxRadius, ease);
+          const rDist = Math.abs(r - curR);
+          if (rDist < 7.5) {
+            const waveEnv = Math.exp(-Math.pow(rDist * 0.52, 2.0));
+            const waveCycle = Math.sin(rDist * 2.4 - rip.progress * 26.0);
+            const fade = Math.pow(1.0 - rip.progress, 1.25) * rip.intensity;
+            paramRippleWave += waveEnv * waveCycle * fade * 2.6;
+          }
+        }
+      }
+
+      // Propagating thermal radiation blast wave from accretion state/rate threshold change
+      let accretionShockWave = 0.0;
+      if (this.isAccretionShockActive && this.settings.accretionShockwaveEnabled !== false) {
+        const shockFrontR = this.accretionShockRadius;
+        const rDist = Math.abs(r - shockFrontR);
+        if (rDist < 8.5) {
+          const waveEnv = Math.exp(-Math.pow(rDist * 0.45, 2.0));
+          const waveOsc = Math.sin(rDist * 2.1 - this.accretionShockProgress * 32.0);
+          const shockFade = Math.pow(1.0 - this.accretionShockProgress, 1.2) * this.accretionShockIntensity;
+          accretionShockWave += waveEnv * waveOsc * shockFade * 3.4;
+        }
+      }
+
+      posAttr.setY(i, depth + companionWellDip + frameDragSpiral + pulseWave + paramRippleWave + accretionShockWave);
     }
     posAttr.needsUpdate = true;
     this.spacetimeWellGeo.computeVertexNormals();
@@ -3363,6 +3771,89 @@ export class BlackHoleSceneController {
   public updateParams(nextParams: BlackHoleParams, immediate = false) {
     const prevBackgroundTheme = this.params ? this.params.backgroundTheme : undefined;
     const prevSystemCategory = this.params ? this.params.systemCategory : undefined;
+
+    // Parameter rapid adjustment detection for propagating gravitational wave ripples
+    if (!immediate && this.settings.rapidAdjustmentRipples !== false && this.params) {
+      const now = performance.now();
+      const dt = Math.max(0.005, (now - this.lastParamUpdateTime) / 1000.0);
+
+      const prevSpin = typeof this.lastObservedSpin === 'number' ? this.lastObservedSpin : this.params.spin;
+      const prevAccretion = typeof this.lastObservedAccretionRate === 'number' ? this.lastObservedAccretionRate : this.params.accretionRate;
+
+      const deltaSpin = Math.abs(nextParams.spin - prevSpin);
+      const deltaAccretion = Math.abs(nextParams.accretionRate - prevAccretion);
+
+      const spinRate = deltaSpin / dt;
+      const accretionRateSpeed = deltaAccretion / dt;
+
+      const isRapidSpin = (spinRate > 0.16 && deltaSpin > 0.008) || deltaSpin > 0.035;
+      const isRapidAccretion = (accretionRateSpeed > 0.40 && deltaAccretion > 0.02) || deltaAccretion > 0.09;
+
+      if (isRapidSpin || isRapidAccretion) {
+        if (now - this.lastRippleSpawnTime > 85) {
+          const type: 'spin' | 'accretion' | 'mixed' =
+            isRapidSpin && isRapidAccretion ? 'mixed' : isRapidSpin ? 'spin' : 'accretion';
+          const intensity = Math.min(1.4, Math.max(0.7, deltaSpin * 7.0 + deltaAccretion * 2.2));
+          this.spawnParameterRipple(type, intensity);
+          this.lastRippleSpawnTime = now;
+        }
+      }
+
+      this.lastParamUpdateTime = now;
+      this.lastObservedSpin = nextParams.spin;
+      this.lastObservedAccretionRate = nextParams.accretionRate;
+    } else {
+      this.lastParamUpdateTime = performance.now();
+      this.lastObservedSpin = nextParams.spin;
+      this.lastObservedAccretionRate = nextParams.accretionRate;
+    }
+
+    // Accretion state & threshold burst shockwave detection
+    if (!immediate && this.settings.accretionShockwaveEnabled !== false && this.params) {
+      const prevAccretionRate = typeof this.lastShockAccretionRate === 'number'
+        ? this.lastShockAccretionRate
+        : this.params.accretionRate;
+      const prevAccretionState = this.lastShockAccretionState ?? this.params.accretionState ?? 'quiescent';
+
+      const deltaAccretion = Math.abs(nextParams.accretionRate - prevAccretionRate);
+      const stateChanged = nextParams.accretionState !== prevAccretionState;
+
+      const now = performance.now();
+      const dt = (now - this.lastAccretionUpdateTime) / 1000.0;
+      if (dt > 0.40) {
+        this.accretionRateAccumDelta = 0;
+      }
+      this.accretionRateAccumDelta += deltaAccretion;
+      this.lastAccretionUpdateTime = now;
+
+      // Threshold trigger:
+      // 1. Accretion state toggle (quiescent <-> active)
+      // 2. Significant modification beyond threshold (delta >= 0.25)
+      // 3. Accumulated scrubbing modification beyond threshold (accumulated delta >= 0.35)
+      // 4. Crossing the critical Eddington boundary (m_dot = 1.0) with significant change (delta >= 0.15)
+      const crossedEddington =
+        (prevAccretionRate < 1.0 && nextParams.accretionRate >= 1.0) ||
+        (prevAccretionRate >= 1.0 && nextParams.accretionRate < 1.0);
+
+      const thresholdExceeded =
+        deltaAccretion >= 0.25 ||
+        this.accretionRateAccumDelta >= 0.35 ||
+        (crossedEddington && deltaAccretion >= 0.15);
+
+      if (stateChanged || thresholdExceeded) {
+        const isSurge = nextParams.accretionRate >= prevAccretionRate || nextParams.accretionState === 'active';
+        const intensity = Math.min(1.5, Math.max(0.85, deltaAccretion * 2.2 + (stateChanged ? 0.45 : 0.0)));
+        this.triggerAccretionShockwave(intensity, isSurge);
+        this.accretionRateAccumDelta = 0;
+      }
+
+      this.lastShockAccretionRate = nextParams.accretionRate;
+      this.lastShockAccretionState = nextParams.accretionState || 'quiescent';
+    } else {
+      this.lastShockAccretionRate = nextParams.accretionRate;
+      this.lastShockAccretionState = nextParams.accretionState || 'quiescent';
+    }
+
     const massChanged =
       Math.abs(nextParams.massSolar - this.params.massSolar) > 0.1 ||
       Math.abs(nextParams.spin - this.params.spin) > 0.01 ||
@@ -4033,6 +4524,89 @@ export class BlackHoleSceneController {
       }
     }
 
+    // 4c. Rapid Parameter Adjustment Gravitational Wave Ripples Animation
+    if (this.settings.rapidAdjustmentRipples !== false && this.parameterRipples.length > 0) {
+      let hasActiveRipples = false;
+      const stepDelta = Math.min(0.05, Math.max(0.005, rawDelta)); // advances continuously even during pauses
+      for (const rip of this.parameterRipples) {
+        if (!rip.active) continue;
+        hasActiveRipples = true;
+        rip.progress += stepDelta * rip.speed;
+        if (rip.progress >= 1.0) {
+          rip.active = false;
+          rip.ringMesh.visible = false;
+          rip.shellMesh.visible = false;
+        } else {
+          const ease = 1.0 - Math.pow(1.0 - rip.progress, 2.2);
+          const currentR = THREE.MathUtils.lerp(rip.startRadius, rip.maxRadius, ease);
+          rip.ringMesh.visible = true;
+          rip.ringMesh.scale.set(currentR, 1.0, currentR);
+
+          const fade = Math.pow(1.0 - rip.progress, 1.35) * rip.intensity;
+          const ringMat = rip.ringMesh.material as THREE.ShaderMaterial;
+          ringMat.uniforms.uOpacity.value = fade * 0.88;
+          ringMat.uniforms.uPhase.value = rip.progress * 18.0;
+
+          rip.shellMesh.visible = true;
+          rip.shellMesh.scale.set(currentR * 0.96, currentR * 0.96, currentR * 0.96);
+          const shellMat = rip.shellMesh.material as THREE.ShaderMaterial;
+          shellMat.uniforms.uOpacity.value = fade * 0.38;
+        }
+      }
+
+      if (hasActiveRipples && !this.isPulseActive) {
+        this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
+      }
+    }
+
+    // 4d. Accretion State & Threshold Burst Shockwave Animation
+    if (this.isAccretionShockActive && this.settings.accretionShockwaveEnabled !== false) {
+      const shockStep = Math.min(0.05, Math.max(0.005, rawDelta));
+      this.accretionShockProgress += shockStep / this.accretionShockDuration;
+      if (this.accretionShockProgress >= 1.0) {
+        this.clearAccretionShockwave();
+      } else {
+        const t = this.accretionShockProgress;
+        const blastEase = 1.0 - Math.pow(1.0 - t, 2.5);
+        const isStar = this.params?.objectCategory === 'star';
+        const effScale = isStar ? 0.45 : this.currentScale;
+        const startR = isStar ? 1.65 * effScale : 2.26 * effScale;
+        const maxR = Math.max(16.0, 26.0 * effScale);
+        this.accretionShockRadius = THREE.MathUtils.lerp(startR, maxR, blastEase);
+        const fade = Math.pow(1.0 - t, 1.35) * this.accretionShockIntensity;
+
+        this.accretionShockPrimaryMesh.visible = true;
+        this.accretionShockPrimaryMesh.scale.set(this.accretionShockRadius, this.accretionShockRadius, this.accretionShockRadius);
+        (this.accretionShockPrimaryMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = fade * 0.95;
+        (this.accretionShockPrimaryMesh.material as THREE.ShaderMaterial).uniforms.uProgress.value = t;
+
+        const trailR = Math.max(startR, this.accretionShockRadius * 0.82);
+        this.accretionShockSecondaryMesh.visible = true;
+        this.accretionShockSecondaryMesh.scale.set(trailR, trailR, trailR);
+        (this.accretionShockSecondaryMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = fade * 0.60;
+        (this.accretionShockSecondaryMesh.material as THREE.ShaderMaterial).uniforms.uProgress.value = t * 1.15;
+
+        const shellR = THREE.MathUtils.lerp(startR, maxR * 1.08, blastEase);
+        this.accretionShockShellMesh.visible = true;
+        this.accretionShockShellMesh.scale.set(shellR, shellR, shellR);
+        (this.accretionShockShellMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = fade * 0.48;
+
+        if (t < 0.35) {
+          const flashT = t / 0.35;
+          const flashScale = startR * (1.0 + flashT * 0.28);
+          this.accretionHorizonFlashMesh.visible = true;
+          this.accretionHorizonFlashMesh.scale.set(flashScale, flashScale, flashScale);
+          (this.accretionHorizonFlashMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = (1.0 - flashT) * 0.85 * fade;
+        } else {
+          this.accretionHorizonFlashMesh.visible = false;
+        }
+
+        if (!this.isPulseActive) {
+          this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
+        }
+      }
+    }
+
     // 5. Authentic Gravitational Lensing of Background Starfield
     if (this.params.gravitationalLensing !== false) {
       this.updateGravitationalLensingOfStarfield();
@@ -4598,6 +5172,12 @@ export class BlackHoleSceneController {
       this.camera.fov = nextSettings.cameraFov;
       this.camera.updateProjectionMatrix();
     }
+    if (nextSettings.rapidAdjustmentRipples === false) {
+      this.clearParameterRipples();
+    }
+    if (nextSettings.accretionShockwaveEnabled === false) {
+      this.clearAccretionShockwave();
+    }
   }
 
   public setAutoRotate(enabled: boolean, speed?: number) {
@@ -4709,6 +5289,20 @@ export class BlackHoleSceneController {
     this.microlensSecondaryImageMesh?.geometry?.dispose();
     this.microlensEinsteinRingMesh?.geometry?.dispose();
     this.microlensPathTrail?.geometry?.dispose();
+    for (const rip of this.parameterRipples) {
+      rip.ringMesh.geometry.dispose();
+      (rip.ringMesh.material as THREE.Material).dispose();
+      rip.shellMesh.geometry.dispose();
+      (rip.shellMesh.material as THREE.Material).dispose();
+    }
+    this.accretionShockPrimaryMesh?.geometry?.dispose();
+    (this.accretionShockPrimaryMesh?.material as THREE.Material | undefined)?.dispose();
+    this.accretionShockSecondaryMesh?.geometry?.dispose();
+    (this.accretionShockSecondaryMesh?.material as THREE.Material | undefined)?.dispose();
+    this.accretionShockShellMesh?.geometry?.dispose();
+    (this.accretionShockShellMesh?.material as THREE.Material | undefined)?.dispose();
+    this.accretionHorizonFlashMesh?.geometry?.dispose();
+    (this.accretionHorizonFlashMesh?.material as THREE.Material | undefined)?.dispose();
     this.renderer?.dispose();
     if (this.domElement.parentNode === this.container) {
       this.container.removeChild(this.domElement);
