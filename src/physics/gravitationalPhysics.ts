@@ -1,4 +1,8 @@
-export type ObjectCategory = 'black_hole' | 'star';
+export type ObjectCategory = 'black_hole' | 'star' | 'luminous_star';
+
+export function isStellarCategory(cat?: ObjectCategory): boolean {
+  return cat === 'star' || cat === 'luminous_star';
+}
 
 export type BackgroundThemeId = 'galactic_core' | 'pure_black';
 
@@ -40,7 +44,7 @@ export type SystemCategory = 'isolated' | 'binary';
 export interface BlackHoleParams {
   /** System architecture category: Isolated Singularity vs. Binary Accretion System (Roche Lobe Overflow) */
   systemCategory?: SystemCategory;
-  /** Object category: black hole or compact star remnant */
+  /** Object category: black hole, compact star remnant, or luminous star */
   objectCategory: ObjectCategory;
   /** Active background cosmic environment theme */
   backgroundTheme: BackgroundThemeId;
@@ -95,7 +99,13 @@ export type BlackHoleArchetype =
   | 'stellar'
   | 'primordial'
   | 'neutron_star'
-  | 'magnetar';
+  | 'magnetar'
+  | 'quark_star'
+  | 'white_dwarf'
+  | 'wolf_rayet'
+  | 'luminous_blue_variable'
+  | 'red_hypergiant'
+  | 'main_sequence_star';
 
 export interface ArchetypeDefinition {
   id: BlackHoleArchetype;
@@ -161,7 +171,7 @@ export const ARCHETYPE_DEFINITIONS: Record<BlackHoleArchetype, ArchetypeDefiniti
     typicalDiameter: '18 to 600 kilometers across (size of Manhattan or a small state)',
     formationMechanism: 'Catastrophic gravitational core collapse of massive stars (>20 M☉) in supernova explosions.',
     hawkingEvaporationTime: '~10⁶⁷ years',
-    examples: ['Cygnus X-1 (21.2 Suns)', 'GW150914 (62.0 Suns)', 'V404 Cygni (9.0 Suns)'],
+    examples: ['Cygnus X-1 (21.2 Suns)', 'GW150914 (62 Suns)', 'V404 Cygni (9 Suns)'],
     badgeBg: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
   },
   primordial: {
@@ -174,7 +184,7 @@ export const ARCHETYPE_DEFINITIONS: Record<BlackHoleArchetype, ArchetypeDefiniti
     typicalDiameter: 'Subatomic scale up to a few centimeters (an Earth-mass PBH is 1.8 cm across, like a coin!)',
     formationMechanism: 'Direct collapse of high-density quantum fluctuations in the primordial plasma of the early universe.',
     hawkingEvaporationTime: 'Sub-seconds for micro-PBHs; >10⁵⁰ years for planetary mass PBHs',
-    examples: ['PBH-Earth (1.0 Earth Mass)', 'Asteroid-Mass PBH (10¹⁵ kg)'],
+    examples: ['PBH-Earth (1 Earth Mass)', 'Asteroid-Mass PBH (10¹⁵ kg)'],
     badgeBg: 'bg-pink-500/20 text-pink-300 border-pink-500/40',
   },
   neutron_star: {
@@ -203,6 +213,84 @@ export const ARCHETYPE_DEFINITIONS: Record<BlackHoleArchetype, ArchetypeDefiniti
     examples: ['SGR 1806-20', '1E 1048.1-5937', 'SGR 1935+2154'],
     badgeBg: 'bg-teal-500/20 text-teal-300 border-teal-500/40',
   },
+  quark_star: {
+    id: 'quark_star',
+    category: 'star',
+    name: 'Strange Quark Star (Exotic Remnant)',
+    tagline: 'Deconfined up-down-strange quark matter balanced on the verge of the event horizon',
+    massRangeDisplay: '1.8 to 2.3 Solar Masses (Sub-TOV Exotic Phase)',
+    sunsComparison: '2.1 Suns crushed into a hyper-compact 11 km sphere of pure quark-gluon plasma, with R_star only ~1.7× its Schwarzschild radius.',
+    typicalDiameter: '10 to 13 kilometers across (denser than ordinary neutron matter)',
+    formationMechanism: 'Phase transition where extreme core pressure dissolves neutrons into free up, down, and strange quarks.',
+    hawkingEvaporationTime: 'Self-bound by strong nuclear force (Bodmer-Witten hypothesis)',
+    examples: ['RX J1856.5-3754', 'XMMU J173203.3-344518', '3C 58'],
+    badgeBg: 'bg-violet-500/20 text-violet-300 border-violet-500/40',
+  },
+  white_dwarf: {
+    id: 'white_dwarf',
+    category: 'star',
+    name: 'Ultra-Massive White Dwarf',
+    tagline: 'Electron-degenerate carbon-oxygen core poised near the 1.44 M☉ Chandrasekhar limit',
+    massRangeDisplay: '0.5 to 1.44 Solar Masses (Chandrasekhar Limit)',
+    sunsComparison: '1.35 Suns packed into a crystalline carbon-oxygen sphere the size of Earth\'s Moon (~4,300 km).',
+    typicalDiameter: '4,000 to 12,000 kilometers across (Moon to Earth scale)',
+    formationMechanism: 'Gravitational core remnant of low-to-intermediate mass stars (<8 M☉) or double white-dwarf mergers.',
+    hawkingEvaporationTime: 'Cools over ~10¹⁵ years into a cold crystalline black dwarf',
+    examples: ['ZTF J1901+1458 (1.35 Suns)', 'Sirius B (1.02 Suns)', '40 Eridani B'],
+    badgeBg: 'bg-sky-500/20 text-sky-200 border-sky-500/40',
+  },
+  wolf_rayet: {
+    id: 'wolf_rayet',
+    category: 'luminous_star',
+    name: 'Wolf-Rayet Hyper-Luminous Star',
+    tagline: 'Radiation-stripped stellar titans (>100 to 250+ Suns) firing relativistic stellar winds',
+    massRangeDisplay: '25 to 250+ Solar Masses (Eddington Limit Titans)',
+    sunsComparison: 'Up to 215 Suns shining with the luminosity of 8.7 Million Suns at >50,000 K surface temperatures.',
+    typicalDiameter: '30 to 60 Million kilometers (~20 to 40 Solar Radii)',
+    formationMechanism: 'Extreme O-type hypergiants whose ferocious radiation pressure strips away their own outer hydrogen envelopes.',
+    hawkingEvaporationTime: 'Short 2-5 Myr nuclear lifespan; ends in a Type Ib/Ic supernova or direct black hole collapse',
+    examples: ['R136a1 (215 Suns)', 'WR 102 (70,000 K)', 'WR 104 (Pinwheel Star)'],
+    badgeBg: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+  },
+  luminous_blue_variable: {
+    id: 'luminous_blue_variable',
+    category: 'luminous_star',
+    name: 'Luminous Blue Variable (LBV) Hypergiant',
+    tagline: 'Unstable supermassive blue hypergiants (50 to 150 Suns) erupting with bipolar nebular jets',
+    massRangeDisplay: '50 to 150 Solar Masses',
+    sunsComparison: '100 Suns radiating 5 Million times our Sun\'s power, periodically blasting 10+ Suns of plasma into bipolar lobes.',
+    typicalDiameter: '100 to 350 Million kilometers (~0.7 to 2.3 AU)',
+    formationMechanism: 'Massive post-main-sequence stars encountering the Humphreys-Davidson radiation instability limit.',
+    hawkingEvaporationTime: 'Erupts into a core-collapse hypernova / stellar-mass black hole within ~1 Million years',
+    examples: ['Eta Carinae A (100 Suns)', 'P Cygni', 'Pistol Star (100 Suns)'],
+    badgeBg: 'bg-cyan-500/20 text-cyan-200 border-cyan-400/40',
+  },
+  red_hypergiant: {
+    id: 'red_hypergiant',
+    category: 'luminous_star',
+    name: 'Red Supergiant / Hypergiant',
+    tagline: 'Colossal evolved fusion furnaces (15 to 40 Suns) spanning up to Saturn\'s orbit',
+    massRangeDisplay: '15 to 40 Solar Masses',
+    sunsComparison: '18 Suns swollen to a diameter of 1.2 Billion km (~760× wider than our Sun), with giant boiling convective cells.',
+    typicalDiameter: '1.0 to 3.0 Billion kilometers (~700 to 2,150 Solar Radii)',
+    formationMechanism: 'Core helium-to-iron fusion expansion in massive stars prior to Type II core-collapse supernova.',
+    hawkingEvaporationTime: 'Explodes as a Type II supernova within ~100,000 years, leaving a neutron star or black hole',
+    examples: ['Betelgeuse · α Orionis (18 Suns)', 'VY Canis Majoris', 'Stephenson 2-18'],
+    badgeBg: 'bg-orange-500/20 text-orange-300 border-orange-500/40',
+  },
+  main_sequence_star: {
+    id: 'main_sequence_star',
+    category: 'luminous_star',
+    name: 'Main-Sequence Star (Hydrostatic Fusion)',
+    tagline: 'Hydrogen-fusing stars in stable hydrostatic equilibrium (0.08 to 50 Suns)',
+    massRangeDisplay: '0.08 to 50 Solar Masses',
+    sunsComparison: '1.0 Solar Mass benchmark (333,000 Earths) where outward thermonuclear fusion pressure balances inward gravity.',
+    typicalDiameter: '1.39 Million kilometers (1.0 Solar Diameter = 109 Earths wide)',
+    formationMechanism: 'Gravitational collapse of cold molecular cloud cores igniting core proton-proton or CNO hydrogen fusion.',
+    hawkingEvaporationTime: '~10 Billion years on the main sequence before evolving into a red giant and white dwarf',
+    examples: ['Sol · The Sun (1.0 Sun)', 'Alpha Centauri A (1.1 Suns)', 'Vega (2.1 Suns)'],
+    badgeBg: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
+  },
 };
 
 export interface AstrophysicalPreset {
@@ -222,6 +310,12 @@ export interface AstrophysicalPreset {
   scaleNote: string;
   params: Partial<BlackHoleParams>;
   description: string;
+  /** Optional custom 3D stellar surface & jet appearance overrides for star categories */
+  surfaceHexColor?: number;
+  coreBeamHexColor?: number;
+  sheathBeamHexColor?: number;
+  compactnessRatio?: number;
+  visualScale?: number;
 }
 
 export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
@@ -509,6 +603,11 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       },
     },
     description: 'The historic first pulsar ever discovered in 1967 by Jocelyn Bell Burnell. A rapidly spinning magnetized neutron star whose sweeping radio lighthouse beams create rhythmic periodic pulses every 1.337 seconds.',
+    surfaceHexColor: 0x0ea5e9,
+    coreBeamHexColor: 0xf0f9ff,
+    sheathBeamHexColor: 0x38bdf8,
+    compactnessRatio: 0.41,
+    visualScale: 0.45,
   },
   {
     id: 'magnetar_sgr',
@@ -546,6 +645,265 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       },
     },
     description: 'The most violently magnetized object known to humanity. Starquakes in its rigid crystalline crust trigger colossal magnetic reconnections and giant gamma-ray flares.',
+    surfaceHexColor: 0x14b8a6,
+    coreBeamHexColor: 0xccfbf1,
+    sheathBeamHexColor: 0x2dd4bf,
+    compactnessRatio: 0.48,
+    visualScale: 0.48,
+  },
+  {
+    id: 'rx_j1856',
+    name: 'RX J1856.5-3754',
+    category: 'star',
+    designation: 'Corona Australis · Exotic Quark Remnant',
+    classification: 'Strange Quark Star',
+    archetype: 'quark_star',
+    distanceLightYears: '400 ly',
+    trueMassSolar: 2.1,
+    realMassSolarDisplay: '2.10 M☉',
+    plainMassExplanation: '2.1 Suns',
+    solarEquivalence: '2.1 Suns crushed into an ultra-compact 11 km sphere of deconfined up, down, and strange quark matter balanced right above the photon sphere.',
+    trueDiameterKm: 11,
+    horizonDiameterKmDisplay: '11 km (Quark-Gluon Surface)',
+    scaleNote: 'Smaller and denser than a standard neutron star. Its surface sits at R ≈ 1.7 Rs, bending light so strongly that over 75% of its backside is simultaneously visible.',
+    params: {
+      objectCategory: 'star',
+      massSolar: 24,
+      spin: 0.62,
+      accretionRate: 0.75,
+      inclinationDeg: 68,
+      dopplerStrength: 0.58,
+      probeRadiusRs: 3.8,
+      wellDepthMultiplier: 2.1,
+      spectralMode: 'xray',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: false,
+        geodesicRays: false,
+        pulsarBeams: true,
+        magneticField: true,
+      },
+    },
+    description: 'Closest discovered isolated superdense compact remnant and premier candidate for a strange quark star where extreme pressure has dissolved neutrons into pure quark matter.',
+    surfaceHexColor: 0x8b5cf6,
+    coreBeamHexColor: 0xf5f3ff,
+    sheathBeamHexColor: 0xa78bfa,
+    compactnessRatio: 0.58,
+    visualScale: 0.42,
+  },
+  {
+    id: 'ztf_j1901',
+    name: 'ZTF J1901+1458',
+    category: 'star',
+    designation: 'Aquila · Chandrasekhar-Limit Remnant',
+    classification: 'Ultra-Massive White Dwarf',
+    archetype: 'white_dwarf',
+    distanceLightYears: '130 ly',
+    trueMassSolar: 1.35,
+    realMassSolarDisplay: '1.35 M☉',
+    plainMassExplanation: '1.35 Suns',
+    solarEquivalence: '1.35 Suns compressed into a crystalline carbon-oxygen sphere only 4,300 km wide (roughly the size of Earth\'s Moon).',
+    trueDiameterKm: 4300,
+    horizonDiameterKmDisplay: '4,300 km (Degenerate C/O Core)',
+    scaleNote: 'The smallest and most massive known white dwarf, forged by the merger of two white dwarfs and balanced just 0.09 M☉ below the Type Ia supernova collapse threshold.',
+    params: {
+      objectCategory: 'star',
+      massSolar: 12,
+      spin: 0.28,
+      accretionRate: 0.40,
+      inclinationDeg: 62,
+      dopplerStrength: 0.35,
+      probeRadiusRs: 5.2,
+      wellDepthMultiplier: 1.3,
+      spectralMode: 'blackbody',
+      layers: {
+        accretionDisk: false,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: false,
+        geodesicRays: false,
+        pulsarBeams: false,
+        magneticField: true,
+      },
+    },
+    description: 'An extreme Moon-sized white dwarf spinning once every 6.94 minutes with a 900-million-Gauss magnetic field, supported by relativistic electron degeneracy pressure.',
+    surfaceHexColor: 0x7dd3fc,
+    coreBeamHexColor: 0xf0f9ff,
+    sheathBeamHexColor: 0x7dd3fc,
+    compactnessRatio: 0.22,
+    visualScale: 0.62,
+  },
+
+  // --- LUMINOUS & HYPERGIANT STARS ---
+  {
+    id: 'r136a1',
+    name: 'R136a1',
+    category: 'luminous_star',
+    designation: 'RMC 136a1 · Tarantula Nebula Core',
+    classification: 'Wolf-Rayet Hypergiant',
+    archetype: 'wolf_rayet',
+    distanceLightYears: '163,000 ly (Large Magellanic Cloud)',
+    trueMassSolar: 215,
+    realMassSolarDisplay: '215 M☉',
+    plainMassExplanation: '215 Suns',
+    solarEquivalence: 'The most massive and luminous known star in the universe: 215 Suns radiating the blinding power of 8.7 Million Suns at >53,000 K.',
+    trueDiameterKm: 49000000,
+    horizonDiameterKmDisplay: '49 Million km (~35.4 R☉)',
+    scaleNote: 'Its radiation pressure is so extreme that it continuously strips its own atmosphere via 2,600 km/s relativistic stellar winds.',
+    params: {
+      objectCategory: 'luminous_star',
+      massSolar: 85,
+      spin: 0.55,
+      accretionRate: 1.55,
+      inclinationDeg: 70,
+      dopplerStrength: 0.55,
+      probeRadiusRs: 4.2,
+      wellDepthMultiplier: 2.3,
+      spectralMode: 'blackbody',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: false,
+        geodesicRays: false,
+        pulsarBeams: true,
+        magneticField: true,
+      },
+    },
+    description: 'Monster Wolf-Rayet star at the heart of the 30 Doradus starburst cluster. In just 1 million years it has already shed over 50 Solar Masses via ferocious radiation-driven bipolar outflows.',
+    surfaceHexColor: 0x3b82f6,
+    coreBeamHexColor: 0xeff6ff,
+    sheathBeamHexColor: 0x60a5fa,
+    compactnessRatio: 0.34,
+    visualScale: 1.05,
+  },
+  {
+    id: 'eta_carinae',
+    name: 'Eta Carinae A',
+    category: 'luminous_star',
+    designation: 'η Carinae · Homunculus Eruptive Core',
+    classification: 'Luminous Blue Variable',
+    archetype: 'luminous_blue_variable',
+    distanceLightYears: '7,500 ly',
+    trueMassSolar: 100,
+    realMassSolarDisplay: '100 M☉',
+    plainMassExplanation: '100 Suns',
+    solarEquivalence: '100 Suns shining at 5 Million times solar luminosity, balanced precariously on the Eddington radiation stability limit.',
+    trueDiameterKm: 334000000,
+    horizonDiameterKmDisplay: '334 Million km (~240 R☉)',
+    scaleNote: 'During its Great Eruption of 1843, Eta Carinae ejected 20 Suns of glowing gas into the twin bipolar lobes of the Homunculus Nebula.',
+    params: {
+      objectCategory: 'luminous_star',
+      massSolar: 70,
+      spin: 0.48,
+      accretionRate: 1.40,
+      inclinationDeg: 66,
+      dopplerStrength: 0.50,
+      probeRadiusRs: 4.5,
+      wellDepthMultiplier: 2.0,
+      spectralMode: 'blackbody',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: false,
+        geodesicRays: false,
+        pulsarBeams: true,
+        magneticField: true,
+      },
+    },
+    description: 'Volatile Luminous Blue Variable hypergiant nearing the end of its nuclear life. Expected to detonate as an extreme hypernova and collapse into a stellar-mass black hole.',
+    surfaceHexColor: 0x06b6d4,
+    coreBeamHexColor: 0xecfeff,
+    sheathBeamHexColor: 0x22d3ee,
+    compactnessRatio: 0.30,
+    visualScale: 1.15,
+  },
+  {
+    id: 'betelgeuse',
+    name: 'Betelgeuse · α Orionis',
+    category: 'luminous_star',
+    designation: 'Alpha Orionis · Evolved Red Supergiant',
+    classification: 'Red Supergiant',
+    archetype: 'red_hypergiant',
+    distanceLightYears: '642 ly',
+    trueMassSolar: 18,
+    realMassSolarDisplay: '18.0 M☉',
+    plainMassExplanation: '18 Suns',
+    solarEquivalence: '18 Suns swollen into a colossal crimson photosphere 1.06 Billion km across (~764× the diameter of our Sun).',
+    trueDiameterKm: 1060000000,
+    horizonDiameterKmDisplay: '1.06 Billion km (~764 R☉)',
+    scaleNote: 'If placed at the center of our Solar System, Betelgeuse\'s boiling crimson surface would engulf Mercury, Venus, Earth, Mars, and the Asteroid Belt.',
+    params: {
+      objectCategory: 'luminous_star',
+      massSolar: 35,
+      spin: 0.18,
+      accretionRate: 0.65,
+      inclinationDeg: 68,
+      dopplerStrength: 0.30,
+      probeRadiusRs: 5.5,
+      wellDepthMultiplier: 1.5,
+      spectralMode: 'blackbody',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: false,
+        geodesicRays: false,
+        pulsarBeams: false,
+        magneticField: false,
+      },
+    },
+    description: 'Iconic red supergiant in Orion with giant continent-sized convective cells boiling across its 3,600 K photosphere, surrounded by dusty mass-loss shells prior to core collapse.',
+    surfaceHexColor: 0xf97316,
+    coreBeamHexColor: 0xffedd5,
+    sheathBeamHexColor: 0xfb923c,
+    compactnessRatio: 0.16,
+    visualScale: 1.38,
+  },
+  {
+    id: 'sol_sun',
+    name: 'Sol · The Sun',
+    category: 'luminous_star',
+    designation: 'G2V Yellow Dwarf · Solar System Anchor',
+    classification: 'Main-Sequence Star',
+    archetype: 'main_sequence_star',
+    distanceLightYears: '0.0000158 ly (1.00 AU)',
+    trueMassSolar: 1.0,
+    realMassSolarDisplay: '1.00 M☉',
+    plainMassExplanation: '1.0 Sun',
+    solarEquivalence: 'The fundamental 1.0 M☉ astrophysical benchmark (1.989 × 10³⁰ kg = 333,000 Earths), fusing 600 million tons of hydrogen per second.',
+    trueDiameterKm: 1392700,
+    horizonDiameterKmDisplay: '1.39 Million km (1.0 R☉)',
+    scaleNote: 'In 1919, Sir Arthur Eddington measured the 1.75-arcsecond gravitational bending of starlight grazing our Sun\'s limb, providing the historic first proof of General Relativity.',
+    params: {
+      objectCategory: 'luminous_star',
+      massSolar: 8,
+      spin: 0.12,
+      accretionRate: 0.25,
+      inclinationDeg: 72,
+      dopplerStrength: 0.20,
+      probeRadiusRs: 6.0,
+      wellDepthMultiplier: 1.0,
+      spectralMode: 'blackbody',
+      layers: {
+        accretionDisk: false,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: false,
+        geodesicRays: false,
+        pulsarBeams: false,
+        magneticField: true,
+      },
+    },
+    description: 'Our home G2V main-sequence star in hydrostatic equilibrium. Its gentle spacetime curvature anchors the planetary orbits of the Solar System.',
+    surfaceHexColor: 0xeab308,
+    coreBeamHexColor: 0xfef9c3,
+    sheathBeamHexColor: 0xfacc15,
+    compactnessRatio: 0.12,
+    visualScale: 0.85,
   },
 ];
 
@@ -683,7 +1041,7 @@ export interface DerivedRelativisticMetrics {
 export function computeRelativisticMetrics(params: BlackHoleParams): DerivedRelativisticMetrics {
   const M = Math.max(1.4, params.massSolar);
   const a = Math.min(0.9999, Math.max(0, params.spin));
-  const isStar = params.objectCategory === 'star';
+  const isStar = isStellarCategory(params.objectCategory);
 
   // 1 Solar Mass gravitational radius Rg = GM/c^2 ≈ 1.476625 km; Schwarzschild Rs = 2 * Rg ≈ 2.95325 km
   const rgKm = 1.476625 * M;
@@ -693,7 +1051,7 @@ export function computeRelativisticMetrics(params: BlackHoleParams): DerivedRela
   const eventHorizonRg = 1.0 + Math.sqrt(Math.max(0, 1.0 - a * a));
   const eventHorizonKm = eventHorizonRg * rgKm;
 
-  // Physical surface radius for a neutron star (~10-12 km radius, greater than its Schwarzschild radius)
+  // Physical surface radius for a star (greater than its Schwarzschild radius)
   const physicalSurfaceKm = isStar ? Math.max(10.0, schwarzschildRadiusKm * 1.85) : 0;
 
   // Bardeen, Press & Teukolsky (1972) ISCO formula for prograde equatorial orbit:

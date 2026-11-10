@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Layers, Activity, Download, Maximize2, Zap, Sun, Eye, EyeOff, Settings, Orbit, ChevronDown } from 'lucide-react';
+import { Sparkles, Layers, Activity, Download, Maximize2, Zap, Sun, Eye, EyeOff, Settings, Orbit, ChevronDown, BookOpen } from 'lucide-react';
 import { ASTROPHYSICAL_PRESETS, BackgroundThemeId, BACKGROUND_THEMES, SystemCategory } from '../physics/gravitationalPhysics';
 import { useHaptics } from '../hooks/useHaptics';
 
@@ -9,6 +9,7 @@ interface TopBarProps {
   systemCategory?: SystemCategory;
   onChangeSystemCategory?: (category: SystemCategory) => void;
   onOpenTheoryModal: () => void;
+  onOpenQuickGuideModal?: () => void;
   onOpenArchetypeModal: () => void;
   onOpenCosmicScaleModal: () => void;
   onOpenBackgroundModal: () => void;
@@ -29,6 +30,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   systemCategory = 'isolated',
   onChangeSystemCategory,
   onOpenTheoryModal,
+  onOpenQuickGuideModal,
   onOpenArchetypeModal,
   onOpenCosmicScaleModal,
   onOpenBackgroundModal,
@@ -64,7 +66,15 @@ export const TopBar: React.FC<TopBarProps> = ({
         <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
           <span className="text-neutral-200 font-semibold">{activePreset.name}</span>
           <span className="text-neutral-600">·</span>
-          <span className={activePreset.category === 'star' ? 'text-emerald-400' : 'text-neutral-400'}>
+          <span
+            className={
+              activePreset.category === 'star'
+                ? 'text-emerald-400'
+                : activePreset.category === 'luminous_star'
+                ? 'text-indigo-400'
+                : 'text-neutral-400'
+            }
+          >
             {activePreset.classification}
           </span>
         </div>
@@ -96,11 +106,12 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       {/* Zone 2: Smart Quick Presets Nav */}
-      <nav className="hidden lg:flex items-center gap-1 text-xs font-medium text-neutral-400 py-0.5 px-1 bg-neutral-950 border border-neutral-800/90 rounded-lg">
+      <nav className="hidden lg:flex items-center gap-1 text-xs font-medium text-neutral-400 py-0.5 px-1 bg-neutral-950 border border-neutral-800/90 rounded-lg overflow-x-auto no-scrollbar max-w-xl">
         {ASTROPHYSICAL_PRESETS.map((preset) => {
           const isActive = activePresetId === preset.id;
           const isTon618 = preset.id === 'ton618';
-          const isStar = preset.category === 'star';
+          const isCompactStar = preset.category === 'star';
+          const isLuminousStar = preset.category === 'luminous_star';
 
           return (
             <button
@@ -110,7 +121,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 haptics.medium();
                 onSelectPreset(preset.id);
               }}
-              className={`px-2.5 py-1 rounded text-xs transition-all whitespace-nowrap shrink-0 flex items-center gap-1 cursor-pointer ${
+              className={`px-2 py-1 rounded text-xs transition-all whitespace-nowrap shrink-0 flex items-center gap-1 cursor-pointer ${
                 isActive
                   ? 'bg-neutral-800 text-amber-300 font-medium border border-neutral-700/80'
                   : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900'
@@ -118,7 +129,8 @@ export const TopBar: React.FC<TopBarProps> = ({
               title={preset.solarEquivalence}
             >
               {isTon618 && <Sparkles className="w-3 h-3 text-amber-400/80" />}
-              {isStar && <Zap className="w-3 h-3 text-emerald-400/80" />}
+              {isCompactStar && <Zap className="w-3 h-3 text-emerald-400/80" />}
+              {isLuminousStar && <Sun className="w-3 h-3 text-indigo-400/80" />}
               <span>{preset.name.split(' ')[0]}</span>
             </button>
           );
@@ -202,6 +214,21 @@ export const TopBar: React.FC<TopBarProps> = ({
           <Layers className="w-3.5 h-3.5 text-neutral-400" />
           <span>Archetypes</span>
         </button>
+
+        {onOpenQuickGuideModal && (
+          <button
+            type="button"
+            onClick={() => {
+              haptics.light();
+              onOpenQuickGuideModal();
+            }}
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium text-amber-200 bg-neutral-900 border border-amber-500/40 rounded-md hover:bg-neutral-800 hover:text-amber-100 hover:border-amber-400 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            title="Open Plain-English Physics Quick-Guide (Simple Analogies for Spin, Accretion Rate & Well Depth)"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Quick Guide</span>
+          </button>
+        )}
 
         <button
           type="button"

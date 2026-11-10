@@ -24,6 +24,7 @@ import {
   Eye,
   EyeOff,
   Radio,
+  BookOpen,
 } from 'lucide-react';
 import {
   ASTROPHYSICAL_PRESETS,
@@ -33,6 +34,7 @@ import {
   ObjectCategory,
   SystemCategory,
   BACKGROUND_THEMES,
+  isStellarCategory,
 } from '../physics/gravitationalPhysics';
 import { CameraPresetId } from '../scene/BlackHoleScene';
 import { useHaptics } from '../hooks/useHaptics';
@@ -55,6 +57,7 @@ interface ControlDockProps {
   audioEnabled: boolean;
   onToggleAudio: () => void;
   onOpenCosmicScaleModal: () => void;
+  onOpenQuickGuideModal?: () => void;
   onTriggerPulse: () => void;
   onChangeSystemCategory?: (category: SystemCategory) => void;
   isPhoneMode?: boolean;
@@ -80,6 +83,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   audioEnabled,
   onToggleAudio,
   onOpenCosmicScaleModal,
+  onOpenQuickGuideModal,
   onTriggerPulse,
   onChangeSystemCategory,
   isPhoneMode = false,
@@ -107,7 +111,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   };
 
   const isPaused = params.timeScale === 0;
-  const isStar = params.objectCategory === 'star';
+  const isStar = isStellarCategory(params.objectCategory);
   const isTon618 = activePresetId === 'ton618';
 
   // Critical impact parameter for Kerr spacetime
@@ -254,6 +258,13 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       </option>
                     ))}
                   </optgroup>
+                  <optgroup label="Luminous & Hypergiant Stars" className="bg-neutral-950 text-neutral-200">
+                    {ASTROPHYSICAL_PRESETS.filter((p) => p.category === 'luminous_star').map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.plainMassExplanation})
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
                 <div className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
                   <ChevronDown className="w-2.5 h-2.5" />
@@ -341,6 +352,20 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               >
                 <RotateCcw className="w-3 h-3" />
               </button>
+
+              {onOpenQuickGuideModal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.light();
+                    onOpenQuickGuideModal();
+                  }}
+                  className="p-1 text-amber-300 hover:text-amber-200 bg-neutral-900 border border-amber-500/40 rounded cursor-pointer"
+                  title="Open Physics Quick-Guide (Simple Analogies)"
+                >
+                  <BookOpen className="w-3 h-3" />
+                </button>
+              )}
 
               {onToggleCleanMode && (
                 <button
@@ -1117,6 +1142,13 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                         </option>
                       ))}
                     </optgroup>
+                    <optgroup label="Luminous & Hypergiant Stars" className="bg-neutral-950 text-neutral-200">
+                      {ASTROPHYSICAL_PRESETS.filter((p) => p.category === 'luminous_star').map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.plainMassExplanation})
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                   <div className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center text-neutral-400">
                     <ChevronDown className="w-3 h-3" />
@@ -1245,6 +1277,13 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       </option>
                     ))}
                   </optgroup>
+                  <optgroup label="Luminous & Hypergiant Stars" className="bg-neutral-950 text-neutral-200">
+                    {ASTROPHYSICAL_PRESETS.filter((p) => p.category === 'luminous_star').map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.plainMassExplanation} · {p.classification})
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
                 <div className="absolute right-2 pointer-events-none flex items-center text-neutral-400">
                   <ChevronDown className="w-3.5 h-3.5" />
@@ -1314,6 +1353,20 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               >
                 {audioEnabled ? <Volume2 className="w-3.5 h-3.5 text-amber-400" /> : <VolumeX className="w-3.5 h-3.5 text-neutral-400" />}
               </button>
+
+              {onOpenQuickGuideModal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.light();
+                    onOpenQuickGuideModal();
+                  }}
+                  className="p-1.5 text-xs text-amber-300 hover:text-amber-100 bg-neutral-900 hover:bg-neutral-800 border border-amber-500/40 rounded-lg transition-colors cursor-pointer"
+                  title="Open Physics Quick-Guide (Plain-English Analogies for Spin, Accretion Rate & Well Depth)"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                </button>
+              )}
 
               <button
                 type="button"

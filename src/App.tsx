@@ -13,6 +13,7 @@ import {
   SystemCategory,
   PhysicsPresetId,
   computeRelativisticMetrics,
+  isStellarCategory,
 } from './physics/gravitationalPhysics';
 import {
   BlackHoleSceneController,
@@ -25,6 +26,7 @@ import { relativisticAudio } from './audio/relativisticAudio';
 import { TopBar } from './components/TopBar';
 import { ControlDock } from './components/ControlDock';
 import { PhysicsModal } from './components/PhysicsModal';
+import { PhysicsQuickGuideModal } from './components/PhysicsQuickGuideModal';
 import { ArchetypeModal } from './components/ArchetypeModal';
 import { CosmicScaleModal } from './components/CosmicScaleModal';
 import { BackgroundSelectorModal } from './components/BackgroundSelectorModal';
@@ -80,6 +82,7 @@ export default function App() {
   const [isDockCollapsed, setIsDockCollapsed] = useState<boolean>(false);
   const [isCleanMode, setIsCleanMode] = useState<boolean>(false);
   const [isTheoryModalOpen, setIsTheoryModalOpen] = useState<boolean>(false);
+  const [isQuickGuideModalOpen, setIsQuickGuideModalOpen] = useState<boolean>(false);
   const [isArchetypeModalOpen, setIsArchetypeModalOpen] = useState<boolean>(false);
   const [isCosmicScaleModalOpen, setIsCosmicScaleModalOpen] = useState<boolean>(false);
   const [isBackgroundModalOpen, setIsBackgroundModalOpen] = useState<boolean>(false);
@@ -286,13 +289,13 @@ export default function App() {
       },
     }));
 
-    // Expand from singularity ball (or trigger pulse for compact stars)
+    // Expand from singularity ball (or trigger pulse for compact/luminous stars)
     if (found.category === 'black_hole') {
       sceneControllerRef.current?.replaySingularityExpansion();
     } else {
       sceneControllerRef.current?.triggerEventHorizonPulse(found.category);
     }
-    relativisticAudio.triggerAccretionShockPulse(found.category === 'star');
+    relativisticAudio.triggerAccretionShockPulse(isStellarCategory(found.category));
   }, []);
 
   const handleResetParams = useCallback(() => {
@@ -317,7 +320,7 @@ export default function App() {
       },
     }));
 
-    const targetCam: CameraPresetId = currentPreset.category === 'star' ? 'polar' : 'equatorial';
+    const targetCam: CameraPresetId = isStellarCategory(currentPreset.category) ? 'polar' : 'equatorial';
     setActiveCamera(targetCam);
     sceneControllerRef.current?.setCameraPreset(targetCam);
     sceneControllerRef.current?.triggerEventHorizonPulse(currentPreset.category);
@@ -463,7 +466,7 @@ export default function App() {
     link.click();
   }, [activePresetId, haptics, settings.includeUiInExport]);
 
-  const isStar = params.objectCategory === 'star';
+  const isStar = isStellarCategory(params.objectCategory);
 
   return (
     <div
@@ -478,6 +481,7 @@ export default function App() {
           systemCategory={params.systemCategory || 'isolated'}
           onChangeSystemCategory={handleChangeSystemCategory}
           onOpenTheoryModal={() => setIsTheoryModalOpen(true)}
+          onOpenQuickGuideModal={() => setIsQuickGuideModalOpen(true)}
           onOpenArchetypeModal={() => setIsArchetypeModalOpen(true)}
           onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
           onOpenBackgroundModal={() => setIsBackgroundModalOpen(true)}
@@ -556,10 +560,16 @@ export default function App() {
                         Titan
                       </span>
                     )}
-                    {isStar && (
+                    {params.objectCategory === 'star' && (
                       <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-normal flex items-center gap-0.5">
                         <Zap className="w-2.5 h-2.5 text-emerald-400" />
-                        Pulsar
+                        Remnant
+                      </span>
+                    )}
+                    {params.objectCategory === 'luminous_star' && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-mono font-normal flex items-center gap-0.5">
+                        <Sparkles className="w-2.5 h-2.5 text-indigo-400" />
+                        Star
                       </span>
                     )}
                   </h1>
@@ -575,7 +585,7 @@ export default function App() {
                 )}
 
                 <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 pt-1 mt-1 border-t border-slate-800/60">
-                  <span>{isStar ? 'Crust' : 'Horizon'} <strong className="text-slate-200">{activePreset.horizonDiameterKmDisplay}</strong></span>
+                  <span>{params.objectCategory === 'luminous_star' ? 'Photosphere' : isStar ? 'Crust' : 'Horizon'} <strong className="text-slate-200">{activePreset.horizonDiameterKmDisplay}</strong></span>
                   <span>a* <strong className="text-cyan-300">{params.spin.toFixed(3)}</strong></span>
                 </div>
 
@@ -731,6 +741,7 @@ export default function App() {
             audioEnabled={audioEnabled}
             onToggleAudio={handleToggleAudio}
             onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
+            onOpenQuickGuideModal={() => setIsQuickGuideModalOpen(true)}
             onChangeSystemCategory={handleChangeSystemCategory}
             isPhoneMode={isPhone}
             hapticsEnabled={settings.hapticsEnabled !== false}
@@ -741,7 +752,7 @@ export default function App() {
               } else {
                 sceneControllerRef.current?.triggerEventHorizonPulse(params.objectCategory);
               }
-              relativisticAudio.triggerAccretionShockPulse(params.objectCategory === 'star');
+              relativisticAudio.triggerAccretionShockPulse(isStellarCategory(params.objectCategory));
             }}
           />
         )}
@@ -753,6 +764,14 @@ export default function App() {
         onClose={() => setIsTheoryModalOpen(false)}
         params={params}
         metrics={metrics}
+      />
+
+      {/* Plain-English Physics Quick-Guide Modal */}
+      <PhysicsQuickGuideModal
+        isOpen={isQuickGuideModalOpen}
+        onClose={() => setIsQuickGuideModalOpen(false)}
+        params={params}
+        onChangeParams={setParams}
       />
 
       {/* Cosmic Archetypes & Solar Mass Guide Modal */}

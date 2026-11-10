@@ -328,10 +328,10 @@ export const COMPACT_STAR_FRAGMENT_SHADER = /* glsl */ `
 
     float surfacePattern = clamp(granulation * 0.68 + fineShear * 0.32 + vSeismicDisplacement * 0.08, 0.0, 1.0);
 
-    // Base iron-crust thermal emission (controlled HDR range so lower hemisphere never bleaches white)
-    vec3 coolCrust = max(uBaseColor * 0.55, vec3(0.04, 0.20, 0.40));
-    vec3 warmCrust = uBaseColor * 1.32 + vec3(0.10, 0.28, 0.46);
-    vec3 hotFilament = mix(uBaseColor, vec3(0.76, 0.94, 1.0), 0.72) * 1.85;
+    // Base thermal emission driven by uBaseColor (supports cyan/blue pulsars, violet quark stars, gold dwarfs, and crimson supergiants)
+    vec3 coolCrust = max(uBaseColor * 0.55, vec3(0.03));
+    vec3 warmCrust = uBaseColor * 1.38 + mix(uBaseColor * 0.25, vec3(0.10, 0.28, 0.46), 0.35);
+    vec3 hotFilament = mix(uBaseColor, vec3(0.95, 0.97, 1.0), 0.68) * 1.85;
 
     vec3 crustColor = mix(coolCrust, warmCrust, smoothstep(0.18, 0.76, surfacePattern));
     crustColor = mix(crustColor, hotFilament, smoothstep(0.68, 0.96, surfacePattern));
@@ -344,8 +344,8 @@ export const COMPACT_STAR_FRAGMENT_SHADER = /* glsl */ `
 
     float polarTurbulence = 0.84 + 0.32 * fbm4(vPosition + vec3(uTime * 1.2), 5.4);
 
-    vec3 polarHaloColor = vec3(0.28, 0.70, 1.0) * 2.2;
-    vec3 polarCoreColor = vec3(0.92, 0.98, 1.0) * 4.2;
+    vec3 polarHaloColor = mix(uBaseColor, vec3(0.38, 0.78, 1.0), 0.48) * 2.2;
+    vec3 polarCoreColor = mix(uBaseColor, vec3(0.94, 0.98, 1.0), 0.82) * 4.2;
 
     vec3 hotspotEmission = (
       polarHaloColor * outerPolarHalo +
@@ -363,8 +363,8 @@ export const COMPACT_STAR_FRAGMENT_SHADER = /* glsl */ `
     float rimFlare = pow(grazing, 4.8);
 
     float coronaStreamers = 0.80 + 0.40 * fineShear;
-    vec3 coronaBaseColor = mix(uBaseColor, vec3(0.38, 0.88, 1.0), 0.68);
-    vec3 coronaHotColor = vec3(0.86, 0.96, 1.0);
+    vec3 coronaBaseColor = mix(uBaseColor, vec3(0.50, 0.90, 1.0), 0.38);
+    vec3 coronaHotColor = mix(uBaseColor, vec3(0.92, 0.97, 1.0), 0.78);
 
     vec3 coronalGlow = (
       coronaBaseColor * fresnel * (1.35 + compactness * 1.65) * coronaStreamers +

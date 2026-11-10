@@ -7,6 +7,9 @@ import {
   computeRelativisticMetrics,
   BackgroundThemeId,
   BACKGROUND_THEMES,
+  ObjectCategory,
+  isStellarCategory,
+  ASTROPHYSICAL_PRESETS,
 } from '../physics/gravitationalPhysics';
 import { relativisticAudio } from '../audio/relativisticAudio';
 import {
@@ -2036,7 +2039,7 @@ export class BlackHoleSceneController {
       this.params.spin,
       this.params.accretionRate,
       0.0,
-      this.params.objectCategory === 'star' ? 1.0 : 0.0
+      isStellarCategory(this.params.objectCategory) ? 1.0 : 0.0
     );
 
     // Uniform-Buffer Orbital Turbulence Math: (basePhase, ringPhase, shearRate, timeScale)
@@ -2393,8 +2396,8 @@ export class BlackHoleSceneController {
       candidate = this.parameterRipples.reduce((prev, curr) => (curr.progress > prev.progress ? curr : prev));
     }
 
-    const isStar = this.params?.objectCategory === 'star';
-    const effectiveScale = isStar ? 0.45 : this.currentScale;
+    const isStar = isStellarCategory(this.params?.objectCategory);
+    const effectiveScale = isStar ? this.currentScale : this.currentScale;
     const startR = isStar ? 1.4 * effectiveScale : Math.max(0.4, 2.15 * effectiveScale);
     const maxR = Math.max(18.0, 34.0 * effectiveScale);
 
@@ -2567,8 +2570,8 @@ export class BlackHoleSceneController {
   public triggerAccretionShockwave(intensity: number = 1.0, isSurge: boolean = true) {
     if (this.settings.accretionShockwaveEnabled === false) return;
 
-    const isStar = this.params?.objectCategory === 'star';
-    const effectiveScale = isStar ? 0.45 : this.currentScale;
+    const isStar = isStellarCategory(this.params?.objectCategory);
+    const effectiveScale = this.currentScale;
     const horizonR = isStar ? 1.65 * effectiveScale : 2.26 * effectiveScale;
 
     this.isAccretionShockActive = true;
@@ -2913,7 +2916,7 @@ export class BlackHoleSceneController {
   private deformSpacetimeWell(massSolar: number, spin: number) {
     const posAttr = this.spacetimeWellGeo.attributes.position as THREE.BufferAttribute;
     const depthMult = this.params.wellDepthMultiplier || 2.2;
-    const isStar = this.params.objectCategory === 'star';
+    const isStar = isStellarCategory(this.params.objectCategory);
 
     // Truly deep and steep general-relativistic gravitational funnel:
     // Starts as a subtle localized dimple when compressed in the small singularity ball state,
@@ -2934,7 +2937,7 @@ export class BlackHoleSceneController {
       let depth: number;
 
       if (isStar) {
-        // For a Neutron Star: The well is steep outside, but BOTTOMS OUT at the solid physical crust
+        // For a Star / Compact Remnant: The well is steep outside, but BOTTOMS OUT at the physical surface
         // (R_star > R_s), physically demonstrating why there is NO singularity or horizon!
         const rCrust = rs * 1.25;
         if (r < rCrust) {
@@ -3058,7 +3061,7 @@ export class BlackHoleSceneController {
         uSpectrumLut: { value: spectrumLut },
         uLensingActive: { value: this.params.gravitationalLensing ? 1.0 : 0.0 },
         uShowDisk: { value: this.params.layers.accretionDisk ? 1.0 : 0.0 },
-        uIsStar: { value: this.params.objectCategory === 'star' ? 1.0 : 0.0 },
+        uIsStar: { value: isStellarCategory(this.params.objectCategory) ? 1.0 : 0.0 },
         uPulseRadius: { value: 0 },
         uPulseStrength: { value: 0 },
         uTime: { value: 0 },
@@ -3673,8 +3676,8 @@ export class BlackHoleSceneController {
     this.activeGeodesicPulses = [];
   }
 
-  public triggerEventHorizonPulse(category?: 'black_hole' | 'star') {
-    const isStar = (category || this.params.objectCategory) === 'star';
+  public triggerEventHorizonPulse(category?: ObjectCategory) {
+    const isStar = isStellarCategory(category || this.params.objectCategory);
 
     // If triggering a pulse while the black hole is in its small singularity ball state,
     // automatically grow it into the full black hole along with the shockwave!
@@ -3870,9 +3873,14 @@ export class BlackHoleSceneController {
     // - Supermassive M87* (~6.5 Billion M☉): 3.65 scale
     // - Ultramassive TON 618 (~66 Billion M☉): 4.85 scale (and up to 6.5x with trueCosmicScale)
     let calculatedScale = 1.0;
-    const isStar = nextParams.objectCategory === 'star';
+    const isStar = isStellarCategory(nextParams.objectCategory);
+    const activeStarPreset = isStar
+      ? ASTROPHYSICAL_PRESETS.find((p) => p.id === nextParams.presetId)
+      : undefined;
     if (isStar) {
-      calculatedScale = 0.45;
+      calculatedScale =
+        activeStarPreset?.visualScale ??
+        (nextParams.objectCategory === 'luminous_star' ? 1.05 : 0.45);
     } else {
       let trueMass = nextParams.trueMassSolar;
       if (!trueMass) {
@@ -4027,13 +4035,35 @@ export class BlackHoleSceneController {
       if (this.starfieldInstanced) this.starfieldInstanced.visible = false;
     }
 
-    // Object Category switching: Black hole vs Compact Star
+    // Object Category switching: Black hole vs Star / Compact Remnant
     if (isStar) {
       this.eventHorizonMesh.visible = false;
       this.neutronStarGroup.visible = true;
       this.pulsarBeamsGroup.visible = nextParams.layers.pulsarBeams ?? true;
       this.magneticDipoleGroup.visible = nextParams.layers.magneticField ?? true;
       if (this.singularitySeedGroup) this.singularitySeedGroup.visible = false;
+
+      if (this.neutronStarMat) {
+        const surfHex =
+          activeStarPreset?.surfaceHexColor ??
+          (nextParams.objectCategory === 'luminous_star' ? 0x3b82f6 : 0x0ea5e9);
+        this.neutronStarMat.uniforms.uBaseColor.value.setHex(surfHex);
+      }
+      if (this.pulsarBeamSystem) {
+        const coreHex = activeStarPreset?.coreBeamHexColor ?? 0xf0f9ff;
+        const sheathHex = activeStarPreset?.sheathBeamHexColor ?? 0x38bdf8;
+        this.pulsarBeamSystem.uniforms.uCoreColor.value.setHex(coreHex);
+        this.pulsarBeamSystem.uniforms.uSheathColor.value.setHex(sheathHex);
+      }
+      if (this.magneticDipoleGroup) {
+        const magHex = activeStarPreset?.sheathBeamHexColor ?? 0x34d399;
+        for (const child of this.magneticDipoleGroup.children) {
+          const line = child as THREE.Line;
+          if (line.material) {
+            (line.material as THREE.LineBasicMaterial).color.setHex(magHex);
+          }
+        }
+      }
     } else {
       this.eventHorizonMesh.visible = true;
       this.neutronStarGroup.visible = false;
@@ -4072,7 +4102,7 @@ export class BlackHoleSceneController {
 
     const distMultiplier = Math.max(0.72, Math.sqrt(this.targetScale));
     const incRad = THREE.MathUtils.degToRad(this.params.inclinationDeg);
-    const isBinary = this.params.objectCategory !== 'star' && this.params.systemCategory === 'binary';
+    const isBinary = !isStellarCategory(this.params.objectCategory) && this.params.systemCategory === 'binary';
     const lookX = isBinary ? 4.2 * distMultiplier : 0;
 
     switch (preset) {
@@ -4139,7 +4169,7 @@ export class BlackHoleSceneController {
     const ray = this.raycaster.ray;
 
     // Show interactive pointer cursor when hovering over the clickable singularity ball / black hole center
-    if (this.params.objectCategory !== 'star') {
+    if (!isStellarCategory(this.params.objectCategory)) {
       const distToOrigin = ray.distanceToPoint(this.blackHoleGroup.position);
       const hitRadius = this.isSingularityCollapsed
         ? Math.max(3.8, 1.8 * this.currentScale)
@@ -4175,7 +4205,7 @@ export class BlackHoleSceneController {
 
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
     const distToCenter = this.raycaster.ray.distanceToPoint(this.blackHoleGroup.position);
-    const isStar = this.params.objectCategory === 'star';
+    const isStar = isStellarCategory(this.params.objectCategory);
 
     if (!isStar) {
       if (this.isSingularityCollapsed) {
@@ -4276,7 +4306,7 @@ export class BlackHoleSceneController {
       this.currentExploded = THREE.MathUtils.damp(this.currentExploded, this.targetExploded, 6.0, simDelta);
     }
 
-    const isStar = this.params.objectCategory === 'star';
+    const isStar = isStellarCategory(this.params.objectCategory);
     const minSeedWorldScale = 0.11; // Small singularity ball initial scale (~0.25 world units radius)
 
     if (isStar) {
@@ -4430,34 +4460,32 @@ export class BlackHoleSceneController {
       effectiveScale * (1.0 + 0.22 * this.params.spin)
     );
 
-    // 4. Pulsar Lighthouse Beams, Magnetic Axis Precession & Compact Star Shader Uniforms
-    if (this.params.objectCategory === 'star') {
-      // Rapid rotation of neutron star crust and sweeping pulsar lighthouse beams (~1.3 second period)
-      const spinOmega = 4.5 + this.params.spin * 8.0;
+    // 4. Pulsar Lighthouse Beams, Magnetic Axis Precession & Compact/Luminous Star Shader Uniforms
+    if (isStellarCategory(this.params.objectCategory)) {
+      const isLuminous = this.params.objectCategory === 'luminous_star';
+      const spinOmega = (isLuminous ? 1.8 : 4.5) + this.params.spin * (isLuminous ? 4.2 : 8.0);
       this.pulsarRotationAngle += simDelta * spinOmega;
       this.neutronStarMesh.rotation.y = this.pulsarRotationAngle * 0.25;
 
       if (this.neutronStarMat) {
+        const activeStarPreset = ASTROPHYSICAL_PRESETS.find((p) => p.id === this.params.presetId);
         // Dynamically scale hotspot intensity and compactness with accretion/wind flux and stellar mass
         this.neutronStarMat.uniforms.uHotspotIntensity.value =
-          1.25 + this.params.accretionRate * 0.65;
-        // R_s / R_star increases with mass (from ~0.35 at 1.4 M_sun up to ~0.62 near the TOV collapse limit)
-        const compactnessRatio = THREE.MathUtils.clamp(
-          0.36 + (this.params.massSolar - 1.4) * 0.08,
-          0.34,
-          0.64
-        );
+          (isLuminous ? 0.85 : 1.25) + this.params.accretionRate * (isLuminous ? 0.50 : 0.65);
+        const baseCompactness =
+          activeStarPreset?.compactnessRatio ??
+          THREE.MathUtils.clamp(0.36 + (this.params.massSolar - 1.4) * 0.08, 0.12, 0.64);
         this.neutronStarMat.uniforms.uRadius.value = 1.65;
-        this.neutronStarMat.uniforms.uSchwarzschildRadius.value = 1.65 * compactnessRatio;
+        this.neutronStarMat.uniforms.uSchwarzschildRadius.value = 1.65 * baseCompactness;
 
         // Rotate the magnetic dipole axis independently with free precession wobble
-        // and synchronize the twin pulsar beams so their apexes stay locked to ±uMagneticAxis * R_star
+        // and synchronize the twin pulsar/outflow beams so their apexes stay locked to ±uMagneticAxis * R_star
         const magAxis = updateCompactStarPrecession(
           this.neutronStarMat,
           elapsed,
           spinOmega,
-          THREE.MathUtils.degToRad(24),
-          0.55,
+          THREE.MathUtils.degToRad(isLuminous ? 16 : 24),
+          isLuminous ? 0.35 : 0.55,
           this.pulsarBeamSystem
         );
 
@@ -4593,8 +4621,8 @@ export class BlackHoleSceneController {
       } else {
         const t = this.accretionShockProgress;
         const blastEase = 1.0 - Math.pow(1.0 - t, 2.5);
-        const isStar = this.params?.objectCategory === 'star';
-        const effScale = isStar ? 0.45 : this.currentScale;
+        const isStar = isStellarCategory(this.params?.objectCategory);
+        const effScale = this.currentScale;
         const startR = isStar ? 1.65 * effScale : 2.26 * effScale;
         const maxR = Math.max(16.0, 26.0 * effScale);
         this.accretionShockRadius = THREE.MathUtils.lerp(startR, maxR, blastEase);
@@ -4861,7 +4889,7 @@ export class BlackHoleSceneController {
     }
 
     // 2. Binary Accretion System (Companion Star & Bezier Plasma Bridge) when systemCategory === 'binary'
-    if (this.params.objectCategory !== 'star' && this.params.systemCategory === 'binary' && this.expansionProgress > 0.05) {
+    if (!isStellarCategory(this.params.objectCategory) && this.params.systemCategory === 'binary' && this.expansionProgress > 0.05) {
       _vec3B.copy(this.companionStarWorldPos).project(this.camera);
       const starX = (_vec3B.x * 0.5 + 0.5) * width;
       const starY = (-_vec3B.y * 0.5 + 0.5) * height;
@@ -4986,9 +5014,10 @@ export class BlackHoleSceneController {
     const width = this.container.clientWidth || window.innerWidth;
     const height = this.container.clientHeight || window.innerHeight;
     const scale = this.currentScale;
-    const isStar = this.params.objectCategory === 'star';
+    const isStar = isStellarCategory(this.params.objectCategory);
 
     if (isStar) {
+      const isLuminous = this.params.objectCategory === 'luminous_star';
       const starAnchors: Array<{
         id: string;
         name: string;
@@ -4998,38 +5027,74 @@ export class BlackHoleSceneController {
         description: string;
         pos: THREE.Vector3;
         dockPosition: 'top-left' | 'top-right' | 'mid-left' | 'mid-right' | 'bottom-left' | 'bottom-right';
-      }> = [
-        {
-          id: 'ns_crust',
-          name: 'Crystalline Iron Crust',
-          badge: 'Solid Surface (10¹⁴ g/cm³)',
-          badgeColor: 'text-cyan-400 border-cyan-500/40 bg-cyan-950/40',
-          headline: 'Physical solid boundary — no event horizon or singularity exists',
-          description: 'A solid crust made of degenerate electrons and tightly packed iron nuclei. The Tolman-Oppenheimer-Volkoff limit prevents collapse.',
-          pos: new THREE.Vector3(0, 1.65 * scale, 0),
-          dockPosition: 'top-left',
-        },
-        {
-          id: 'ns_pulsar_beam',
-          name: 'Pulsar Lighthouse Beam',
-          badge: 'Relativistic Synchrotron Jet',
-          badgeColor: 'text-emerald-400 border-emerald-500/40 bg-emerald-950/40',
-          headline: 'Beams of radio and X-ray emission sweep across the galaxy',
-          description: 'Sweeping magnetic polar cones rotating with the star crust produce rapid periodic radio pulses detected on Earth.',
-          pos: new THREE.Vector3(2.5 * scale, 5.5 * scale, 0),
-          dockPosition: 'top-right',
-        },
-        {
-          id: 'ns_tov_limit',
-          name: 'Quantum Neutron Degeneracy',
-          badge: 'TOV Limit (~2.17 M☉)',
-          badgeColor: 'text-purple-400 border-purple-500/40 bg-purple-950/40',
-          headline: 'Quantum Pauli exclusion principle halts gravitational collapse',
-          description: 'Neutrons cannot occupy the same quantum state, exerting degeneracy pressure that balances gravity up to ~2.2 Solar masses.',
-          pos: new THREE.Vector3(-2.8 * scale, -1.8 * scale, 0),
-          dockPosition: 'bottom-left',
-        },
-      ];
+      }> = isLuminous
+        ? [
+            {
+              id: 'luminous_photosphere',
+              name: 'Convective Radiative Photosphere',
+              badge: 'Thermonuclear Fusion Surface',
+              badgeColor: 'text-amber-300 border-amber-500/40 bg-amber-950/40',
+              headline: 'Outward radiation and thermal pressure balance inward gravity',
+              description:
+                'Nuclear fusion in the stellar core generates intense photon flux and boiling convective plasma cells across the photosphere.',
+              pos: new THREE.Vector3(0, 1.65 * scale, 0),
+              dockPosition: 'top-left',
+            },
+            {
+              id: 'luminous_wind_jet',
+              name: 'Radiation-Driven Bipolar Outflow',
+              badge: 'Eddington Stellar Wind',
+              badgeColor: 'text-sky-300 border-sky-500/40 bg-sky-950/40',
+              headline: 'Extreme UV radiation pressure accelerates supersonic polar winds',
+              description:
+                'In hypergiants and Wolf-Rayet stars, continuum radiation pressure drives bipolar mass-loss plumes at thousands of km/s.',
+              pos: new THREE.Vector3(2.5 * scale, 5.5 * scale, 0),
+              dockPosition: 'top-right',
+            },
+            {
+              id: 'luminous_hydrostatic',
+              name: 'Hydrostatic & Eddington Equilibrium',
+              badge: 'dP/dr = -G M(r) ρ(r) / r²',
+              badgeColor: 'text-indigo-300 border-indigo-500/40 bg-indigo-950/40',
+              headline: 'Spacetime curves smoothly into a shallow interior bowl',
+              description:
+                'Because the star’s physical radius is much larger than its Schwarzschild radius, no event horizon forms until core fuel is exhausted.',
+              pos: new THREE.Vector3(-2.8 * scale, -1.8 * scale, 0),
+              dockPosition: 'bottom-left',
+            },
+          ]
+        : [
+            {
+              id: 'ns_crust',
+              name: 'Crystalline Iron Crust',
+              badge: 'Solid Surface (10¹⁴ g/cm³)',
+              badgeColor: 'text-cyan-400 border-cyan-500/40 bg-cyan-950/40',
+              headline: 'Physical solid boundary — no event horizon or singularity exists',
+              description: 'A solid crust made of degenerate electrons and tightly packed iron nuclei. The Tolman-Oppenheimer-Volkoff limit prevents collapse.',
+              pos: new THREE.Vector3(0, 1.65 * scale, 0),
+              dockPosition: 'top-left',
+            },
+            {
+              id: 'ns_pulsar_beam',
+              name: 'Pulsar Lighthouse Beam',
+              badge: 'Relativistic Synchrotron Jet',
+              badgeColor: 'text-emerald-400 border-emerald-500/40 bg-emerald-950/40',
+              headline: 'Beams of radio and X-ray emission sweep across the galaxy',
+              description: 'Sweeping magnetic polar cones rotating with the star crust produce rapid periodic radio pulses detected on Earth.',
+              pos: new THREE.Vector3(2.5 * scale, 5.5 * scale, 0),
+              dockPosition: 'top-right',
+            },
+            {
+              id: 'ns_tov_limit',
+              name: 'Quantum Neutron Degeneracy',
+              badge: 'TOV Limit (~2.17 M☉)',
+              badgeColor: 'text-purple-400 border-purple-500/40 bg-purple-950/40',
+              headline: 'Quantum Pauli exclusion principle halts gravitational collapse',
+              description: 'Neutrons cannot occupy the same quantum state, exerting degeneracy pressure that balances gravity up to ~2.2 Solar masses.',
+              pos: new THREE.Vector3(-2.8 * scale, -1.8 * scale, 0),
+              dockPosition: 'bottom-left',
+            },
+          ];
 
       return starAnchors.map((a) => {
         _vec3A.copy(a.pos);
@@ -5173,7 +5238,7 @@ export class BlackHoleSceneController {
     this.settings = { ...nextSettings };
     const isClassicDisk = nextSettings.accretionDiskStyle !== 'raymarched';
     const diskStyleVal = isClassicDisk ? 0.0 : 1.0;
-    const isStar = this.params?.objectCategory === 'star';
+    const isStar = isStellarCategory(this.params?.objectCategory);
 
     if (this.accretionDiskMat) {
       this.accretionDiskMat.uniforms.uDiskStyle.value = diskStyleVal;
