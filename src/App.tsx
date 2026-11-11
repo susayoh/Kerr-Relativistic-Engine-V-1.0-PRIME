@@ -51,6 +51,7 @@ import {
 } from './components/KerrRelativityEngineModal';
 import { CompareModeOverlay } from './components/CompareModeOverlay';
 import { PerformanceMonitorOverlay } from './components/PerformanceMonitorOverlay';
+import { ChangelogModal } from './components/ChangelogModal';
 import { useHaptics, setGlobalHapticIntensity } from './hooks/useHaptics';
 import { TRANSLATIONS } from './i18n/translations';
 import { toPng, toCanvas } from 'html-to-image';
@@ -96,7 +97,12 @@ export default function App() {
   const [controllerInstance, setControllerInstance] = useState<BlackHoleSceneController | null>(null);
 
   const [params, setParams] = useState<BlackHoleParams>(DEFAULT_PARAMS);
-  const [settings, setSettings] = useState<VisualizerSettings>(DEFAULT_VISUALIZER_SETTINGS);
+  const [settings, setSettings] = useState<VisualizerSettings>(() => ({
+    ...DEFAULT_VISUALIZER_SETTINGS,
+    showPerformanceMonitor: false,
+    showEventLog: false,
+    showMetricTelemetry: false,
+  }));
   const [activePresetId, setActivePresetId] = useState<string>('ton618');
   const [isCompareMode, setIsCompareMode] = useState<boolean>(false);
   const [comparePresetId, setComparePresetId] = useState<string>('sgra');
@@ -112,6 +118,7 @@ export default function App() {
   const [isBackgroundModalOpen, setIsBackgroundModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [isKerrLogModalOpen, setIsKerrLogModalOpen] = useState<boolean>(false);
+  const [isChangelogModalOpen, setIsChangelogModalOpen] = useState<boolean>(false);
   const [activeKerrTerminalRun, setActiveKerrTerminalRun] = useState<KerrEngineRunLog | null>(null);
   const [kerrEngineLogs, setKerrEngineLogs] = useState<KerrEngineRunLog[]>(() => [
     generateKerrEngineCalculationRun(
@@ -121,9 +128,57 @@ export default function App() {
     ),
   ]);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
-  const [isSingularityCollapsed, setIsSingularityCollapsed] = useState<boolean>(false);
+  const [isSingularityCollapsed, setIsSingularityCollapsed] = useState<boolean>(true);
+  const [hasCompletedStartupSequence, setHasCompletedStartupSequence] = useState<boolean>(false);
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
+
+  // Cinematic 2.5s Boot-In Telemetry Overlay state
+  const [showBootOverlay, setShowBootOverlay] = useState<boolean>(true);
+  const [isBootOverlayFading, setIsBootOverlayFading] = useState<boolean>(false);
+
+  const handleFinishBootIntro = useCallback(() => {
+    setIsBootOverlayFading((alreadyFading) => {
+      if (alreadyFading) return true;
+      window.setTimeout(() => {
+        setShowBootOverlay(false);
+      }, 450);
+      return true;
+    });
+  }, []);
+
+  const handleSkipBootIntro = useCallback(() => {
+    sceneControllerRef.current?.skipBootIntro(true);
+    handleFinishBootIntro();
+  }, [handleFinishBootIntro]);
+
+  // First-time visitor floating interaction hint state (persisted via localStorage "kerr_has_interacted")
+  const [showInteractionHint, setShowInteractionHint] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem('kerr_has_interacted') !== 'true';
+    } catch {
+      return true;
+    }
+  });
+  const [isInteractionHintFading, setIsInteractionHintFading] = useState<boolean>(false);
+
+  const handleFirstCanvasInteraction = useCallback(() => {
+    if (sceneControllerRef.current?.isBootIntroRunning()) {
+      sceneControllerRef.current.skipBootIntro(true);
+      handleFinishBootIntro();
+    }
+    if (!showInteractionHint || isInteractionHintFading) return;
+    setIsInteractionHintFading(true);
+    try {
+      window.localStorage.setItem('kerr_has_interacted', 'true');
+    } catch {
+      // Ignore storage quota / privacy mode errors
+    }
+    window.setTimeout(() => {
+      setShowInteractionHint(false);
+    }, 450);
+  }, [showInteractionHint, isInteractionHintFading, handleFinishBootIntro]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingRafRef = useRef<number | null>(null);
@@ -263,7 +318,7 @@ export default function App() {
     r: number;
     theta: number;
     phi: number;
-  }>({ r: 14.8, theta: 72, phi: 90 });
+  }>({ r: 16.5, theta: 71, phi: 96 });
   const observerReadoutRef = useRef<HTMLDivElement | null>(null);
   const lastObserverDomUpdateRef = useRef<number>(0);
   const isDraggingCameraRef = useRef<boolean>(false);
@@ -420,6 +475,7 @@ export default function App() {
       onSingularityStateChange: (collapsed) => {
         setIsSingularityCollapsed(collapsed);
         if (!collapsed) {
+          setHasCompletedStartupSequence(true);
           relativisticAudio.triggerAccretionShockPulse(false);
           appendLogEventRef.current(
             'metric',
@@ -431,6 +487,10 @@ export default function App() {
       onCameraChange: (pos, target) => {
         compareSceneControllerRef.current?.syncCameraPose(pos, target);
       },
+      onBootIntroComplete: () => {
+        handleFinishBootIntro();
+      },
+      enableBootIntro: true,
     });
     sceneControllerRef.current = controller;
     setControllerInstance(controller);
@@ -441,7 +501,7 @@ export default function App() {
       setControllerInstance(null);
       relativisticAudio.dispose();
     };
-  }, []);
+  }, [handleFinishBootIntro]);
 
   // Initialize & synchronize secondary Three.js WebGL scene when Side-by-Side Compare Mode is active
   useEffect(() => {
@@ -465,6 +525,7 @@ export default function App() {
       onCameraChange: (pos, target) => {
         sceneControllerRef.current?.syncCameraPose(pos, target);
       },
+      enableBootIntro: false,
     });
     compareCtrl.updateSettings(settings);
     compareCtrl.expandFromSingularity();
@@ -701,13 +762,33 @@ export default function App() {
         handleSetCleanMode(false);
       } else if (e.code === 'Space') {
         e.preventDefault();
+        if (sceneControllerRef.current?.isBootIntroRunning()) {
+          haptics.light();
+          handleSkipBootIntro();
+          return;
+        }
+        if (isSingularityCollapsed) {
+          haptics.pulseBoom();
+          if (params.timeScale === 0) {
+            setParams((p) => ({ ...p, timeScale: 1.0 }));
+          }
+          sceneControllerRef.current?.expandFromSingularity();
+          return;
+        }
         haptics.medium();
         setParams((p) => ({ ...p, timeScale: p.timeScale === 0 ? 1.0 : 0.0 }));
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleToggleCleanMode, handleSetCleanMode, haptics]);
+  }, [
+    handleToggleCleanMode,
+    handleSetCleanMode,
+    handleSkipBootIntro,
+    isSingularityCollapsed,
+    params.timeScale,
+    haptics,
+  ]);
 
   const handleCompleteKerrDeploy = useCallback(
     (run: KerrEngineRunLog) => {
@@ -737,10 +818,31 @@ export default function App() {
         ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
       const tierToUse = tierOverride || settings.kerrEngineTier || 'ultra';
       const run = generateKerrEngineCalculationRun(currentPreset, params, tierToUse);
-      setKerrEngineLogs((prev) => [run, ...prev.slice(0, 29)]);
+      setKerrEngineLogs((prev) => [run, ...prev.slice(0, 49)]);
       setActiveKerrTerminalRun(run);
     },
     [activePresetId, params, settings.kerrEngineTier]
+  );
+
+  const handleRecordDiagnosticStressTest = useCallback(
+    (run: KerrEngineRunLog, applyParamsToScene?: Partial<BlackHoleParams>) => {
+      setKerrEngineLogs((prev) => {
+        if (prev.some((existing) => existing.id === run.id)) return prev;
+        return [run, ...prev.slice(0, 49)];
+      });
+      if (applyParamsToScene) {
+        setParams((prev) => ({
+          ...prev,
+          ...applyParamsToScene,
+        }));
+      }
+      appendLogEvent(
+        'metric',
+        `Diagnostic Stress Test Logged: ${run.targetName}`,
+        `a* = ${run.spin.toFixed(3)} · g_tt = ${run.summaryMetrics.g_tt.toFixed(4)} · K = ${run.summaryMetrics.kretschmann.toExponential(2)} M⁻⁴`
+      );
+    },
+    [appendLogEvent]
   );
 
   // Kerr Relativity Engine is ALWAYS active on Standard, Linear, and Advanced tiers,
@@ -761,11 +863,11 @@ export default function App() {
         trueMassSolar: found.trueMassSolar,
         objectCategory: found.category,
         accretionState: found.params.accretionState ?? params.accretionState ?? 'quiescent',
-        // Ensure ergosphere, anatomy guide, and stars remain off when clicking a black hole
+        // Respect preset accretionDisk setting for stars vs black holes; keep ergosphere, anatomy guide, and stars off by default
         layers: {
           ...params.layers,
+          accretionDisk: found.category === 'black_hole',
           ...(found.params.layers || {}),
-          accretionDisk: true,
           spacetimeGrid: true,
           ergosphereCage: false,
           orbitalStars: false,
@@ -814,11 +916,17 @@ export default function App() {
 
       const nextCompareParams: BlackHoleParams = {
         ...compareParams,
+        ...found.params,
         presetId: found.id,
         objectCategory: found.category,
         trueMassSolar: found.trueMassSolar,
         massSolar: found.params.massSolar ?? compareParams.massSolar,
         spin: syncSpinInCompare ? params.spin : found.params.spin ?? compareSpinOverride,
+        layers: {
+          ...compareParams.layers,
+          accretionDisk: found.category === 'black_hole',
+          ...(found.params.layers || {}),
+        },
       };
 
       const run = generateKerrEngineCalculationRun(
@@ -865,8 +973,8 @@ export default function App() {
       accretionState: currentPreset.params.accretionState ?? 'quiescent',
       layers: {
         ...DEFAULT_PARAMS.layers,
+        accretionDisk: currentPreset.category === 'black_hole',
         ...(currentPreset.params.layers || {}),
-        accretionDisk: true,
         spacetimeGrid: true,
         ergosphereCage: false,
         orbitalStars: false,
@@ -1388,63 +1496,82 @@ export default function App() {
     };
   }, [stopRecordingCleanup]);
 
+  useEffect(() => {
+    const activeUiTheme = settings.uiTheme || 'kerr_claude';
+    document.documentElement.setAttribute('data-ui-theme', activeUiTheme);
+  }, [settings.uiTheme]);
+
   const isStar = isStellarCategory(params.objectCategory);
+  const isBootOrSeedStage =
+    (showBootOverlay && !isBootOverlayFading) || (!isStar && isSingularityCollapsed);
+  const isUiHiddenForBootOrSeed = isCleanMode || isBootOrSeedStage;
   const t = TRANSLATIONS[settings.language || 'en'] || TRANSLATIONS.en;
 
   return (
     <div
       ref={appContainerRef}
+      data-ui-theme={settings.uiTheme || 'kerr_claude'}
       className="relative w-screen h-screen overflow-hidden bg-black select-none flex flex-col"
     >
-      {/* Zone 1-3 Top Navigation Bar (Hidden in Clean Mode) */}
+      {/* Zone 1-3 Top Navigation Bar (Flows smoothly in with the post-singularity camera pan-in) */}
       {!isCleanMode && (
-        <TopBar
-          activePresetId={activePresetId}
-          onSelectPreset={handleSelectPreset}
-          systemCategory={params.systemCategory || 'isolated'}
-          onChangeSystemCategory={handleChangeSystemCategory}
-          onOpenTheoryModal={() => setIsTheoryModalOpen(true)}
-          onOpenQuickGuideModal={() => setIsQuickGuideModalOpen(true)}
-          onOpenArchetypeModal={() => setIsArchetypeModalOpen(true)}
-          onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
-          onOpenBackgroundModal={() => setIsBackgroundModalOpen(true)}
-          onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
-          activeBackgroundTheme={params.backgroundTheme || 'galactic_core'}
-          isAnatomyVisible={isAnatomyVisible}
-          onToggleAnatomyVisible={handleToggleAnatomyVisible}
-          onExportSnapshot={handleExportSnapshot}
-          isRecording={isRecording}
-          recordingSeconds={recordingSeconds}
-          onToggleRecording={handleToggleRecording}
-          isCleanMode={isCleanMode}
-          onToggleCleanMode={handleToggleCleanMode}
-          isCompareMode={isCompareMode}
-          onToggleCompareMode={() => {
-            setIsCompareMode((prev) => {
-              const next = !prev;
-              appendLogEvent(
-                'system',
-                next
-                  ? 'Side-by-Side Compare Mode engaged'
-                  : 'Single-viewport visualization restored',
-                next
-                  ? `Synchronizing physics parameters between ${activePreset.name} and ${comparePreset.name}`
-                  : activePreset.name
-              );
-              return next;
-            });
-          }}
-          isPerfMonitorVisible={Boolean(settings.showPerformanceMonitor)}
-          onTogglePerfMonitor={() =>
-            setSettings((prev) => ({
-              ...prev,
-              showPerformanceMonitor: !prev.showPerformanceMonitor,
-            }))
-          }
-          isPhoneMode={isPhone}
-          hapticsEnabled={settings.hapticsEnabled !== false}
-          language={settings.language || 'en'}
-        />
+        <div
+          className={`relative z-30 transition-all duration-[1800ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            isBootOrSeedStage
+              ? 'opacity-0 -translate-y-6 pointer-events-none'
+              : 'opacity-100'
+          }`}
+        >
+          <TopBar
+            activePresetId={activePresetId}
+            onSelectPreset={handleSelectPreset}
+            systemCategory={params.systemCategory || 'isolated'}
+            onChangeSystemCategory={handleChangeSystemCategory}
+            onOpenTheoryModal={() => setIsTheoryModalOpen(true)}
+            onOpenQuickGuideModal={() => setIsQuickGuideModalOpen(true)}
+            onOpenArchetypeModal={() => setIsArchetypeModalOpen(true)}
+            onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
+            onOpenBackgroundModal={() => setIsBackgroundModalOpen(true)}
+            onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+            activeBackgroundTheme={params.backgroundTheme || 'galactic_core'}
+            isAnatomyVisible={isAnatomyVisible}
+            onToggleAnatomyVisible={handleToggleAnatomyVisible}
+            onExportSnapshot={handleExportSnapshot}
+            isRecording={isRecording}
+            recordingSeconds={recordingSeconds}
+            onToggleRecording={handleToggleRecording}
+            isCleanMode={isCleanMode}
+            onToggleCleanMode={handleToggleCleanMode}
+            isCompareMode={isCompareMode}
+            onToggleCompareMode={() => {
+              setIsCompareMode((prev) => {
+                const next = !prev;
+                appendLogEvent(
+                  'system',
+                  next
+                    ? 'Side-by-Side Compare Mode engaged'
+                    : 'Single-viewport visualization restored',
+                  next
+                    ? `Synchronizing physics parameters between ${activePreset.name} and ${comparePreset.name}`
+                    : activePreset.name
+                );
+                return next;
+              });
+            }}
+            isPerfMonitorVisible={Boolean(settings.showPerformanceMonitor)}
+            onTogglePerfMonitor={() =>
+              setSettings((prev) => ({
+                ...prev,
+                showPerformanceMonitor: !prev.showPerformanceMonitor,
+              }))
+            }
+            isPhoneMode={isPhone}
+            hapticsEnabled={settings.hapticsEnabled !== false}
+            language={settings.language || 'en'}
+            uiTheme={settings.uiTheme || 'kerr_claude'}
+            onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
+          />
+        </div>
       )}
 
       {/* Main 3D Viewport Stage (Supports Single View or Side-by-Side Synchronized Compare Mode) */}
@@ -1465,6 +1592,8 @@ export default function App() {
           >
             <div
               ref={canvasMountRef}
+              onPointerDown={handleFirstCanvasInteraction}
+              onTouchStart={handleFirstCanvasInteraction}
               className="absolute inset-0 w-full h-full cursor-crosshair touch-none select-none overscroll-none"
             />
             {isCompareMode && !isCleanMode && (
@@ -1483,6 +1612,8 @@ export default function App() {
             >
               <div
                 ref={compareCanvasMountRef}
+                onPointerDown={handleFirstCanvasInteraction}
+                onTouchStart={handleFirstCanvasInteraction}
                 className="absolute inset-0 w-full h-full cursor-crosshair touch-none select-none overscroll-none"
               />
               {!isCleanMode && (
@@ -1555,7 +1686,7 @@ export default function App() {
         )}
 
         {/* Dynamic Relativistic Anatomy & Leader Lines Overlay */}
-        {!isCleanMode && !isCompareMode && (
+        {!isUiHiddenForBootOrSeed && !isCompareMode && (
           <BlackHoleAnatomyOverlay
             sceneController={controllerInstance || sceneControllerRef.current}
             isVisible={isAnatomyVisible}
@@ -1565,12 +1696,20 @@ export default function App() {
           />
         )}
 
-        {/* Left HUD Column: Target Specification Badge + Overhead Radar + Event Log */}
-        {!isCleanMode && !isCompareMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation || settings.showEventLog !== false) && (
-          <div className={`hud-panel absolute top-2 sm:top-2.5 left-2 sm:left-3.5 z-10 flex flex-col items-start gap-1.5 sm:gap-2 pointer-events-none ${isPhone ? 'w-[210px]' : 'w-60'}`}>
+        {/* Left HUD Column: Target Specification Badge + Overhead Radar + Event Log (Flows smoothly in with camera pan-in) */}
+        {!isCleanMode && !isCompareMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation || Boolean(settings.showEventLog)) && (
+          <div
+            className={`hud-panel absolute top-2 sm:top-2.5 left-2 sm:left-3.5 z-10 flex flex-col items-start gap-1.5 sm:gap-2 pointer-events-none transition-all duration-[1850ms] delay-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              isPhone ? 'w-[210px]' : 'w-60'
+            } ${
+              isBootOrSeedStage
+                ? 'opacity-0 -translate-x-8'
+                : 'opacity-100'
+            }`}
+          >
             {/* Target Spec Badge */}
             {settings.showLeftHud && (
-              <div className={`hud-panel pointer-events-auto bg-[#050811]/95 border border-slate-800/80 rounded-xl ${isPhone ? 'p-1.5' : 'p-2.5'} shadow-xl transition-all w-full`}>
+              <div className={`hud-panel ${isBootOrSeedStage ? 'pointer-events-none' : 'pointer-events-auto'} bg-[#050811]/95 border border-slate-800/80 rounded-xl ${isPhone ? 'p-1.5' : 'p-2.5'} shadow-xl transition-all w-full`}>
                 <div className="flex items-center justify-between gap-1.5">
                   <span
                     className={`px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold uppercase tracking-wider border shrink-0 ${
@@ -1628,7 +1767,7 @@ export default function App() {
                   data-testid="observer-readout"
                   className="mt-1 pt-1 border-t border-slate-800/50 text-[9px] font-mono text-slate-300 tabular-nums truncate"
                 >
-                  Observer: r = 14.8 Rₛ | θ = 72° | φ = 90°
+                  Observer: r = 16.5 Rₛ | θ = 71° | φ = 96°
                 </div>
 
                 {/* Quick Link to Real Scale Explorer if TON 618 is selected */}
@@ -1685,7 +1824,7 @@ export default function App() {
             )}
 
             {/* Real-Time Astrophysical Event Log Stacked in Left HUD Column */}
-            {settings.showEventLog !== false && (
+            {Boolean(settings.showEventLog) && (
               <EventLogOverlay
                 events={eventLogs}
                 onClearEvents={() => setEventLogs([])}
@@ -1729,11 +1868,12 @@ export default function App() {
           </div>
         )}
 
-        {/* Interactive Singularity Ball Prompt (Displayed when compressed as a small singularity ball) */}
-        {!isCleanMode && !isStar && isSingularityCollapsed && (
-          <div className={`hud-panel absolute ${isPhone ? (isDockCollapsed ? 'bottom-14' : 'bottom-[200px]') : 'bottom-20 sm:bottom-24'} left-1/2 -translate-x-1/2 z-20 pointer-events-auto px-2 w-full max-w-sm flex justify-center transition-all`}>
+        {/* Interactive Singularity Ball Prompt (Only displayed if the user manually collapses the black hole after the startup sequence) */}
+        {hasCompletedStartupSequence && !isCleanMode && !showBootOverlay && !isStar && isSingularityCollapsed && (
+          <div className="hud-panel absolute bottom-10 sm:bottom-12 left-1/2 -translate-x-1/2 z-20 pointer-events-auto px-2 w-full max-w-sm flex justify-center transition-all">
             <button
               type="button"
+              data-testid="singularity-seed-expand-button"
               onClick={() => {
                 haptics.pulseBoom();
                 if (params.timeScale === 0) {
@@ -1748,6 +1888,55 @@ export default function App() {
                 {t.singularitySeedPrompt}
               </span>
             </button>
+          </div>
+        )}
+
+        {/* Sleek Non-Blocking Telemetry Boot Overlay (Centered during 2.5s Camera Fly-In from max distance) */}
+        {showBootOverlay && (
+          <div
+            data-testid="cinematic-boot-overlay"
+            onClick={handleSkipBootIntro}
+            className={`absolute inset-0 z-30 flex flex-col items-center justify-center pointer-events-none select-none transition-opacity duration-500 ${
+              isBootOverlayFading ? 'opacity-0' : 'opacity-100'
+            }`}
+          >
+            <div
+              onClick={handleSkipBootIntro}
+              className="pointer-events-auto cursor-pointer px-5 py-3.5 rounded-2xl bg-[#050811]/75 border border-amber-500/35 backdrop-blur-md shadow-[0_12px_40px_rgba(0,0,0,0.85),0_0_24px_rgba(217,119,87,0.16)] font-mono text-[11px] sm:text-xs text-left space-y-1.5 max-w-md"
+            >
+              <div className="flex items-center gap-2 text-amber-200 font-semibold tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                <span>
+                  INITIALIZING KERR-NEWMAN METRIC CORE [a* = {params.spin.toFixed(3)}]...
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-cyan-300/95 tracking-wider pl-3.5">
+                <span>SOLVING NULL GEODESICS...</span>
+              </div>
+              <div className="flex items-center gap-2 text-emerald-300 font-bold tracking-wider pl-3.5">
+                <span>OBSERVER LOCK ESTABLISHED</span>
+              </div>
+              <div className="pt-1.5 mt-1 border-t border-slate-800/80 flex items-center justify-between gap-4 text-[10px] text-slate-400">
+                <span>r₀ = 260.0 → SINGULARITY SEED AUTO-EXPANSION</span>
+                <span className="text-amber-300/90 hover:text-amber-200 underline underline-offset-2">
+                  Press Space or Click to Skip
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Lightweight Non-Blocking First-Time Visitor Interaction Cue */}
+        {!isUiHiddenForBootOrSeed && showInteractionHint && (
+          <div
+            data-testid="floating-interaction-hint"
+            className={`interaction-hint-pill ${
+              isInteractionHintFading ? 'is-fading-out' : 'opacity-100'
+            } absolute ${
+              isDockCollapsed ? 'bottom-14 sm:bottom-16' : 'bottom-44 sm:bottom-48'
+            } left-1/2 -translate-x-1/2 z-20 pointer-events-none px-3.5 py-1.5 rounded-full bg-[#050811]/75 border border-slate-700/70 text-slate-200/90 font-mono text-[11px] tracking-wide shadow-[0_4px_20px_rgba(0,0,0,0.65)] whitespace-nowrap select-none`}
+          >
+            {isPhone ? 'Touch to Rotate • Pinch to Zoom' : 'Drag to Orbit • Scroll to Zoom'}
           </div>
         )}
 
@@ -1806,7 +1995,7 @@ export default function App() {
         )}
 
         {/* Top-Right Real-Time Spacetime Metric Tensor Evolution Overlay */}
-        {!isCleanMode && Boolean(settings.showMetricTelemetry) && (
+        {!isUiHiddenForBootOrSeed && Boolean(settings.showMetricTelemetry) && (
           <MetricTelemetryOverlay
             params={params}
             metrics={metrics}
@@ -1824,7 +2013,7 @@ export default function App() {
         )}
 
         {/* Real-Time Three.js Performance Monitor & GPU Shader Bottleneck Diagnostics Overlay */}
-        {!isCleanMode && Boolean(settings.showPerformanceMonitor) && (
+        {!isUiHiddenForBootOrSeed && Boolean(settings.showPerformanceMonitor) && (
           <PerformanceMonitorOverlay
             sceneController={controllerInstance || sceneControllerRef.current}
             params={params}
@@ -1840,46 +2029,54 @@ export default function App() {
         )}
 
 
-        {/* Unified Collapsible Bottom Control Dock */}
+        {/* Unified Collapsible Bottom Control Dock (Flows smoothly in with the post-singularity camera pan-in) */}
         {!isCleanMode && (
-          <ControlDock
-            params={params}
-            metrics={metrics}
-            activePresetId={activePresetId}
-            isCollapsed={isDockCollapsed}
-            onToggleCollapse={() => setIsDockCollapsed((prev) => !prev)}
-            onToggleCleanMode={handleToggleCleanMode}
-            onChangeParams={setParams}
-            onSelectPreset={handleSelectPreset}
-            onResetParams={handleResetParams}
-            onSelectCamera={handleSelectCamera}
-            activeCamera={activeCamera}
-            onLaunchPhoton={handleLaunchPhoton}
-            onClearPhotons={handleClearPhotons}
-            onExportGeodesicCsv={handleExportGeodesicCsv}
-            lastTrajectory={lastTrajectory}
-            audioEnabled={audioEnabled}
-            onToggleAudio={handleToggleAudio}
-            onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
-            onOpenQuickGuideModal={() => setIsQuickGuideModalOpen(true)}
-            onChangeSystemCategory={handleChangeSystemCategory}
-            isPhoneMode={isPhone}
-            hapticsEnabled={settings.hapticsEnabled !== false}
-            onTriggerPulse={() => {
-              haptics.pulseBoom();
-              if (params.objectCategory === 'black_hole') {
-                sceneControllerRef.current?.replaySingularityExpansion();
-              } else {
-                sceneControllerRef.current?.triggerEventHorizonPulse(params.objectCategory);
-              }
-              relativisticAudio.triggerAccretionShockPulse(isStellarCategory(params.objectCategory));
-              appendLogEvent(
-                'accretion',
-                'Relativistic accretion shockwave emitted',
-                'Magnetosonic pressure wave propagating across horizon'
-              );
-            }}
-          />
+          <div
+            className={`fixed inset-0 z-20 pointer-events-none transition-all duration-[1900ms] delay-100 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              isBootOrSeedStage
+                ? 'opacity-0 translate-y-10 [&_.hud-dock]:!pointer-events-none'
+                : 'opacity-100'
+            }`}
+          >
+            <ControlDock
+              params={params}
+              metrics={metrics}
+              activePresetId={activePresetId}
+              isCollapsed={isDockCollapsed}
+              onToggleCollapse={() => setIsDockCollapsed((prev) => !prev)}
+              onToggleCleanMode={handleToggleCleanMode}
+              onChangeParams={setParams}
+              onSelectPreset={handleSelectPreset}
+              onResetParams={handleResetParams}
+              onSelectCamera={handleSelectCamera}
+              activeCamera={activeCamera}
+              onLaunchPhoton={handleLaunchPhoton}
+              onClearPhotons={handleClearPhotons}
+              onExportGeodesicCsv={handleExportGeodesicCsv}
+              lastTrajectory={lastTrajectory}
+              audioEnabled={audioEnabled}
+              onToggleAudio={handleToggleAudio}
+              onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
+              onOpenQuickGuideModal={() => setIsQuickGuideModalOpen(true)}
+              onChangeSystemCategory={handleChangeSystemCategory}
+              isPhoneMode={isPhone}
+              hapticsEnabled={settings.hapticsEnabled !== false}
+              onTriggerPulse={() => {
+                haptics.pulseBoom();
+                if (params.objectCategory === 'black_hole') {
+                  sceneControllerRef.current?.replaySingularityExpansion();
+                } else {
+                  sceneControllerRef.current?.triggerEventHorizonPulse(params.objectCategory);
+                }
+                relativisticAudio.triggerAccretionShockPulse(isStellarCategory(params.objectCategory));
+                appendLogEvent(
+                  'accretion',
+                  'Relativistic accretion shockwave emitted',
+                  'Magnetosonic pressure wave propagating across horizon'
+                );
+              }}
+            />
+          </div>
         )}
       </main>
 
@@ -1946,6 +2143,8 @@ export default function App() {
         onOpenKerrLogModal={() => setIsKerrLogModalOpen(true)}
         onTriggerKerrCalculation={handleTriggerManualKerrSolve}
         onExportGeodesicCsv={() => handleExportGeodesicCsv()}
+        activeParams={params}
+        onRecordDiagnosticStressTest={handleRecordDiagnosticStressTest}
       />
 
       {/* Real-Time Kerr Relativity Engine Pre-Load Terminal Modal */}
@@ -1972,6 +2171,13 @@ export default function App() {
           }))
         }
         onRerunCalculation={() => handleTriggerManualKerrSolve()}
+      />
+
+      {/* Minimalist Terminal-Style Release Changelog Modal (Triggered via TopBar v1.4 Badge) */}
+      <ChangelogModal
+        isOpen={isChangelogModalOpen}
+        onClose={() => setIsChangelogModalOpen(false)}
+        uiTheme={settings.uiTheme || 'kerr_claude'}
       />
     </div>
   );

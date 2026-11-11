@@ -204,15 +204,19 @@ export interface KerrEngineRunLog {
 export function generateKerrEngineCalculationRun(
   preset: AstrophysicalPreset,
   params: BlackHoleParams,
-  tierId: KerrEngineTierId
+  tierId: KerrEngineTierId,
+  options?: {
+    diagnosticScenarioTitle?: string;
+    diagnosticScenarioCode?: string;
+  }
 ): KerrEngineRunLog {
   const tier = KERR_ENGINE_TIERS[tierId] || KERR_ENGINE_TIERS.advanced;
   const mergedParams: BlackHoleParams = {
-    ...params,
     ...preset.params,
+    ...params,
     presetId: preset.id,
-    trueMassSolar: preset.trueMassSolar,
-    objectCategory: preset.category,
+    trueMassSolar: params.trueMassSolar || preset.trueMassSolar,
+    objectCategory: params.objectCategory || preset.category,
   };
 
   const metrics = computeRelativisticMetrics(mergedParams);
@@ -356,8 +360,12 @@ export function generateKerrEngineCalculationRun(
     id: `kerr-run-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     timestamp,
     presetId: preset.id,
-    targetName: preset.name,
-    targetClassification: preset.classification,
+    targetName: options?.diagnosticScenarioTitle
+      ? `${options.diagnosticScenarioTitle} (${preset.name})`
+      : preset.name,
+    targetClassification: options?.diagnosticScenarioCode
+      ? `${options.diagnosticScenarioCode} · ${preset.classification}`
+      : preset.classification,
     objectCategory: preset.category,
     tierId: tier.id,
     tierName: tier.name,
@@ -972,3 +980,6 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
     </div>
   );
 };
+
+export const KerrEngineLogViewer = KerrEngineLogViewerModal;
+

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sparkles, Layers, Activity, Download, Maximize2, Zap, Sun, Eye, EyeOff, Settings, Orbit, ChevronDown, BookOpen, Video, Square, Columns2 } from 'lucide-react';
 import { ASTROPHYSICAL_PRESETS, BackgroundThemeId, BACKGROUND_THEMES, SystemCategory } from '../physics/gravitationalPhysics';
+import { UiThemeId } from '../scene/BlackHoleScene';
 import { useHaptics } from '../hooks/useHaptics';
 import { AppLanguage, TRANSLATIONS } from '../i18n/translations';
 
@@ -31,6 +32,8 @@ interface TopBarProps {
   isPhoneMode?: boolean;
   hapticsEnabled?: boolean;
   language?: AppLanguage;
+  uiTheme?: UiThemeId;
+  onOpenChangelogModal?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -60,29 +63,62 @@ export const TopBar: React.FC<TopBarProps> = ({
   isPhoneMode = false,
   hapticsEnabled = true,
   language = 'en',
+  uiTheme = 'kerr_claude',
+  onOpenChangelogModal,
 }) => {
   const haptics = useHaptics({ enabled: hapticsEnabled });
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   const activePreset = ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
 
+  const isClaude = uiTheme === 'kerr_claude';
+  const isCryo = uiTheme === 'cryo_quantum';
+
   return (
-    <header className="hud-panel relative z-20 flex items-center justify-between gap-1.5 sm:gap-2.5 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-[#0c0b0a]/95 border-b border-[#292420] shadow-[0_4px_24px_rgba(0,0,0,0.75)] overflow-x-auto no-scrollbar">
-      {/* Zone 1: Claude-Inspired Terminal Brand Selector, Active Target Badge & System Category Dropdown */}
+    <header
+      className={`hud-panel relative z-20 flex items-center justify-between gap-1.5 sm:gap-2.5 px-2.5 sm:px-4 py-1.5 sm:py-2 border-b shadow-[0_4px_24px_rgba(0,0,0,0.75)] overflow-x-auto no-scrollbar transition-colors ${
+        isClaude
+          ? 'bg-[#110e0c]/95 border-[#382c26]'
+          : isCryo
+          ? 'bg-[#050b14]/95 border-sky-500/35'
+          : 'bg-[#050811]/95 border-amber-500/35'
+      }`}
+    >
+      {/* Zone 1: Theme-Responsive Brand Selector, Active Target Badge & System Category Dropdown */}
       <div className="flex items-center gap-2.5 shrink-0">
-        <a
-          href="#top"
-          onClick={(e) => {
-            e.preventDefault();
-            onSelectPreset('ton618');
-          }}
-          className="group flex items-center gap-2.5 px-2.5 py-1 rounded-lg bg-[#151311] hover:bg-[#1D1A17] border border-[#332B25] hover:border-[#D97757]/60 shadow-[0_2px_14px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,248,240,0.05)] whitespace-nowrap transition-all"
-          title="Kerr Engine [v1.4] — Apex Metric Core (Reset to TON 618)"
+        <div
+          className={`group flex items-center gap-2.5 px-2.5 py-1 rounded-lg border whitespace-nowrap transition-all ${
+            isClaude
+              ? 'bg-[#181411] hover:bg-[#211b17] border-[#3d3029] hover:border-[#D97757]/70 shadow-[0_2px_14px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,248,240,0.06)]'
+              : isCryo
+              ? 'bg-[#0a1322] hover:bg-[#0f1c30] border-sky-500/40 hover:border-sky-400 shadow-[0_2px_14px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(125,211,252,0.1)]'
+              : 'bg-[#090e1c] hover:bg-[#10182d] border-amber-500/40 hover:border-amber-400 shadow-[0_2px_14px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(251,191,36,0.08)]'
+          }`}
         >
-          {/* Claude-Inspired Warm Terracotta Starburst / Singularity Terminal Emblem */}
-          <div className="relative flex items-center justify-center w-7 h-7 rounded-md bg-[#201A17] border border-[#D97757]/50 shadow-[0_0_14px_rgba(217,119,87,0.26)] group-hover:border-[#E89578] group-hover:shadow-[0_0_18px_rgba(217,119,87,0.42)] transition-all shrink-0">
+          {/* Theme-Responsive Starburst / Singularity Emblem */}
+          <button
+            type="button"
+            onClick={() => {
+              haptics.light();
+              onSelectPreset('ton618');
+            }}
+            title="Kerr Engine — Reset to TON 618"
+            className={`relative flex items-center justify-center w-7 h-7 rounded-md border transition-all shrink-0 cursor-pointer ${
+              isClaude
+                ? 'bg-[#221b17] border-[#D97757]/55 shadow-[0_0_14px_rgba(217,119,87,0.28)] group-hover:border-[#E89578]'
+                : isCryo
+                ? 'bg-[#0d1b30] border-sky-400/55 shadow-[0_0_14px_rgba(56,189,248,0.28)] group-hover:border-sky-300'
+                : 'bg-[#131b2e] border-amber-400/55 shadow-[0_0_14px_rgba(245,158,11,0.28)] group-hover:border-amber-300'
+            }`}
+          >
             <svg
               viewBox="0 0 24 24"
-              className="w-4 h-4 text-[#E08263] drop-shadow-[0_0_6px_rgba(217,119,87,0.55)] group-hover:scale-105 transition-transform"
+              className={`w-4 h-4 group-hover:scale-105 transition-transform ${
+                isClaude
+                  ? 'text-[#E08263] drop-shadow-[0_0_6px_rgba(217,119,87,0.55)]'
+                  : isCryo
+                  ? 'text-sky-400 drop-shadow-[0_0_6px_rgba(56,189,248,0.55)]'
+                  : 'text-amber-400 drop-shadow-[0_0_6px_rgba(245,158,11,0.55)]'
+              }`}
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -90,30 +126,100 @@ export const TopBar: React.FC<TopBarProps> = ({
             >
               <path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7" />
               <path d="M8.4 3.2l7.2 17.6M15.6 3.2L8.4 20.8M3.2 8.4l17.6 7.2M3.2 15.6l17.6-7.2" strokeWidth="1.4" opacity="0.8" />
-              <circle cx="12" cy="12" r="2.6" className="fill-[#1F1B18] stroke-[#F4B097]" strokeWidth="1.75" />
+              <circle
+                cx="12"
+                cy="12"
+                r="2.6"
+                className={
+                  isClaude
+                    ? 'fill-[#1F1B18] stroke-[#F4B097]'
+                    : isCryo
+                    ? 'fill-[#091526] stroke-sky-200'
+                    : 'fill-[#0f172a] stroke-amber-200'
+                }
+                strokeWidth="1.75"
+              />
             </svg>
-          </div>
+          </button>
 
           <div className="flex flex-col leading-none">
             <div className="flex items-center gap-1.5">
-              <span className="font-display text-sm sm:text-[15px] font-bold tracking-[0.06em] text-[#F7F4EE] drop-shadow-[0_0_10px_rgba(244,241,234,0.28)] group-hover:text-white transition-colors">
+              <button
+                type="button"
+                onClick={() => {
+                  haptics.light();
+                  onSelectPreset('ton618');
+                }}
+                title="Kerr Engine — Reset to TON 618"
+                className={`font-display text-sm sm:text-[15px] font-bold tracking-[0.06em] transition-colors cursor-pointer ${
+                  isClaude
+                    ? 'text-[#F7F4EE] drop-shadow-[0_0_10px_rgba(244,241,234,0.28)]'
+                    : isCryo
+                    ? 'text-sky-50 drop-shadow-[0_0_10px_rgba(56,189,248,0.28)]'
+                    : 'text-amber-50 drop-shadow-[0_0_10px_rgba(245,158,11,0.28)]'
+                }`}
+              >
                 Kerr Engine
-              </span>
-              <span className="inline-flex items-center justify-center px-1.5 py-[2px] rounded-[4px] bg-[#241C18] border border-[#D97757]/75 font-mono text-[9.5px] font-bold text-[#F4A688] tracking-[0.08em] leading-none shadow-[0_0_10px_rgba(217,119,87,0.28),inset_0_0_4px_rgba(217,119,87,0.18)]">
+              </button>
+              <button
+                type="button"
+                data-testid="topbar-changelog-badge"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  haptics.light();
+                  onOpenChangelogModal?.();
+                }}
+                title="View Kerr Engine [v1.4] Release Changelog"
+                className={`inline-flex items-center justify-center px-1.5 py-[2px] rounded-[4px] border font-mono text-[9.5px] font-bold tracking-[0.08em] leading-none transition-all cursor-pointer ${
+                  isClaude
+                    ? 'bg-[#241C18] hover:bg-[#332620] border-[#D97757]/75 hover:border-[#F4A688] text-[#F4A688] shadow-[0_0_10px_rgba(217,119,87,0.28)]'
+                    : isCryo
+                    ? 'bg-sky-950/80 hover:bg-sky-900/80 border-sky-400/75 hover:border-sky-300 text-sky-300 shadow-[0_0_10px_rgba(56,189,248,0.25)]'
+                    : 'bg-amber-950/80 hover:bg-amber-900/80 border-amber-400/75 hover:border-amber-300 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.25)]'
+                }`}
+              >
                 v1.4
-              </span>
+              </button>
             </div>
             <div className="flex items-center gap-1.5 mt-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#D97757] shadow-[0_0_7px_rgba(217,119,87,0.9)]" />
-              <span className="font-mono text-[9.5px] font-bold tracking-[0.08em] text-[#E89578] drop-shadow-[0_0_8px_rgba(217,119,87,0.24)] group-hover:text-[#F4B097] transition-colors">
-                Apex Metric Core
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isClaude
+                    ? 'bg-[#D97757] shadow-[0_0_7px_rgba(217,119,87,0.9)]'
+                    : isCryo
+                    ? 'bg-sky-400 shadow-[0_0_7px_rgba(56,189,248,0.9)]'
+                    : 'bg-amber-400 shadow-[0_0_7px_rgba(245,158,11,0.9)]'
+                }`}
+              />
+              <span
+                className={`font-mono text-[9.5px] font-bold tracking-[0.08em] transition-colors ${
+                  isClaude
+                    ? 'text-[#E89578]'
+                    : isCryo
+                    ? 'text-sky-300'
+                    : 'text-amber-300'
+                }`}
+              >
+                {isClaude
+                  ? 'Apex Metric Core'
+                  : isCryo
+                  ? 'Cryo-Optic Quantum'
+                  : 'EHT Observatory'}
               </span>
             </div>
           </div>
-        </a>
+        </div>
 
-        <div className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#141311] border border-[#2A2521] text-[11px] font-mono tracking-wider shadow-inner">
-          <span className="text-[#F4F1EA] font-bold drop-shadow-[0_0_6px_rgba(244,241,234,0.18)]">{activePreset.name}</span>
+        <div
+          className={`hidden 2xl:flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-mono tracking-wider shadow-inner ${
+            isClaude
+              ? 'bg-[#161310] border-[#332924]'
+              : isCryo
+              ? 'bg-[#091220] border-sky-500/30'
+              : 'bg-[#090e1c] border-amber-500/30'
+          }`}
+        >
+          <span className="text-[#F4F1EA] font-bold">{activePreset.name}</span>
           <span className="text-neutral-600">·</span>
           <span
             className={
@@ -121,7 +227,11 @@ export const TopBar: React.FC<TopBarProps> = ({
                 ? 'text-emerald-400 font-semibold'
                 : activePreset.category === 'luminous_star'
                 ? 'text-indigo-400 font-semibold'
-                : 'text-[#B8B1A6] font-medium'
+                : isClaude
+                ? 'text-[#E89578] font-medium'
+                : isCryo
+                ? 'text-sky-300 font-medium'
+                : 'text-amber-300 font-medium'
             }
           >
             {activePreset.classification}

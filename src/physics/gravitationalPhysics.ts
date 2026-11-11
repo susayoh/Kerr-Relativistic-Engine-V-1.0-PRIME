@@ -593,7 +593,7 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       wellDepthMultiplier: 1.6,
       spectralMode: 'blackbody',
       layers: {
-        accretionDisk: true,
+        accretionDisk: false,
         ergosphereCage: false,
         spacetimeGrid: true,
         orbitalStars: false,
@@ -677,7 +677,7 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       wellDepthMultiplier: 2.1,
       spectralMode: 'xray',
       layers: {
-        accretionDisk: true,
+        accretionDisk: false,
         ergosphereCage: false,
         spacetimeGrid: true,
         orbitalStars: false,
@@ -763,7 +763,7 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       wellDepthMultiplier: 2.3,
       spectralMode: 'blackbody',
       layers: {
-        accretionDisk: true,
+        accretionDisk: false,
         ergosphereCage: false,
         spacetimeGrid: true,
         orbitalStars: false,
@@ -847,7 +847,7 @@ export const ASTROPHYSICAL_PRESETS: AstrophysicalPreset[] = [
       wellDepthMultiplier: 1.5,
       spectralMode: 'blackbody',
       layers: {
-        accretionDisk: true,
+        accretionDisk: false,
         ergosphereCage: false,
         spacetimeGrid: true,
         orbitalStars: false,

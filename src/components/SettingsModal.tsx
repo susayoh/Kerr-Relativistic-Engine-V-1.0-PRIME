@@ -28,25 +28,362 @@ import {
   Cpu,
   Zap,
   DollarSign,
+  SkipBack,
+  SkipForward,
+  Repeat,
+  Radio,
+  Brain,
+  Layers,
+  Palette,
+  Activity,
 } from 'lucide-react';
 import {
   VisualizerSettings,
   DEFAULT_VISUALIZER_SETTINGS,
+  UiThemeId,
 } from '../scene/BlackHoleScene';
 import {
   AccretionState,
   PhysicsPresetId,
   PHYSICS_PRESETS_CONFIG,
   getActivePhysicsPresetId,
+  ASTROPHYSICAL_PRESETS,
+  BlackHoleParams,
 } from '../physics/gravitationalPhysics';
 import { useHaptics } from '../hooks/useHaptics';
-import { trapQueenPlayer, TrapQueenPlayerState } from '../audio/trapQueenPlayer';
+import {
+  trapQueenPlayer,
+  TrapQueenPlayerState,
+  SongTrackDefinition,
+  SONG_SPEED_PRESETS,
+  AUDIO_QUALITY_PRESETS,
+  AudioQualityPresetId,
+} from '../audio/trapQueenPlayer';
 import { AppLanguage, LANGUAGE_OPTIONS, TRANSLATIONS } from '../i18n/translations';
 import {
   KerrEngineTierId,
   KERR_ENGINE_TIERS,
   KerrEngineRunLog,
+  generateKerrEngineCalculationRun,
 } from './KerrRelativityEngineModal';
+import { IQTestModule } from './IQTestModule';
+
+export const SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
+  {
+    id: 'again',
+    title: 'Again',
+    subtitle: 'Fetty Wap',
+    artistName: 'Fetty Wap',
+    badge: 'Fetty Wap',
+    durationSec: 313,
+    durationLabel: '5:13',
+    artworkUrl:
+      'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/53/9b/95/539b9581-3dd6-7a02-8b25-ebad59ba0949/814908020318.jpg/600x600bb.jpg',
+    accentColor: 'fuchsia',
+    sources: [
+      '/audio/again-full.mp3',
+      'https://archive.org/download/fettywapagainaudio/Fetty%20Wap%20-%20Again%20%5B%20Audio%20%5D.mp3',
+    ],
+    bpm: 148,
+    audioQualityBadge: '48kHz Hi-Res',
+    genreTag: 'Hip-Hop / Trap',
+  },
+  {
+    id: 'clarity_nightcore',
+    title: 'Clarity',
+    subtitle: 'Nightcore',
+    artistName: 'Nightcore • Zedd ft. Foxes',
+    badge: 'Nightcore',
+    durationSec: 241,
+    durationLabel: '4:01',
+    artworkUrl:
+      'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/05/e2/80/05e28091-d908-655c-c2ef-bbb0fd45e8f8/859730761916_cover.jpg/600x600bb.jpg',
+    accentColor: 'emerald',
+    sources: ['/audio/clarity-nightcore.mp3'],
+    bpm: 160,
+    audioQualityBadge: '48kHz Hi-Res',
+    genreTag: 'Nightcore',
+  },
+  {
+    id: 'end_it_nightcore',
+    title: 'End It',
+    subtitle: 'Nightcore',
+    artistName: 'Nightcore • Sinnon / RIELL',
+    badge: 'Nightcore',
+    durationSec: 167,
+    durationLabel: '2:47',
+    artworkUrl:
+      'https://cdn-images.dzcdn.net/images/cover/146c8de07fdcd33369bc3267195df94d/500x500-000000-80-0-0.jpg',
+    accentColor: 'fuchsia',
+    sources: ['/audio/end-it-nightcore.mp3'],
+    bpm: 165,
+    audioQualityBadge: '48kHz Hi-Res',
+    genreTag: 'Nightcore',
+  },
+  {
+    id: 'no_friends_female',
+    title: 'No Friends',
+    subtitle: 'Female Version',
+    artistName: 'Female Version • CADMIUM ft. Rosendale',
+    badge: 'Female Version',
+    durationSec: 226,
+    durationLabel: '3:46',
+    artworkUrl:
+      'https://cdn-images.dzcdn.net/images/cover/36ea7a8f01b1af0000f04348bc71b102/500x500-000000-80-0-0.jpg',
+    accentColor: 'cyan',
+    sources: [
+      '/audio/no-friends-female.mp3',
+      'https://archive.org/download/cadmium-no-friendsfeat.-rosendale/CADMIUM%2B-%2BNo%2BFriends%2B%28feat.%2BRosendale%29.mp3',
+    ],
+    bpm: 145,
+    audioQualityBadge: '48kHz Hi-Res',
+    genreTag: 'Electronic / Alt',
+  },
+  {
+    id: 'duvet_x_linger',
+    title: 'Duvet x Linger',
+    subtitle: 'Bôa × The Cranberries',
+    artistName: 'Bôa × The Cranberries',
+    badge: 'Mashup',
+    durationSec: 202,
+    durationLabel: '3:22',
+    artworkUrl:
+      'https://cdn-images.dzcdn.net/images/cover/fc0d073cdce93824ed0038a6f0ec7ed6/500x500-000000-80-0-0.jpg',
+    accentColor: 'amber',
+    sources: [
+      '/audio/duvet-x-linger.mp3',
+      'https://archive.org/download/boa-duvet-official-video-uoox-9fpm-dp-0/B%C3%B4a%20-%20%20Duvet%20%28Official%20Video%29%20%5BUoox9fpmDP0%5D.mp3',
+    ],
+    bpm: 124,
+    audioQualityBadge: '48kHz Hi-Res',
+    genreTag: 'Electronic / Alt',
+  },
+  {
+    id: 'stronger_than_you_frisk',
+    title: 'Stronger Than You',
+    subtitle: 'Frisk version',
+    artistName: 'Frisk version • Undertale',
+    badge: 'Frisk version',
+    durationSec: 237,
+    durationLabel: '3:57',
+    artworkUrl:
+      'https://cdn-images.dzcdn.net/images/cover/4c059a18bb7fd25748f77a8eaecb0948/500x500-000000-80-0-0.jpg',
+    accentColor: 'emerald',
+    sources: ['/audio/stronger-than-you-frisk.mp3'],
+    bpm: 130,
+    audioQualityBadge: '48kHz Hi-Res',
+    genreTag: 'Electronic / Alt',
+  },
+  {
+    id: 'world_execute_me',
+    title: 'world.execute(me);',
+    subtitle: 'Mili',
+    artistName: 'Mili',
+    badge: 'Mili',
+    durationSec: 212,
+    durationLabel: '3:32',
+    artworkUrl:
+      'https://cdn-images.dzcdn.net/images/cover/1285d6765ae590bd717b886bb8b8dbd8/500x500-000000-80-0-0.jpg',
+    accentColor: 'fuchsia',
+    sources: [
+      '/audio/world-execute-me.mp3',
+      'https://archive.org/download/mili-world.executeme/Mili%20-%20world.execute%28me%29%3B.mp3',
+    ],
+    bpm: 130,
+    audioQualityBadge: '48kHz Hi-Res',
+    genreTag: 'Electronic / Alt',
+  },
+  {
+    id: 'mazeltron',
+    title: 'MazelTron',
+    subtitle: 'BLP Kosher & BabyTron',
+    artistName: 'BLP Kosher & BabyTron',
+    badge: 'MazelTron',
+    durationSec: 144,
+    durationLabel: '2:24',
+    artworkUrl:
+      'https://cdn-images.dzcdn.net/images/cover/ee3a4f14c8ecb9ac80b0aec21b884e89/500x500-000000-80-0-0.jpg',
+    accentColor: 'cyan',
+    sources: ['/audio/mazeltron.mp3'],
+    bpm: 166,
+    audioQualityBadge: '48kHz Hi-Res',
+    genreTag: 'Hip-Hop / Trap',
+  },
+  {
+    id: 'trap_queen',
+    title: 'Trap Queen',
+    subtitle: 'Fetty Wap',
+    artistName: 'Fetty Wap',
+    badge: 'Fetty Wap',
+    durationSec: 222,
+    durationLabel: '3:42',
+    artworkUrl:
+      'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/b3/df/c5/b3dfc5e2-3980-7b7c-f227-7022c846f5dd/814908020219.jpg/600x600bb.jpg',
+    accentColor: 'amber',
+    sources: [
+      '/audio/trap-queen-full.mp3',
+      'https://archive.org/download/TrapQueen/Trap%20Queen.mp3',
+      'https://archive.org/download/fetty-wap-trap-queen-official-video-prod-by-tony-fadd/Fetty%20Wap%20%20%20Trap%20Queen%20Official%20Video%20Prod%20By%20Tony%20Fadd.mp3',
+    ],
+    bpm: 148,
+    audioQualityBadge: '48kHz Hi-Res',
+    genreTag: 'Hip-Hop / Trap',
+  },
+];
+
+export interface UiThemeOption {
+  id: UiThemeId;
+  name: string;
+  subtitle: string;
+  badge: string;
+  description: string;
+  swatches: [string, string, string, string];
+  activeCardClass: string;
+  badgeClass: string;
+}
+
+export const UI_THEME_OPTIONS: UiThemeOption[] = [
+  {
+    id: 'kerr_claude',
+    name: 'Kerr Engine Claude',
+    subtitle: 'Apex Terracotta & Parchment Ivory',
+    badge: 'KERR v1.4 · CLAUDE',
+    description:
+      'Signature Kerr Engine [v1.4] editorial terminal look pairing warm terracotta (#D97757) and parchment ivory (#F7F4EE) over deep espresso carbon surfaces.',
+    swatches: ['#120F0D', '#241C18', '#D97757', '#F7F4EE'],
+    activeCardClass:
+      'bg-[#1D1613] border-[#D97757] text-[#F7F4EE] shadow-[0_0_20px_rgba(217,119,87,0.22)] ring-1 ring-[#D97757]/50',
+    badgeClass: 'bg-[#241C18] text-[#F4A688] border-[#D97757]/75',
+  },
+  {
+    id: 'observatory_gold',
+    name: 'Observatory Gold',
+    subtitle: 'Doppler Amber & Abyssal Navy',
+    badge: 'EHT TELEMETRY',
+    description:
+      'Professional Event Horizon Telescope mission-control interface with relativistic amber (#F59E0B) highlights and deep void navy (#050811) panels.',
+    swatches: ['#050811', '#0D1322', '#F59E0B', '#22D3EE'],
+    activeCardClass:
+      'bg-amber-500/15 border-amber-400 text-amber-100 shadow-[0_0_20px_rgba(245,158,11,0.2)] ring-1 ring-amber-400/40',
+    badgeClass: 'bg-amber-500/20 text-amber-200 border-amber-400/50',
+  },
+  {
+    id: 'cryo_quantum',
+    name: 'Cryo-Optic Quantum',
+    subtitle: 'Laser Sky-Cyan & Titanium Slate',
+    badge: 'CERN / ESO LAB',
+    description:
+      'Precision cryogenic detector & optical interferometry aesthetic featuring crisp sky-cyan (#38BDF8), indigo plasma (#818CF8), and brushed titanium.',
+    swatches: ['#060B14', '#0F172A', '#38BDF8', '#818CF8'],
+    activeCardClass:
+      'bg-sky-500/15 border-sky-400 text-sky-100 shadow-[0_0_20px_rgba(56,189,248,0.22)] ring-1 ring-sky-400/40',
+    badgeClass: 'bg-sky-500/20 text-sky-200 border-sky-400/50',
+  },
+];
+
+interface SpacetimeCurvatureStressScenario {
+  id: string;
+  code: string;
+  title: string;
+  regimeBadge: string;
+  presetId: string;
+  description: string;
+  curvatureCriteria: string;
+  params: Partial<BlackHoleParams>;
+}
+
+export const SPACETIME_CURVATURE_STRESS_TESTS: SpacetimeCurvatureStressScenario[] = [
+  {
+    id: 'stress-schwarzschild-static',
+    code: 'STRESS-01',
+    title: 'Schwarzschild Static Limit',
+    regimeBadge: 'a* = 0.000 · Plunge 1.0×',
+    presetId: 'm87',
+    description:
+      'Spherically symmetric non-rotating baseline manifold verifying zero Lense-Thirring frame-dragging (ω = 0) and canonical ISCO at 6.0 R_g (3.0 R_s).',
+    curvatureCriteria: 'r₊ = 2.000 R_g · r_ISCO = 6.000 R_g · g_tφ = 0.0000',
+    params: {
+      spin: 0.0,
+      wellDepthMultiplier: 1.0,
+      probeRadiusRs: 4.2,
+      inclinationDeg: 60,
+      accretionRate: 0.75,
+      accretionState: 'quiescent',
+    },
+  },
+  {
+    id: 'stress-kerr-frame-drag',
+    code: 'STRESS-02',
+    title: 'Lense-Thirring Frame-Dragging Shear',
+    regimeBadge: 'a* = 0.750 · Plunge 2.2×',
+    presetId: 'sgra',
+    description:
+      'Moderate-spin Boyer-Lindquist manifold stress-testing off-diagonal gravitomagnetic tensor coupling (g_tφ < 0) and Flamm paraboloid embedding curvature.',
+    curvatureCriteria: 'r₊ = 1.661 R_g · r_ISCO = 3.158 R_g · g_tφ < 0',
+    params: {
+      spin: 0.75,
+      wellDepthMultiplier: 2.2,
+      probeRadiusRs: 2.8,
+      inclinationDeg: 78,
+      accretionRate: 1.25,
+      accretionState: 'quiescent',
+    },
+  },
+  {
+    id: 'stress-thorne-extremal',
+    code: 'STRESS-03',
+    title: 'Near-Extremal Thorne Spin Boundary',
+    regimeBadge: 'a* = 0.998 · Plunge 3.5×',
+    presetId: 'cygnus_x1',
+    description:
+      'Maximal astrophysical spin limit (a* = 0.998) where inner and outer Killing horizons nearly coalesce and prograde ISCO plunges inside the ergosphere.',
+    curvatureCriteria: 'r₊ = 1.063 R_g · r_ISCO = 1.237 R_g · Ω_H → 0.470 c/R_g',
+    params: {
+      spin: 0.998,
+      wellDepthMultiplier: 3.5,
+      probeRadiusRs: 1.65,
+      inclinationDeg: 84,
+      accretionRate: 2.25,
+      accretionState: 'active',
+    },
+  },
+  {
+    id: 'stress-ergosphere-static-limit',
+    code: 'STRESS-04',
+    title: 'Ergosphere Static-Limit Plunge',
+    regimeBadge: 'a* = 0.960 · Probe 0.88 R_s',
+    presetId: 'ton618',
+    description:
+      'Deep-well probe injected inside the static limit surface (r_probe < r_ergo) where g_tt ≥ 0 forces mandatory prograde spacetime corotation.',
+    curvatureCriteria: 'g_tt ≥ 0 (Inside Ergosphere) · Plunge 4.0× R_s · α → 0.31',
+    params: {
+      spin: 0.96,
+      wellDepthMultiplier: 4.0,
+      probeRadiusRs: 0.88,
+      inclinationDeg: 86,
+      accretionRate: 1.95,
+      accretionState: 'active',
+    },
+  },
+  {
+    id: 'stress-kretschmann-tidal-peak',
+    code: 'STRESS-05',
+    title: 'Extreme Weyl & Kretschmann Tidal Spike',
+    regimeBadge: 'a* = 0.990 · Probe 0.68 R_s',
+    presetId: 'gw150914',
+    description:
+      'Horizon-grazing geodesic stress test verifying numerical stability of radial metric divergence g_rr = Σ/Δ and Kretschmann scalar K = R^{αβγδ}R_{αβγδ}.',
+    curvatureCriteria: 'K > 1.20 M⁻⁴ · g_rr > 12.0 · Zero-NaN Tensor Convergence',
+    params: {
+      spin: 0.99,
+      wellDepthMultiplier: 3.8,
+      probeRadiusRs: 0.68,
+      inclinationDeg: 88,
+      accretionRate: 2.45,
+      accretionState: 'active',
+    },
+  },
+];
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -65,6 +402,11 @@ interface SettingsModalProps {
   onOpenKerrLogModal?: () => void;
   onTriggerKerrCalculation?: (tierOverride?: KerrEngineTierId) => void;
   onExportGeodesicCsv?: () => void;
+  activeParams?: BlackHoleParams;
+  onRecordDiagnosticStressTest?: (
+    run: KerrEngineRunLog,
+    applyParamsToScene?: Partial<BlackHoleParams>
+  ) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -84,11 +426,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenKerrLogModal,
   onTriggerKerrCalculation,
   onExportGeodesicCsv,
+  activeParams,
+  onRecordDiagnosticStressTest,
 }) => {
   const haptics = useHaptics({
     enabled: settings.hapticsEnabled !== false,
     intensity: settings.hapticsIntensity ?? 1.0,
   });
+  const [activeTab, setActiveTab] = useState<'settings' | 'songs' | 'iq_test' | 'diagnostic'>(
+    'settings'
+  );
   const [secretPasswordInput, setSecretPasswordInput] = useState<string>('');
   const [secretAuthError, setSecretAuthError] = useState<boolean>(false);
   const [isInlineKerrLogOpen, setIsInlineKerrLogOpen] = useState<boolean>(false);
@@ -96,10 +443,130 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [playerState, setPlayerState] = useState<TrapQueenPlayerState>(() =>
     trapQueenPlayer.getState()
   );
+  const [songCategoryFilter, setSongCategoryFilter] = useState<
+    'all' | 'Hip-Hop / Trap' | 'Nightcore' | 'Electronic / Alt'
+  >('all');
+  const [spectrumBands, setSpectrumBands] = useState<number[]>(() =>
+    trapQueenPlayer.getSpectrumBands(16)
+  );
+  const [diagnosticSuiteNonce, setDiagnosticSuiteNonce] = useState<number>(0);
+  const [diagnosticRunningIdx, setDiagnosticRunningIdx] = useState<number | null>(null);
+  const [diagnosticCompletedRuns, setDiagnosticCompletedRuns] = useState<
+    Record<string, KerrEngineRunLog>
+  >({});
+  const [selectedDiagnosticLogId, setSelectedDiagnosticLogId] = useState<string | null>(null);
+  const [syncSceneOnDiagnosticRun, setSyncSceneOnDiagnosticRun] = useState<boolean>(false);
 
   useEffect(() => {
+    trapQueenPlayer.setCatalog(SETTINGS_SONGS_LIST);
     return trapQueenPlayer.subscribe(setPlayerState);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'songs') return;
+    setSpectrumBands(trapQueenPlayer.getSpectrumBands(16));
+    if (!playerState.isPlaying) return;
+    const interval = window.setInterval(() => {
+      setSpectrumBands(trapQueenPlayer.getSpectrumBands(16));
+    }, 60);
+    return () => window.clearInterval(interval);
+  }, [isOpen, activeTab, playerState.isPlaying, playerState.playbackRate, playerState.trackId]);
+
+  // Automatically trigger and log the spacetime curvature stress-test suite when the Diagnostic tab is opened
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'diagnostic') return;
+
+    let cancelled = false;
+    const timers: number[] = [];
+    const tierToUse: KerrEngineTierId = settings.kerrEngineTier || 'ultra';
+    const baseParams: BlackHoleParams = activeParams || {
+      objectCategory: 'black_hole',
+      systemCategory: 'isolated',
+      backgroundTheme: 'galactic_core',
+      presetId: 'ton618',
+      trueMassSolar: 66000000000,
+      massSolar: 100,
+      spin: 0.98,
+      accretionRate: 1.95,
+      inclinationDeg: 78,
+      dopplerStrength: 0.65,
+      probeRadiusRs: 3.6,
+      explodedSeparation: 0.0,
+      timeScale: 1.0,
+      wellDepthMultiplier: 2.2,
+      gravitationalLensing: true,
+      trueCosmicScale: false,
+      spectralMode: 'blackbody',
+      accretionState: 'quiescent',
+      layers: {
+        accretionDisk: true,
+        ergosphereCage: false,
+        spacetimeGrid: true,
+        orbitalStars: false,
+        geodesicRays: false,
+        pulsarBeams: true,
+        magneticField: true,
+        anatomyLines: false,
+        microlensingStar: false,
+      },
+    };
+
+    setDiagnosticCompletedRuns({});
+    setDiagnosticRunningIdx(0);
+
+    SPACETIME_CURVATURE_STRESS_TESTS.forEach((scenario, idx) => {
+      const timerId = window.setTimeout(() => {
+        if (cancelled) return;
+        setDiagnosticRunningIdx(idx);
+
+        const targetPreset =
+          ASTROPHYSICAL_PRESETS.find((p) => p.id === scenario.presetId) ||
+          ASTROPHYSICAL_PRESETS[0];
+
+        const testParams: BlackHoleParams = {
+          ...baseParams,
+          ...targetPreset.params,
+          ...scenario.params,
+          presetId: targetPreset.id,
+          trueMassSolar: targetPreset.trueMassSolar,
+          objectCategory: targetPreset.category,
+        };
+
+        const runLog = generateKerrEngineCalculationRun(targetPreset, testParams, tierToUse, {
+          diagnosticScenarioTitle: `[${scenario.code}] ${scenario.title}`,
+          diagnosticScenarioCode: `${scenario.code} · ${scenario.regimeBadge}`,
+        });
+
+        setDiagnosticCompletedRuns((prev) => ({
+          ...prev,
+          [scenario.id]: runLog,
+        }));
+        setSelectedDiagnosticLogId((prev) => prev || scenario.id);
+
+        onRecordDiagnosticStressTest?.(
+          runLog,
+          syncSceneOnDiagnosticRun ? scenario.params : undefined
+        );
+
+        if (idx === SPACETIME_CURVATURE_STRESS_TESTS.length - 1) {
+          const doneTimer = window.setTimeout(() => {
+            if (!cancelled) {
+              setDiagnosticRunningIdx(null);
+            }
+          }, 90);
+          timers.push(doneTimer);
+        }
+      }, idx * 110);
+
+      timers.push(timerId);
+    });
+
+    return () => {
+      cancelled = true;
+      timers.forEach((id) => window.clearTimeout(id));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, activeTab, diagnosticSuiteNonce]);
 
   const currentLang: AppLanguage = settings.language || 'en';
   const t = TRANSLATIONS[currentLang] || TRANSLATIONS.en;
@@ -162,33 +629,75 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           motionBlurEnabled: false,
         };
       } else {
-        // Restore desktop layout preset
+        // Restore desktop layout preset (keep diagnostic overlays closed by default)
         return {
           ...prev,
           phoneMode: false,
           showLeftHud: true,
           showOverheadMap: true,
           showCursorTelemetry: true,
-          showEventLog: true,
+          showEventLog: false,
           cameraFov: 46,
         };
       }
     });
   };
 
+  const activeTrackDef =
+    SETTINGS_SONGS_LIST.find((tr) => tr.id === playerState.trackId) || SETTINGS_SONGS_LIST[0];
+
+  const activeUiThemeId: UiThemeId = settings.uiTheme || 'kerr_claude';
+  const activeUiThemeOption =
+    UI_THEME_OPTIONS.find((th) => th.id === activeUiThemeId) || UI_THEME_OPTIONS[0];
+
+  const modalShellThemeClass =
+    activeUiThemeId === 'kerr_claude'
+      ? 'bg-[#100d0b] border-[#3a2e28] shadow-[0_24px_60px_rgba(0,0,0,0.85),0_0_30px_rgba(217,119,87,0.12)]'
+      : activeUiThemeId === 'cryo_quantum'
+      ? 'bg-[#060b14] border-sky-500/35 shadow-[0_24px_60px_rgba(0,0,0,0.85),0_0_30px_rgba(56,189,248,0.12)]'
+      : 'bg-[#070a12] border-neutral-800 shadow-2xl';
+
+  const modalHeaderThemeClass =
+    activeUiThemeId === 'kerr_claude'
+      ? 'border-[#2e241f] bg-[#15110e]'
+      : activeUiThemeId === 'cryo_quantum'
+      ? 'border-sky-900/50 bg-[#080f1d]'
+      : 'border-neutral-800/90 bg-neutral-950';
+
+  const modalHeaderIconClass =
+    activeUiThemeId === 'kerr_claude'
+      ? 'bg-[#241C18] border-[#D97757]/60 text-[#F4A688]'
+      : activeUiThemeId === 'cryo_quantum'
+      ? 'bg-sky-500/15 border-sky-400/50 text-sky-300'
+      : 'bg-amber-500/15 border-amber-500/40 text-amber-300';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 pointer-events-auto">
-      <div className="relative w-full max-w-xl bg-[#070a12] border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div
+        data-ui-theme={activeUiThemeId}
+        className={`relative w-full max-w-xl border rounded-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors ${modalShellThemeClass}`}
+      >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 sm:py-4 border-b border-neutral-800/90 bg-neutral-950">
+        <div
+          className={`flex items-center justify-between px-4 sm:px-5 py-3.5 sm:py-4 border-b ${modalHeaderThemeClass}`}
+        >
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-300 shrink-0">
+            <div
+              className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${modalHeaderIconClass}`}
+            >
               <Settings className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="font-display text-sm font-bold uppercase tracking-wider text-white">
-                {t.settingsTitle}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="font-display text-sm font-bold uppercase tracking-wider text-[#F7F4EE]">
+                  {t.settingsTitle}
+                </h2>
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${activeUiThemeOption.badgeClass}`}
+                >
+                  {activeUiThemeOption.name}
+                </span>
+              </div>
               <p className="text-[11px] font-mono text-neutral-400">
                 {t.settingsSubtitle}
               </p>
@@ -205,8 +714,217 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Scrollable Settings Body */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 sm:space-y-5 text-xs">
+        {/* 3-Tab Navigation Bar: Settings | Songs | IQ Test */}
+        <div
+          role="tablist"
+          aria-label="Settings Modal Tabs"
+          className={`flex items-center gap-1.5 px-4 sm:px-5 py-2 border-b font-mono text-xs ${modalHeaderThemeClass}`}
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'settings'}
+            data-testid="settings-tab-settings"
+            onClick={() => {
+              haptics.light();
+              setActiveTab('settings');
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'settings'
+                ? activeUiThemeId === 'kerr_claude'
+                  ? 'bg-[#241C18] border-[#D97757] text-[#F7F4EE] shadow-[0_0_12px_rgba(217,119,87,0.28)]'
+                  : activeUiThemeId === 'cryo_quantum'
+                  ? 'bg-sky-500/20 border-sky-400 text-sky-200 shadow-[0_0_12px_rgba(56,189,248,0.22)]'
+                  : 'bg-amber-500/20 border-amber-400 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+            }`}
+          >
+            <Sliders
+              className={`w-3.5 h-3.5 ${
+                activeUiThemeId === 'kerr_claude'
+                  ? 'text-[#E08263]'
+                  : activeUiThemeId === 'cryo_quantum'
+                  ? 'text-sky-400'
+                  : 'text-amber-400'
+              }`}
+            />
+            <span>Settings</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'songs'}
+            data-testid="settings-tab-songs"
+            onClick={() => {
+              haptics.light();
+              setActiveTab('songs');
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'songs'
+                ? 'bg-fuchsia-500/20 border-fuchsia-400 text-fuchsia-200 shadow-[0_0_12px_rgba(217,70,239,0.22)]'
+                : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+            }`}
+          >
+            <Music className="w-3.5 h-3.5 text-fuchsia-400" />
+            <span>Songs</span>
+            {playerState.isPlaying && (
+              <span className="text-[9.5px] text-amber-300 font-bold">
+                • {playerState.playbackRate.toFixed(2).replace(/\.00$/, '.0')}x
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'iq_test'}
+            data-testid="settings-tab-iq-test"
+            onClick={() => {
+              haptics.light();
+              setActiveTab('iq_test');
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'iq_test'
+                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+            }`}
+          >
+            <Atom className="w-3.5 h-3.5 text-cyan-400" />
+            <span>IQ Test</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'diagnostic'}
+            data-testid="settings-tab-diagnostic"
+            onClick={() => {
+              haptics.light();
+              setActiveTab('diagnostic');
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'diagnostic'
+                ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.22)]'
+                : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Diagnostic</span>
+            {Object.keys(diagnosticCompletedRuns).length > 0 && (
+              <span className="text-[9.5px] text-emerald-300 font-bold">
+                • {Object.keys(diagnosticCompletedRuns).length}/{SPACETIME_CURVATURE_STRESS_TESTS.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Scrollable Modal Body */}
+        {activeTab === 'settings' && (
+          <div className="p-4 sm:p-5 overflow-y-auto space-y-4 sm:space-y-5 text-xs">
+          {/* Interface Theme & Color Palette Selector (3 Professional Themes including Kerr Engine Claude Look) */}
+          <div
+            data-testid="settings-ui-theme-section"
+            className={`rounded-xl p-4 space-y-3 border transition-colors ${
+              activeUiThemeId === 'kerr_claude'
+                ? 'bg-gradient-to-br from-[#191310] via-[#120e0c] to-neutral-950 border-[#D97757]/50 shadow-[0_0_24px_rgba(217,119,87,0.1)]'
+                : activeUiThemeId === 'cryo_quantum'
+                ? 'bg-gradient-to-br from-[#081326] via-neutral-950 to-neutral-950 border-sky-500/40 shadow-[0_0_24px_rgba(56,189,248,0.1)]'
+                : 'bg-neutral-950/90 border-amber-500/35'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider font-semibold text-[#F7F4EE]">
+                <Palette
+                  className={`w-3.5 h-3.5 ${
+                    activeUiThemeId === 'kerr_claude'
+                      ? 'text-[#E08263]'
+                      : activeUiThemeId === 'cryo_quantum'
+                      ? 'text-sky-400'
+                      : 'text-amber-400'
+                  }`}
+                />
+                <span>Interface Theme & Color Architecture</span>
+              </div>
+              <span
+                className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${activeUiThemeOption.badgeClass}`}
+              >
+                {activeUiThemeOption.badge}
+              </span>
+            </div>
+
+            <p className="text-[11px] text-neutral-400 leading-relaxed">
+              Select a workspace color architecture. Includes the signature <strong className="text-[#F4A688]">Kerr Engine Claude</strong> terracotta &amp; parchment look alongside two precision observatory themes.
+            </p>
+
+            <div
+              className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-0.5"
+              role="radiogroup"
+              aria-label="Interface Theme Selector"
+            >
+              {UI_THEME_OPTIONS.map((themeOpt) => {
+                const isSelected = activeUiThemeId === themeOpt.id;
+                return (
+                  <button
+                    key={themeOpt.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    data-testid={`ui-theme-${themeOpt.id}`}
+                    onClick={() => {
+                      haptics.medium();
+                      onUpdateSettings((prev) => ({
+                        ...prev,
+                        uiTheme: themeOpt.id,
+                      }));
+                    }}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? themeOpt.activeCardClass
+                        : 'bg-neutral-900/80 border-neutral-800 text-neutral-300 hover:border-neutral-700 hover:text-white'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1.5 mb-2">
+                        {/* 4-Color Palette Swatch Chip */}
+                        <div className="flex items-center gap-1">
+                          {themeOpt.swatches.map((hex, i) => (
+                            <span
+                              key={i}
+                              className="w-3.5 h-3.5 rounded-full border border-white/20 shadow-sm"
+                              style={{ backgroundColor: hex }}
+                            />
+                          ))}
+                        </div>
+                        {isSelected && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-white/10 text-white border border-white/20">
+                            <Check className="w-2.5 h-2.5" /> ACTIVE
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="font-display font-bold text-xs text-white">
+                        {themeOpt.name}
+                      </div>
+                      <div className="text-[10px] font-mono text-neutral-300 mt-0.5">
+                        {themeOpt.subtitle}
+                      </div>
+                      <p className="text-[10px] text-neutral-400 leading-snug mt-1.5">
+                        {themeOpt.description}
+                      </p>
+                    </div>
+
+                    <div className="mt-2.5 pt-1.5 border-t border-white/10 flex items-center justify-between font-mono text-[9px]">
+                      <span className={`px-1.5 py-0.5 rounded border font-bold ${themeOpt.badgeClass}`}>
+                        {themeOpt.badge}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Language & Localization Selector (English Default, German, Japanese, Spanish, Chinese) */}
           <div className="bg-neutral-950/90 border border-amber-500/30 rounded-xl p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -1924,147 +2642,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 </div>
 
-                {/* Vault Anthem Player: Trap Queen — Fetty Wap */}
-                <div className="p-3 rounded-lg bg-neutral-900/85 border border-fuchsia-500/40 space-y-2.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-amber-400/50 bg-neutral-950 shrink-0 flex items-center justify-center">
-                        {playerState.artworkUrl ? (
-                          <img
-                            src={playerState.artworkUrl}
-                            alt="Fetty Wap - Trap Queen cover"
-                            className={`w-full h-full object-cover ${
-                              playerState.isPlaying ? 'scale-105 transition-transform duration-500' : ''
-                            }`}
-                          />
-                        ) : (
-                          <Music className="w-4 h-4 text-amber-300" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-white truncate">
-                            {playerState.trackTitle}
-                          </span>
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
-                            1738
-                          </span>
-                        </div>
-                        <div className="text-[11px] font-mono text-fuchsia-300 truncate">
-                          {playerState.artistName} • Vault Anthem
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        haptics.medium();
-                        void trapQueenPlayer.togglePlay();
-                      }}
-                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-mono text-xs font-bold transition-all cursor-pointer shrink-0 border ${
-                        playerState.isPlaying
-                          ? 'bg-amber-500 text-neutral-950 border-amber-300 shadow-[0_0_16px_rgba(245,158,11,0.45)]'
-                          : 'bg-fuchsia-500/20 hover:bg-fuchsia-500/30 text-amber-200 border-fuchsia-400/50'
-                      }`}
-                    >
-                      {playerState.isPlaying ? (
-                        <>
-                          <Pause className="w-3.5 h-3.5 fill-current" />
-                          <span>Pause Song</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Play Trap Queen</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Progress & Volume / Source Controls */}
-                  <div className="space-y-1.5 pt-1 border-t border-neutral-800/80">
-                    <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => trapQueenPlayer.setMode('official')}
-                          className={`px-1.5 py-0.5 rounded border cursor-pointer transition-colors ${
-                            playerState.mode === 'official'
-                              ? 'bg-amber-500/20 border-amber-400/50 text-amber-200'
-                              : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-200'
-                          }`}
-                        >
-                          Full Song (3:42)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => trapQueenPlayer.setMode('synth1738')}
-                          className={`px-1.5 py-0.5 rounded border cursor-pointer transition-colors ${
-                            playerState.mode === 'synth1738'
-                              ? 'bg-fuchsia-500/20 border-fuchsia-400/50 text-fuchsia-200'
-                              : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-200'
-                          }`}
-                        >
-                          1738 Synth Beat
-                        </button>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Volume2 className="w-3 h-3 text-amber-300" />
-                        <input
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          value={playerState.volume}
-                          onChange={(e) =>
-                            trapQueenPlayer.setVolume(parseFloat(e.target.value))
-                          }
-                          aria-label="Trap Queen volume"
-                          className="w-16 accent-amber-400 cursor-pointer"
-                        />
-                      </div>
-                    </div>
-
-                    {playerState.mode === 'official' && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[10px] text-neutral-400 w-8">
-                          {Math.floor(playerState.currentTime / 60)}:
-                          {Math.floor(playerState.currentTime % 60)
-                            .toString()
-                            .padStart(2, '0')}
-                        </span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={Math.max(1, playerState.duration)}
-                          step={0.1}
-                          value={Math.min(playerState.currentTime, playerState.duration)}
-                          onChange={(e) =>
-                            trapQueenPlayer.seek(parseFloat(e.target.value))
-                          }
-                          aria-label="Seek Trap Queen track"
-                          className="flex-1 accent-fuchsia-400 cursor-pointer h-1"
-                        />
-                        <span className="font-mono text-[10px] text-neutral-400 w-8 text-right">
-                          {Math.floor(playerState.duration / 60)}:
-                          {Math.floor(playerState.duration % 60)
-                            .toString()
-                            .padStart(2, '0')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
                 <div className="flex items-center justify-between text-[11px] font-mono text-neutral-400">
                   <span className="text-amber-300/90">Clearance 1987 Verified</span>
                   <button
                     type="button"
                     onClick={() => {
                       haptics.light();
-                      trapQueenPlayer.stopAndReset();
                       onUpdateSettings((prev) => ({
                         ...prev,
                         secret1987Unlocked: false,
@@ -2081,6 +2664,796 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
           </div>
         </div>
+        )}
+
+        {/* TAB 2: Songs Studio Deck, Web Audio DSP Mastering & Speed Changer */}
+        {activeTab === 'songs' && (
+          <div
+            data-testid="settings-tab-panel-songs"
+            className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs"
+          >
+            {/* Flagship Now Playing Studio Deck */}
+            <div className="p-4 rounded-xl bg-gradient-to-br from-[#0e0716] via-neutral-950 to-[#070b14] border border-fuchsia-500/45 space-y-3.5 shadow-[0_0_28px_rgba(217,70,239,0.14)]">
+              {/* Top Telemetry Bar: Hi-Res DSP Status & Bitrate */}
+              <div className="flex items-center justify-between gap-2 pb-2 border-b border-neutral-800/80 font-mono text-[10px]">
+                <div className="flex items-center gap-1.5 text-fuchsia-300 font-semibold">
+                  <Radio className="w-3.5 h-3.5 text-amber-400" />
+                  <span>KERR HI-RES STUDIO MASTERING DECK</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-bold">
+                    {playerState.bitrateDisplay}
+                  </span>
+                </div>
+              </div>
+
+              {/* Artwork, Track Info & Live 16-Band Spectrum Visualizer */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-amber-400/60 bg-neutral-900 shrink-0 flex items-center justify-center shadow-[0_0_16px_rgba(245,158,11,0.2)]">
+                    {playerState.artworkUrl ? (
+                      <img
+                        src={playerState.artworkUrl}
+                        alt={`${playerState.artistName} - ${playerState.trackTitle} cover`}
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
+                        className={`w-full h-full object-cover ${
+                          playerState.isPlaying ? 'scale-105 transition-transform duration-500' : ''
+                        }`}
+                      />
+                    ) : (
+                      <Music className="w-6 h-6 text-amber-300" />
+                    )}
+                  </div>
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-bold text-white truncate">
+                        {activeTrackDef.title} ({activeTrackDef.subtitle})
+                      </span>
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0">
+                        {activeTrackDef.audioQualityBadge || '48kHz Hi-Res'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-mono text-fuchsia-300 truncate">
+                      {playerState.artistName} ·{' '}
+                      <span className="text-amber-200 font-semibold">
+                        {Math.round(activeTrackDef.bpm * playerState.playbackRate)} BPM
+                      </span>{' '}
+                      ({playerState.playbackRate.toFixed(2)}x)
+                    </div>
+                    {/* Real-Time 16-Band Spectrum Analyzer Strip */}
+                    <div
+                      data-testid="songs-live-spectrum"
+                      className="flex items-end gap-1 h-4 pt-1"
+                      aria-label="Real-Time Audio Frequency Spectrum"
+                    >
+                      {spectrumBands.map((val, idx) => (
+                        <span
+                          key={idx}
+                          className={`w-1.5 rounded-t transition-all duration-75 ${
+                            playerState.isPlaying
+                              ? idx % 3 === 0
+                                ? 'bg-amber-400'
+                                : idx % 2 === 0
+                                ? 'bg-fuchsia-400'
+                                : 'bg-cyan-400'
+                              : 'bg-neutral-700'
+                          }`}
+                          style={{ height: `${Math.round(val * 100)}%` }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Transport Controls: Prev | Play/Pause | Next | Loop */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    data-testid="jukebox-prev-btn"
+                    onClick={() => {
+                      haptics.light();
+                      trapQueenPlayer.prevTrack();
+                    }}
+                    className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white transition-colors cursor-pointer"
+                    title="Previous Track"
+                    aria-label="Previous Track"
+                  >
+                    <SkipBack className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="jukebox-play-pause-btn"
+                    onClick={() => {
+                      haptics.medium();
+                      void trapQueenPlayer.togglePlay();
+                    }}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-mono text-xs font-bold transition-all cursor-pointer shrink-0 border whitespace-nowrap ${
+                      playerState.isPlaying
+                        ? 'bg-amber-500 text-neutral-950 border-amber-300 shadow-[0_0_16px_rgba(245,158,11,0.45)]'
+                        : 'bg-fuchsia-500/25 hover:bg-fuchsia-500/35 text-amber-200 border-fuchsia-400/60'
+                    }`}
+                  >
+                    {playerState.isPlaying ? (
+                      <>
+                        <Pause className="w-3.5 h-3.5 fill-current" />
+                        <span>Pause Song</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Play {activeTrackDef.title}</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="jukebox-next-btn"
+                    onClick={() => {
+                      haptics.light();
+                      trapQueenPlayer.nextTrack();
+                    }}
+                    className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white transition-colors cursor-pointer"
+                    title="Next Track"
+                    aria-label="Next Track"
+                  >
+                    <SkipForward className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="jukebox-loop-btn"
+                    onClick={() => {
+                      haptics.light();
+                      trapQueenPlayer.setLoopTrack(!playerState.loopTrack);
+                    }}
+                    className={`p-2 rounded-lg border font-mono text-[10px] transition-colors cursor-pointer ${
+                      playerState.loopTrack
+                        ? 'bg-amber-500/20 border-amber-400/60 text-amber-300'
+                        : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
+                    }`}
+                    title={playerState.loopTrack ? 'Loop Current Song: ON' : 'Auto-Advance Queue: ON'}
+                    aria-label="Toggle Loop Track"
+                  >
+                    <Repeat className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Timeline Scrubber */}
+              <div className="space-y-2.5 pt-2 border-t border-neutral-800/80">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-neutral-400 w-9 tabular-nums">
+                    {Math.floor(playerState.currentTime / 60)}:
+                    {Math.floor(playerState.currentTime % 60)
+                      .toString()
+                      .padStart(2, '0')}
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={Math.max(1, playerState.duration)}
+                    step={0.1}
+                    value={Math.min(playerState.currentTime, playerState.duration)}
+                    onChange={(e) => trapQueenPlayer.seek(parseFloat(e.target.value))}
+                    aria-label="Seek active song"
+                    className="flex-1 accent-fuchsia-400 cursor-pointer h-1.5"
+                  />
+                  <span className="font-mono text-[10px] text-neutral-400 w-9 text-right tabular-nums">
+                    {Math.floor(playerState.duration / 60)}:
+                    {Math.floor(playerState.duration % 60)
+                      .toString()
+                      .padStart(2, '0')}
+                  </span>
+                </div>
+
+                {/* Song Speed Changer + Pitch Shift / Lock + Volume */}
+                <div className="p-3 rounded-xl bg-neutral-900/90 border border-neutral-800 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap font-mono text-[10.5px]">
+                    <span className="text-amber-300 font-bold">
+                      Song Speed Changer: {playerState.playbackRate.toFixed(2)}x
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          trapQueenPlayer.setPreservesPitch(!playerState.preservesPitch)
+                        }
+                        className={`px-2 py-0.5 rounded border text-[9.5px] font-mono cursor-pointer transition-colors whitespace-nowrap ${
+                          !playerState.preservesPitch
+                            ? 'bg-fuchsia-500/20 border-fuchsia-400/50 text-fuchsia-200'
+                            : 'bg-neutral-950 border-neutral-700 text-neutral-400 hover:text-white'
+                        }`}
+                        title="Toggle between vinyl/nightcore pitch shift and constant-pitch time stretch"
+                      >
+                        {!playerState.preservesPitch ? 'Pitch Shift: ON' : 'Pitch Lock: ON'}
+                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        <Volume2 className="w-3.5 h-3.5 text-amber-300" />
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={playerState.volume}
+                          onChange={(e) =>
+                            trapQueenPlayer.setVolume(parseFloat(e.target.value))
+                          }
+                          aria-label="Song volume"
+                          className="w-16 accent-amber-400 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Continuous Speed Slider (0.50x to 2.00x) */}
+                  <div className="flex items-center gap-2 font-mono text-[10px]">
+                    <span className="text-neutral-500">0.5x</span>
+                    <input
+                      type="range"
+                      data-testid="song-speed-slider"
+                      aria-label="Song Playback Speed"
+                      min={0.5}
+                      max={2.0}
+                      step={0.05}
+                      value={playerState.playbackRate}
+                      onChange={(e) =>
+                        trapQueenPlayer.setPlaybackRate(parseFloat(e.target.value))
+                      }
+                      className="flex-1 accent-amber-400 cursor-pointer h-1.5"
+                    />
+                    <span className="text-neutral-500">2.0x</span>
+                  </div>
+
+                  {/* Quick Speed Preset Buttons */}
+                  <div className="grid grid-cols-5 gap-1">
+                    {SONG_SPEED_PRESETS.map((preset) => {
+                      const isRateActive =
+                        Math.abs(playerState.playbackRate - preset.rate) < 0.02;
+                      return (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          data-testid={`song-speed-${preset.label}`}
+                          onClick={() => {
+                            haptics.light();
+                            trapQueenPlayer.setPlaybackRate(preset.rate);
+                          }}
+                          className={`py-1 px-1.5 rounded border font-mono text-[9.5px] font-semibold transition-colors cursor-pointer text-center whitespace-nowrap ${
+                            isRateActive
+                              ? 'bg-amber-500/25 border-amber-400 text-amber-200'
+                              : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+                          }`}
+                        >
+                          {preset.label} · {preset.tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Web Audio API Studio Mastering & 3-Band Parametric EQ */}
+                <div
+                  data-testid="songs-dsp-mastering-panel"
+                  className="p-3 rounded-xl bg-neutral-900/90 border border-fuchsia-500/30 space-y-2.5"
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap font-mono text-[10px]">
+                    <span className="text-fuchsia-200 font-bold uppercase tracking-wider">
+                      Hi-Res Audio Mastering & 3-Band Parametric EQ
+                    </span>
+                    <span className="text-emerald-300 font-semibold">
+                      Bass {playerState.bassDb >= 0 ? `+${playerState.bassDb}` : playerState.bassDb} dB · Mid{' '}
+                      {playerState.midDb >= 0 ? `+${playerState.midDb}` : playerState.midDb} dB · Air{' '}
+                      {playerState.trebleDb >= 0 ? `+${playerState.trebleDb}` : playerState.trebleDb} dB
+                    </span>
+                  </div>
+
+                  {/* 4 Mastering Quality Presets */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {AUDIO_QUALITY_PRESETS.map((preset: { id: AudioQualityPresetId; label: string; shortTag: string }) => {
+                      const isPresetActive = playerState.qualityPreset === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          data-testid={`audio-quality-preset-${preset.id}`}
+                          onClick={() => {
+                            haptics.light();
+                            trapQueenPlayer.setQualityPreset(preset.id);
+                          }}
+                          className={`p-1.5 rounded-lg border text-left font-mono transition-all cursor-pointer ${
+                            isPresetActive
+                              ? 'bg-fuchsia-500/20 border-fuchsia-400 text-white shadow-[0_0_10px_rgba(217,70,239,0.2)]'
+                              : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+                          }`}
+                        >
+                          <div className="text-[9.5px] font-bold truncate">{preset.label}</div>
+                          <div className="text-[8.5px] text-amber-300/90 truncate">{preset.shortTag}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* 3-Band EQ Sliders: Sub-Bass (85Hz) | Presence (2.4kHz) | Crystal Air (10kHz) */}
+                  <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-[9.5px]">
+                    <div className="p-2 rounded-lg bg-neutral-950 border border-neutral-800 space-y-1">
+                      <div className="flex justify-between text-neutral-300">
+                        <span>85Hz Bass</span>
+                        <span className="text-amber-300 font-bold">
+                          {playerState.bassDb >= 0 ? `+${playerState.bassDb}` : playerState.bassDb}dB
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={-6}
+                        max={9}
+                        step={0.5}
+                        value={playerState.bassDb}
+                        onChange={(e) =>
+                          trapQueenPlayer.setCustomEq('bass', parseFloat(e.target.value))
+                        }
+                        aria-label="85Hz Sub-Bass Gain"
+                        className="w-full accent-amber-400 cursor-pointer h-1"
+                      />
+                    </div>
+
+                    <div className="p-2 rounded-lg bg-neutral-950 border border-neutral-800 space-y-1">
+                      <div className="flex justify-between text-neutral-300">
+                        <span>2.4kHz Mid</span>
+                        <span className="text-fuchsia-300 font-bold">
+                          {playerState.midDb >= 0 ? `+${playerState.midDb}` : playerState.midDb}dB
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={-6}
+                        max={9}
+                        step={0.5}
+                        value={playerState.midDb}
+                        onChange={(e) =>
+                          trapQueenPlayer.setCustomEq('mid', parseFloat(e.target.value))
+                        }
+                        aria-label="2.4kHz Vocal Presence Gain"
+                        className="w-full accent-fuchsia-400 cursor-pointer h-1"
+                      />
+                    </div>
+
+                    <div className="p-2 rounded-lg bg-neutral-950 border border-neutral-800 space-y-1">
+                      <div className="flex justify-between text-neutral-300">
+                        <span>10kHz Air</span>
+                        <span className="text-cyan-300 font-bold">
+                          {playerState.trebleDb >= 0 ? `+${playerState.trebleDb}` : playerState.trebleDb}dB
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={-6}
+                        max={9}
+                        step={0.5}
+                        value={playerState.trebleDb}
+                        onChange={(e) =>
+                          trapQueenPlayer.setCustomEq('treble', parseFloat(e.target.value))
+                        }
+                        aria-label="10kHz High-Shelf Air Gain"
+                        className="w-full accent-cyan-400 cursor-pointer h-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Full-Length Songs Library with Category Filter */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap font-mono text-[10.5px] text-neutral-400 px-0.5">
+                <span className="uppercase tracking-wider font-semibold text-neutral-200">
+                  Full-Length Remastered Songs ({SETTINGS_SONGS_LIST.length} Tracks · 48 kHz Stereo)
+                </span>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {(['all', 'Hip-Hop / Trap', 'Nightcore', 'Electronic / Alt'] as const).map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => {
+                        haptics.light();
+                        setSongCategoryFilter(cat);
+                      }}
+                      className={`px-2 py-0.5 rounded border text-[9.5px] font-mono cursor-pointer transition-colors ${
+                        songCategoryFilter === cat
+                          ? 'bg-fuchsia-500/25 border-fuchsia-400 text-fuchsia-200 font-bold'
+                          : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      {cat === 'all' ? `All (${SETTINGS_SONGS_LIST.length})` : cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div
+                className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+                role="group"
+                aria-label="Song Library Selector"
+              >
+                {SETTINGS_SONGS_LIST.filter(
+                  (tr) => songCategoryFilter === 'all' || tr.genreTag === songCategoryFilter
+                ).map((track) => {
+                  const isSelected = playerState.trackId === track.id;
+                  const isTrackPlaying = isSelected && playerState.isPlaying;
+                  return (
+                    <button
+                      key={track.id}
+                      type="button"
+                      data-testid={`song-track-${track.id}`}
+                      onClick={() => {
+                        haptics.medium();
+                        if (isSelected) {
+                          void trapQueenPlayer.togglePlay();
+                        } else {
+                          trapQueenPlayer.selectTrack(track.id, true);
+                        }
+                      }}
+                      className={`flex items-center justify-between gap-2.5 p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-amber-500/20 border-amber-400 text-white shadow-[0_0_14px_rgba(245,158,11,0.2)]'
+                          : 'bg-neutral-950/90 border-neutral-800 text-neutral-300 hover:border-neutral-700 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-neutral-700 bg-neutral-900 shrink-0 flex items-center justify-center">
+                          {track.artworkUrl ? (
+                            <img
+                              src={track.artworkUrl}
+                              alt={`${track.title} (${track.subtitle})`}
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                              }}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Music className="w-4 h-4 text-amber-300" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-white leading-snug">
+                            {track.title}{' '}
+                            <span className="font-normal text-amber-300/90">
+                              ({track.subtitle})
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[10px] font-mono text-neutral-400 truncate mt-0.5">
+                            <span className="truncate">{track.artistName}</span>
+                            <span>·</span>
+                            <span className="text-neutral-300">{track.durationLabel}</span>
+                            <span>·</span>
+                            <span className="text-emerald-300/90">{track.bpm} BPM</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center border ${
+                          isTrackPlaying
+                            ? 'bg-amber-400 text-neutral-950 border-amber-300'
+                            : isSelected
+                            ? 'bg-amber-500/25 text-amber-200 border-amber-400/50'
+                            : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                        }`}
+                      >
+                        {isTrackPlaying ? (
+                          <Pause className="w-3.5 h-3.5 fill-current" />
+                        ) : (
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: IQ Test Module (General Relativity & Astrophysics IQ Assessment) */}
+        {activeTab === 'iq_test' && (
+          <IQTestModule
+            uiTheme={activeUiThemeId}
+            onHapticLight={() => haptics.light()}
+            onHapticMedium={() => haptics.medium()}
+            onHapticSuccess={() => haptics.success()}
+          />
+        )}
+
+        {/* TAB 4: Automated Spacetime Curvature Stress-Test Diagnostic Suite */}
+        {activeTab === 'diagnostic' && (() => {
+          const completedCount = Object.keys(diagnosticCompletedRuns).length;
+          const totalTests = SPACETIME_CURVATURE_STRESS_TESTS.length;
+          const isSuiteComplete = completedCount === totalTests && diagnosticRunningIdx === null;
+          const activeScenario =
+            SPACETIME_CURVATURE_STRESS_TESTS.find((s) => s.id === selectedDiagnosticLogId) ||
+            SPACETIME_CURVATURE_STRESS_TESTS[0];
+          const activeRunLog = diagnosticCompletedRuns[activeScenario.id];
+
+          const bannerThemeClass =
+            activeUiThemeId === 'kerr_claude'
+              ? 'bg-gradient-to-br from-[#191310] via-[#120e0c] to-neutral-950 border-[#D97757]/50'
+              : activeUiThemeId === 'cryo_quantum'
+              ? 'bg-gradient-to-br from-[#071526] via-[#09111e] to-neutral-950 border-sky-500/45'
+              : 'bg-gradient-to-br from-emerald-950/35 via-neutral-950 to-neutral-950 border-emerald-500/40';
+
+          return (
+            <div
+              data-testid="settings-diagnostic-tab-panel"
+              className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs"
+            >
+              {/* Automated Stress-Test Telemetry Header */}
+              <div className={`rounded-xl border p-4 space-y-3 ${bannerThemeClass}`}>
+                <div className="flex flex-wrap items-start justify-between gap-2.5">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider font-bold text-[#F7F4EE]">
+                      <Activity className="w-4 h-4 text-emerald-400" />
+                      <span>Spacetime Curvature Stress-Test Suite</span>
+                      <span
+                        data-testid="diagnostic-suite-status-badge"
+                        className={`px-2 py-0.5 rounded text-[9.5px] font-mono font-bold border ${
+                          isSuiteComplete
+                            ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200'
+                            : 'bg-amber-500/20 border-amber-400/60 text-amber-200'
+                        }`}
+                      >
+                        {isSuiteComplete
+                          ? `VERIFIED (${completedCount}/${totalTests} LOGGED)`
+                          : `RUNNING (${completedCount}/${totalTests})`}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-neutral-300 leading-relaxed">
+                      Automatically sweeps Boyer-Lindquist metric tensors, Bardeen-Press-Teukolsky ISCO roots, ergosphere static limits, and Kretschmann invariants across {totalTests} extreme curvature regimes, persisting all runs directly to{' '}
+                      <span className="font-mono text-emerald-300 font-semibold">
+                        KerrEngineLogViewer
+                      </span>
+                      .
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      data-testid="diagnostic-rerun-suite-btn"
+                      onClick={() => {
+                        haptics.medium();
+                        setDiagnosticSuiteNonce((n) => n + 1);
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/60 text-emerald-200 font-mono text-[10.5px] font-bold transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Re-Run Stress Suite</span>
+                    </button>
+
+                    {onOpenKerrLogModal && (
+                      <button
+                        type="button"
+                        data-testid="diagnostic-open-log-viewer-btn"
+                        onClick={() => {
+                          haptics.light();
+                          onOpenKerrLogModal();
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/60 text-amber-200 font-mono text-[10.5px] font-bold transition-colors cursor-pointer"
+                      >
+                        <Terminal className="w-3 h-3" />
+                        <span>Open KerrEngineLogViewer ({kerrEngineLogs.length})</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress Bar & Viewport Sync Toggle */}
+                <div className="space-y-2 pt-1">
+                  <div className="h-1.5 w-full rounded-full bg-neutral-900 overflow-hidden border border-neutral-800">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-amber-400 transition-all duration-200"
+                      style={{
+                        width: `${Math.round((completedCount / totalTests) * 100)}%`,
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-neutral-400">
+                    <span>
+                      Solver Tier:{' '}
+                      <strong className="text-amber-300 uppercase">
+                        {settings.kerrEngineTier || 'ultra'}
+                      </strong>{' '}
+                      · Saved in KerrEngineLogViewer:{' '}
+                      <strong className="text-emerald-300">{kerrEngineLogs.length} runs</strong>
+                    </span>
+
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none text-neutral-300 hover:text-white">
+                      <input
+                        type="checkbox"
+                        checked={syncSceneOnDiagnosticRun}
+                        onChange={(e) => {
+                          haptics.light();
+                          setSyncSceneOnDiagnosticRun(e.target.checked);
+                        }}
+                        className="rounded border-neutral-700 bg-neutral-900 text-emerald-500"
+                      />
+                      <span>Sync 3D Viewport on Re-Run</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* 5 Spacetime Curvature Stress Test Scenario Cards */}
+              <div className="space-y-2" data-testid="diagnostic-stress-test-list">
+                {SPACETIME_CURVATURE_STRESS_TESTS.map((scenario, idx) => {
+                  const runLog = diagnosticCompletedRuns[scenario.id];
+                  const isRunningThis = diagnosticRunningIdx === idx;
+                  const isSelected = activeScenario.id === scenario.id;
+
+                  return (
+                    <div
+                      key={scenario.id}
+                      data-testid={`diagnostic-stress-card-${scenario.code.toLowerCase()}`}
+                      onClick={() => {
+                        haptics.light();
+                        setSelectedDiagnosticLogId(scenario.id);
+                      }}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-950/25 border-emerald-400/70 shadow-[0_0_16px_rgba(16,185,129,0.14)]'
+                          : 'bg-neutral-950/90 border-neutral-800/90 hover:border-neutral-700'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-700 font-mono text-[10px] font-bold text-cyan-300">
+                            {scenario.code}
+                          </span>
+                          <span className="font-bold text-white text-xs">
+                            {scenario.title}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 font-mono text-[9.5px] text-amber-200">
+                            {scenario.regimeBadge}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {runLog && onRecordDiagnosticStressTest && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                haptics.medium();
+                                onRecordDiagnosticStressTest(runLog, scenario.params);
+                              }}
+                              className="px-2 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 font-mono text-[9.5px] cursor-pointer"
+                              title="Apply these curvature parameters to the 3D Black Hole scene"
+                            >
+                              Apply to 3D Scene
+                            </button>
+                          )}
+
+                          <span
+                            className={`px-2 py-0.5 rounded font-mono text-[9.5px] font-bold border ${
+                              runLog
+                                ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
+                                : isRunningThis
+                                ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 animate-pulse'
+                                : 'bg-neutral-900 border-neutral-800 text-neutral-500'
+                            }`}
+                          >
+                            {runLog ? 'PASS · LOGGED' : isRunningThis ? 'SOLVING...' : 'QUEUED'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-neutral-400 mt-1.5 leading-snug">
+                        {scenario.description}
+                      </p>
+
+                      {runLog && (
+                        <div className="mt-2.5 pt-2 border-t border-neutral-800/80 grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono text-[10px]">
+                          <div>
+                            <span className="text-neutral-500 block text-[9px] uppercase">
+                              Metric g_tt / g_rr
+                            </span>
+                            <span className="text-emerald-300 font-semibold">
+                              {runLog.summaryMetrics.g_tt.toFixed(4)}
+                            </span>{' '}
+                            <span className="text-neutral-400">
+                              / +{runLog.summaryMetrics.g_rr.toFixed(2)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-neutral-500 block text-[9px] uppercase">
+                              Frame-Drag g_tφ
+                            </span>
+                            <span className="text-cyan-300 font-semibold">
+                              {runLog.summaryMetrics.g_tphi.toFixed(4)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-neutral-500 block text-[9px] uppercase">
+                              Horizon / ISCO
+                            </span>
+                            <span className="text-purple-300 font-semibold">
+                              {runLog.summaryMetrics.rPlusRg.toFixed(3)} R_g
+                            </span>{' '}
+                            <span className="text-neutral-400">
+                              / {runLog.summaryMetrics.iscoRg.toFixed(3)} R_g
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-neutral-500 block text-[9px] uppercase">
+                              Kretschmann K
+                            </span>
+                            <span className="text-amber-300 font-semibold">
+                              {runLog.summaryMetrics.kretschmann.toExponential(2)} M⁻⁴
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-neutral-500 block text-[9px] uppercase">
+                              ADM Lapse α
+                            </span>
+                            <span className="text-sky-300 font-semibold">
+                              {runLog.summaryMetrics.admLapse.toFixed(4)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Embedded KerrEngineLogViewer Inspector for Selected Diagnostic Run */}
+              {activeRunLog && (
+                <div
+                  data-testid="diagnostic-embedded-kerr-log-viewer"
+                  className="rounded-xl bg-[#04070e] border border-slate-800 p-3.5 space-y-2.5 font-mono"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                    <div className="flex items-center gap-2 text-[10.5px]">
+                      <Terminal className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="text-amber-200 font-bold">
+                        KerrEngineLogViewer Trace · {activeRunLog.targetName}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400">
+                      {activeRunLog.modelCode} · {activeRunLog.totalDurationMs} ms · CONVERGED
+                    </span>
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                    {activeRunLog.steps.map((step) => (
+                      <div
+                        key={step.id}
+                        className="p-2 rounded-lg bg-neutral-950/90 border border-slate-800/80 space-y-1 text-[10px]"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-cyan-300 font-semibold">
+                            STEP {step.stepNumber} [{step.phase}] $ {step.command}
+                          </span>
+                          <span className="text-emerald-400 shrink-0">{step.residual}</span>
+                        </div>
+                        <div className="text-amber-200/95 text-[10px] overflow-x-auto">
+                          {step.equation}
+                        </div>
+                        <div className="text-slate-400 text-[9.5px]">{step.logicDecision}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Modal Footer */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 border-t border-neutral-800/90 bg-neutral-950">
