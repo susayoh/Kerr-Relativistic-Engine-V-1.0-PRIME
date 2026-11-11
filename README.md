@@ -20,36 +20,36 @@
 
 **Kerr Relativistic Engine (`v1.4 PRIME`)** is a high-precision, hardware-accelerated astrophysics visualization and numerical relativity platform engineered for the web. Built on a native **WebGL2 / Three.js** pipeline with custom **GLSL raymarching and volumetric shaders**, it solves and renders the exact **Boyer–Lindquist Kerr metric** around rotating black holes, Roche-lobe overflow binary X-ray systems, relativistic pulsars/magnetars, and hypergiant stars at **60–120 FPS**.
 
-Unlike simplified visualizers that rely on static textures or post-process screen-space distortion, **Kerr Relativistic Engine** couples analytical general-relativistic solvers directly to GPU shader uniforms and real-time scientific telemetry overlays—modeling **Bardeen D-shaped event horizon shadows**, **prograde/retrograde ISCO migration**, **Novikov–Thorne radiative blackbody profiles**, **Lense–Thirring frame dragging**, **asymmetric Doppler beaming ($\mathcal{D}^{3+\alpha}$)**, and **Paczyński gravitational microlensing**.
+Unlike simplified visualizers that rely on static textures or post-process screen-space distortion, **Kerr Relativistic Engine** couples analytical general-relativistic solvers directly to GPU shader uniforms and real-time scientific telemetry overlays—modeling **Bardeen D-shaped event horizon shadows**, **prograde/retrograde ISCO migration**, **Novikov–Thorne radiative blackbody profiles**, **Lense–Thirring frame dragging**, **asymmetric Doppler beaming (𝒟³⁺ᵅ)**, and **Paczyński gravitational microlensing**.
 
 ---
 
 ## Visual Overview
 
-| **Ultramassive Kerr Quasar (`TON 618` · $6.6 \times 10^{10}\,M_\odot$)** | **Relativistic Doppler Beaming & Flamm Spacetime Manifold** |
+| **Ultramassive Kerr Quasar (`TON 618` · 6.6 × 10¹⁰ M☉)** | **Relativistic Doppler Beaming & Flamm Spacetime Manifold** |
 | :---: | :---: |
 | ![TON 618 Relativistic Simulation](public/assets/cosmic-vis-ton618-1794212230564.png) | ![Doppler Asymmetry and Curvature Grid](public/assets/cosmic-vis-ton618-1794212343879.png) |
-| *Volumetric raymarched Novikov–Thorne accretion disk with primary ($n=1$) and secondary ($n=2$) lensed Einstein arches.* | *Asymmetric approaching/receding Doppler beaming, photon-ring caustics, and dynamically deformed Flamm paraboloid embedding grid.* |
+| *Volumetric raymarched Novikov–Thorne accretion disk with primary (n = 1) and secondary (n = 2) lensed Einstein arches.* | *Asymmetric approaching/receding Doppler beaming, photon-ring caustics, and dynamically deformed Flamm paraboloid embedding grid.* |
 
 ---
 
 ## Key Production Capabilities
 
 ### 1. Cinematic Deep-Space Helical Boot & Singularity Seed Detonation
-- **Multi-Stage IMAX Camera Spline:** Initializes at maximum orbital distance ($r_0 = 260.0\text{ world units} \approx 148.6\,R_s, \theta = 62^\circ, \phi = 132^\circ$) with HUD chrome and grid suppressed for an unobstructed deep-space approach.
-- **Autonomous Singularity Ignition:** Glides along a helical arc to a suspended **Singularity Seed** ($r = 95.0$), holds in weightless orbital drift, and automatically triggers a relativistic N-wave shockwave detonation—unfurling the Kerr event horizon, photon ring, accretion disk, and 3D spacetime curvature grid simultaneously.
-- **Quintic S-Curve Dolly & Late-Stage HUD Flow:** Executes a 3.2-second quintic smoothstep ($6t^5 - 15t^4 + 10t^3$) spherical dolly pan into the canonical observer lock ($r = 16.5\,R_s, \theta = 71^\circ, \phi = 96^\circ$) with dynamic FOV breathing, revealing the UI HUD only as the camera settles.
+- **Multi-Stage IMAX Camera Spline:** Initializes at maximum orbital distance (`r₀ = 260.0 world units ≈ 148.6 Rₛ, θ = 62°, φ = 132°`) with HUD chrome and grid suppressed for an unobstructed deep-space approach.
+- **Autonomous Singularity Ignition:** Glides along a helical arc to a suspended **Singularity Seed** (`r = 95.0`), holds in weightless orbital drift, and automatically triggers a relativistic N-wave shockwave detonation—unfurling the Kerr event horizon, photon ring, accretion disk, and 3D spacetime curvature grid simultaneously.
+- **Quintic S-Curve Dolly & Late-Stage HUD Flow:** Executes a 3.2-second quintic smoothstep (`6t⁵ − 15t⁴ + 10t³`) spherical dolly pan into the canonical observer lock (`r = 16.5 Rₛ, θ = 71°, φ = 96°`) with dynamic FOV breathing, revealing the UI HUD only as the camera settles.
 
 ### 2. Dual Accretion Rendering Modes & 4 Spectral Calibration Channels
 - **Rendering Architecture:** Instant switching between **Classic Multi-Layer Volumetric Torus** and **Full-Screen Billboard Volumetric Geodesic Raymarcher**.
 - **Multi-Band Spectral Filters:**
-  - **Optical Blackbody (`blackbody`):** True Novikov–Thorne radial temperature gradient ($10^5\text{ K} \to 10^7\text{ K}$).
-  - **Event Horizon Telescope (`eht230ghz`):** $230\text{ GHz}$ ($1.3\text{ mm}$) interferometric synchrotron false-color palette matching M87\* and Sgr A\* reconstructions.
-  - **Chandra X-Ray (`xray`):** High-energy coronal Bremsstrahlung and $\text{Fe K}\alpha$ ($6.4\text{ keV}$) fluorescence mapping.
-  - **Relativistic Velocity Map (`doppler`):** Direct blue/red continuum diagnostic isolating approaching ($+\beta_{\parallel}$) vs. receding ($-\beta_{\parallel}$) Keplerian plasma shear.
+  - **Optical Blackbody (`blackbody`):** True Novikov–Thorne radial temperature gradient (`10⁵ K → 10⁷ K`).
+  - **Event Horizon Telescope (`eht230ghz`):** `230 GHz` (`1.3 mm`) interferometric synchrotron false-color palette matching M87\* and Sgr A\* reconstructions.
+  - **Chandra X-Ray (`xray`):** High-energy coronal Bremsstrahlung and `Fe Kα (6.4 keV)` fluorescence mapping.
+  - **Relativistic Velocity Map (`doppler`):** Direct blue/red continuum diagnostic isolating approaching (`+β∥`) vs. receding (`−β∥`) Keplerian plasma shear.
 
 ### 3. Side-by-Side Synchronized Compare Viewport
-- Dual-canvas WebGL2 split-screen mode enabling real-time comparative astrophysics between any two celestial presets or one-click **Kerr Spin Contrast** benchmarks ($a^* = 0.000$ Schwarzschild vs. $a^* = 0.998$ Near-Extremal Kerr) with synchronized camera quaternions and live ISCO/ergosphere differentials.
+- Dual-canvas WebGL2 split-screen mode enabling real-time comparative astrophysics between any two celestial presets or one-click **Kerr Spin Contrast** benchmarks (`a* = 0.000` Schwarzschild vs. `a* = 0.998` Near-Extremal Kerr) with synchronized camera quaternions and live ISCO/ergosphere differentials.
 
 ### 4. 24-Bit / 96 kHz Hi-Res Procedural Audio Mastering Deck
 - Custom polyphonic Web Audio synthesizer featuring **5 procedural interstellar scores** (*Gargantua Organ Cathedral*, *Event Horizon Noir*, *Singularity Pulse*, *Lense–Thirring Drift*, *Hawking Whisper*), a real-time 60 FPS **FFT Spectrum & Waveform Analyzer**, **3-Band Mastering EQ** (Sub-Bass, Presence, Air), stereo widener, and camera-distance-coupled gravitational redshift low-pass filtering.
@@ -150,11 +150,11 @@ The rendering engine (`src/scene/BlackHoleScene.ts`) is architected around **zer
 
 | Pass | Shader / Mesh Layer | Mathematical & Visual Responsibility | GPU Cost Tier |
 | :---: | :--- | :--- | :---: |
-| **1** | **Deep-Space Starfield** (`InstancedMesh` · 5,500 stars) | Evaluates Harvard B–V blackbody colors, per-star scintillation, and $O(1)$ vertex-stage Einstein deflection $\Delta\theta = \frac{4GM}{c^2 b}$ with shockwave refraction. | `LOW` (~5%) |
-| **2** | **Flamm Paraboloid Manifold** (`84×84` polar-indexed grid) | Deforms radial proper distance $d\rho = dr/\sqrt{1 - R_s/r}$, applies Lense–Thirring azimuthal frame-dragging twist, and propagates concentric N-wave ripples. | `MODERATE` (~8%) |
-| **3** | **Volumetric Geodesic Raymarcher** (`Billboard Quad` · GLSL) | Raymarches curved photon trajectories in Boyer–Lindquist coordinates; synthesizes Bardeen D-shaped shadow, $n=1$ Einstein arches, and $n=2$ photon-ring caustics. | `HIGH` (~32–44%) |
-| **4** | **Relativistic Accretion Torus** (`Multi-Layer 3D Torus`) | Computes Novikov–Thorne radial temperature, 4-octave 3D gyroid fBM turbulence, Keplerian spiral shear, and $\mathcal{D}^{3+\alpha}$ Doppler beaming. | `HIGH` (~28%) |
-| **5** | **Roche-Lobe Binary Stream** (`Teardrop Star + 560 Parcels`) | Deforms companion star photosphere toward Lagrange point $L_1$, advects 560 instanced plasma parcels along a cubic Bézier curve, and renders disk impact shock. | `MODERATE` (~10%) |
+| **1** | **Deep-Space Starfield** (`InstancedMesh` · 5,500 stars) | Evaluates Harvard B–V blackbody colors, per-star scintillation, and O(1) vertex-stage Einstein deflection (`Δθ = 4GM / c²b`) with shockwave refraction. | `LOW` (~5%) |
+| **2** | **Flamm Paraboloid Manifold** (`84×84` polar-indexed grid) | Deforms radial proper distance (`dρ = dr / √(1 − Rₛ/r)`), applies Lense–Thirring azimuthal frame-dragging twist, and propagates concentric N-wave ripples. | `MODERATE` (~8%) |
+| **3** | **Volumetric Geodesic Raymarcher** (`Billboard Quad` · GLSL) | Raymarches curved photon trajectories in Boyer–Lindquist coordinates; synthesizes Bardeen D-shaped shadow, `n = 1` Einstein arches, and `n = 2` photon-ring caustics. | `HIGH` (~32–44%) |
+| **4** | **Relativistic Accretion Torus** (`Multi-Layer 3D Torus`) | Computes Novikov–Thorne radial temperature, 4-octave 3D gyroid fBM turbulence, Keplerian spiral shear, and `𝒟³⁺ᵅ` Doppler beaming. | `HIGH` (~28%) |
+| **5** | **Roche-Lobe Binary Stream** (`Teardrop Star + 560 Parcels`) | Deforms companion star photosphere toward Lagrange point `L₁`, advects 560 instanced plasma parcels along a cubic Bézier curve, and renders disk impact shock. | `MODERATE` (~10%) |
 | **6** | **Camera-Space Anamorphic Flare** (`Full-Screen NDC Quad`) | Projects prograde Doppler hotspot into NDC space; renders 5-element hexagonal iris ghosts, chromatic dispersion ring, and 12-ray diffraction starburst. | `MODERATE` (~12%) |
 | **7** | **Temporal Post-Processor** (`Ping-Pong RGBA8 Targets`) | Executes 9-tap directional velocity chromatic blur during rapid camera slews and multi-frame exponential accumulation in **Time-Lapse Exposure Mode**. | `LOW–HIGH` (Standby / Active) |
 
@@ -162,62 +162,114 @@ The rendering engine (`src/scene/BlackHoleScene.ts`) is architected around **zer
 
 ## General Relativistic Mathematical Formulation
 
-All telemetry readouts and shader uniforms are computed from analytical expressions in **Boyer–Lindquist coordinates** $(t, r, \theta, \phi)$ with metric signature $(-, +, +, +)$ and gravitational radius $r_g = \frac{GM}{c^2} = \frac{1}{2}R_s$:
+All telemetry readouts and shader uniforms are computed from analytical expressions in **Boyer–Lindquist coordinates** `(t, r, θ, φ)` with metric signature `(−, +, +, +)` and gravitational radius `r_g = GM/c² = ½ Rₛ`:
 
-### 1. Exact Kerr Metric Tensor ($g_{\mu\nu}$)
-With $\Sigma = r^2 + a^2\cos^2\theta$ and $\Delta = r^2 - 2Mr + a^2$ (where $a = a^* r_g$):
+### 1. Exact Boyer–Lindquist Kerr Metric Tensor (`g_μν`)
 
-$$ds^2 = -\left(1 - \frac{2Mr}{\Sigma}\right)dt^2 - \frac{4Mra\sin^2\theta}{\Sigma}dt\,d\phi + \frac{\Sigma}{\Delta}dr^2 + \Sigma\,d\theta^2 + \left(r^2 + a^2 + \frac{2Mra^2\sin^2\theta}{\Sigma}\right)\sin^2\theta\,d\phi^2$$
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://latex.codecogs.com/svg.image?\dpi{150}\fg{f8fafc}ds^2=-\left(1-\frac{2Mr}{\Sigma}\right)dt^2-\frac{4Mra\sin^2\theta}{\Sigma}dt\,d\phi&plus;\frac{\Sigma}{\Delta}dr^2&plus;\Sigma\,d\theta^2&plus;\left(r^2&plus;a^2&plus;\frac{2Mra^2\sin^2\theta}{\Sigma}\right)\sin^2\theta\,d\phi^2" />
+    <img alt="Boyer-Lindquist Kerr Metric Line Element" src="https://latex.codecogs.com/svg.image?\dpi{150}\fg{0f172a}ds^2=-\left(1-\frac{2Mr}{\Sigma}\right)dt^2-\frac{4Mra\sin^2\theta}{\Sigma}dt\,d\phi&plus;\frac{\Sigma}{\Delta}dr^2&plus;\Sigma\,d\theta^2&plus;\left(r^2&plus;a^2&plus;\frac{2Mra^2\sin^2\theta}{\Sigma}\right)\sin^2\theta\,d\phi^2" />
+  </picture>
+  <br /><br />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://latex.codecogs.com/svg.image?\dpi{140}\fg{cbd5e1}\Sigma=r^2&plus;a^2\cos^2\theta,\qquad\Delta=r^2-2Mr&plus;a^2,\qquad&space;r_g=\frac{GM}{c^2}=\frac{1}{2}R_s" />
+    <img alt="Kerr Metric Auxiliary Functions Sigma and Delta" src="https://latex.codecogs.com/svg.image?\dpi{140}\fg{334155}\Sigma=r^2&plus;a^2\cos^2\theta,\qquad\Delta=r^2-2Mr&plus;a^2,\qquad&space;r_g=\frac{GM}{c^2}=\frac{1}{2}R_s" />
+  </picture>
+</div>
 
-### 2. Event Horizons, Ergosphere & Frame-Dragging Angular Velocity
-- **Outer Event Horizon ($r_+$) & Inner Cauchy Horizon ($r_-$):**
-  $$r_{\pm} = r_g\left(1 \pm \sqrt{1 - (a^*)^2}\right)$$
-- **Static Limit / Ergosphere Boundary ($g_{tt} = 0$):**
-  $$r_{\text{ergo}}(\theta) = r_g\left(1 + \sqrt{1 - (a^*)^2\cos^2\theta}\right)$$
-- **Lense–Thirring Frame-Dragging Rate ($\omega$):**
-  $$\omega(r, \theta) = -\frac{g_{t\phi}}{g_{\phi\phi}} = \frac{2Mra}{(r^2 + a^2)^2 - a^2\Delta\sin^2\theta}$$
+---
 
-### 3. Bardeen–Press–Teukolsky ISCO & Photon Sphere
-- **Equatorial Photon Circular Orbit ($r_{\text{ph}}$):**
-  $$r_{\text{ph}} = 2\,r_g\left[1 + \cos\left(\frac{2}{3}\arccos(\mp a^*)\right)\right]$$
-- **Innermost Stable Circular Orbit ($r_{\text{ISCO}}$):**
-  $$Z_1 = 1 + \left(1 - (a^*)^2\right)^{1/3}\left[(1 + a^*)^{1/3} + (1 - a^*)^{1/3}\right], \qquad Z_2 = \sqrt{3(a^*)^2 + Z_1^2}$$
-  $$r_{\text{ISCO}} = r_g\left(3 + Z_2 \mp \sqrt{(3 - Z_1)(3 + Z_1 + 2Z_2)}\right)$$
+### 2. Event Horizons (`r±`), Ergosphere Boundary (`r_ergo`) & Frame-Dragging (`ω`)
 
-### 4. Kretschmann Curvature Invariant ($K$)
-To verify absence of coordinate pathologies across horizons and stress-test near-extremal spin states, the engine evaluates the exact Kerr Kretschmann scalar:
+- **Outer Event Horizon (`r₊`) & Inner Cauchy Horizon (`r₋`) + Static Limit (`g_tt = 0`):**
 
-$$K = R_{\alpha\beta\gamma\delta}R^{\alpha\beta\gamma\delta} = \frac{48\,M^2}{\Sigma^6}\left(r^6 - 15a^2r^4\cos^2\theta + 15a^4r^2\cos^4\theta - a^6\cos^6\theta\right)$$
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://latex.codecogs.com/svg.image?\dpi{150}\fg{f8fafc}r_{\pm}=r_g\left(1\pm\sqrt{1-(a^*)^2}\right),\qquad&space;r_{\text{ergo}}(\theta)=r_g\left(1&plus;\sqrt{1-(a^*)^2\cos^2\theta}\right)" />
+    <img alt="Kerr Event Horizons and Ergosphere Boundary" src="https://latex.codecogs.com/svg.image?\dpi{150}\fg{0f172a}r_{\pm}=r_g\left(1\pm\sqrt{1-(a^*)^2}\right),\qquad&space;r_{\text{ergo}}(\theta)=r_g\left(1&plus;\sqrt{1-(a^*)^2\cos^2\theta}\right)" />
+  </picture>
+</div>
 
-### 5. Novikov–Thorne Disk Temperature & Relativistic Doppler Factor ($\mathcal{D}$)
-- **Effective Blackbody Temperature Profile:**
-  $$T_{\text{eff}}(r) = \left[\frac{3GM\dot{M}}{8\pi\sigma_{\text{SB}}r^3}\left(1 - \sqrt{\frac{r_{\text{ISCO}}}{r}}\right)\right]^{1/4}$$
-- **Relativistic Doppler Beaming Factor:**
-  $$\mathcal{D} = \frac{1}{\gamma\left(1 - \beta\cos\theta_{\text{los}}\right)}\sqrt{1 - \frac{R_s}{r}}, \qquad I_{\text{obs}}(\nu_{\text{obs}}) = \mathcal{D}^{3+\alpha}\,I_{\text{emit}}(\nu_{\text{emit}})$$
+- **Lense–Thirring Frame-Dragging Angular Velocity (`ω`):**
+
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://latex.codecogs.com/svg.image?\dpi{150}\fg{f8fafc}\omega(r,\theta)=-\frac{g_{t\phi}}{g_{\phi\phi}}=\frac{2Mra}{(r^2&plus;a^2)^2-a^2\Delta\sin^2\theta}" />
+    <img alt="Lense-Thirring Frame-Dragging Angular Velocity" src="https://latex.codecogs.com/svg.image?\dpi{150}\fg{0f172a}\omega(r,\theta)=-\frac{g_{t\phi}}{g_{\phi\phi}}=\frac{2Mra}{(r^2&plus;a^2)^2-a^2\Delta\sin^2\theta}" />
+  </picture>
+</div>
+
+---
+
+### 3. Bardeen–Press–Teukolsky ISCO (`r_ISCO`) & Photon Sphere (`r_ph`)
+
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://latex.codecogs.com/svg.image?\dpi{150}\fg{f8fafc}r_{\text{ph}}=2r_g\left[1&plus;\cos\left(\frac{2}{3}\arccos(\mp&space;a^*)\right)\right],\qquad&space;r_{\text{ISCO}}=r_g\left(3&plus;Z_2\mp\sqrt{(3-Z_1)(3&plus;Z_1&plus;2Z_2)}\right)" />
+    <img alt="Photon Sphere and ISCO Radius" src="https://latex.codecogs.com/svg.image?\dpi{150}\fg{0f172a}r_{\text{ph}}=2r_g\left[1&plus;\cos\left(\frac{2}{3}\arccos(\mp&space;a^*)\right)\right],\qquad&space;r_{\text{ISCO}}=r_g\left(3&plus;Z_2\mp\sqrt{(3-Z_1)(3&plus;Z_1&plus;2Z_2)}\right)" />
+  </picture>
+  <br /><br />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://latex.codecogs.com/svg.image?\dpi{140}\fg{cbd5e1}Z_1=1&plus;\left(1-(a^*)^2\right)^{1/3}\left[(1&plus;a^*)^{1/3}&plus;(1-a^*)^{1/3}\right],\qquad&space;Z_2=\sqrt{3(a^*)^2&plus;Z_1^2}" />
+    <img alt="Bardeen-Press-Teukolsky Z1 and Z2 Auxiliary Factors" src="https://latex.codecogs.com/svg.image?\dpi{140}\fg{334155}Z_1=1&plus;\left(1-(a^*)^2\right)^{1/3}\left[(1&plus;a^*)^{1/3}&plus;(1-a^*)^{1/3}\right],\qquad&space;Z_2=\sqrt{3(a^*)^2&plus;Z_1^2}" />
+  </picture>
+</div>
+
+For a non-rotating Schwarzschild black hole (`a* = 0`), `r_ISCO = 6 r_g = 3 Rₛ` (radiative efficiency `η ≈ 5.72%`). At maximal Kerr spin (`a* → 1`), the prograde ISCO plunges to `r_ISCO → 1 r_g = 0.5 Rₛ`, raising radiative efficiency up to `η ≈ 42.3%`.
+
+---
+
+### 4. Kretschmann Curvature Scalar (`K`)
+
+To verify absence of coordinate pathologies across horizons and stress-test near-extremal spin states, the engine evaluates the exact Kerr Kretschmann curvature invariant:
+
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://latex.codecogs.com/svg.image?\dpi{150}\fg{f8fafc}K=R_{\alpha\beta\gamma\delta}R^{\alpha\beta\gamma\delta}=\frac{48M^2}{\Sigma^6}\left(r^6-15a^2r^4\cos^2\theta&plus;15a^4r^2\cos^4\theta-a^6\cos^6\theta\right)" />
+    <img alt="Kretschmann Curvature Invariant" src="https://latex.codecogs.com/svg.image?\dpi{150}\fg{0f172a}K=R_{\alpha\beta\gamma\delta}R^{\alpha\beta\gamma\delta}=\frac{48M^2}{\Sigma^6}\left(r^6-15a^2r^4\cos^2\theta&plus;15a^4r^2\cos^4\theta-a^6\cos^6\theta\right)" />
+  </picture>
+</div>
+
+---
+
+### 5. Novikov–Thorne Disk Temperature, Doppler Beaming (`𝒟`) & Microlensing (`A(u)`)
+
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://latex.codecogs.com/svg.image?\dpi{150}\fg{f8fafc}T_{\text{eff}}(r)=\left[\frac{3GM\dot{M}}{8\pi\sigma_{\text{SB}}r^3}\left(1-\sqrt{\frac{r_{\text{ISCO}}}{r}}\right)\right]^{1/4},\qquad\mathcal{D}=\frac{1}{\gamma(1-\beta\cos\theta_{\text{los}})}\sqrt{1-\frac{R_s}{r}},\qquad&space;I_{\text{obs}}=\mathcal{D}^{3&plus;\alpha}\,I_{\text{emit}}" />
+    <img alt="Novikov-Thorne Disk Temperature and Relativistic Doppler Factor" src="https://latex.codecogs.com/svg.image?\dpi{150}\fg{0f172a}T_{\text{eff}}(r)=\left[\frac{3GM\dot{M}}{8\pi\sigma_{\text{SB}}r^3}\left(1-\sqrt{\frac{r_{\text{ISCO}}}{r}}\right)\right]^{1/4},\qquad\mathcal{D}=\frac{1}{\gamma(1-\beta\cos\theta_{\text{los}})}\sqrt{1-\frac{R_s}{r}},\qquad&space;I_{\text{obs}}=\mathcal{D}^{3&plus;\alpha}\,I_{\text{emit}}" />
+  </picture>
+  <br /><br />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://latex.codecogs.com/svg.image?\dpi{145}\fg{cbd5e1}\theta_{\pm}=\frac{1}{2}\left(u\pm\sqrt{u^2&plus;4}\right)\theta_E,\qquad&space;A(u)=\frac{u^2&plus;2}{u\sqrt{u^2&plus;4}}" />
+    <img alt="Paczynski Gravitational Microlensing Doublet and Amplification" src="https://latex.codecogs.com/svg.image?\dpi{145}\fg{334155}\theta_{\pm}=\frac{1}{2}\left(u\pm\sqrt{u^2&plus;4}\right)\theta_E,\qquad&space;A(u)=\frac{u^2&plus;2}{u\sqrt{u^2&plus;4}}" />
+  </picture>
+</div>
 
 ---
 
 ## Celestial Catalog & Calibrated Presets
 
-The engine ships with **15 astrophysically calibrated presets** spanning 11 orders of magnitude in mass ($1.0\,M_\odot \to 6.6 \times 10^{10}\,M_\odot$). Non-accreting isolated stars and pulsars automatically disable the accretion disk layer, while active binary and circumstellar systems enable their physically appropriate disk/outflow geometry:
+The engine ships with **15 astrophysically calibrated presets** spanning 11 orders of magnitude in mass (`1.0 M☉ → 6.6 × 10¹⁰ M☉`). Non-accreting isolated stars and pulsars automatically disable the accretion disk layer, while active binary and circumstellar systems enable their physically appropriate disk/outflow geometry:
 
-| Preset ID | Name | Classification | Mass ($M_\odot$) | Spin ($a^*$) | Default Disk | Physical Signature |
+| Preset ID | Name | Classification | Mass (`M☉`) | Spin (`a*`) | Default Disk | Physical Signature |
 | :--- | :--- | :--- | :---: | :---: | :---: | :--- |
-| `ton618` | **TON 618** | Ultramassive Quasar BH | $6.6 \times 10^{10}$ | `0.980` | Active | $3.9 \times 10^{11}\text{ km}$ ($2,600\text{ AU}$) shadow diameter |
-| `m87` | **M87\*** | Supermassive Galactic BH | $6.5 \times 10^{9}$ | `0.900` | Active | Messier 87 core; EHT $230\text{ GHz}$ benchmark target |
-| `sgra` | **Sagittarius A\*** | Supermassive Galactic BH | $4.3 \times 10^{6}$ | `0.940` | Quiescent | Milky Way nuclear SMBH with S2 star orbit |
-| `gw190521` | **GW190521** | Intermediate Merger BH | $142$ | `0.720` | Active | Heaviest LIGO–Virgo–KAGRA binary coalescence remnant |
-| `gw150914` | **GW150914** | Stellar Binary Merger BH | $62.0$ | `0.680` | Quiescent | First direct gravitational-wave detection remnant |
-| `cygnus_x1` | **Cygnus X-1** | High-Mass X-Ray Binary BH | $21.2$ | `0.998` | Active (Binary) | Near-extremal spin fed by O9.7 Iab supergiant wind |
-| `v404_cygni` | **V404 Cygni** | Low-Mass X-Ray Binary BH | $9.0$ | `0.850` | Active (Binary) | Roche-lobe overflow microquasar with Eddington flares |
-| `psr_b1919` | **PSR B1919+21** | Radio Pulsar (Neutron Star) | $1.40$ | `0.150` | Disabled | $1.337\text{ s}$ period; dipole magnetosphere & radio cones |
-| `magnetar_sgr`| **SGR 1806-20** | Hyper-Magnetic Magnetar | $1.80$ | `0.320` | Fallback Ring | $10^{15}\text{ G}$ crustal field with X-ray fallback debris |
-| `rx_j1856` | **RX J1856.5-3754**| Isolated Neutron Star | $1.50$ | `0.120` | Disabled | Magnificent Seven thermal X-ray surface ($R_\infty > R$) |
-| `ztf_j1901` | **ZTF J1901+1458** | Ultra-Massive White Dwarf | $1.35$ | `0.280` | Disabled | Near-Chandrasekhar limit ($R \approx 4,280\text{ km}$) |
-| `eta_carinae` | **Eta Carinae A** | Luminous Blue Variable | $100$ | `0.680` | Circumstellar | Super-Eddington wind + equatorial Homunculus torus |
-| `r136a1` | **R136a1** | Wolf–Rayet Hypergiant | $215$ | `0.620` | Disabled | $8.7 \times 10^6\,L_\odot$; intense UV radiation-driven wind |
-| `betelgeuse` | **Betelgeuse** | Red Supergiant ($\alpha$ Ori) | $16.5$ | `0.180` | Disabled | Giant convective boiling cells ($R \approx 764\,R_\odot$) |
-| `sol_sun` | **Sol (The Sun)** | G2V Main-Sequence Star | $1.00$ | `0.050` | Disabled | Weak-field hydrostatic reference ($R_s \approx 2.95\text{ km}$) |
+| `ton618` | **TON 618** | Ultramassive Quasar BH | `6.6 × 10¹⁰` | `0.980` | Active | `3.9 × 10¹¹ km` (`2,600 AU`) shadow diameter |
+| `m87` | **M87\*** | Supermassive Galactic BH | `6.5 × 10⁹` | `0.900` | Active | Messier 87 core; EHT `230 GHz` benchmark target |
+| `sgra` | **Sagittarius A\*** | Supermassive Galactic BH | `4.3 × 10⁶` | `0.940` | Quiescent | Milky Way nuclear SMBH with S2 star orbit |
+| `gw190521` | **GW190521** | Intermediate Merger BH | `142` | `0.720` | Active | Heaviest LIGO–Virgo–KAGRA binary coalescence remnant |
+| `gw150914` | **GW150914** | Stellar Binary Merger BH | `62.0` | `0.680` | Quiescent | First direct gravitational-wave detection remnant |
+| `cygnus_x1` | **Cygnus X-1** | High-Mass X-Ray Binary BH | `21.2` | `0.998` | Active (Binary) | Near-extremal spin fed by O9.7 Iab supergiant wind |
+| `v404_cygni` | **V404 Cygni** | Low-Mass X-Ray Binary BH | `9.0` | `0.850` | Active (Binary) | Roche-lobe overflow microquasar with Eddington flares |
+| `psr_b1919` | **PSR B1919+21** | Radio Pulsar (Neutron Star) | `1.40` | `0.150` | Disabled | `1.337 s` period; dipole magnetosphere & radio cones |
+| `magnetar_sgr`| **SGR 1806-20** | Hyper-Magnetic Magnetar | `1.80` | `0.320` | Fallback Ring | `10¹⁵ G` crustal field with X-ray fallback debris |
+| `rx_j1856` | **RX J1856.5-3754**| Isolated Neutron Star | `1.50` | `0.120` | Disabled | Magnificent Seven thermal X-ray surface (`R∞ > R`) |
+| `ztf_j1901` | **ZTF J1901+1458** | Ultra-Massive White Dwarf | `1.35` | `0.280` | Disabled | Near-Chandrasekhar limit (`R ≈ 4,280 km`) |
+| `eta_carinae` | **Eta Carinae A** | Luminous Blue Variable | `100` | `0.680` | Circumstellar | Super-Eddington wind + equatorial Homunculus torus |
+| `r136a1` | **R136a1** | Wolf–Rayet Hypergiant | `215` | `0.620` | Disabled | `8.7 × 10⁶ L☉`; intense UV radiation-driven wind |
+| `betelgeuse` | **Betelgeuse** | Red Supergiant (`α Ori`) | `16.5` | `0.180` | Disabled | Giant convective boiling cells (`R ≈ 764 R☉`) |
+| `sol_sun` | **Sol (The Sun)** | G2V Main-Sequence Star | `1.00` | `0.050` | Disabled | Weak-field hydrostatic reference (`Rₛ ≈ 2.95 km`) |
 
 ---
 
@@ -226,11 +278,11 @@ The engine ships with **15 astrophysically calibrated presets** spanning 11 orde
 ### 1. Automated Spacetime Curvature Stress-Test Suite (`Settings → Diagnostic`)
 When the **Diagnostic** tab is opened, the engine automatically sequences through **5 extreme spacetime curvature stress tests** (`SPACETIME_CURVATURE_STRESS_TESTS`), applying each parameter regime to the live 3D WebGL2 engine, triggering an event-horizon shockwave, computing a multi-step **Boyer–Lindquist Tensor Run (`KerrEngineRunLog`)**, and archiving the results to the **Kerr Engine Log Viewer**:
 
-1. **Test 01 — Thorne Spin Limit (`a* = 0.998` · `cygnus_x1`):** Verifies absence of naked ring-singularity division-by-zero as $r_+ \to 1.063\,r_g$ and $r_{\text{ISCO}} \to 1.237\,r_g$.
-2. **Test 02 — Schwarzschild Degeneracy (`a* = 0.000` · `gw150914`):** Confirms spherical symmetry restoration ($g_{t\phi} = 0$, $r_{\text{ISCO}} = 6.000\,r_g$, $r_{\text{ph}} = 3.000\,r_g$).
-3. **Test 03 — Ultramassive Horizon Scaling (`M = 6.6×10¹⁰ M☉` · `ton618`):** Validates IEEE-754 floating-point stability across $R_s = 1.95 \times 10^{11}\text{ km}$.
-4. **Test 04 — Super-Eddington Accretion Surge (`ṁ = 2.85` · `v404_cygni`):** Stress-tests ACES filmic tone mapping and volumetric raymarching under extreme radiative flux and $5.0\times$ Flamm funnel depth.
-5. **Test 05 — Grazing Photon-Ring Caustic (`i = 86°` · `m87`):** Validates secondary ($n=2$) Einstein arch raymarching and $\mathcal{D}^4$ Doppler beaming at near-equatorial grazing incidence.
+1. **Test 01 — Thorne Spin Limit (`a* = 0.998` · `cygnus_x1`):** Verifies absence of naked ring-singularity division-by-zero as `r₊ → 1.063 r_g` and `r_ISCO → 1.237 r_g`.
+2. **Test 02 — Schwarzschild Degeneracy (`a* = 0.000` · `gw150914`):** Confirms spherical symmetry restoration (`g_tφ = 0`, `r_ISCO = 6.000 r_g`, `r_ph = 3.000 r_g`).
+3. **Test 03 — Ultramassive Horizon Scaling (`M = 6.6 × 10¹⁰ M☉` · `ton618`):** Validates IEEE-754 floating-point stability across `Rₛ = 1.95 × 10¹¹ km`.
+4. **Test 04 — Super-Eddington Accretion Surge (`ṁ = 2.85` · `v404_cygni`):** Stress-tests ACES filmic tone mapping and volumetric raymarching under extreme radiative flux and `5.0×` Flamm funnel depth.
+5. **Test 05 — Grazing Photon-Ring Caustic (`i = 86°` · `m87`):** Validates secondary (`n = 2`) Einstein arch raymarching and `𝒟⁴` Doppler beaming at near-equatorial grazing incidence.
 
 ### 2. Geodesic CSV Telemetry Export Schema
 Launching photon trajectories from the **Geodesics** tab (or via double-click) allows exporting step-by-step integration data as a standard RFC-4180 CSV file with metadata headers:
@@ -249,11 +301,11 @@ live-geodesic-1,critical-orbit,2.600,1.520,4.8120,0,-24.0000,0.0000,4.5500,13.94
 
 | Input / Shortcut | Function |
 | :---: | :--- |
-| **Left-Click + Drag** | Orbit camera in spherical coordinates $(\theta, \phi)$ around primary mass |
-| **Scroll Wheel / Pinch** | Dolly zoom along radial coordinate $r \in [3.5, 260.0]$ world units |
-| **Double-Click Canvas** | Fire a live null geodesic photon ray at the clicked impact parameter $b$ |
+| **Left-Click + Drag** | Orbit camera in spherical coordinates `(θ, φ)` around primary mass |
+| **Scroll Wheel / Pinch** | Dolly zoom along radial coordinate `r ∈ [3.5, 260.0]` world units |
+| **Double-Click Canvas** | Fire a live null geodesic photon ray at the clicked impact parameter `b` |
 | **Click Central Horizon** | Collapse black hole into a Singularity Seed / Replay relativistic expansion |
-| **`Space`** | Skip startup boot intro / Pause or resume simulation time ($\Delta t$) |
+| **`Space`** | Skip startup boot intro / Pause or resume simulation time (`Δt`) |
 | **`H`** | Collapse or expand the bottom Control Dock |
 | **`C`** | Toggle **Clean Mode** (hide all HUD overlays for unobstructed 3D capture) |
 | **`Esc`** | Exit Clean Mode / Close active modal window |
@@ -299,11 +351,11 @@ Open **`http://localhost:3000`** in your browser.
 
 The physical models, geodesic integrators, and relativistic rendering algorithms implemented in this engine are grounded in the following foundational papers:
 
-1. **Bardeen, J. M., Press, W. H., & Teukolsky, S. A. (1972).** *Rotating Black Holes: Locally Nonrotating Frames, Energy Extraction, and Scalar Synchrotron Radiation.* The Astrophysical Journal, **178**, 347–370. *(ISCO radii $Z_1, Z_2$ and Kerr shadow geometry)*
-2. **Novikov, I. D., & Thorne, K. S. (1973).** *Astrophysics of Black Holes.* In *Black Holes (Les Astres Occlus)*, pp. 343–450. *(Relativistic thin-disk radial temperature and radiative efficiency $\eta$)*
+1. **Bardeen, J. M., Press, W. H., & Teukolsky, S. A. (1972).** *Rotating Black Holes: Locally Nonrotating Frames, Energy Extraction, and Scalar Synchrotron Radiation.* The Astrophysical Journal, **178**, 347–370. *(ISCO radii `Z₁, Z₂` and Kerr shadow geometry)*
+2. **Novikov, I. D., & Thorne, K. S. (1973).** *Astrophysics of Black Holes.* In *Black Holes (Les Astres Occlus)*, pp. 343–450. *(Relativistic thin-disk radial temperature and radiative efficiency `η`)*
 3. **Luminet, J.-P. (1979).** *Image of a Spherical Black Hole with Thin Accretion Disk.* Astronomy and Astrophysics, **75**, 228–235. *(Primary and secondary lensed disk images and Doppler asymmetry)*
 4. **James, O., von Tunzelmann, E., Franklin, P., & Thorne, K. S. (2015).** *Gravitational Lensing by Spinning Black Holes in Astrophysics, and in the Movie Interstellar.* Classical and Quantum Gravity, **32**(6), 065001. *(Kerr raymarching, camera-space lensing, and Doppler beaming)*
-5. **Paczyński, B. (1986).** *Gravitational Microlensing by the Galactic Halo.* The Astrophysical Journal, **304**, 1–5. *(Point-lens microlensing amplification $A(u)$ and doublet image positions)*
+5. **Paczyński, B. (1986).** *Gravitational Microlensing by the Galactic Halo.* The Astrophysical Journal, **304**, 1–5. *(Point-lens microlensing amplification `A(u)` and doublet image positions)*
 6. **Event Horizon Telescope Collaboration (2019 / 2022).** *First M87 Event Horizon Telescope Results. I. The Shadow of the Supermassive Black Hole* & *First Sagittarius A\* Event Horizon Telescope Results. I.* The Astrophysical Journal Letters, **875**(1), L1 & **930**(2), L12. *(230 GHz synchrotron ring calibration)*
 
 ---
