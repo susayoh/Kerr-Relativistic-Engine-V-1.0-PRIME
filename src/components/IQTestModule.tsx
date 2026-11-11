@@ -200,7 +200,7 @@ export interface IQTestModuleProps {
 }
 
 export const IQTestModule: React.FC<IQTestModuleProps> = ({
-  uiTheme = 'kerr_claude',
+  uiTheme = 'observatory_gold',
   onHapticLight,
   onHapticMedium,
   onHapticSuccess,
@@ -316,8 +316,8 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
     setSelectedAnswers(nextAnswers);
   };
 
-  const isClaude = uiTheme === 'kerr_claude';
-  const isCryo = uiTheme === 'cryo_quantum';
+  const isObsidian = uiTheme === 'kerr_claude';
+  const isPlanck = uiTheme === 'cryo_quantum';
   const currentSelectedOption = selectedAnswers[currentQuestion.id];
   const hasAnsweredCurrent = typeof currentSelectedOption === 'number';
   const classification = getCognitiveClassification(estimatedIq);
@@ -330,11 +330,11 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
       {/* Top Control Header Card with 'Start Test' Button & Live IQ Telemetry */}
       <div
         className={`p-4 rounded-xl border space-y-3 transition-colors ${
-          isClaude
-            ? 'bg-gradient-to-br from-[#1b1411] via-[#120e0c] to-neutral-950 border-[#D97757]/50 shadow-[0_0_24px_rgba(217,119,87,0.12)]'
-            : isCryo
-            ? 'bg-gradient-to-br from-[#071529] via-neutral-950 to-neutral-950 border-sky-500/45 shadow-[0_0_24px_rgba(56,189,248,0.12)]'
-            : 'bg-gradient-to-br from-[#06121c] via-neutral-950 to-neutral-950 border-cyan-500/40 shadow-[0_0_24px_rgba(6,182,212,0.1)]'
+          isObsidian
+            ? 'bg-gradient-to-br from-[#16110e] via-[#0d0a09] to-black border-[#D97757]/50 shadow-[0_0_24px_rgba(217,119,87,0.1)]'
+            : isPlanck
+            ? 'bg-gradient-to-br from-[#07110d] via-[#040605] to-black border-emerald-500/45 shadow-[0_0_24px_rgba(16,185,129,0.1)]'
+            : 'bg-gradient-to-br from-[#0e0e11] via-[#050506] to-black border-zinc-500/40 shadow-[0_0_24px_rgba(244,244,245,0.08)]'
         }`}
       >
         <div className="flex items-start justify-between gap-3 flex-wrap">

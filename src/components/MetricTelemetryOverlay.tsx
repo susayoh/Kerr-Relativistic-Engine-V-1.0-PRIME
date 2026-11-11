@@ -221,12 +221,31 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
       const w = displayW;
       const h = displayH;
 
-      // 1. Deep scientific oscilloscope background
-      ctx.fillStyle = '#03060c';
+      // 1. Deep carbon-black scientific oscilloscope background
+      const activeTheme =
+        document.documentElement.getAttribute('data-ui-theme') || 'observatory_gold';
+      const isObsidian = activeTheme === 'kerr_claude';
+      const isPlanck = activeTheme === 'cryo_quantum';
+
+      const traceGtt = isObsidian ? '#d97757' : isPlanck ? '#34d399' : '#d4af37';
+      const traceGrr = isObsidian ? '#f7f4ee' : isPlanck ? '#a7f3d0' : '#fafafa';
+      const traceGtphi = isObsidian ? '#e6d5b8' : isPlanck ? '#10b981' : '#a1a1aa';
+      const traceLapse = isObsidian ? '#a89f96' : isPlanck ? '#6ee7b7' : '#71717a';
+      const fillTopRgba = isObsidian
+        ? 'rgba(217, 119, 87, 0.14)'
+        : isPlanck
+        ? 'rgba(52, 211, 153, 0.14)'
+        : 'rgba(212, 175, 55, 0.14)';
+
+      ctx.fillStyle = isObsidian ? '#050404' : isPlanck ? '#020403' : '#030304';
       ctx.fillRect(0, 0, w, h);
 
       // Subtle coordinate grid
-      ctx.strokeStyle = 'rgba(51, 65, 85, 0.32)';
+      ctx.strokeStyle = isObsidian
+        ? 'rgba(217, 119, 87, 0.14)'
+        : isPlanck
+        ? 'rgba(52, 211, 153, 0.14)'
+        : 'rgba(228, 228, 231, 0.12)';
       ctx.lineWidth = 0.75;
       const rows = 4;
       const cols = 6;
@@ -257,7 +276,11 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
 
         // Zero reference line (g_tt = 0 Ergosphere static limit threshold)
         const zeroY = mapY(0);
-        ctx.strokeStyle = 'rgba(245, 158, 11, 0.35)';
+        ctx.strokeStyle = isObsidian
+          ? 'rgba(217, 119, 87, 0.35)'
+          : isPlanck
+          ? 'rgba(52, 211, 153, 0.35)'
+          : 'rgba(212, 175, 55, 0.35)';
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         ctx.beginPath();
@@ -268,7 +291,7 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
 
         // Flat-space Minkowski limit line (g_tt = -1)
         const minkowskiY = mapY(-1.0);
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.2)';
+        ctx.strokeStyle = 'rgba(161, 161, 170, 0.2)';
         ctx.beginPath();
         ctx.moveTo(0, minkowskiY);
         ctx.lineTo(w, minkowskiY);
@@ -299,48 +322,48 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
               ctx.lineTo(4, h);
               ctx.closePath();
               const grad = ctx.createLinearGradient(0, 0, 0, h);
-              grad.addColorStop(0, 'rgba(34, 211, 238, 0.16)');
-              grad.addColorStop(1, 'rgba(34, 211, 238, 0.0)');
+              grad.addColorStop(0, fillTopRgba);
+              grad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
               ctx.fillStyle = grad;
               ctx.fill();
             }
           };
 
-          // 1. g_rr (Radial space curvature stretching) — Cyan
-          drawTrace((s) => Math.min(4.1, s.g_rr), '#22d3ee', 1.6, true);
+          // 1. g_rr (Radial space curvature stretching)
+          drawTrace((s) => Math.min(4.1, s.g_rr), traceGrr, 1.6, true);
 
-          // 2. |g_tφ| * 2.5 (Lense-Thirring frame-dragging coupling scaled for visibility) — Purple
-          drawTrace((s) => Math.abs(s.g_tphi) * 2.5, '#c084fc', 1.5);
+          // 2. |g_tφ| * 2.5 (Lense-Thirring frame-dragging coupling)
+          drawTrace((s) => Math.abs(s.g_tphi) * 2.5, traceGtphi, 1.5);
 
-          // 3. α_ADM (Relativistic Lapse dτ/dt) — Emerald
-          drawTrace((s) => s.admLapse, '#34d399', 1.4);
+          // 3. α_ADM (Relativistic Lapse dτ/dt)
+          drawTrace((s) => s.admLapse, traceLapse, 1.4);
 
-          // 4. g_tt (Temporal metric component) — Amber
-          drawTrace((s) => s.g_tt, '#f59e0b', 1.8);
+          // 4. g_tt (Temporal metric component)
+          drawTrace((s) => s.g_tt, traceGtt, 1.8);
 
           // Live leading pulse dots on right edge
           const latest = history[history.length - 1];
           const tipX = ((history.length - 1) / 139) * (w - 8) + 4;
           const dots: Array<{ val: number; color: string }> = [
-            { val: Math.min(4.1, latest.g_rr), color: '#22d3ee' },
-            { val: Math.abs(latest.g_tphi) * 2.5, color: '#c084fc' },
-            { val: latest.admLapse, color: '#34d399' },
-            { val: latest.g_tt, color: '#f59e0b' },
+            { val: Math.min(4.1, latest.g_rr), color: traceGrr },
+            { val: Math.abs(latest.g_tphi) * 2.5, color: traceGtphi },
+            { val: latest.admLapse, color: traceLapse },
+            { val: latest.g_tt, color: traceGtt },
           ];
           for (const d of dots) {
             const dy = mapY(d.val);
             ctx.beginPath();
-            ctx.arc(tipX, dy, 2.6, 0, Math.PI * 2);
+            ctx.arc(tipX, dy, 2.5, 0, Math.PI * 2);
             ctx.fillStyle = d.color;
             ctx.fill();
           }
         }
 
         // Axis Reference Labels
-        ctx.fillStyle = 'rgba(245, 158, 11, 0.75)';
+        ctx.fillStyle = traceGtt;
         ctx.font = '8px "JetBrains Mono", monospace';
         ctx.fillText('g_tt = 0 (Ergosphere)', 6, zeroY - 3);
-        ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
+        ctx.fillStyle = 'rgba(161, 161, 170, 0.6)';
         ctx.fillText('g_tt = -1 (Flat)', 6, minkowskiY - 3);
       } else {
         // MODE B: Radial Spatial Profile g_μν(r) from r_+ to 6.5 Rs
@@ -358,9 +381,9 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
 
         // Draw anatomical radius vertical markers (Photon Sphere, Ergosphere, ISCO)
         const markers = [
-          { rRs: metrics.photonSphereRg * 0.5, label: 'r_ph', color: 'rgba(250, 204, 21, 0.45)' },
-          { rRs: 1.0, label: 'r_ergo', color: 'rgba(192, 132, 252, 0.45)' },
-          { rRs: metrics.iscoProgradeRg * 0.5, label: 'ISCO', color: 'rgba(34, 211, 238, 0.5)' },
+          { rRs: metrics.photonSphereRg * 0.5, label: 'r_ph', color: traceGtt },
+          { rRs: 1.0, label: 'r_ergo', color: traceGtphi },
+          { rRs: metrics.iscoProgradeRg * 0.5, label: 'ISCO', color: traceGrr },
         ];
         for (const m of markers) {
           if (m.rRs >= minRs && m.rRs <= maxRs) {
@@ -406,10 +429,10 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
           ctx.stroke();
         };
 
-        plotRadialCurve((s) => Math.min(4.1, s.g_rr), '#22d3ee', 1.6);
-        plotRadialCurve((s) => Math.abs(s.g_tphi) * 2.5, '#c084fc', 1.5);
-        plotRadialCurve((s) => s.admLapse, '#34d399', 1.4);
-        plotRadialCurve((s) => s.g_tt, '#f59e0b', 1.8);
+        plotRadialCurve((s) => Math.min(4.1, s.g_rr), traceGrr, 1.6);
+        plotRadialCurve((s) => Math.abs(s.g_tphi) * 2.5, traceGtphi, 1.5);
+        plotRadialCurve((s) => s.admLapse, traceLapse, 1.4);
+        plotRadialCurve((s) => s.g_tt, traceGtt, 1.8);
 
         // Current live tracer vertical scanline
         const curX = mapX(Math.min(maxRs, Math.max(minRs, sample.rRs)));
@@ -420,7 +443,7 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
         ctx.lineTo(curX, h);
         ctx.stroke();
 
-        ctx.fillStyle = '#f8fafc';
+        ctx.fillStyle = traceGrr;
         ctx.font = '8px "JetBrains Mono", monospace';
         ctx.fillText(`r=${sample.rRs.toFixed(2)}Rₛ`, Math.min(w - 52, curX + 3), h - 4);
       }

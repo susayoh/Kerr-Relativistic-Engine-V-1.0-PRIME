@@ -54,10 +54,10 @@ Unlike simplified visualizers that rely on static textures or post-process scree
 ### 4. 24-Bit / 96 kHz Hi-Res Procedural Audio Mastering Deck
 - Custom polyphonic Web Audio synthesizer featuring **5 procedural interstellar scores** (*Gargantua Organ Cathedral*, *Event Horizon Noir*, *Singularity Pulse*, *Lense–Thirring Drift*, *Hawking Whisper*), a real-time 60 FPS **FFT Spectrum & Waveform Analyzer**, **3-Band Mastering EQ** (Sub-Bass, Presence, Air), stereo widener, and camera-distance-coupled gravitational redshift low-pass filtering.
 
-### 5. Three Bespoke Scientific UI Themes
-- **Kerr Engine Claude (`kerr_claude`):** Warm obsidian glass (`#0b0a09`) with terracotta-amber (`#d97757`) accents and high-legibility parchment typography.
-- **Event Horizon Noir (`horizon_noir`):** Deep-space OLED carbon (`#05070e`) with Cherenkov cyan (`#38bdf8`) and mission-control telemetry contrast.
-- **Aethelgard Alabaster (`aethelgard_light`):** Daylight editorial laboratory paper (`#f6f4ef`) with crisp slate ink and warm bronze instrumentation.
+### 5. Three Pure-Black Academic Research UI Themes
+- **Kerr Metric Obsidian (`kerr_claude`):** Warm obsidian-black carbon (`#0b0908`) with terracotta-amber (`#d97757`) accents and high-legibility parchment ivory (`#f7f4ee`) typography.
+- **Schwarzschild Monolith (`observatory_gold`):** Pure carbon-black (`#050506`) monochrome academic publication aesthetic with chalk-ivory (`#fafafa`) typography and classical gold (`#d4af37`) metric rules.
+- **Planck Laboratory (`cryo_quantum`):** Pure obsidian-black (`#040605`) university laboratory aesthetic with calibrated phosphor-emerald (`#34d399`) readouts and warm brass (`#eab308`) instrumentation.
 
 ---
 

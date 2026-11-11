@@ -107,12 +107,33 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
       const maxRs = 7.0 / zoomLevel;
       const pixelsPerRs = (Math.min(w, h) / 2 - 10) / maxRs;
 
+      const activeTheme =
+        document.documentElement.getAttribute('data-ui-theme') || 'observatory_gold';
+      const isObsidian = activeTheme === 'kerr_claude';
+      const isPlanck = activeTheme === 'cryo_quantum';
+
+      const primaryRingColor = isObsidian
+        ? 'rgba(217, 119, 87, 0.85)'
+        : isPlanck
+        ? 'rgba(52, 211, 153, 0.85)'
+        : 'rgba(212, 175, 55, 0.85)';
+      const secondaryRingColor = isObsidian
+        ? 'rgba(247, 244, 238, 0.75)'
+        : isPlanck
+        ? 'rgba(167, 243, 208, 0.75)'
+        : 'rgba(244, 244, 245, 0.75)';
+      const mutedRingColor = isObsidian
+        ? 'rgba(230, 213, 184, 0.45)'
+        : isPlanck
+        ? 'rgba(16, 185, 129, 0.45)'
+        : 'rgba(161, 161, 170, 0.45)';
+
       // 1. Clear background
-      ctx.fillStyle = '#000000';
+      ctx.fillStyle = '#020203';
       ctx.fillRect(0, 0, w, h);
 
       // 2. Draw subtle background coordinate grid
-      ctx.strokeStyle = 'rgba(50, 50, 50, 0.45)';
+      ctx.strokeStyle = 'rgba(63, 63, 70, 0.35)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(cx, 10);
@@ -122,7 +143,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
       ctx.stroke();
 
       // Axis labels
-      ctx.fillStyle = '#475569';
+      ctx.fillStyle = '#71717a';
       ctx.font = '9px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
@@ -140,15 +161,14 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
         const radPx = r * pixelsPerRs;
         ctx.beginPath();
         ctx.arc(cx, cy, radPx, 0, Math.PI * 2);
-        ctx.strokeStyle = r % 2 === 0 ? 'rgba(51, 65, 85, 0.55)' : 'rgba(30, 41, 59, 0.35)';
+        ctx.strokeStyle = r % 2 === 0 ? 'rgba(82, 82, 91, 0.45)' : 'rgba(63, 63, 70, 0.25)';
         ctx.lineWidth = 0.8;
         ctx.setLineDash([2, 3]);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Small range label on right horizontal axis (even rings only to avoid crowding)
         if (r % 2 === 0 && radPx + cx < w - 22 && radPx > 14) {
-          ctx.fillStyle = '#475569';
+          ctx.fillStyle = '#71717a';
           ctx.font = '8px monospace';
           ctx.fillText(`${r}Rₛ`, cx + radPx + 2, cy - 2);
         }
@@ -160,10 +180,19 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
 
       if (outerDiskPx > iscoPx) {
         const diskGrad = ctx.createRadialGradient(cx, cy, iscoPx, cx, cy, outerDiskPx);
-        diskGrad.addColorStop(0.0, 'rgba(245, 158, 11, 0.28)');
-        diskGrad.addColorStop(0.2, 'rgba(217, 119, 6, 0.18)');
-        diskGrad.addColorStop(0.7, 'rgba(180, 83, 9, 0.08)');
-        diskGrad.addColorStop(1.0, 'rgba(120, 53, 15, 0.0)');
+        if (isObsidian) {
+          diskGrad.addColorStop(0.0, 'rgba(217, 119, 87, 0.26)');
+          diskGrad.addColorStop(0.4, 'rgba(217, 119, 87, 0.12)');
+          diskGrad.addColorStop(1.0, 'rgba(217, 119, 87, 0.0)');
+        } else if (isPlanck) {
+          diskGrad.addColorStop(0.0, 'rgba(16, 185, 129, 0.24)');
+          diskGrad.addColorStop(0.4, 'rgba(16, 185, 129, 0.1)');
+          diskGrad.addColorStop(1.0, 'rgba(16, 185, 129, 0.0)');
+        } else {
+          diskGrad.addColorStop(0.0, 'rgba(212, 175, 55, 0.24)');
+          diskGrad.addColorStop(0.4, 'rgba(244, 244, 245, 0.08)');
+          diskGrad.addColorStop(1.0, 'rgba(212, 175, 55, 0.0)');
+        }
 
         ctx.beginPath();
         ctx.arc(cx, cy, outerDiskPx, 0, Math.PI * 2);
@@ -171,19 +200,17 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
         ctx.fillStyle = diskGrad;
         ctx.fill();
 
-        // Subtle frame-dragging prograde spin indicator arrows
         if (data.spin > 0.05) {
           ctx.save();
-          ctx.strokeStyle = 'rgba(245, 158, 11, 0.35)';
+          ctx.strokeStyle = primaryRingColor;
           ctx.lineWidth = 1;
           const arrowR = (iscoPx + outerDiskPx) * 0.48;
           ctx.beginPath();
           ctx.arc(cx, cy, arrowR, -Math.PI * 0.35, Math.PI * 0.15, false);
           ctx.stroke();
-          // Arrowhead
           const tipX = cx + arrowR * Math.cos(Math.PI * 0.15);
           const tipY = cy + arrowR * Math.sin(Math.PI * 0.15);
-          ctx.fillStyle = 'rgba(245, 158, 11, 0.5)';
+          ctx.fillStyle = primaryRingColor;
           ctx.beginPath();
           ctx.moveTo(tipX, tipY);
           ctx.lineTo(tipX - 4, tipY - 3);
@@ -198,7 +225,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
       const ergoPx = data.ergosphereRs * pixelsPerRs;
       ctx.beginPath();
       ctx.arc(cx, cy, ergoPx, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(6, 182, 212, 0.55)';
+      ctx.strokeStyle = mutedRingColor;
       ctx.lineWidth = 1.2;
       ctx.setLineDash([3, 2]);
       ctx.stroke();
@@ -207,7 +234,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
       // 6. ISCO (Innermost Stable Circular Orbit) Ring
       ctx.beginPath();
       ctx.arc(cx, cy, iscoPx, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(34, 211, 238, 0.85)';
+      ctx.strokeStyle = secondaryRingColor;
       ctx.lineWidth = 1.2;
       ctx.setLineDash([4, 2]);
       ctx.stroke();
@@ -217,7 +244,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
       const photonPx = data.photonSphereRs * pixelsPerRs;
       ctx.beginPath();
       ctx.arc(cx, cy, photonPx, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(254, 240, 138, 0.75)';
+      ctx.strokeStyle = primaryRingColor;
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 2]);
       ctx.stroke();
@@ -229,7 +256,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
       ctx.arc(cx, cy, Math.max(2, horizonPx), 0, Math.PI * 2);
       ctx.fillStyle = '#000000';
       ctx.fill();
-      ctx.strokeStyle = '#f59e0b';
+      ctx.strokeStyle = primaryRingColor;
       ctx.lineWidth = 1.4;
       ctx.stroke();
 
@@ -346,8 +373,8 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
         ctx.setLineDash([]);
 
         ctx.beginPath();
-        ctx.arc(camX, camY, 2.6, 0, Math.PI * 2);
-        ctx.fillStyle = '#38bdf8';
+        ctx.arc(camX, camY, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = secondaryRingColor;
         ctx.fill();
       }
 

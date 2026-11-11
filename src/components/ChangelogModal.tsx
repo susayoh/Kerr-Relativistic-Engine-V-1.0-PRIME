@@ -61,30 +61,30 @@ interface ChangelogModalProps {
 export const ChangelogModal: React.FC<ChangelogModalProps> = ({
   isOpen,
   onClose,
-  uiTheme = 'kerr_claude',
+  uiTheme = 'observatory_gold',
 }) => {
   if (!isOpen) return null;
 
-  const isClaude = uiTheme === 'kerr_claude';
-  const isCryo = uiTheme === 'cryo_quantum';
+  const isObsidian = uiTheme === 'kerr_claude';
+  const isPlanck = uiTheme === 'cryo_quantum';
 
-  const shellClass = isClaude
-    ? 'bg-[#0e0b09] border-[#3d3029] shadow-[0_24px_64px_rgba(0,0,0,0.88),0_0_32px_rgba(217,119,87,0.14)]'
-    : isCryo
-    ? 'bg-[#050b14] border-sky-500/40 shadow-[0_24px_64px_rgba(0,0,0,0.88),0_0_32px_rgba(56,189,248,0.14)]'
-    : 'bg-[#060911] border-amber-500/40 shadow-[0_24px_64px_rgba(0,0,0,0.88),0_0_32px_rgba(245,158,11,0.12)]';
+  const shellClass = isObsidian
+    ? 'bg-[#0b0908] border-[#3d3029] shadow-[0_24px_64px_rgba(0,0,0,0.92),0_0_32px_rgba(217,119,87,0.12)]'
+    : isPlanck
+    ? 'bg-[#040605] border-emerald-500/35 shadow-[0_24px_64px_rgba(0,0,0,0.92),0_0_32px_rgba(16,185,129,0.1)]'
+    : 'bg-[#050506] border-zinc-600/45 shadow-[0_24px_64px_rgba(0,0,0,0.94),0_0_32px_rgba(244,244,245,0.08)]';
 
-  const headerClass = isClaude
-    ? 'bg-[#14100d] border-[#2e241f]'
-    : isCryo
-    ? 'bg-[#07101e] border-sky-900/50'
-    : 'bg-neutral-950 border-neutral-800/90';
+  const headerClass = isObsidian
+    ? 'bg-[#120e0c] border-[#2e241f]'
+    : isPlanck
+    ? 'bg-[#070b09] border-emerald-900/50'
+    : 'bg-[#09090b] border-zinc-800/90';
 
-  const accentBadgeClass = isClaude
+  const accentBadgeClass = isObsidian
     ? 'bg-[#241C18] border-[#D97757]/70 text-[#F4A688]'
-    : isCryo
-    ? 'bg-sky-500/15 border-sky-400/60 text-sky-200'
-    : 'bg-amber-500/15 border-amber-400/60 text-amber-200';
+    : isPlanck
+    ? 'bg-emerald-500/15 border-emerald-400/60 text-emerald-200'
+    : 'bg-zinc-800 border-zinc-400/60 text-zinc-100';
 
   return (
     <div
@@ -143,11 +143,11 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({
               data-testid={`changelog-entry-${entry.version}`}
               className={`rounded-xl border p-4 space-y-2.5 transition-colors ${
                 entry.isCurrent
-                  ? isClaude
-                    ? 'bg-[#17120f] border-[#D97757]/60 shadow-[0_0_20px_rgba(217,119,87,0.1)]'
-                    : isCryo
-                    ? 'bg-[#091526] border-sky-400/55 shadow-[0_0_20px_rgba(56,189,248,0.1)]'
-                    : 'bg-neutral-950 border-amber-400/55 shadow-[0_0_20px_rgba(245,158,11,0.08)]'
+                  ? isObsidian
+                    ? 'bg-[#14100d] border-[#D97757]/60 shadow-[0_0_20px_rgba(217,119,87,0.1)]'
+                    : isPlanck
+                    ? 'bg-[#080d0a] border-emerald-400/55 shadow-[0_0_20px_rgba(16,185,129,0.1)]'
+                    : 'bg-[#0c0c0e] border-zinc-400/55 shadow-[0_0_20px_rgba(244,244,245,0.08)]'
                   : 'bg-neutral-950/80 border-neutral-800/90'
               }`}
             >

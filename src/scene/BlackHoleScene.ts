@@ -81,7 +81,7 @@ export const isMobileDevice = (() => {
 })();
 
 export const DEFAULT_VISUALIZER_SETTINGS: VisualizerSettings = {
-  uiTheme: 'kerr_claude',
+  uiTheme: 'observatory_gold',
   accretionDiskStyle: 'classic',
   bloomIntensity: 1.0,
   lensFlareIntensity: 1.0,
@@ -2106,6 +2106,9 @@ export class BlackHoleSceneController {
   private targetExpansionProgress = 1.0;
   private lastWellExpansionProgress = -1.0;
   private pointerDownPos = new THREE.Vector2();
+  private activePointerIds = new Set<number>();
+  private multiTouchGestureOccurred = false;
+  private lastMultiTouchEndMs = 0;
 
   // Spacetime Well Manifold (Precomputed static vertex polar coordinates for fast O(N) CPU deformation)
   private spacetimeWellMesh!: THREE.Mesh;
@@ -2595,14 +2598,43 @@ export class BlackHoleSceneController {
     this.controls = new OrbitControls(this.camera, this.domElement);
     this.controls.enableDamping = !isSoftwareGl;
     this.controls.dampingFactor = 0.06;
+    this.controls.enableZoom = true;
+    this.controls.zoomSpeed = 1.25;
+    this.controls.enableRotate = true;
+    this.controls.rotateSpeed = 0.85;
+    this.controls.enablePan = true;
+    this.controls.panSpeed = 0.85;
+    this.controls.screenSpacePanning = true;
+    this.controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    };
     this.controls.maxDistance = 260;
-    this.controls.minDistance = 3.5;
+    this.controls.minDistance = 1.25;
     this.controls.target.set(0, 0, 0);
-    this.controls.enabled = !this.bootIntroActive;
+    // Keep OrbitControls enabled from frame 0 so the very first 1-finger or 2-finger touch gesture is captured natively
+    this.controls.enabled = true;
+    this.domElement.style.touchAction = 'none';
     this.camera.lookAt(this.controls.target);
 
     this.controls.addEventListener('start', () => {
       this.isUserInteracting = true;
+      if (this.bootIntroActive || this.bootAutoExpandPending) {
+        this.bootIntroActive = false;
+        this.bootAutoExpandPending = false;
+        this.onBootIntroComplete?.();
+        if (this.isSingularityCollapsed) {
+          this.expansionProgress = Math.max(0.08, this.expansionProgress);
+          this.targetExpansionProgress = 1.0;
+          this.isSingularityCollapsed = false;
+          if (this.spacetimeWellMesh) {
+            this.spacetimeWellMesh.visible = Boolean(this.params.layers.spacetimeGrid);
+            this.needsWellDeform = true;
+          }
+          this.onSingularityStateChange?.(false);
+          this.triggerEventHorizonPulse(this.params.objectCategory);
+        }
+      }
       this.cameraTransitionActive = false;
       this.slowCameraPanIn = false;
       this.followStarMode = false;
@@ -2708,6 +2740,8 @@ export class BlackHoleSceneController {
       }
     });
     this.domElement.addEventListener('pointerdown', this.handlePointerDown);
+    this.domElement.addEventListener('pointerup', this.handlePointerUp);
+    this.domElement.addEventListener('pointercancel', this.handlePointerUp);
     this.domElement.addEventListener('pointermove', this.handlePointerMove);
     this.domElement.addEventListener('click', this.handleCanvasClick);
 
@@ -5201,8 +5235,10 @@ export class BlackHoleSceneController {
       this.currentScale = this.targetScale;
       this.currentExploded = this.targetExploded;
       const idealDist = Math.max(24.5, 25.5 * Math.sqrt(this.targetScale));
-      this.camera.position.normalize().multiplyScalar(idealDist);
-      this.controls.maxDistance = Math.max(110, idealDist * 2.5);
+      if (!this.bootIntroActive) {
+        this.camera.position.normalize().multiplyScalar(idealDist);
+      }
+      this.controls.maxDistance = Math.max(260, idealDist * 3.5);
     }
 
     const modeIndex =
@@ -5406,8 +5442,9 @@ export class BlackHoleSceneController {
       2.0
     );
 
-    // Maintain GPU-composited layer promotion on the canvas DOM element
+    // Maintain GPU-composited layer promotion and touch-action: none on the canvas DOM element
     if (this.domElement) {
+      this.domElement.style.touchAction = 'none';
       this.domElement.style.imageRendering = 'auto';
       this.domElement.style.transform = 'translateZ(0)';
       this.domElement.style.backfaceVisibility = 'hidden';
@@ -5466,7 +5503,7 @@ export class BlackHoleSceneController {
     const dy = this.camera.position.y - this.controls.target.y;
     const dz = this.camera.position.z - this.controls.target.z;
     const dist = Math.max(0.001, Math.hypot(dx, dy, dz));
-    const rRs = Math.max(1.0, dist / 1.75);
+    const rRs = Math.max(0.55, dist / 1.75);
     const thetaDeg = THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(dy / dist, -1, 1)));
     const phiDeg = ((THREE.MathUtils.radToDeg(Math.atan2(dz, dx)) % 360) + 360) % 360;
     return { rRs, thetaDeg, phiDeg };
@@ -5526,13 +5563,28 @@ export class BlackHoleSceneController {
   };
 
   private handlePointerDown = (e: PointerEvent) => {
-    this.pointerDownPos.set(e.clientX, e.clientY);
+    this.activePointerIds.add(e.pointerId);
+    if (this.activePointerIds.size >= 2) {
+      this.multiTouchGestureOccurred = true;
+    } else {
+      this.pointerDownPos.set(e.clientX, e.clientY);
+    }
     this.cachedCanvasRect = this.domElement.getBoundingClientRect();
+  };
+
+  private handlePointerUp = (e: PointerEvent) => {
+    this.activePointerIds.delete(e.pointerId);
+    if (this.multiTouchGestureOccurred) {
+      this.lastMultiTouchEndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      if (this.activePointerIds.size === 0) {
+        this.multiTouchGestureOccurred = false;
+      }
+    }
   };
 
   private handlePointerMove = (e: PointerEvent) => {
     // Decouple camera orbit dragging from pointer raycasting, layout reflows, and React state updates
-    if (this.isUserInteracting || e.buttons !== 0) return;
+    if (this.isUserInteracting || e.buttons !== 0 || this.activePointerIds.size > 0) return;
 
     const now = performance.now();
     if (now - this.lastRaycastTime < 64) return;
@@ -5545,12 +5597,10 @@ export class BlackHoleSceneController {
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
     const ray = this.raycaster.ray;
 
-    // Show interactive pointer cursor when hovering over the clickable singularity ball / black hole center
-    if (!isStellarCategory(this.params.objectCategory)) {
+    // Show interactive pointer cursor when hovering over the clickable singularity ball
+    if (!isStellarCategory(this.params.objectCategory) && this.isSingularityCollapsed) {
       const distToOrigin = ray.distanceToPoint(this.blackHoleGroup.position);
-      const hitRadius = this.isSingularityCollapsed
-        ? Math.max(3.8, 1.8 * this.currentScale)
-        : 2.25 * this.currentScale;
+      const hitRadius = Math.max(3.8, 1.8 * this.currentScale);
       const targetCursor = distToOrigin < hitRadius ? 'pointer' : 'crosshair';
       if (this.domElement.style.cursor !== targetCursor) {
         this.domElement.style.cursor = targetCursor;
@@ -5579,7 +5629,9 @@ export class BlackHoleSceneController {
   };
 
   private handleCanvasClick = (e: MouseEvent) => {
-    // Ignore drag-releases from camera orbiting
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    // Ignore synthetic clicks following two-finger pinch-zoom / pan gestures or orbit drags
+    if (this.multiTouchGestureOccurred || now - this.lastMultiTouchEndMs < 450) return;
     const dragDist = Math.hypot(e.clientX - this.pointerDownPos.x, e.clientY - this.pointerDownPos.y);
     if (dragDist > 7) return;
 
@@ -5591,20 +5643,11 @@ export class BlackHoleSceneController {
     const distToCenter = this.raycaster.ray.distanceToPoint(this.blackHoleGroup.position);
     const isStar = isStellarCategory(this.params.objectCategory);
 
-    if (!isStar) {
-      if (this.isSingularityCollapsed) {
-        // Clicking the small singularity ball (or near center) triggers the expansion animation
-        if (distToCenter < Math.max(3.6, 2.2 * this.currentScale)) {
-          this.expandFromSingularity();
-          return;
-        }
-      } else {
-        // Clicking directly on the central black hole shadow collapses it back into the small singularity ball
-        // so the user can click the black hole again anytime to replay the expansion animation
-        if (distToCenter < 2.25 * this.currentScale) {
-          this.collapseToSingularity();
-          return;
-        }
+    if (!isStar && this.isSingularityCollapsed) {
+      // Clicking the small singularity ball triggers the expansion animation
+      if (distToCenter < Math.max(3.6, 2.2 * this.currentScale)) {
+        this.expandFromSingularity();
+        return;
       }
     }
 
@@ -8069,6 +8112,8 @@ export class BlackHoleSceneController {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.domElement.removeEventListener('pointerdown', this.handlePointerDown);
+    this.domElement.removeEventListener('pointerup', this.handlePointerUp);
+    this.domElement.removeEventListener('pointercancel', this.handlePointerUp);
     this.domElement.removeEventListener('pointermove', this.handlePointerMove);
     this.domElement.removeEventListener('click', this.handleCanvasClick);
     this.domElement.removeEventListener('dblclick', this.handleCanvasDoubleClick);

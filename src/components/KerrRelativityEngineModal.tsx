@@ -1,17 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Terminal,
   Cpu,
   Zap,
-  CheckCircle2,
   Play,
   Pause,
   FastForward,
-  Sparkles,
   DollarSign,
-  Activity,
   ShieldCheck,
-  Layers,
   Lock,
   X,
 } from 'lucide-react';
@@ -21,6 +16,7 @@ import {
   computeRelativisticMetrics,
   isStellarCategory,
 } from '../physics/gravitationalPhysics';
+import { UiThemeId } from '../scene/BlackHoleScene';
 import { evaluateKerrMetricTensor } from './MetricTelemetryOverlay';
 
 export type KerrEngineTierId = 'standard' | 'linear' | 'advanced' | 'ultra';
@@ -70,9 +66,9 @@ export const KERR_ENGINE_TIERS: Record<KerrEngineTierId, KerrEngineTierConfig> =
     speedScore: 22,
     performanceScore: 42,
     qualityScore: 60,
-    badgeClass: 'bg-slate-500/20 text-slate-300 border-slate-500/40',
-    borderClass: 'border-slate-700/80',
-    accentColor: '#94a3b8',
+    badgeClass: 'bg-zinc-900/90 text-zinc-300 border-zinc-700/70',
+    borderClass: 'border-zinc-800/90',
+    accentColor: '#a1a1aa',
     description:
       'Default single-threaded sequential solver using 1st-order Post-Newtonian and static Schwarzschild approximations. Cannot be bypassed.',
   },
@@ -95,9 +91,9 @@ export const KERR_ENGINE_TIERS: Record<KerrEngineTierId, KerrEngineTierConfig> =
     speedScore: 48,
     performanceScore: 66,
     qualityScore: 78,
-    badgeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
-    borderClass: 'border-cyan-500/50',
-    accentColor: '#22d3ee',
+    badgeClass: 'bg-zinc-900/90 text-zinc-200 border-zinc-600/70',
+    borderClass: 'border-zinc-700/85',
+    accentColor: '#d4d4d8',
     description:
       'Linearized Boyer-Lindquist metric expansion in spin parameter a*. Captures first-order gravitomagnetic frame-dragging and ISCO shifts.',
   },
@@ -120,9 +116,9 @@ export const KERR_ENGINE_TIERS: Record<KerrEngineTierId, KerrEngineTierConfig> =
     speedScore: 84,
     performanceScore: 90,
     qualityScore: 94,
-    badgeClass: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
-    borderClass: 'border-purple-500/60',
-    accentColor: '#c084fc',
+    badgeClass: 'bg-zinc-900/90 text-zinc-100 border-zinc-500/70',
+    borderClass: 'border-zinc-700/90',
+    accentColor: '#f4f4f5',
     description:
       'Multi-GPU tensor solver integrating exact Bardeen-Press-Teukolsky roots, 4th-order Runge-Kutta null geodesics, and relativistic Doppler radiative transfer.',
   },
@@ -145,9 +141,9 @@ export const KERR_ENGINE_TIERS: Record<KerrEngineTierId, KerrEngineTierConfig> =
     speedScore: 100,
     performanceScore: 100,
     qualityScore: 100,
-    badgeClass: 'bg-amber-500/25 text-amber-200 border-amber-400/60',
-    borderClass: 'border-amber-400/80',
-    accentColor: '#f59e0b',
+    badgeClass: 'bg-amber-500/15 text-amber-200 border-amber-500/45',
+    borderClass: 'border-amber-500/45',
+    accentColor: '#d4af37',
     description:
       'Uncompromised flagship compute cluster. Executes sub-second full covariant Boyer-Lindquist tensor decomposition, Christoffel symbols, Carter constant Q, and Kretschmann invariants.',
   },
@@ -242,12 +238,22 @@ export function generateKerrEngineCalculationRun(
   // Christoffel connection coefficients at probe radius
   const sigma = probeRg * probeRg + a * a * Math.cos(thetaRad) * Math.cos(thetaRad);
   const delta = Math.max(0.02, probeRg * probeRg - 2.0 * probeRg + a * a);
-  const gamma_r_tt = (delta * (probeRg * probeRg - a * a * Math.cos(thetaRad) * Math.cos(thetaRad))) / Math.pow(sigma, 3);
-  const gamma_phi_tr = (a * (probeRg * probeRg - a * a * Math.cos(thetaRad) * Math.cos(thetaRad))) / (sigma * sigma * delta);
+  const gamma_r_tt =
+    (delta * (probeRg * probeRg - a * a * Math.cos(thetaRad) * Math.cos(thetaRad))) /
+    Math.pow(sigma, 3);
+  const gamma_phi_tr =
+    (a * (probeRg * probeRg - a * a * Math.cos(thetaRad) * Math.cos(thetaRad))) /
+    (sigma * sigma * delta);
 
   const stepMs = tier.stepDelayMs;
   const residualExp =
-    tierId === 'ultra' ? '10⁻¹⁶' : tierId === 'advanced' ? '10⁻¹²' : tierId === 'linear' ? '10⁻⁷' : '10⁻⁴';
+    tierId === 'ultra'
+      ? '10⁻¹⁶'
+      : tierId === 'advanced'
+      ? '10⁻¹²'
+      : tierId === 'linear'
+      ? '10⁻⁷'
+      : '10⁻⁴';
 
   const steps: KerrCalculationStep[] = [
     {
@@ -397,18 +403,23 @@ interface KerrRelativityEngineModalProps {
   activeRun: KerrEngineRunLog | null;
   onCompleteDeploy: (run: KerrEngineRunLog) => void;
   onOpenSettingsLog?: () => void;
+  uiTheme?: UiThemeId;
 }
 
 export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps> = ({
   activeRun,
   onCompleteDeploy,
   onOpenSettingsLog,
+  uiTheme = 'observatory_gold',
 }) => {
   const [visibleStepCount, setVisibleStepCount] = useState<number>(0);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const completedRef = useRef<boolean>(false);
+
+  const isObsidian = uiTheme === 'kerr_claude';
+  const isPlanck = uiTheme === 'cryo_quantum';
 
   useEffect(() => {
     if (!activeRun) {
@@ -466,78 +477,130 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
       role="dialog"
       aria-label="Kerr Relativity Engine Terminal"
       data-testid="kerr-relativity-engine-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/85 backdrop-blur-md pointer-events-auto select-none"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/92 backdrop-blur-md pointer-events-auto select-none"
     >
       <div
-        className={`relative w-full max-w-3xl bg-[#04070e] border ${tier.borderClass} rounded-2xl shadow-[0_0_60px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col max-h-[90vh]`}
+        className={`relative w-full max-w-3xl bg-[#020203] border rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.98)] overflow-hidden flex flex-col max-h-[90vh] ${
+          isObsidian
+            ? 'border-[#D97757]/30'
+            : isPlanck
+            ? 'border-emerald-500/25'
+            : 'border-zinc-800/90'
+        }`}
       >
-        {/* Terminal Top Title Bar */}
-        <div className="px-4 py-3 bg-neutral-950 border-b border-slate-800/90 flex items-center justify-between gap-2 flex-wrap">
+        {/* Ultra-Dark Terminal Top Title Bar */}
+        <div
+          className={`px-4 py-3 bg-[#040406] border-b flex items-center justify-between gap-2 flex-wrap ${
+            isObsidian
+              ? 'border-[#D97757]/20'
+              : isPlanck
+              ? 'border-emerald-500/20'
+              : 'border-zinc-800/80'
+          }`}
+        >
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="flex items-center gap-1.5 shrink-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400/80" />
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
+              <span className="w-2 h-2 rounded-full bg-zinc-800 border border-zinc-700" />
+              <span className="w-2 h-2 rounded-full bg-zinc-800 border border-zinc-700" />
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isObsidian
+                    ? 'bg-[#D97757]/80'
+                    : isPlanck
+                    ? 'bg-emerald-400/80'
+                    : 'bg-[#D4AF37]/80'
+                }`}
+              />
             </div>
 
-            <div className="relative flex items-center justify-center w-7 h-7 rounded-md bg-[#201A17] border border-[#D97757]/55 shadow-[0_0_14px_rgba(217,119,87,0.28)] shrink-0 ml-1">
+            <div
+              className={`relative flex items-center justify-center w-7 h-7 rounded-md bg-[#08080a] border shrink-0 ml-1 ${
+                isObsidian
+                  ? 'border-[#D97757]/45'
+                  : isPlanck
+                  ? 'border-emerald-500/45'
+                  : 'border-zinc-600/55'
+              }`}
+            >
               <svg
                 viewBox="0 0 24 24"
-                className="w-4 h-4 text-[#E08263] drop-shadow-[0_0_6px_rgba(217,119,87,0.55)]"
+                className={`w-4 h-4 ${
+                  isObsidian
+                    ? 'text-[#E08263]'
+                    : isPlanck
+                    ? 'text-emerald-400'
+                    : 'text-[#D4AF37]'
+                }`}
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
                 strokeLinecap="round"
               >
                 <path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7" />
-                <path d="M8.4 3.2l7.2 17.6M15.6 3.2L8.4 20.8M3.2 8.4l17.6 7.2M3.2 15.6l17.6-7.2" strokeWidth="1.4" opacity="0.8" />
-                <circle cx="12" cy="12" r="2.6" className="fill-[#1F1B18] stroke-[#F4B097]" strokeWidth="1.75" />
+                <path
+                  d="M8.4 3.2l7.2 17.6M15.6 3.2L8.4 20.8M3.2 8.4l17.6 7.2M3.2 15.6l17.6-7.2"
+                  strokeWidth="1.4"
+                  opacity="0.8"
+                />
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="2.6"
+                  className="fill-[#050506] stroke-current"
+                  strokeWidth="1.75"
+                />
               </svg>
             </div>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5">
-                  <h2 className="font-display text-xs sm:text-sm font-bold tracking-[0.06em] text-[#F7F4EE] drop-shadow-[0_0_10px_rgba(244,241,234,0.28)]">
+                  <h2 className="font-display text-xs sm:text-sm font-bold tracking-[0.06em] text-zinc-100">
                     Kerr Engine
                   </h2>
-                  <span className="inline-flex items-center justify-center px-1.5 py-[2px] rounded-[4px] bg-[#241C18] border border-[#D97757]/75 font-mono text-[9.5px] font-bold text-[#F4A688] tracking-[0.08em] leading-none shadow-[0_0_10px_rgba(217,119,87,0.28),inset_0_0_4px_rgba(217,119,87,0.18)]">
+                  <span
+                    className={`inline-flex items-center justify-center px-1.5 py-[2px] rounded-[4px] bg-[#0a0a0d] border font-mono text-[9.5px] font-bold tracking-[0.08em] leading-none ${
+                      isObsidian
+                        ? 'border-[#D97757]/55 text-[#F4A688]'
+                        : isPlanck
+                        ? 'border-emerald-500/55 text-emerald-300'
+                        : 'border-[#D4AF37]/55 text-[#D4AF37]'
+                    }`}
+                  >
                     v1.4
                   </span>
-                  <span className="font-mono text-[10px] font-bold text-[#D97757]/80">-</span>
-                  <span className="font-mono text-[10px] font-bold tracking-[0.08em] text-[#E89578] drop-shadow-[0_0_8px_rgba(217,119,87,0.24)]">
+                  <span className="font-mono text-[10px] text-zinc-600">-</span>
+                  <span className="font-mono text-[10px] font-semibold tracking-[0.08em] text-zinc-400">
                     Apex Metric Core
                   </span>
                 </div>
-                <span
-                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase border ${tier.badgeClass}`}
-                >
+                <span className="px-2 py-0.5 rounded text-[9.5px] font-mono font-semibold uppercase bg-[#0a0a0d] text-zinc-300 border border-zinc-800">
                   {tier.name} Tier · {tier.modelCode}
                 </span>
               </div>
-              <p className="text-[10px] font-mono text-slate-400 truncate">
+              <p className="text-[10px] font-mono text-zinc-500 truncate mt-0.5">
                 Pre-Load Spacetime Metric Tensor, Geodesic & Radiative Transfer Solver — Target:{' '}
-                <strong className="text-amber-300">{activeRun.targetName}</strong>
+                <strong className="text-zinc-200">{activeRun.targetName}</strong>
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0 font-mono text-[10px]">
-            <div className="px-2 py-1 rounded bg-neutral-900 border border-slate-800 text-cyan-300 flex items-center gap-1">
+            <div className="px-2 py-1 rounded bg-[#08080b] border border-zinc-800/90 text-zinc-300 flex items-center gap-1">
               <Zap className="w-3 h-3 text-amber-400" />
               <span>{tier.tflopsDisplay}</span>
             </div>
-            <div className="px-2 py-1 rounded bg-neutral-900 border border-slate-800 text-emerald-300 flex items-center gap-1">
-              <DollarSign className="w-3 h-3 text-emerald-400" />
+            <div className="px-2 py-1 rounded bg-[#08080b] border border-zinc-800/90 text-zinc-300 flex items-center gap-1">
+              <DollarSign className="w-3 h-3 text-amber-400" />
               <span>${accruedCost}</span>
             </div>
           </div>
         </div>
 
-        {/* Progress Bar & Compute Telemetry Strip */}
-        <div className="px-4 py-2 bg-[#070b16] border-b border-slate-800/80 space-y-1.5">
+        {/* Ultra-Dark Progress Bar & Compute Telemetry Strip */}
+        <div className="px-4 py-2 bg-[#030305] border-b border-zinc-900 space-y-1.5">
           <div className="flex items-center justify-between text-[10px] font-mono">
-            <div className="flex items-center gap-2 text-slate-300">
+            <div className="flex items-center gap-2 text-zinc-300">
               <Cpu className="w-3.5 h-3.5 text-amber-400 animate-spin" />
               <span>
                 {isFinished
@@ -548,25 +611,31 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
               </span>
             </div>
             <div className="flex items-center gap-3 tabular-nums">
-              <span className="text-slate-400">
-                Elapsed: <strong className="text-slate-200">{elapsedMs} ms</strong>
+              <span className="text-zinc-500">
+                Elapsed: <strong className="text-zinc-300">{elapsedMs} ms</strong>
               </span>
               <span className="text-amber-300 font-bold">{progressPct}%</span>
             </div>
           </div>
 
-          <div className="w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden border border-slate-800/80">
+          <div className="w-full h-1 bg-[#0a0a0d] rounded-full overflow-hidden border border-zinc-800/80">
             <div
-              className="h-full bg-gradient-to-r from-amber-500 via-cyan-400 to-purple-400 transition-all duration-100"
+              className={`h-full transition-all duration-100 ${
+                isObsidian
+                  ? 'bg-[#D97757]'
+                  : isPlanck
+                  ? 'bg-emerald-400'
+                  : 'bg-[#D4AF37]'
+              }`}
               style={{ width: `${progressPct}%` }}
             />
           </div>
         </div>
 
-        {/* Live Streaming Calculation & Logic Terminal Output */}
+        {/* Deep Pitch-Black Streaming Calculation & Logic Terminal Output */}
         <div
           ref={scrollRef}
-          className="p-3.5 sm:p-4 overflow-y-auto space-y-2.5 font-mono text-[11px] bg-[#03050a] max-h-[48vh]"
+          className="p-3.5 sm:p-4 overflow-y-auto space-y-2 font-mono text-[11px] bg-[#010102] max-h-[48vh]"
         >
           {visibleSteps.map((step, idx) => {
             const isLatest = idx === visibleSteps.length - 1 && !isFinished;
@@ -575,29 +644,30 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
                 key={step.id}
                 className={`p-2.5 rounded-xl border transition-all ${
                   isLatest
-                    ? 'bg-neutral-900/95 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.12)]'
-                    : 'bg-neutral-950/80 border-slate-800/80'
+                    ? 'bg-[#07070a] border-amber-500/40'
+                    : 'bg-[#040406] border-zinc-900'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2 text-[10px]">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold shrink-0">
-                      [{step.stepNumber.toString().padStart(2, '0')}/{totalSteps.toString().padStart(2, '0')} · {step.phase}]
+                    <span className="px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/35 font-bold shrink-0">
+                      [{step.stepNumber.toString().padStart(2, '0')}/
+                      {totalSteps.toString().padStart(2, '0')} · {step.phase}]
                     </span>
-                    <span className="text-cyan-300 truncate">$ {step.command}</span>
+                    <span className="text-zinc-300 truncate">$ {step.command}</span>
                   </div>
-                  <span className="text-emerald-400 shrink-0 tabular-nums">{step.residual}</span>
+                  <span className="text-cyan-300 shrink-0 tabular-nums">{step.residual}</span>
                 </div>
 
-                <div className="mt-1.5 px-2.5 py-1 rounded bg-[#070c18] border border-slate-800/90 text-amber-200 text-[11px] overflow-x-auto">
+                <div className="mt-1.5 px-2.5 py-1 rounded bg-[#020203] border border-zinc-900 text-zinc-200 text-[11px] overflow-x-auto">
                   {step.equation}
                 </div>
 
                 <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[10px]">
-                  <span className="text-slate-300">
-                    <strong className="text-purple-300">LOGIC:</strong> {step.logicDecision}
+                  <span className="text-zinc-400">
+                    <strong className="text-amber-300">LOGIC:</strong> {step.logicDecision}
                   </span>
-                  <span className="text-slate-400 bg-neutral-900 px-1.5 py-0.5 rounded border border-slate-800">
+                  <span className="text-zinc-500 bg-[#060609] px-1.5 py-0.5 rounded border border-zinc-900">
                     {step.telemetry}
                   </span>
                 </div>
@@ -607,50 +677,51 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
         </div>
 
         {/* Live Pre-Load Telemetry Matrix Summary Strip */}
-        <div className="px-4 py-2.5 bg-neutral-950/95 border-t border-slate-800/90 grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono text-[10px] tabular-nums">
-          <div className="bg-neutral-900/70 border border-slate-800/80 rounded-lg px-2.5 py-1.5">
-            <span className="text-slate-400 block text-[8.5px] uppercase">Horizon / ISCO</span>
-            <span className="text-amber-300 font-bold">
+        <div className="px-4 py-2.5 bg-[#040406] border-t border-zinc-900 grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono text-[10px] tabular-nums">
+          <div className="bg-[#08080b] border border-zinc-800/80 rounded-lg px-2.5 py-1.5">
+            <span className="text-zinc-500 block text-[8.5px] uppercase">Horizon / ISCO</span>
+            <span className="text-zinc-100 font-bold">
               {(activeRun.summaryMetrics.rPlusRg * 0.5).toFixed(3)} /{' '}
               {(activeRun.summaryMetrics.iscoRg * 0.5).toFixed(3)} Rₛ
             </span>
           </div>
 
-          <div className="bg-neutral-900/70 border border-slate-800/80 rounded-lg px-2.5 py-1.5">
-            <span className="text-slate-400 block text-[8.5px] uppercase">Metric g_tt / g_rr</span>
+          <div className="bg-[#08080b] border border-zinc-800/80 rounded-lg px-2.5 py-1.5">
+            <span className="text-zinc-500 block text-[8.5px] uppercase">Metric g_tt / g_rr</span>
             <span className="text-cyan-300 font-bold">
               {activeRun.summaryMetrics.g_tt.toFixed(3)} / +{activeRun.summaryMetrics.g_rr.toFixed(2)}
             </span>
           </div>
 
-          <div className="bg-neutral-900/70 border border-slate-800/80 rounded-lg px-2.5 py-1.5">
-            <span className="text-slate-400 block text-[8.5px] uppercase">Frame-Drag g_tφ</span>
-            <span className="text-purple-300 font-bold">
+          <div className="bg-[#08080b] border border-zinc-800/80 rounded-lg px-2.5 py-1.5">
+            <span className="text-zinc-500 block text-[8.5px] uppercase">Frame-Drag g_tφ</span>
+            <span className="text-zinc-200 font-bold">
               {activeRun.summaryMetrics.g_tphi.toFixed(4)}
             </span>
           </div>
 
-          <div className="bg-neutral-900/70 border border-slate-800/80 rounded-lg px-2.5 py-1.5">
-            <span className="text-slate-400 block text-[8.5px] uppercase">Kretschmann K</span>
-            <span className="text-emerald-300 font-bold">
+          <div className="bg-[#08080b] border border-zinc-800/80 rounded-lg px-2.5 py-1.5">
+            <span className="text-zinc-500 block text-[8.5px] uppercase">Kretschmann K</span>
+            <span className="text-zinc-200 font-bold">
               {activeRun.summaryMetrics.kretschmann.toExponential(2)}
             </span>
           </div>
 
-          <div className="bg-neutral-900/70 border border-slate-800/80 rounded-lg px-2.5 py-1.5 col-span-2 sm:col-span-1">
-            <span className="text-slate-400 block text-[8.5px] uppercase">Fidelity & Tier</span>
-            <span className="text-amber-200 font-bold">
+          <div className="bg-[#08080b] border border-zinc-800/80 rounded-lg px-2.5 py-1.5 col-span-2 sm:col-span-1">
+            <span className="text-zinc-500 block text-[8.5px] uppercase">Fidelity & Tier</span>
+            <span className="text-amber-300 font-bold">
               {tier.fidelityPercent} ({tier.name})
             </span>
           </div>
         </div>
 
         {/* Terminal Footer Controls */}
-        <div className="px-4 py-2.5 bg-neutral-950 border-t border-slate-800/90 flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+        <div className="px-4 py-2.5 bg-[#030305] border-t border-zinc-900 flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500">
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span>
-              Tier speed scales with compute allocation ({tier.monthlyPriceDisplay} · {tier.expectedLatencyDisplay})
+              Tier speed scales with compute allocation ({tier.monthlyPriceDisplay} ·{' '}
+              {tier.expectedLatencyDisplay})
             </span>
           </div>
 
@@ -665,7 +736,7 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
                   }
                   onOpenSettingsLog();
                 }}
-                className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-slate-700 text-slate-300 hover:text-white font-mono text-[10px] cursor-pointer transition-colors"
+                className="px-2.5 py-1 rounded-lg bg-[#08080b] hover:bg-[#111115] border border-zinc-800 text-zinc-300 hover:text-white font-mono text-[10px] cursor-pointer transition-colors"
               >
                 Configure Tier / View Log
               </button>
@@ -674,7 +745,7 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
             <button
               type="button"
               onClick={() => setIsPaused((p) => !p)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-slate-700 text-amber-200 font-mono text-[10px] cursor-pointer transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#08080b] hover:bg-[#111115] border border-zinc-800 text-amber-200 font-mono text-[10px] cursor-pointer transition-colors"
             >
               {isPaused ? (
                 <>
@@ -696,17 +767,23 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
                   completedRef.current = true;
                   onCompleteDeploy(activeRun);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-mono text-[10px] font-bold cursor-pointer transition-colors shadow-sm"
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-mono text-[10px] font-bold cursor-pointer transition-colors border ${
+                  isObsidian
+                    ? 'bg-[#D97757]/25 hover:bg-[#D97757]/35 border-[#D97757] text-[#F7F4EE]'
+                    : isPlanck
+                    ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-400 text-emerald-50'
+                    : 'bg-zinc-100 hover:bg-white border-zinc-200 text-black'
+                }`}
               >
                 <FastForward className="w-3 h-3 fill-current" />
                 <span>Ultra Bypass (Deploy Now)</span>
               </button>
             ) : (
               <div
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-900/90 border border-slate-800 text-slate-500 font-mono text-[10px] cursor-not-allowed"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#070709] border border-zinc-800/80 text-zinc-500 font-mono text-[10px] cursor-not-allowed"
                 title="Engine calculation is always active. Upgrade to Ultra ($499/mo) to unlock instant bypass."
               >
-                <Lock className="w-3 h-3 text-amber-500/70" />
+                <Lock className="w-3 h-3 text-zinc-500" />
                 <span>Bypass Locked (Ultra Required)</span>
               </div>
             )}
@@ -750,45 +827,55 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
       role="dialog"
       aria-label="Kerr Relativity Engine Calculation Log"
       data-testid="kerr-engine-log-viewer-modal"
-      className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md pointer-events-auto select-none"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md pointer-events-auto select-none"
     >
-      <div className="relative w-full max-w-4xl bg-[#050811] border border-amber-500/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-4xl bg-[#030304] border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="px-4 sm:px-5 py-3.5 bg-neutral-950 border-b border-slate-800 flex items-center justify-between gap-3">
+        <div className="px-4 sm:px-5 py-3.5 bg-neutral-950 border-b border-neutral-800 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="relative flex items-center justify-center w-8 h-8 rounded-md bg-[#201A17] border border-[#D97757]/55 shadow-[0_0_14px_rgba(217,119,87,0.28)] shrink-0">
+            <div className="relative flex items-center justify-center w-8 h-8 rounded-md bg-neutral-900 border border-amber-500/40 shrink-0">
               <svg
                 viewBox="0 0 24 24"
-                className="w-4.5 h-4.5 text-[#E08263] drop-shadow-[0_0_6px_rgba(217,119,87,0.55)]"
+                className="w-4.5 h-4.5 text-amber-400"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
                 strokeLinecap="round"
               >
                 <path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7" />
-                <path d="M8.4 3.2l7.2 17.6M15.6 3.2L8.4 20.8M3.2 8.4l17.6 7.2M3.2 15.6l17.6-7.2" strokeWidth="1.4" opacity="0.8" />
-                <circle cx="12" cy="12" r="2.6" className="fill-[#1F1B18] stroke-[#F4B097]" strokeWidth="1.75" />
+                <path
+                  d="M8.4 3.2l7.2 17.6M15.6 3.2L8.4 20.8M3.2 8.4l17.6 7.2M3.2 15.6l17.6-7.2"
+                  strokeWidth="1.4"
+                  opacity="0.8"
+                />
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="2.6"
+                  className="fill-neutral-950 stroke-current"
+                  strokeWidth="1.75"
+                />
               </svg>
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5">
-                  <h2 className="font-display text-sm font-bold tracking-[0.06em] text-[#F7F4EE] drop-shadow-[0_0_10px_rgba(244,241,234,0.28)]">
+                  <h2 className="font-display text-sm font-bold tracking-[0.06em] text-zinc-100">
                     Kerr Engine
                   </h2>
-                  <span className="inline-flex items-center justify-center px-1.5 py-[2px] rounded-[4px] bg-[#241C18] border border-[#D97757]/75 font-mono text-[9.5px] font-bold text-[#F4A688] tracking-[0.08em] leading-none shadow-[0_0_10px_rgba(217,119,87,0.28),inset_0_0_4px_rgba(217,119,87,0.18)]">
+                  <span className="inline-flex items-center justify-center px-1.5 py-[2px] rounded-[4px] bg-neutral-900 border border-amber-500/40 font-mono text-[9.5px] font-bold text-amber-300 tracking-[0.08em] leading-none">
                     v1.4
                   </span>
-                  <span className="font-mono text-[10px] font-bold text-[#D97757]/80">-</span>
-                  <span className="font-mono text-[10px] font-bold tracking-[0.08em] text-[#E89578] drop-shadow-[0_0_8px_rgba(217,119,87,0.24)]">
+                  <span className="font-mono text-[10px] text-zinc-600">-</span>
+                  <span className="font-mono text-[10px] font-bold tracking-[0.08em] text-zinc-400">
                     Apex Metric Core
                   </span>
                 </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/35">
                   {logs.length} {logs.length === 1 ? 'SOLVE' : 'SOLVES'}
                 </span>
               </div>
-              <p className="text-[11px] font-mono text-slate-400">
+              <p className="text-[11px] font-mono text-zinc-400">
                 Calculation & Telemetry Log — Pre-load Boyer-Lindquist tensors, Christoffel symbols & geodesic roots
               </p>
             </div>
@@ -801,7 +888,7 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
                 onClose();
                 onRerunCalculation();
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 font-mono text-xs font-bold cursor-pointer transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-200 font-mono text-xs font-bold cursor-pointer transition-colors"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
               <span>Run Live Solve</span>
@@ -819,7 +906,7 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
         </div>
 
         {/* Body */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs bg-[#020203]">
           {/* Tier Compute Comparison & Session Billing Summary */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono">
             {(Object.keys(KERR_ENGINE_TIERS) as KerrEngineTierId[]).map((tKey) => {
@@ -832,18 +919,18 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
                   onClick={() => onSelectTier(tKey)}
                   className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-amber-500/15 border-amber-400 text-white shadow-[0_0_15px_rgba(245,158,11,0.18)]'
-                      : 'bg-neutral-950/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                      ? 'bg-amber-500/15 border-amber-400 text-white'
+                      : 'bg-neutral-950 border-neutral-800 text-zinc-300 hover:border-neutral-700'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span className="font-bold text-xs text-amber-300">{tierCfg.name}</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-900 border border-slate-800 text-emerald-300">
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-900 border border-neutral-800 text-cyan-300">
                       {tierCfg.monthlyPriceDisplay}
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">{tierCfg.modelCode}</div>
-                  <div className="flex items-center justify-between text-[10px] text-cyan-300 mt-1.5 pt-1 border-t border-slate-800/80">
+                  <div className="text-[10px] text-zinc-400 mt-0.5">{tierCfg.modelCode}</div>
+                  <div className="flex items-center justify-between text-[10px] text-zinc-300 mt-1.5 pt-1 border-t border-neutral-800">
                     <span>{tierCfg.tflopsDisplay}</span>
                     <span>{tierCfg.expectedLatencyDisplay}</span>
                   </div>
@@ -854,7 +941,7 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
 
           {/* Run Selector Tabs */}
           {logs.length > 0 && (
-            <div className="flex items-center justify-between gap-2 flex-wrap bg-neutral-950 p-2.5 rounded-xl border border-slate-800">
+            <div className="flex items-center justify-between gap-2 flex-wrap bg-neutral-950 p-2.5 rounded-xl border border-neutral-800">
               <div className="flex items-center gap-1.5 flex-wrap">
                 {logs.map((logItem, idx) => (
                   <button
@@ -863,15 +950,16 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
                     onClick={() => setSelectedLogIndex(idx)}
                     className={`px-2.5 py-1 rounded-lg font-mono text-[10px] border transition-colors cursor-pointer ${
                       selectedLogIndex === idx
-                        ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-bold'
-                        : 'bg-neutral-900 border-slate-800 text-slate-400 hover:text-white'
+                        ? 'bg-amber-500/15 border-amber-400 text-amber-200 font-bold'
+                        : 'bg-neutral-900 border-neutral-800 text-zinc-400 hover:text-white'
                     }`}
                   >
-                    #{logs.length - idx} · {logItem.targetName} ({logItem.tierName.toUpperCase()} · {logItem.timestamp})
+                    #{logs.length - idx} · {logItem.targetName} ({logItem.tierName.toUpperCase()} ·{' '}
+                    {logItem.timestamp})
                   </button>
                 ))}
               </div>
-              <div className="font-mono text-[11px] text-emerald-300 px-2 py-0.5 rounded bg-emerald-950/50 border border-emerald-500/30">
+              <div className="font-mono text-[11px] text-cyan-300 px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800">
                 Session Compute Spend: <strong>${totalSpend.toFixed(3)} USD</strong>
               </div>
             </div>
@@ -880,46 +968,46 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
           {/* Selected Calculation Run Details */}
           {currentLog ? (
             <div className="space-y-3">
-              <div className="p-3.5 rounded-xl bg-neutral-950 border border-slate-800 grid grid-cols-2 sm:grid-cols-6 gap-2.5 font-mono text-[10px]">
+              <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 grid grid-cols-2 sm:grid-cols-6 gap-2.5 font-mono text-[10px]">
                 <div>
-                  <span className="text-slate-500 block uppercase text-[9px]">Target Object</span>
+                  <span className="text-zinc-500 block uppercase text-[9px]">Target Object</span>
                   <span className="text-white font-bold text-xs">{currentLog.targetName}</span>
-                  <span className="text-slate-400 block text-[9px] truncate">
+                  <span className="text-zinc-400 block text-[9px] truncate">
                     {currentLog.targetClassification}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block uppercase text-[9px]">Engine Model</span>
+                  <span className="text-zinc-500 block uppercase text-[9px]">Engine Model</span>
                   <span className="text-amber-300 font-bold">{currentLog.modelCode}</span>
-                  <span className="text-slate-400 block text-[9px]">{currentLog.tierName} Tier</span>
+                  <span className="text-zinc-400 block text-[9px]">{currentLog.tierName} Tier</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block uppercase text-[9px]">Kerr Spin / Mass</span>
+                  <span className="text-zinc-500 block uppercase text-[9px]">Kerr Spin / Mass</span>
                   <span className="text-cyan-300 font-bold">a* = {currentLog.spin.toFixed(3)}</span>
-                  <span className="text-slate-400 block text-[9px]">{currentLog.massSolarDisplay}</span>
+                  <span className="text-zinc-400 block text-[9px]">{currentLog.massSolarDisplay}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block uppercase text-[9px]">Horizon / ISCO</span>
-                  <span className="text-purple-300 font-bold">
+                  <span className="text-zinc-500 block uppercase text-[9px]">Horizon / ISCO</span>
+                  <span className="text-zinc-200 font-bold">
                     r₊={(currentLog.summaryMetrics.rPlusRg * 0.5).toFixed(3)} Rₛ
                   </span>
-                  <span className="text-slate-400 block text-[9px]">
+                  <span className="text-zinc-400 block text-[9px]">
                     ISCO={(currentLog.summaryMetrics.iscoRg * 0.5).toFixed(3)} Rₛ
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block uppercase text-[9px]">Metric Tensor</span>
-                  <span className="text-emerald-300 font-bold">
+                  <span className="text-zinc-500 block uppercase text-[9px]">Metric Tensor</span>
+                  <span className="text-zinc-200 font-bold">
                     g_tt={currentLog.summaryMetrics.g_tt.toFixed(3)}
                   </span>
-                  <span className="text-slate-400 block text-[9px]">
+                  <span className="text-zinc-400 block text-[9px]">
                     g_rr=+{currentLog.summaryMetrics.g_rr.toFixed(3)}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block uppercase text-[9px]">Compute Billing</span>
-                  <span className="text-emerald-300 font-bold">${currentLog.costUsd.toFixed(3)} USD</span>
-                  <span className="text-slate-400 block text-[9px]">
+                  <span className="text-zinc-500 block uppercase text-[9px]">Compute Billing</span>
+                  <span className="text-cyan-300 font-bold">${currentLog.costUsd.toFixed(3)} USD</span>
+                  <span className="text-zinc-400 block text-[9px]">
                     {currentLog.totalDurationMs} ms ({currentLog.tflopsPeak} TF)
                   </span>
                 </div>
@@ -930,48 +1018,48 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
                 {currentLog.steps.map((step) => (
                   <div
                     key={step.id}
-                    className="p-3 rounded-xl bg-[#03060c] border border-slate-800/90 space-y-1.5"
+                    className="p-3 rounded-xl bg-[#040406] border border-neutral-800 space-y-1.5"
                   >
                     <div className="flex items-center justify-between gap-2 text-[10px]">
                       <div className="flex items-center gap-2">
-                        <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
+                        <span className="px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/35 font-bold">
                           STEP {step.stepNumber} · {step.phase}
                         </span>
-                        <span className="text-cyan-300">$ {step.command}</span>
+                        <span className="text-zinc-300">$ {step.command}</span>
                       </div>
-                      <span className="text-emerald-400">{step.residual}</span>
+                      <span className="text-cyan-300">{step.residual}</span>
                     </div>
 
-                    <div className="px-2.5 py-1.5 rounded bg-neutral-950 border border-slate-800/80 text-amber-200 text-[11px] overflow-x-auto">
+                    <div className="px-2.5 py-1.5 rounded bg-[#020203] border border-neutral-800 text-amber-200 text-[11px] overflow-x-auto">
                       {step.equation}
                     </div>
 
                     <div className="flex flex-wrap items-center justify-between gap-2 text-[10px]">
-                      <span className="text-slate-300">
-                        <strong className="text-purple-300">LOGIC:</strong> {step.logicDecision}
+                      <span className="text-zinc-300">
+                        <strong className="text-amber-300">LOGIC:</strong> {step.logicDecision}
                       </span>
-                      <span className="text-slate-400">{step.telemetry}</span>
+                      <span className="text-zinc-400">{step.telemetry}</span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            <div className="p-8 text-center font-mono text-slate-400">
+            <div className="p-8 text-center font-mono text-zinc-400">
               No Kerr Engine [v1.4] (Apex Metric Core) calculations recorded yet. Select any black hole or star to run the solver.
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 bg-neutral-950 border-t border-slate-800 flex items-center justify-between">
-          <span className="font-mono text-[11px] text-slate-400">
+        <div className="px-5 py-3 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between">
+          <span className="font-mono text-[11px] text-zinc-400">
             Kerr Engine [v1.4] · Apex Metric Core · Exact Boyer-Lindquist & BPT Tensor Verification
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-200 hover:bg-amber-500/30 font-mono text-xs font-semibold cursor-pointer"
+            className="px-4 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-zinc-100 font-mono text-xs font-semibold cursor-pointer transition-colors"
           >
             Close Log
           </button>
@@ -980,6 +1068,3 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
     </div>
   );
 };
-
-export const KerrEngineLogViewer = KerrEngineLogViewerModal;
-

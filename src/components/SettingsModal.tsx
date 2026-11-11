@@ -244,40 +244,40 @@ export interface UiThemeOption {
 
 export const UI_THEME_OPTIONS: UiThemeOption[] = [
   {
-    id: 'kerr_claude',
-    name: 'Kerr Engine Claude',
-    subtitle: 'Apex Terracotta & Parchment Ivory',
-    badge: 'KERR v1.4 · CLAUDE',
+    id: 'observatory_gold',
+    name: 'Schwarzschild Monolith',
+    subtitle: 'Pure Carbon Black & Academic Ivory',
+    badge: 'DEFAULT · MONOLITH',
     description:
-      'Signature Kerr Engine [v1.4] editorial terminal look pairing warm terracotta (#D97757) and parchment ivory (#F7F4EE) over deep espresso carbon surfaces.',
-    swatches: ['#120F0D', '#241C18', '#D97757', '#F7F4EE'],
+      'High-contrast academic publication & monochrome instrumentation aesthetic pairing pure carbon black (#050506) panels with chalk-ivory (#FAFAFA) typography and classical gold (#D4AF37) metric rules.',
+    swatches: ['#050506', '#121215', '#FAFAFA', '#D4AF37'],
     activeCardClass:
-      'bg-[#1D1613] border-[#D97757] text-[#F7F4EE] shadow-[0_0_20px_rgba(217,119,87,0.22)] ring-1 ring-[#D97757]/50',
-    badgeClass: 'bg-[#241C18] text-[#F4A688] border-[#D97757]/75',
+      'bg-[#0E0E11] border-zinc-300 text-zinc-100 shadow-[0_0_20px_rgba(244,244,245,0.14)] ring-1 ring-zinc-300/40',
+    badgeClass: 'bg-zinc-900 text-zinc-100 border-zinc-400/50',
   },
   {
-    id: 'observatory_gold',
-    name: 'Observatory Gold',
-    subtitle: 'Doppler Amber & Abyssal Navy',
-    badge: 'EHT TELEMETRY',
+    id: 'kerr_claude',
+    name: 'Kerr Metric Obsidian',
+    subtitle: 'Warm Obsidian & Terracotta Ivory',
+    badge: 'KERR v1.4 · OBSIDIAN',
     description:
-      'Professional Event Horizon Telescope mission-control interface with relativistic amber (#F59E0B) highlights and deep void navy (#050811) panels.',
-    swatches: ['#050811', '#0D1322', '#F59E0B', '#22D3EE'],
+      'Signature Kerr Engine [v1.4] academic research terminal pairing warm terracotta (#D97757) and parchment ivory (#F7F4EE) over deep obsidian-black surfaces.',
+    swatches: ['#0B0908', '#1C1613', '#D97757', '#F7F4EE'],
     activeCardClass:
-      'bg-amber-500/15 border-amber-400 text-amber-100 shadow-[0_0_20px_rgba(245,158,11,0.2)] ring-1 ring-amber-400/40',
-    badgeClass: 'bg-amber-500/20 text-amber-200 border-amber-400/50',
+      'bg-[#16110E] border-[#D97757] text-[#F7F4EE] shadow-[0_0_20px_rgba(217,119,87,0.2)] ring-1 ring-[#D97757]/50',
+    badgeClass: 'bg-[#1F1815] text-[#F4A688] border-[#D97757]/75',
   },
   {
     id: 'cryo_quantum',
-    name: 'Cryo-Optic Quantum',
-    subtitle: 'Laser Sky-Cyan & Titanium Slate',
-    badge: 'CERN / ESO LAB',
+    name: 'Planck Laboratory',
+    subtitle: 'Pure Obsidian Black & Phosphor Sage',
+    badge: 'TELEMETRY LAB',
     description:
-      'Precision cryogenic detector & optical interferometry aesthetic featuring crisp sky-cyan (#38BDF8), indigo plasma (#818CF8), and brushed titanium.',
-    swatches: ['#060B14', '#0F172A', '#38BDF8', '#818CF8'],
+      'Precision university laboratory & oscilloscope aesthetic featuring pure obsidian black (#040605) surfaces, calibrated phosphor-emerald (#34D399) readouts, and warm brass (#EAB308) instrumentation.',
+    swatches: ['#040605', '#0B120E', '#34D399', '#EAB308'],
     activeCardClass:
-      'bg-sky-500/15 border-sky-400 text-sky-100 shadow-[0_0_20px_rgba(56,189,248,0.22)] ring-1 ring-sky-400/40',
-    badgeClass: 'bg-sky-500/20 text-sky-200 border-sky-400/50',
+      'bg-[#09110D] border-emerald-400/80 text-emerald-50 shadow-[0_0_20px_rgba(52,211,153,0.18)] ring-1 ring-emerald-400/40',
+    badgeClass: 'bg-emerald-950/70 text-emerald-200 border-emerald-400/50',
   },
 ];
 
@@ -646,30 +646,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const activeTrackDef =
     SETTINGS_SONGS_LIST.find((tr) => tr.id === playerState.trackId) || SETTINGS_SONGS_LIST[0];
 
-  const activeUiThemeId: UiThemeId = settings.uiTheme || 'kerr_claude';
+  const activeUiThemeId: UiThemeId = settings.uiTheme || 'observatory_gold';
   const activeUiThemeOption =
     UI_THEME_OPTIONS.find((th) => th.id === activeUiThemeId) || UI_THEME_OPTIONS[0];
 
   const modalShellThemeClass =
     activeUiThemeId === 'kerr_claude'
-      ? 'bg-[#100d0b] border-[#3a2e28] shadow-[0_24px_60px_rgba(0,0,0,0.85),0_0_30px_rgba(217,119,87,0.12)]'
+      ? 'bg-[#0b0908] border-[#3a2e28] shadow-[0_24px_60px_rgba(0,0,0,0.9),0_0_30px_rgba(217,119,87,0.12)]'
       : activeUiThemeId === 'cryo_quantum'
-      ? 'bg-[#060b14] border-sky-500/35 shadow-[0_24px_60px_rgba(0,0,0,0.85),0_0_30px_rgba(56,189,248,0.12)]'
-      : 'bg-[#070a12] border-neutral-800 shadow-2xl';
+      ? 'bg-[#040605] border-emerald-500/35 shadow-[0_24px_60px_rgba(0,0,0,0.92),0_0_30px_rgba(16,185,129,0.1)]'
+      : 'bg-[#050506] border-zinc-700/70 shadow-[0_24px_60px_rgba(0,0,0,0.94)]';
 
   const modalHeaderThemeClass =
     activeUiThemeId === 'kerr_claude'
-      ? 'border-[#2e241f] bg-[#15110e]'
+      ? 'border-[#2e241f] bg-[#120e0c]'
       : activeUiThemeId === 'cryo_quantum'
-      ? 'border-sky-900/50 bg-[#080f1d]'
-      : 'border-neutral-800/90 bg-neutral-950';
+      ? 'border-emerald-900/50 bg-[#070b09]'
+      : 'border-zinc-800/90 bg-[#09090b]';
 
   const modalHeaderIconClass =
     activeUiThemeId === 'kerr_claude'
       ? 'bg-[#241C18] border-[#D97757]/60 text-[#F4A688]'
       : activeUiThemeId === 'cryo_quantum'
-      ? 'bg-sky-500/15 border-sky-400/50 text-sky-300'
-      : 'bg-amber-500/15 border-amber-500/40 text-amber-300';
+      ? 'bg-emerald-500/15 border-emerald-400/50 text-emerald-300'
+      : 'bg-zinc-800 border-zinc-500/50 text-zinc-100';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 pointer-events-auto">
@@ -734,8 +734,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 ? activeUiThemeId === 'kerr_claude'
                   ? 'bg-[#241C18] border-[#D97757] text-[#F7F4EE] shadow-[0_0_12px_rgba(217,119,87,0.28)]'
                   : activeUiThemeId === 'cryo_quantum'
-                  ? 'bg-sky-500/20 border-sky-400 text-sky-200 shadow-[0_0_12px_rgba(56,189,248,0.22)]'
-                  : 'bg-amber-500/20 border-amber-400 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                  ? 'bg-emerald-500/20 border-emerald-400 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.22)]'
+                  : 'bg-zinc-800 border-zinc-300 text-white shadow-[0_0_12px_rgba(244,244,245,0.15)]'
                 : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
             }`}
           >
@@ -744,8 +744,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 activeUiThemeId === 'kerr_claude'
                   ? 'text-[#E08263]'
                   : activeUiThemeId === 'cryo_quantum'
-                  ? 'text-sky-400'
-                  : 'text-amber-400'
+                  ? 'text-emerald-400'
+                  : 'text-zinc-200'
               }`}
             />
             <span>Settings</span>
@@ -822,15 +822,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Scrollable Modal Body */}
         {activeTab === 'settings' && (
           <div className="p-4 sm:p-5 overflow-y-auto space-y-4 sm:space-y-5 text-xs">
-          {/* Interface Theme & Color Palette Selector (3 Professional Themes including Kerr Engine Claude Look) */}
+          {/* Interface Theme & Color Palette Selector (3 Pure-Black Academic Research Themes) */}
           <div
             data-testid="settings-ui-theme-section"
             className={`rounded-xl p-4 space-y-3 border transition-colors ${
               activeUiThemeId === 'kerr_claude'
-                ? 'bg-gradient-to-br from-[#191310] via-[#120e0c] to-neutral-950 border-[#D97757]/50 shadow-[0_0_24px_rgba(217,119,87,0.1)]'
+                ? 'bg-gradient-to-br from-[#14100d] via-[#0c0a09] to-black border-[#D97757]/50 shadow-[0_0_24px_rgba(217,119,87,0.1)]'
                 : activeUiThemeId === 'cryo_quantum'
-                ? 'bg-gradient-to-br from-[#081326] via-neutral-950 to-neutral-950 border-sky-500/40 shadow-[0_0_24px_rgba(56,189,248,0.1)]'
-                : 'bg-neutral-950/90 border-amber-500/35'
+                ? 'bg-gradient-to-br from-[#07110d] via-[#040605] to-black border-emerald-500/40 shadow-[0_0_24px_rgba(16,185,129,0.1)]'
+                : 'bg-gradient-to-br from-[#0e0e11] via-[#050506] to-black border-zinc-500/40 shadow-[0_0_24px_rgba(244,244,245,0.08)]'
             }`}
           >
             <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -840,8 +840,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     activeUiThemeId === 'kerr_claude'
                       ? 'text-[#E08263]'
                       : activeUiThemeId === 'cryo_quantum'
-                      ? 'text-sky-400'
-                      : 'text-amber-400'
+                      ? 'text-emerald-400'
+                      : 'text-zinc-200'
                   }`}
                 />
                 <span>Interface Theme & Color Architecture</span>
@@ -854,7 +854,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
             <p className="text-[11px] text-neutral-400 leading-relaxed">
-              Select a workspace color architecture. Includes the signature <strong className="text-[#F4A688]">Kerr Engine Claude</strong> terracotta &amp; parchment look alongside two precision observatory themes.
+              Select an academic research color architecture. Includes the signature <strong className="text-[#F4A688]">Kerr Metric Obsidian</strong> terracotta &amp; parchment terminal alongside <strong className="text-zinc-200">Schwarzschild Monolith</strong> and <strong className="text-emerald-300">Planck Laboratory</strong> pure-black instrumentation themes.
             </p>
 
             <div
@@ -3182,10 +3182,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           const bannerThemeClass =
             activeUiThemeId === 'kerr_claude'
-              ? 'bg-gradient-to-br from-[#191310] via-[#120e0c] to-neutral-950 border-[#D97757]/50'
+              ? 'bg-gradient-to-br from-[#15100d] via-[#0c0a09] to-black border-[#D97757]/50'
               : activeUiThemeId === 'cryo_quantum'
-              ? 'bg-gradient-to-br from-[#071526] via-[#09111e] to-neutral-950 border-sky-500/45'
-              : 'bg-gradient-to-br from-emerald-950/35 via-neutral-950 to-neutral-950 border-emerald-500/40';
+              ? 'bg-gradient-to-br from-[#07120d] via-[#040605] to-black border-emerald-500/45'
+              : 'bg-gradient-to-br from-[#111114] via-[#050506] to-black border-zinc-500/40';
 
           return (
             <div

@@ -165,7 +165,6 @@ export default function App() {
 
   const handleFirstCanvasInteraction = useCallback(() => {
     if (sceneControllerRef.current?.isBootIntroRunning()) {
-      sceneControllerRef.current.skipBootIntro(true);
       handleFinishBootIntro();
     }
     if (!showInteractionHint || isInteractionHintFading) return;
@@ -326,6 +325,134 @@ export default function App() {
 
   const metrics = useMemo(() => computeRelativisticMetrics(params), [params]);
 
+  // Low-Latency Proximity Warning System (Photon Sphere Radius & Ergosphere Static Limit)
+  const [proximityZone, setProximityZone] = useState<'none' | 'ergosphere' | 'photon_sphere'>('none');
+  const [proximityBurst, setProximityBurst] = useState<boolean>(false);
+  const proximityZoneRef = useRef<'none' | 'ergosphere' | 'photon_sphere'>('none');
+  const lastProximityHapticMsRef = useRef<number>(0);
+  const proximityReadoutDomRef = useRef<HTMLSpanElement | null>(null);
+  const proximityBurstTimerRef = useRef<number | null>(null);
+
+  const evaluateProximityThresholds = useCallback(
+    (
+      rRs: number,
+      thetaDeg: number,
+      spinVal: number,
+      photonSphereRgVal: number,
+      category: BlackHoleParams['objectCategory'],
+      suppressDuringBoot: boolean
+    ) => {
+      if (isStellarCategory(category) || suppressDuringBoot) {
+        if (proximityZoneRef.current !== 'none') {
+          proximityZoneRef.current = 'none';
+          setProximityZone('none');
+        }
+        return;
+      }
+
+      const thetaRad = (thetaDeg * Math.PI) / 180;
+      const sinThetaSq = Math.sin(thetaRad) * Math.sin(thetaRad);
+      // Photon sphere capture envelope in Rs (1.50 Rs Schwarzschild limit + prograde Kerr shell)
+      const photonSphereThresholdRs = Math.max(1.52, photonSphereRgVal * 0.5);
+      // Ergosphere static limit & Lense-Thirring frame-dragging envelope in Rs
+      const ergosphereThresholdRs = Math.max(
+        photonSphereThresholdRs + 0.55,
+        1.85 + 0.65 * Math.abs(spinVal) * sinThetaSq
+      );
+
+      let nextZone: 'none' | 'ergosphere' | 'photon_sphere' = 'none';
+      if (rRs <= photonSphereThresholdRs) {
+        nextZone = 'photon_sphere';
+      } else if (rRs <= ergosphereThresholdRs) {
+        nextZone = 'ergosphere';
+      }
+
+      // Zero-latency direct DOM telemetry readout update
+      const domEl = proximityReadoutDomRef.current;
+      if (domEl && nextZone !== 'none') {
+        const progradePhRs = photonSphereRgVal * 0.5;
+        const staticLimitRs =
+          0.5 *
+          (1.0 + Math.sqrt(Math.max(0, 1.0 - spinVal * spinVal * Math.cos(thetaRad) * Math.cos(thetaRad))));
+        domEl.textContent =
+          nextZone === 'photon_sphere'
+            ? `r = ${rRs.toFixed(2)} Rₛ · r_ph(pro) = ${progradePhRs.toFixed(2)} Rₛ · θ = ${thetaDeg.toFixed(0)}°`
+            : `r = ${rRs.toFixed(2)} Rₛ · r_ergo(θ) = ${staticLimitRs.toFixed(2)} Rₛ · θ = ${thetaDeg.toFixed(0)}°`;
+      }
+
+      if (nextZone !== proximityZoneRef.current) {
+        const prevZone = proximityZoneRef.current;
+        proximityZoneRef.current = nextZone;
+        setProximityZone(nextZone);
+
+        if (nextZone !== 'none') {
+          setProximityBurst(true);
+          if (proximityBurstTimerRef.current !== null) {
+            window.clearTimeout(proximityBurstTimerRef.current);
+          }
+          proximityBurstTimerRef.current = window.setTimeout(() => {
+            setProximityBurst(false);
+            proximityBurstTimerRef.current = null;
+          }, 440);
+
+          const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          if (nowMs - lastProximityHapticMsRef.current >= 550) {
+            lastProximityHapticMsRef.current = nowMs;
+            if (nextZone === 'photon_sphere') {
+              haptics.pulseBoom();
+            } else if (prevZone === 'none') {
+              haptics.medium();
+            }
+          }
+        }
+      }
+    },
+    [haptics]
+  );
+
+  const proximityEvalRef = useRef<{
+    spin: number;
+    photonSphereRg: number;
+    objectCategory: BlackHoleParams['objectCategory'];
+    suppressDuringBoot: boolean;
+    evaluate: typeof evaluateProximityThresholds;
+  }>({
+    spin: params.spin,
+    photonSphereRg: metrics.photonSphereRg,
+    objectCategory: params.objectCategory,
+    suppressDuringBoot: true,
+    evaluate: evaluateProximityThresholds,
+  });
+
+  useEffect(() => {
+    const suppressDuringBoot =
+      (showBootOverlay && !isBootOverlayFading) ||
+      (!isStellarCategory(params.objectCategory) && isSingularityCollapsed);
+    proximityEvalRef.current = {
+      spin: params.spin,
+      photonSphereRg: metrics.photonSphereRg,
+      objectCategory: params.objectCategory,
+      suppressDuringBoot,
+      evaluate: evaluateProximityThresholds,
+    };
+    evaluateProximityThresholds(
+      cameraCoordsRef.current.r,
+      cameraCoordsRef.current.theta,
+      params.spin,
+      metrics.photonSphereRg,
+      params.objectCategory,
+      suppressDuringBoot
+    );
+  }, [
+    params.spin,
+    params.objectCategory,
+    metrics.photonSphereRg,
+    showBootOverlay,
+    isBootOverlayFading,
+    isSingularityCollapsed,
+    evaluateProximityThresholds,
+  ]);
+
   const activePreset = useMemo(
     () => ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0],
     [activePresetId]
@@ -460,6 +587,16 @@ export default function App() {
       },
       onObserverReadoutChange: ({ rRs, thetaDeg, phiDeg }, forceImmediate) => {
         cameraCoordsRef.current = { r: rRs, theta: thetaDeg, phi: phiDeg };
+        // Low-latency proximity evaluation on every camera move
+        const pCtx = proximityEvalRef.current;
+        pCtx.evaluate(
+          rRs,
+          thetaDeg,
+          pCtx.spin,
+          pCtx.photonSphereRg,
+          pCtx.objectCategory,
+          pCtx.suppressDuringBoot
+        );
         const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
         if (forceImmediate || now - lastObserverDomUpdateRef.current >= 200) {
           lastObserverDomUpdateRef.current = now;
@@ -1497,7 +1634,7 @@ export default function App() {
   }, [stopRecordingCleanup]);
 
   useEffect(() => {
-    const activeUiTheme = settings.uiTheme || 'kerr_claude';
+    const activeUiTheme = settings.uiTheme || 'observatory_gold';
     document.documentElement.setAttribute('data-ui-theme', activeUiTheme);
   }, [settings.uiTheme]);
 
@@ -1510,7 +1647,7 @@ export default function App() {
   return (
     <div
       ref={appContainerRef}
-      data-ui-theme={settings.uiTheme || 'kerr_claude'}
+      data-ui-theme={settings.uiTheme || 'observatory_gold'}
       className="relative w-screen h-screen overflow-hidden bg-black select-none flex flex-col"
     >
       {/* Zone 1-3 Top Navigation Bar (Flows smoothly in with the post-singularity camera pan-in) */}
@@ -1568,7 +1705,7 @@ export default function App() {
             isPhoneMode={isPhone}
             hapticsEnabled={settings.hapticsEnabled !== false}
             language={settings.language || 'en'}
-            uiTheme={settings.uiTheme || 'kerr_claude'}
+            uiTheme={settings.uiTheme || 'observatory_gold'}
             onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
           />
         </div>
@@ -1586,7 +1723,13 @@ export default function App() {
             data-testid="viewport-primary"
             className={`relative h-full ${
               isCompareMode
-                ? 'w-full md:w-1/2 border-b md:border-b-0 md:border-r border-amber-500/30'
+                ? `w-full md:w-1/2 border-b md:border-b-0 md:border-r ${
+                    settings.uiTheme === 'observatory_gold'
+                      ? 'border-zinc-500/40'
+                      : settings.uiTheme === 'cryo_quantum'
+                      ? 'border-emerald-500/35'
+                      : 'border-[#D97757]/40'
+                  }`
                 : 'w-full'
             }`}
           >
@@ -1597,7 +1740,15 @@ export default function App() {
               className="absolute inset-0 w-full h-full cursor-crosshair touch-none select-none overscroll-none"
             />
             {isCompareMode && !isCleanMode && (
-              <div className="absolute bottom-44 sm:bottom-48 left-3 z-10 pointer-events-none px-2.5 py-1 rounded-lg bg-black/80 border border-amber-500/40 font-mono text-[10px] text-amber-200">
+              <div
+                className={`absolute bottom-44 sm:bottom-48 left-3 z-10 pointer-events-none px-2.5 py-1 rounded-lg bg-[#050506]/90 border font-mono text-[10px] ${
+                  settings.uiTheme === 'observatory_gold'
+                    ? 'border-zinc-400/45 text-zinc-100'
+                    : settings.uiTheme === 'cryo_quantum'
+                    ? 'border-emerald-500/45 text-emerald-200'
+                    : 'border-[#D97757]/50 text-[#F4A688]'
+                }`}
+              >
                 <strong>A: {activePreset.name}</strong> · Spin a* = {params.spin.toFixed(3)} · ISCO ={' '}
                 {(metrics.iscoProgradeRg * 0.5).toFixed(2)} Rₛ
               </div>
@@ -1617,7 +1768,15 @@ export default function App() {
                 className="absolute inset-0 w-full h-full cursor-crosshair touch-none select-none overscroll-none"
               />
               {!isCleanMode && (
-                <div className="absolute bottom-44 sm:bottom-48 right-3 z-10 pointer-events-none px-2.5 py-1 rounded-lg bg-black/80 border border-cyan-500/40 font-mono text-[10px] text-cyan-200">
+                <div
+                  className={`absolute bottom-44 sm:bottom-48 right-3 z-10 pointer-events-none px-2.5 py-1 rounded-lg bg-[#050506]/90 border font-mono text-[10px] ${
+                    settings.uiTheme === 'observatory_gold'
+                      ? 'border-[#D4AF37]/50 text-[#FDE68A]'
+                      : settings.uiTheme === 'cryo_quantum'
+                      ? 'border-amber-500/45 text-amber-200'
+                      : 'border-[#E6D5B8]/45 text-[#F7F4EE]'
+                  }`}
+                >
                   <strong>B: {comparePreset.name}</strong> · Spin a* ={' '}
                   {compareParams.spin.toFixed(3)} · ISCO ={' '}
                   {(compareMetrics.iscoProgradeRg * 0.5).toFixed(2)} Rₛ
@@ -1626,6 +1785,82 @@ export default function App() {
             </div>
           )}
         </div>
+
+        {/* Low-Latency Proximity Warning System (Triggers Subtle Edge Vignette Pulse & Telemetry Alert inside Ergosphere or Photon Sphere) */}
+        {!isUiHiddenForBootOrSeed && proximityZone !== 'none' && (
+          <>
+            {/* Subtle Screen-Edge Radial Vignette Pulse */}
+            <div
+              data-testid="proximity-warning-vignette"
+              className="pointer-events-none absolute inset-0 z-10 proximity-vignette-active transition-opacity duration-300"
+              style={{
+                background:
+                  settings.uiTheme === 'cryo_quantum'
+                    ? proximityZone === 'photon_sphere'
+                      ? 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 56%, rgba(16, 185, 129, 0.16) 85%, rgba(52, 211, 153, 0.32) 100%)'
+                      : 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 62%, rgba(16, 185, 129, 0.1) 88%, rgba(52, 211, 153, 0.22) 100%)'
+                    : settings.uiTheme === 'kerr_claude'
+                    ? proximityZone === 'photon_sphere'
+                      ? 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 56%, rgba(217, 119, 87, 0.16) 85%, rgba(217, 119, 87, 0.34) 100%)'
+                      : 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 62%, rgba(217, 119, 87, 0.1) 88%, rgba(217, 119, 87, 0.24) 100%)'
+                    : proximityZone === 'photon_sphere'
+                    ? 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 56%, rgba(212, 175, 55, 0.16) 85%, rgba(244, 244, 245, 0.28) 100%)'
+                    : 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 62%, rgba(212, 175, 55, 0.1) 88%, rgba(244, 244, 245, 0.2) 100%)',
+              }}
+            />
+
+            {/* Academic Telemetry Proximity Alert Pill */}
+            <div
+              data-testid="proximity-warning-alert"
+              role="status"
+              aria-live="polite"
+              className={`pointer-events-none absolute ${
+                isCompareMode
+                  ? 'bottom-44 sm:bottom-48'
+                  : params.timeScale === 0
+                  ? 'top-14'
+                  : 'top-3'
+              } left-1/2 -translate-x-1/2 z-25 flex flex-col items-center gap-0.5 px-3.5 py-1.5 rounded-xl border backdrop-blur-md shadow-[0_10px_30px_rgba(0,0,0,0.94)] font-mono transition-all ${
+                proximityBurst ? 'proximity-banner-burst' : ''
+              } ${
+                settings.uiTheme === 'cryo_quantum'
+                  ? 'bg-[#030504]/96 border-emerald-400/65 text-emerald-50 shadow-[0_0_20px_rgba(16,185,129,0.2)]'
+                  : settings.uiTheme === 'kerr_claude'
+                  ? 'bg-[#080605]/96 border-[#D97757]/65 text-[#F7F4EE] shadow-[0_0_20px_rgba(217,119,87,0.22)]'
+                  : 'bg-[#050506]/96 border-[#D4AF37]/65 text-zinc-100 shadow-[0_0_20px_rgba(212,175,55,0.2)]'
+              }`}
+            >
+              <div className="flex items-center gap-2 text-[10px] sm:text-[10.5px] font-bold tracking-wider uppercase whitespace-nowrap">
+                <span
+                  className={`w-2 h-2 rounded-full animate-ping shrink-0 ${
+                    settings.uiTheme === 'cryo_quantum'
+                      ? 'bg-emerald-400'
+                      : settings.uiTheme === 'kerr_claude'
+                      ? 'bg-[#D97757]'
+                      : 'bg-[#D4AF37]'
+                  }`}
+                />
+                <span>
+                  {proximityZone === 'photon_sphere'
+                    ? 'PHOTON SPHERE CAPTURE ZONE · r ≤ r_ph'
+                    : 'ERGOSPHERE BOUNDARY · g_tt ≥ 0'}
+                </span>
+                <span className="hidden sm:inline text-[9px] font-normal opacity-80">
+                  {proximityZone === 'photon_sphere'
+                    ? '[Unstable Null Geodesic Orbit]'
+                    : '[Lense–Thirring Frame Dragging]'}
+                </span>
+              </div>
+              <span
+                ref={proximityReadoutDomRef}
+                className="text-[9px] text-neutral-300 tabular-nums tracking-wide"
+              >
+                r = {cameraCoordsRef.current.r.toFixed(2)} Rₛ · θ ={' '}
+                {cameraCoordsRef.current.theta.toFixed(0)}°
+              </span>
+            </div>
+          </>
+        )}
 
         {/* Side-by-Side Compare Mode Control Header & Spin Contrast HUD */}
         {!isCleanMode && isCompareMode && (
@@ -1666,6 +1901,7 @@ export default function App() {
             }}
             onCloseCompare={() => setIsCompareMode(false)}
             isPhoneMode={isPhone}
+            uiTheme={settings.uiTheme || 'observatory_gold'}
           />
         )}
 
@@ -1891,7 +2127,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Sleek Non-Blocking Telemetry Boot Overlay (Centered during 2.5s Camera Fly-In from max distance) */}
+        {/* Ultra-Dark Telemetry Boot Terminal Overlay (Centered during 2.5s Camera Fly-In from max distance) */}
         {showBootOverlay && (
           <div
             data-testid="cinematic-boot-overlay"
@@ -1902,23 +2138,65 @@ export default function App() {
           >
             <div
               onClick={handleSkipBootIntro}
-              className="pointer-events-auto cursor-pointer px-5 py-3.5 rounded-2xl bg-[#050811]/75 border border-amber-500/35 backdrop-blur-md shadow-[0_12px_40px_rgba(0,0,0,0.85),0_0_24px_rgba(217,119,87,0.16)] font-mono text-[11px] sm:text-xs text-left space-y-1.5 max-w-md"
+              className={`pointer-events-auto cursor-pointer px-5 py-4 rounded-xl bg-[#020203]/92 border backdrop-blur-md shadow-[0_24px_70px_rgba(0,0,0,0.98)] font-mono text-[11px] sm:text-xs text-left space-y-1.5 max-w-md ${
+                settings.uiTheme === 'cryo_quantum'
+                  ? 'border-emerald-500/25'
+                  : settings.uiTheme === 'kerr_claude'
+                  ? 'border-[#D97757]/25'
+                  : 'border-zinc-800/90'
+              }`}
             >
-              <div className="flex items-center gap-2 text-amber-200 font-semibold tracking-wider">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+              <div className="flex items-center justify-between gap-3 pb-1.5 mb-1 border-b border-zinc-900">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-zinc-800 border border-zinc-700" />
+                  <span className="w-2 h-2 rounded-full bg-zinc-800 border border-zinc-700" />
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      settings.uiTheme === 'cryo_quantum'
+                        ? 'bg-emerald-400/80'
+                        : settings.uiTheme === 'kerr_claude'
+                        ? 'bg-[#D97757]/80'
+                        : 'bg-[#D4AF37]/80'
+                    }`}
+                  />
+                  <span className="ml-1 text-[10px] text-zinc-500 uppercase tracking-widest">
+                    kerr-engine // boot-manifold
+                  </span>
+                </div>
+                <span className="text-[9.5px] text-zinc-500">v1.4</span>
+              </div>
+
+              <div className="flex items-center gap-2 text-zinc-200 font-semibold tracking-wider">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full animate-pulse shrink-0 ${
+                    settings.uiTheme === 'cryo_quantum'
+                      ? 'bg-emerald-400'
+                      : settings.uiTheme === 'kerr_claude'
+                      ? 'bg-[#D97757]'
+                      : 'bg-[#D4AF37]'
+                  }`}
+                />
                 <span>
                   INITIALIZING KERR-NEWMAN METRIC CORE [a* = {params.spin.toFixed(3)}]...
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-cyan-300/95 tracking-wider pl-3.5">
-                <span>SOLVING NULL GEODESICS...</span>
+              <div className="flex items-center gap-2 text-zinc-400 tracking-wider pl-3.5">
+                <span>SOLVING NULL GEODESICS &amp; BPT ROOTS...</span>
               </div>
-              <div className="flex items-center gap-2 text-emerald-300 font-bold tracking-wider pl-3.5">
+              <div
+                className={`flex items-center gap-2 font-semibold tracking-wider pl-3.5 ${
+                  settings.uiTheme === 'cryo_quantum'
+                    ? 'text-emerald-300/90'
+                    : settings.uiTheme === 'kerr_claude'
+                    ? 'text-[#F4A688]'
+                    : 'text-[#D4AF37]'
+                }`}
+              >
                 <span>OBSERVER LOCK ESTABLISHED</span>
               </div>
-              <div className="pt-1.5 mt-1 border-t border-slate-800/80 flex items-center justify-between gap-4 text-[10px] text-slate-400">
+              <div className="pt-2 mt-1.5 border-t border-zinc-900 flex items-center justify-between gap-4 text-[10px] text-zinc-500">
                 <span>r₀ = 260.0 → SINGULARITY SEED AUTO-EXPANSION</span>
-                <span className="text-amber-300/90 hover:text-amber-200 underline underline-offset-2">
+                <span className="text-zinc-300 hover:text-white underline underline-offset-2">
                   Press Space or Click to Skip
                 </span>
               </div>
@@ -2155,6 +2433,7 @@ export default function App() {
           setIsSettingsModalOpen(true);
           setIsKerrLogModalOpen(true);
         }}
+        uiTheme={settings.uiTheme || 'observatory_gold'}
       />
 
       {/* Full-Screen Kerr Relativity Engine Calculation & Billing Log Modal */}
@@ -2177,7 +2456,7 @@ export default function App() {
       <ChangelogModal
         isOpen={isChangelogModalOpen}
         onClose={() => setIsChangelogModalOpen(false)}
-        uiTheme={settings.uiTheme || 'kerr_claude'}
+        uiTheme={settings.uiTheme || 'observatory_gold'}
       />
     </div>
   );
