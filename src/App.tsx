@@ -133,9 +133,16 @@ export default function App() {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
 
-  // Cinematic 2.5s Boot-In Telemetry Overlay state
+  const [isCinematicTourActive, setIsCinematicTourActive] = useState<boolean>(false);
+  const [cinematicTourStageLabel, setCinematicTourStageLabel] = useState<string>('Polar Axis');
+
+  // Cinematic 6.0s Non-Skippable Boot-In Telemetry Overlay + Post-Boot Sequence (+1.5s Watermark -> +1.0s Seed -> +2.0s Expand)
   const [showBootOverlay, setShowBootOverlay] = useState<boolean>(true);
   const [isBootOverlayFading, setIsBootOverlayFading] = useState<boolean>(false);
+  const [showWatermarkOverlay, setShowWatermarkOverlay] = useState<boolean>(false);
+  const [isWatermarkOverlayFading, setIsWatermarkOverlayFading] = useState<boolean>(false);
+  const [isPostBootSequenceActive, setIsPostBootSequenceActive] = useState<boolean>(true);
+  const watermarkFadeTimerRef = useRef<number | null>(null);
 
   const handleFinishBootIntro = useCallback(() => {
     setIsBootOverlayFading((alreadyFading) => {
@@ -147,10 +154,36 @@ export default function App() {
     });
   }, []);
 
-  const handleSkipBootIntro = useCallback(() => {
-    sceneControllerRef.current?.skipBootIntro(true);
-    handleFinishBootIntro();
-  }, [handleFinishBootIntro]);
+  const handleStartWatermarkDisplay = useCallback(() => {
+    setShowWatermarkOverlay(true);
+    setIsWatermarkOverlayFading(false);
+  }, []);
+
+  const handleSingularitySeedLoaded = useCallback(() => {
+    const isFastBoot =
+      typeof window !== 'undefined' &&
+      typeof window.location?.search === 'string' &&
+      window.location.search.includes('fastboot=1');
+    const fadeDelayAfterSeedMs = isFastBoot ? 60 : 1250;
+    if (watermarkFadeTimerRef.current !== null) {
+      window.clearTimeout(watermarkFadeTimerRef.current);
+    }
+    watermarkFadeTimerRef.current = window.setTimeout(() => {
+      setIsWatermarkOverlayFading(true);
+    }, fadeDelayAfterSeedMs);
+  }, []);
+
+  const handleFinishWatermarkPause = useCallback(() => {
+    if (watermarkFadeTimerRef.current !== null) {
+      window.clearTimeout(watermarkFadeTimerRef.current);
+      watermarkFadeTimerRef.current = null;
+    }
+    setIsPostBootSequenceActive(false);
+    setIsWatermarkOverlayFading(true);
+    window.setTimeout(() => {
+      setShowWatermarkOverlay(false);
+    }, 650);
+  }, []);
 
   // First-time visitor floating interaction hint state (persisted via localStorage "kerr_has_interacted")
   const [showInteractionHint, setShowInteractionHint] = useState<boolean>(() => {
@@ -164,8 +197,11 @@ export default function App() {
   const [isInteractionHintFading, setIsInteractionHintFading] = useState<boolean>(false);
 
   const handleFirstCanvasInteraction = useCallback(() => {
-    if (sceneControllerRef.current?.isBootIntroRunning()) {
-      handleFinishBootIntro();
+    if (
+      sceneControllerRef.current?.isBootIntroRunning() ||
+      sceneControllerRef.current?.isWatermarkPauseRunning()
+    ) {
+      return;
     }
     if (!showInteractionHint || isInteractionHintFading) return;
     setIsInteractionHintFading(true);
@@ -177,7 +213,7 @@ export default function App() {
     window.setTimeout(() => {
       setShowInteractionHint(false);
     }, 450);
-  }, [showInteractionHint, isInteractionHintFading, handleFinishBootIntro]);
+  }, [showInteractionHint, isInteractionHintFading]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingRafRef = useRef<number | null>(null);
@@ -627,6 +663,22 @@ export default function App() {
       onBootIntroComplete: () => {
         handleFinishBootIntro();
       },
+      onWatermarkDisplayStart: () => {
+        handleStartWatermarkDisplay();
+      },
+      onSingularitySeedLoaded: () => {
+        handleSingularitySeedLoaded();
+      },
+      onWatermarkPauseComplete: () => {
+        handleFinishWatermarkPause();
+      },
+      onCinematicTourChange: (active, stageId, stageLabel) => {
+        setIsCinematicTourActive(active);
+        setCinematicTourStageLabel(stageLabel);
+        if (active) {
+          setActiveCamera(stageId);
+        }
+      },
       enableBootIntro: true,
     });
     sceneControllerRef.current = controller;
@@ -638,7 +690,12 @@ export default function App() {
       setControllerInstance(null);
       relativisticAudio.dispose();
     };
-  }, [handleFinishBootIntro]);
+  }, [
+    handleFinishBootIntro,
+    handleStartWatermarkDisplay,
+    handleSingularitySeedLoaded,
+    handleFinishWatermarkPause,
+  ]);
 
   // Initialize & synchronize secondary Three.js WebGL scene when Side-by-Side Compare Mode is active
   useEffect(() => {
@@ -899,9 +956,11 @@ export default function App() {
         handleSetCleanMode(false);
       } else if (e.code === 'Space') {
         e.preventDefault();
-        if (sceneControllerRef.current?.isBootIntroRunning()) {
-          haptics.light();
-          handleSkipBootIntro();
+        // Initial 6s boot and 4s watermark pause are strictly non-skippable
+        if (
+          sceneControllerRef.current?.isBootIntroRunning() ||
+          sceneControllerRef.current?.isWatermarkPauseRunning()
+        ) {
           return;
         }
         if (isSingularityCollapsed) {
@@ -921,7 +980,6 @@ export default function App() {
   }, [
     handleToggleCleanMode,
     handleSetCleanMode,
-    handleSkipBootIntro,
     isSingularityCollapsed,
     params.timeScale,
     haptics,
@@ -1130,10 +1188,29 @@ export default function App() {
   }, [activePresetId, appendLogEvent]);
 
   const handleSelectCamera = useCallback((preset: CameraPresetId) => {
+    setIsCinematicTourActive(false);
     setActiveCamera(preset);
     sceneControllerRef.current?.setCameraPreset(preset);
     compareSceneControllerRef.current?.setCameraPreset(preset);
   }, []);
+
+  const handleToggleCinematicTour = useCallback(() => {
+    const ctrl = sceneControllerRef.current;
+    if (!ctrl) return;
+    haptics.medium();
+    if (params.timeScale === 0) {
+      setParams((p) => ({ ...p, timeScale: 1.0 }));
+    }
+    const nextActive = ctrl.toggleCinematicTour();
+    setIsCinematicTourActive(nextActive);
+    appendLogEvent(
+      'orbital',
+      nextActive ? 'Cinematic Tour engaged' : 'Cinematic Tour disengaged',
+      nextActive
+        ? 'Automated geodesic camera pan: Polar Axis → Equatorial Plane → 45° Horizon Plunge'
+        : 'Manual observer orbit control restored'
+    );
+  }, [appendLogEvent, haptics, params.timeScale]);
 
   const handleChangeSystemCategory = useCallback((nextCategory: SystemCategory) => {
     setParams((prev) => ({
@@ -1640,7 +1717,10 @@ export default function App() {
 
   const isStar = isStellarCategory(params.objectCategory);
   const isBootOrSeedStage =
-    (showBootOverlay && !isBootOverlayFading) || (!isStar && isSingularityCollapsed);
+    (showBootOverlay && !isBootOverlayFading) ||
+    isPostBootSequenceActive ||
+    showWatermarkOverlay ||
+    (!isStar && isSingularityCollapsed);
   const isUiHiddenForBootOrSeed = isCleanMode || isBootOrSeedStage;
   const t = TRANSLATIONS[settings.language || 'en'] || TRANSLATIONS.en;
 
@@ -1936,7 +2016,7 @@ export default function App() {
         {!isCleanMode && !isCompareMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation || Boolean(settings.showEventLog)) && (
           <div
             className={`hud-panel absolute top-2 sm:top-2.5 left-2 sm:left-3.5 z-10 flex flex-col items-start gap-1.5 sm:gap-2 pointer-events-none transition-all duration-[1850ms] delay-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-              isPhone ? 'w-[210px]' : 'w-60'
+              isPhone ? 'w-[210px]' : 'w-[268px]'
             } ${
               isBootOrSeedStage
                 ? 'opacity-0 -translate-x-8'
@@ -2008,15 +2088,15 @@ export default function App() {
 
                 {/* Quick Link to Real Scale Explorer if TON 618 is selected */}
                 {activePreset.id === 'ton618' && (
-                  <div className="mt-1 pt-1 border-t border-slate-800/60 flex items-center justify-between gap-1">
-                    <span className="text-[9.5px] text-amber-400 font-mono truncate">True: 66B M☉ (2,600 AU)</span>
+                  <div className="mt-1 pt-1 border-t border-slate-800/60 flex items-center justify-between gap-1.5">
+                    <span className="text-[9px] text-amber-400 font-mono whitespace-nowrap">True: 66B M☉ · 2,600 AU</span>
                     <button
                       type="button"
                       onClick={() => setIsCosmicScaleModalOpen(true)}
-                      className="text-[9.5px] font-bold text-amber-300 hover:text-amber-200 flex items-center gap-0.5 cursor-pointer shrink-0"
+                      className="text-[9px] font-bold text-amber-300 hover:text-amber-200 flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
                     >
-                      <Maximize2 className="w-2.5 h-2.5" />
-                      {t.compareRealSize}
+                      <Maximize2 className="w-2.5 h-2.5 shrink-0" />
+                      <span>{t.compareRealSize}</span>
                     </button>
                   </div>
                 )}
@@ -2127,18 +2207,16 @@ export default function App() {
           </div>
         )}
 
-        {/* Ultra-Dark Telemetry Boot Terminal Overlay (Centered during 2.5s Camera Fly-In from max distance) */}
+        {/* Ultra-Dark Telemetry Boot Terminal Overlay (Centered during 6.0s Non-Skippable Camera Fly-In from max distance) */}
         {showBootOverlay && (
           <div
             data-testid="cinematic-boot-overlay"
-            onClick={handleSkipBootIntro}
             className={`absolute inset-0 z-30 flex flex-col items-center justify-center pointer-events-none select-none transition-opacity duration-500 ${
               isBootOverlayFading ? 'opacity-0' : 'opacity-100'
             }`}
           >
             <div
-              onClick={handleSkipBootIntro}
-              className={`pointer-events-auto cursor-pointer px-5 py-4 rounded-xl bg-[#020203]/92 border backdrop-blur-md shadow-[0_24px_70px_rgba(0,0,0,0.98)] font-mono text-[11px] sm:text-xs text-left space-y-1.5 max-w-md ${
+              className={`pointer-events-none px-5 py-4 rounded-xl bg-[#020203]/92 border backdrop-blur-md shadow-[0_24px_70px_rgba(0,0,0,0.98)] font-mono text-[11px] sm:text-xs text-left space-y-1.5 max-w-md ${
                 settings.uiTheme === 'cryo_quantum'
                   ? 'border-emerald-500/25'
                   : settings.uiTheme === 'kerr_claude'
@@ -2195,24 +2273,92 @@ export default function App() {
                 <span>OBSERVER LOCK ESTABLISHED</span>
               </div>
               <div className="pt-2 mt-1.5 border-t border-zinc-900 flex items-center justify-between gap-4 text-[10px] text-zinc-500">
-                <span>r₀ = 260.0 → SINGULARITY SEED AUTO-EXPANSION</span>
-                <span className="text-zinc-300 hover:text-white underline underline-offset-2">
-                  Press Space or Click to Skip
+                <span>r₀ = 260.0 → SINGULARITY SEED STAGING</span>
+                <span className="text-zinc-400 uppercase tracking-wider">
+                  6.0s Telemetry Lock
                 </span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Lightweight Non-Blocking First-Time Visitor Interaction Cue */}
+        {/* Post-Boot Kerr Relativity Engine Watermark Overlay (Displayed 1.5s after boot, positioned cleanly above the Singularity Seed) */}
+        {showWatermarkOverlay && (
+          <div
+            data-testid="boot-watermark-overlay"
+            className={`absolute inset-0 z-30 flex flex-col items-center justify-center pointer-events-none select-none transition-opacity duration-700 ease-out ${
+              isWatermarkOverlayFading ? 'opacity-0' : 'opacity-100'
+            }`}
+          >
+            <div className="flex items-center gap-4 px-6 py-4 -translate-y-20 sm:-translate-y-24 drop-shadow-[0_6px_28px_rgba(0,0,0,0.95)]">
+              {/* 12-Ray Starburst Singularity Emblem */}
+              <svg
+                width="44"
+                height="44"
+                viewBox="-24 -24 48 48"
+                className="shrink-0 overflow-visible"
+                aria-hidden="true"
+              >
+                {[0, 1, 2, 3, 4, 5].map((i) => {
+                  const angle = (i * Math.PI) / 6;
+                  const rRay = i % 2 === 0 ? 18 : 14.5;
+                  const x1 = Math.cos(angle) * -rRay;
+                  const y1 = Math.sin(angle) * -rRay;
+                  const x2 = Math.cos(angle) * rRay;
+                  const y2 = Math.sin(angle) * rRay;
+                  return (
+                    <line
+                      key={i}
+                      x1={x1}
+                      y1={y1}
+                      x2={x2}
+                      y2={y2}
+                      stroke="rgba(232, 139, 107, 0.94)"
+                      strokeWidth={i % 3 === 0 ? '2.4' : '1.6'}
+                      strokeLinecap="round"
+                    />
+                  );
+                })}
+                <circle
+                  cx="0"
+                  cy="0"
+                  r="4.6"
+                  fill="#090A0F"
+                  stroke="rgba(246, 184, 158, 0.96)"
+                  strokeWidth="2.1"
+                />
+              </svg>
+
+              {/* Delicate Vertical Architectural Hairline Divider */}
+              <div className="h-10 w-px bg-gradient-to-b from-transparent via-[#E88B6B]/60 to-transparent" />
+
+              {/* Kerr Relativity Engine v1.4 Signature Typography */}
+              <div className="flex flex-col text-left">
+                <div className="flex items-baseline gap-2.5">
+                  <span className="font-display text-lg sm:text-xl font-bold tracking-[0.12em] text-zinc-100 uppercase">
+                    KERR RELATIVITY ENGINE
+                  </span>
+                  <span className="font-mono text-xs sm:text-sm font-semibold text-[#E88B6B]">
+                    v1.4
+                  </span>
+                </div>
+                <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.2em] text-zinc-400 uppercase mt-0.5">
+                  GENERATED BY KERR ENGINE · APEX METRIC CORE
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Lightweight Non-Blocking First-Time Visitor Interaction Cue (Positioned cleanly above the Control Dock handle tabs) */}
         {!isUiHiddenForBootOrSeed && showInteractionHint && (
           <div
             data-testid="floating-interaction-hint"
             className={`interaction-hint-pill ${
               isInteractionHintFading ? 'is-fading-out' : 'opacity-100'
             } absolute ${
-              isDockCollapsed ? 'bottom-14 sm:bottom-16' : 'bottom-44 sm:bottom-48'
-            } left-1/2 -translate-x-1/2 z-20 pointer-events-none px-3.5 py-1.5 rounded-full bg-[#050811]/75 border border-slate-700/70 text-slate-200/90 font-mono text-[11px] tracking-wide shadow-[0_4px_20px_rgba(0,0,0,0.65)] whitespace-nowrap select-none`}
+              isDockCollapsed ? 'bottom-14 sm:bottom-16' : 'bottom-56 sm:bottom-60'
+            } left-1/2 -translate-x-1/2 z-10 pointer-events-none px-3.5 py-1.5 rounded-full bg-[#050811]/80 border border-slate-700/70 text-slate-200/90 font-mono text-[11px] tracking-wide shadow-[0_4px_20px_rgba(0,0,0,0.65)] whitespace-nowrap select-none`}
           >
             {isPhone ? 'Touch to Rotate • Pinch to Zoom' : 'Drag to Orbit • Scroll to Zoom'}
           </div>
@@ -2328,6 +2474,9 @@ export default function App() {
               onResetParams={handleResetParams}
               onSelectCamera={handleSelectCamera}
               activeCamera={activeCamera}
+              isCinematicTourActive={isCinematicTourActive}
+              cinematicTourStageLabel={cinematicTourStageLabel}
+              onToggleCinematicTour={handleToggleCinematicTour}
               onLaunchPhoton={handleLaunchPhoton}
               onClearPhotons={handleClearPhotons}
               onExportGeodesicCsv={handleExportGeodesicCsv}

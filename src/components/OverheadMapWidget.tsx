@@ -167,7 +167,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
         ctx.stroke();
         ctx.setLineDash([]);
 
-        if (r % 2 === 0 && radPx + cx < w - 22 && radPx > 14) {
+        if ((r === 3 || r === 6) && radPx + cx < w - 22 && radPx > 14) {
           ctx.fillStyle = '#71717a';
           ctx.font = '8px monospace';
           ctx.fillText(`${r}Rₛ`, cx + radPx + 2, cy - 2);
@@ -427,7 +427,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
   }, []);
 
   return (
-    <div className="hud-panel w-60 bg-black/95 border border-neutral-800 rounded-lg shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
+    <div className="hud-panel w-full bg-black/95 border border-neutral-800 rounded-lg shadow-xl overflow-hidden pointer-events-auto select-none transition-all">
       {/* Top Header Bar */}
       <div className="flex items-center justify-between px-2.5 py-1.5 bg-neutral-950 border-b border-neutral-800/80">
         <div className="flex items-center gap-1.5">

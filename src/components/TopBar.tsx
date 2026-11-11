@@ -1,11 +1,9 @@
 import React from 'react';
 import {
-  Sparkles,
   Layers,
   Activity,
   Download,
   Maximize2,
-  Zap,
   Sun,
   Eye,
   EyeOff,
@@ -18,7 +16,6 @@ import {
   Columns2,
 } from 'lucide-react';
 import {
-  ASTROPHYSICAL_PRESETS,
   BackgroundThemeId,
   BACKGROUND_THEMES,
   SystemCategory,
@@ -89,8 +86,6 @@ export const TopBar: React.FC<TopBarProps> = ({
 }) => {
   const haptics = useHaptics({ enabled: hapticsEnabled });
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
-  const activePreset =
-    ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
 
   const isObsidian = uiTheme === 'kerr_claude';
   const isPlanck = uiTheme === 'cryo_quantum';
@@ -122,7 +117,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   return (
     <header
-      className={`hud-panel relative z-20 flex items-center justify-between gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 border-b shadow-[0_4px_24px_rgba(0,0,0,0.9)] overflow-x-auto no-scrollbar transition-colors ${
+      className={`hud-panel relative z-20 flex items-center justify-between gap-2 px-2.5 sm:px-3.5 py-1.5 border-b shadow-[0_4px_24px_rgba(0,0,0,0.9)] transition-colors ${
         isObsidian
           ? 'bg-[#080605]/96 border-[#D97757]/25'
           : isPlanck
@@ -130,10 +125,10 @@ export const TopBar: React.FC<TopBarProps> = ({
           : 'bg-[#050506]/96 border-zinc-800/80'
       }`}
     >
-      {/* Zone 1: Theme-Bound Brand Selector, Active Target Badge & System Category Dropdown */}
-      <div className="flex items-center gap-2 shrink-0">
+      {/* Zone 1: Compact Brand Selector & System Category Dropdown */}
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         <div
-          className={`group flex items-center gap-2 px-2.5 py-1 rounded-md border whitespace-nowrap transition-all ${
+          className={`group flex items-center gap-1.5 px-2 py-1 rounded-md border whitespace-nowrap transition-all ${
             isObsidian
               ? 'bg-[#120e0c] hover:bg-[#1a1412] border-[#D97757]/30 hover:border-[#D97757]/60'
               : isPlanck
@@ -149,7 +144,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               onSelectPreset('ton618');
             }}
             title="Kerr Engine — Reset to TON 618"
-            className={`relative flex items-center justify-center w-6 h-6 rounded border transition-all shrink-0 cursor-pointer ${
+            className={`relative flex items-center justify-center w-5 h-5 rounded border transition-all shrink-0 cursor-pointer ${
               isObsidian
                 ? 'bg-[#1a1412] border-[#D97757]/50 group-hover:border-[#E89578]'
                 : isPlanck
@@ -193,97 +188,44 @@ export const TopBar: React.FC<TopBarProps> = ({
             </svg>
           </button>
 
-          <div className="flex flex-col leading-none">
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  haptics.light();
-                  onSelectPreset('ton618');
-                }}
-                title="Kerr Engine — Reset to TON 618"
-                className={`font-display text-xs sm:text-sm font-bold tracking-[0.06em] transition-colors cursor-pointer ${
-                  isObsidian
-                    ? 'text-[#F7F4EE]'
-                    : isPlanck
-                    ? 'text-emerald-50'
-                    : 'text-zinc-50'
-                }`}
-              >
-                Kerr Engine
-              </button>
-              <button
-                type="button"
-                data-testid="topbar-changelog-badge"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  haptics.light();
-                  onOpenChangelogModal?.();
-                }}
-                title="View Kerr Engine [v1.4] Release Changelog"
-                className={`inline-flex items-center justify-center px-1.5 py-[1.5px] rounded-[3px] border font-mono text-[9px] font-bold tracking-[0.08em] leading-none transition-all cursor-pointer ${
-                  isObsidian
-                    ? 'bg-[#201815] hover:bg-[#2c201c] border-[#D97757]/60 text-[#F4A688]'
-                    : isPlanck
-                    ? 'bg-emerald-950/70 hover:bg-emerald-900/70 border-emerald-400/60 text-emerald-300'
-                    : 'bg-zinc-900 hover:bg-zinc-800 border-[#D4AF37]/55 text-[#D4AF37]'
-                }`}
-              >
-                v1.4
-              </button>
-            </div>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  isObsidian
-                    ? 'bg-[#D97757]'
-                    : isPlanck
-                    ? 'bg-emerald-400'
-                    : 'bg-[#D4AF37]'
-                }`}
-              />
-              <span
-                className={`font-mono text-[9px] font-medium tracking-[0.06em] ${
-                  isObsidian
-                    ? 'text-[#c9bfb5]'
-                    : isPlanck
-                    ? 'text-emerald-300/80'
-                    : 'text-zinc-400'
-                }`}
-              >
-                {isObsidian
-                  ? 'Kerr Metric Obsidian'
+          <div className="flex items-center gap-1.5 leading-none">
+            <button
+              type="button"
+              onClick={() => {
+                haptics.light();
+                onSelectPreset('ton618');
+              }}
+              title="Kerr Engine — Reset to TON 618"
+              className={`font-display text-xs font-bold tracking-[0.05em] transition-colors cursor-pointer ${
+                isObsidian
+                  ? 'text-[#F7F4EE]'
                   : isPlanck
-                  ? 'Planck Laboratory'
-                  : 'Schwarzschild Monolith'}
-              </span>
-            </div>
+                  ? 'text-emerald-50'
+                  : 'text-zinc-50'
+              }`}
+            >
+              Kerr Engine
+            </button>
+            <button
+              type="button"
+              data-testid="topbar-changelog-badge"
+              onClick={(e) => {
+                e.stopPropagation();
+                haptics.light();
+                onOpenChangelogModal?.();
+              }}
+              title="View Kerr Engine [v1.4] Release Changelog"
+              className={`inline-flex items-center justify-center px-1.5 py-[1.5px] rounded-[3px] border font-mono text-[9px] font-bold tracking-[0.06em] leading-none transition-all cursor-pointer ${
+                isObsidian
+                  ? 'bg-[#201815] hover:bg-[#2c201c] border-[#D97757]/60 text-[#F4A688]'
+                  : isPlanck
+                  ? 'bg-emerald-950/70 hover:bg-emerald-900/70 border-emerald-400/60 text-emerald-300'
+                  : 'bg-zinc-900 hover:bg-zinc-800 border-[#D4AF37]/55 text-[#D4AF37]'
+              }`}
+            >
+              v1.4
+            </button>
           </div>
-        </div>
-
-        {/* Active Target Badge */}
-        <div
-          className={`hidden 2xl:flex items-center gap-1.5 h-7 px-2.5 rounded-md border text-[11px] font-mono tracking-wider ${
-            isObsidian
-              ? 'bg-[#120e0c] border-[#D97757]/25 text-[#F7F4EE]'
-              : isPlanck
-              ? 'bg-[#080d0b] border-emerald-500/25 text-emerald-50'
-              : 'bg-[#0b0b0e] border-zinc-700/60 text-zinc-100'
-          }`}
-        >
-          <span className="font-bold">{activePreset.name}</span>
-          <span className="opacity-40">·</span>
-          <span
-            className={
-              isObsidian
-                ? 'text-[#F4A688]'
-                : isPlanck
-                ? 'text-emerald-300'
-                : 'text-[#D4AF37]'
-            }
-          >
-            {activePreset.classification}
-          </span>
         </div>
 
         {/* Main System Category Dropdown: Isolated Singularity vs Binary Accretion */}
@@ -297,7 +239,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 haptics.medium();
                 onChangeSystemCategory(e.target.value as SystemCategory);
               }}
-              className={`h-7 pl-6 pr-5 sm:pl-7 sm:pr-6 text-[11px] font-mono font-medium rounded-md border transition-colors cursor-pointer appearance-none outline-none ${btnInactiveClass}`}
+              className={`h-7 pl-6 pr-5 text-[11px] font-mono font-medium rounded-md border transition-colors cursor-pointer appearance-none outline-none ${btnInactiveClass}`}
               title="Switch System Category between an Isolated Singularity and a Binary Accretion System (Roche Lobe Overflow)"
             >
               <option value="isolated" className="bg-[#050506] text-zinc-200">
@@ -312,275 +254,256 @@ export const TopBar: React.FC<TopBarProps> = ({
         )}
       </div>
 
-      {/* Zone 2: Uniform Quick Presets Nav */}
-      <nav
-        className={`hidden 2xl:flex items-center gap-0.5 p-0.5 rounded-md border overflow-x-auto no-scrollbar max-w-xl ${
-          isObsidian
-            ? 'bg-[#080605] border-[#D97757]/20'
-            : isPlanck
-            ? 'bg-[#030504] border-emerald-500/20'
-            : 'bg-[#050506] border-zinc-800/80'
-        }`}
-      >
-        {ASTROPHYSICAL_PRESETS.map((preset) => {
-          const isActive = activePresetId === preset.id;
-          const isTon618 = preset.id === 'ton618';
-          const isCompactStar = preset.category === 'star';
-          const isLuminousStar = preset.category === 'luminous_star';
-
-          return (
+      {/* Zone 2 & 3: Well-Spaced Navigation & Always-Accessible Right Utility Controls */}
+      <div className="flex items-center justify-end gap-1.5 min-w-0 flex-1 font-mono">
+        {/* Scrollable / Responsive Exploration & Guides Toolbar */}
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+          {/* Side-by-Side Compare Mode Toggle */}
+          {onToggleCompareMode && (
             <button
-              key={preset.id}
+              type="button"
+              data-testid="topbar-compare-btn"
+              onClick={() => {
+                haptics.medium();
+                onToggleCompareMode();
+              }}
+              className={`h-7 flex items-center gap-1 px-2 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
+                isCompareMode ? btnActiveClass : btnInactiveClass
+              }`}
+              title="Toggle Side-by-Side Compare Mode to contrast two black hole presets with synchronized physics parameters"
+            >
+              <Columns2 className={`w-3.5 h-3.5 ${iconAccentClass}`} />
+              <span className="hidden md:inline">Compare</span>
+            </button>
+          )}
+
+          {/* Anatomy Infographic Lines Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              haptics.light();
+              onToggleAnatomyVisible();
+            }}
+            className={`h-7 flex items-center gap-1 px-2 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
+              isAnatomyVisible ? btnActiveClass : btnInactiveClass
+            }`}
+            title="Toggle Black Hole Anatomy Guide & Leader Lines"
+          >
+            {isAnatomyVisible ? (
+              <Eye className={`w-3.5 h-3.5 ${iconAccentClass}`} />
+            ) : (
+              <EyeOff className={`w-3.5 h-3.5 ${iconMutedClass}`} />
+            )}
+            <span className="hidden lg:inline 2xl:hidden">Anatomy</span>
+            <span className="hidden 2xl:inline">{t.anatomyGuide}</span>
+          </button>
+
+          {/* Background Environments Picker */}
+          <button
+            type="button"
+            onClick={() => {
+              haptics.light();
+              onOpenBackgroundModal();
+            }}
+            className={`hidden sm:flex h-7 items-center gap-1 px-2 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
+            title={`Active Background: ${
+              BACKGROUND_THEMES[activeBackgroundTheme]?.name || 'Pure Black with Stars'
+            }`}
+          >
+            <Sun className={`w-3.5 h-3.5 ${iconMutedClass}`} />
+            <span className="hidden lg:inline">{t.backgrounds}</span>
+          </button>
+
+          {/* Real Scale Explorer */}
+          <button
+            type="button"
+            onClick={() => {
+              haptics.light();
+              onOpenCosmicScaleModal();
+            }}
+            className={`hidden md:flex h-7 items-center gap-1 px-2 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
+            title="Open True Cosmic Scale Explorer (Why TON 618 is 66 Billion Suns)"
+          >
+            <Maximize2 className={`w-3.5 h-3.5 ${iconMutedClass}`} />
+            <span className="hidden xl:inline 2xl:hidden">Scale</span>
+            <span className="hidden 2xl:inline">{t.realScale}</span>
+          </button>
+
+          {/* Archetypes Guide */}
+          <button
+            type="button"
+            onClick={() => {
+              haptics.light();
+              onOpenArchetypeModal();
+            }}
+            className={`hidden lg:flex h-7 items-center gap-1 px-2 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
+            title="Open Black Hole & Star Archetypes Guide"
+          >
+            <Layers className={`w-3.5 h-3.5 ${iconMutedClass}`} />
+            <span className="hidden xl:inline">{t.archetypes}</span>
+          </button>
+
+          {/* Physics Quick-Guide */}
+          {onOpenQuickGuideModal && (
+            <button
+              type="button"
+              onClick={() => {
+                haptics.light();
+                onOpenQuickGuideModal();
+              }}
+              className={`h-7 flex items-center gap-1 px-2 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
+              title="Open Plain-English Physics Quick-Guide (Simple Analogies for Spin, Accretion Rate & Well Depth)"
+            >
+              <BookOpen className={`w-3.5 h-3.5 ${iconAccentClass}`} />
+              <span className="hidden xl:inline 2xl:hidden">Guide</span>
+              <span className="hidden 2xl:inline">{t.quickGuide}</span>
+            </button>
+          )}
+
+          {/* Spacetime Metrics Modal */}
+          <button
+            type="button"
+            onClick={() => {
+              haptics.light();
+              onOpenTheoryModal();
+            }}
+            className={`hidden lg:flex h-7 items-center gap-1 px-2 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
+            title="View Kerr Spacetime Metrics & Relativistic Potential"
+          >
+            <Activity className={`w-3.5 h-3.5 ${iconMutedClass}`} />
+            <span className="hidden xl:inline">{t.metrics}</span>
+          </button>
+
+          {/* Three.js Performance Monitor Toggle */}
+          {onTogglePerfMonitor && (
+            <button
+              type="button"
+              data-testid="topbar-perf-monitor-btn"
+              onClick={() => {
+                haptics.light();
+                onTogglePerfMonitor();
+              }}
+              className={`h-7 flex items-center gap-1 px-2 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
+                isPerfMonitorVisible ? btnActiveClass : btnInactiveClass
+              }`}
+              title="Toggle Three.js Performance Monitor (Frame Time, Draw Calls, GPU Memory & Shader Bottleneck Diagnostics)"
+            >
+              <Activity
+                className={`w-3.5 h-3.5 ${
+                  isPerfMonitorVisible ? iconAccentClass : iconMutedClass
+                }`}
+              />
+              <span className="hidden md:inline">Perf</span>
+            </button>
+          )}
+        </div>
+
+        {/* Subtle Vertical Divider before Pinned Right Controls */}
+        <div
+          className={`h-4 w-px shrink-0 ${
+            isObsidian
+              ? 'bg-[#D97757]/25'
+              : isPlanck
+              ? 'bg-emerald-500/25'
+              : 'bg-zinc-800'
+          }`}
+        />
+
+        {/* Pinned Right Controls: Hide UI, Snapshot, Record, and Always-Visible Settings */}
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Clean View / Hide UI Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              haptics.medium();
+              onToggleCleanMode?.();
+            }}
+            className={`h-7 flex items-center gap-1.5 px-2 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
+            title="Hide all UI elements for an unobstructed clean view (Shortcut: C / ESC)"
+          >
+            <EyeOff className={`w-3.5 h-3.5 ${iconAccentClass}`} />
+            <span className="hidden md:inline">{t.hideUi}</span>
+          </button>
+
+          {/* Export Snapshot */}
+          <button
+            type="button"
+            onClick={() => {
+              haptics.success();
+              onExportSnapshot();
+            }}
+            className={`h-7 flex items-center gap-1.5 px-2 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
+            title="Export high-resolution PNG snapshot"
+          >
+            <Download className={`w-3.5 h-3.5 ${iconAccentClass}`} />
+            <span className="hidden 2xl:inline">{t.exportSnapshot}</span>
+          </button>
+
+          {/* Record Video */}
+          {onToggleRecording && (
+            <button
               type="button"
               onClick={() => {
                 haptics.medium();
-                onSelectPreset(preset.id);
+                onToggleRecording();
               }}
-              className={`h-6 px-2 rounded text-[11px] font-mono transition-all whitespace-nowrap shrink-0 flex items-center gap-1 cursor-pointer border ${
-                isActive
-                  ? btnActiveClass
-                  : 'border-transparent text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04]'
+              className={`h-7 flex items-center gap-1.5 px-2 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
+                isRecording ? btnActiveClass : btnInactiveClass
               }`}
-              title={preset.solarEquivalence}
+              title={
+                isRecording
+                  ? 'Stop recording and download video file'
+                  : 'Record high-bitrate video of the simulation'
+              }
             >
-              {isTon618 && <Sparkles className={`w-3 h-3 ${iconAccentClass}`} />}
-              {isCompactStar && <Zap className={`w-3 h-3 ${iconAccentClass}`} />}
-              {isLuminousStar && <Sun className={`w-3 h-3 ${iconAccentClass}`} />}
-              <span>{preset.name.split(' ')[0]}</span>
+              {isRecording ? (
+                <>
+                  <Square className={`w-3 h-3 fill-current ${iconAccentClass}`} />
+                  <span className="font-mono text-[10.5px]">
+                    {t.stopRecording} {Math.floor(recordingSeconds / 60)}:
+                    {(recordingSeconds % 60).toString().padStart(2, '0')}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Video className={`w-3.5 h-3.5 ${iconMutedClass}`} />
+                  <span className="hidden 2xl:inline">{t.recordVideo}</span>
+                </>
+              )}
             </button>
-          );
-        })}
-      </nav>
-
-      {/* Zone 3: Uniform Action Controls */}
-      <div className="flex items-center gap-1 shrink-0 font-mono">
-        {/* Side-by-Side Compare Mode Toggle */}
-        {onToggleCompareMode && (
-          <button
-            type="button"
-            data-testid="topbar-compare-btn"
-            onClick={() => {
-              haptics.medium();
-              onToggleCompareMode();
-            }}
-            className={`h-7 flex items-center gap-1.5 px-2.5 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
-              isCompareMode ? btnActiveClass : btnInactiveClass
-            }`}
-            title="Toggle Side-by-Side Compare Mode to contrast two black hole presets with synchronized physics parameters"
-          >
-            <Columns2 className={`w-3.5 h-3.5 ${iconAccentClass}`} />
-            <span>Compare</span>
-          </button>
-        )}
-
-        {/* Clean View / Hide UI Toggle */}
-        <button
-          type="button"
-          onClick={() => {
-            haptics.medium();
-            onToggleCleanMode?.();
-          }}
-          className={`h-7 flex items-center gap-1.5 px-2.5 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
-          title="Hide all UI elements for an unobstructed clean view (Shortcut: C / ESC)"
-        >
-          <EyeOff className={`w-3.5 h-3.5 ${iconAccentClass}`} />
-          <span className="hidden sm:inline">{t.hideUi}</span>
-        </button>
-
-        {/* Anatomy Infographic Lines Toggle */}
-        <button
-          type="button"
-          onClick={() => {
-            haptics.light();
-            onToggleAnatomyVisible();
-          }}
-          className={`h-7 flex items-center gap-1.5 px-2.5 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
-            isAnatomyVisible ? btnActiveClass : btnInactiveClass
-          }`}
-          title="Toggle Black Hole Anatomy Guide & Leader Lines"
-        >
-          {isAnatomyVisible ? (
-            <Eye className={`w-3.5 h-3.5 ${iconAccentClass}`} />
-          ) : (
-            <EyeOff className={`w-3.5 h-3.5 ${iconMutedClass}`} />
           )}
-          <span className="hidden sm:inline">{t.anatomyGuide}</span>
-        </button>
 
-        {/* Background Environments Picker */}
-        <button
-          type="button"
-          onClick={() => {
-            haptics.light();
-            onOpenBackgroundModal();
-          }}
-          className={`hidden sm:flex h-7 items-center gap-1.5 px-2.5 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
-          title={`Active Background: ${
-            BACKGROUND_THEMES[activeBackgroundTheme]?.name || 'Pure Black with Stars'
-          }`}
-        >
-          <Sun className={`w-3.5 h-3.5 ${iconMutedClass}`} />
-          <span>{t.backgrounds}</span>
-        </button>
-
-        {/* Real Scale Explorer */}
-        <button
-          type="button"
-          onClick={() => {
-            haptics.light();
-            onOpenCosmicScaleModal();
-          }}
-          className={`hidden md:flex h-7 items-center gap-1.5 px-2.5 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
-          title="Open True Cosmic Scale Explorer (Why TON 618 is 66 Billion Suns)"
-        >
-          <Maximize2 className={`w-3.5 h-3.5 ${iconMutedClass}`} />
-          <span>{t.realScale}</span>
-        </button>
-
-        {/* Archetypes Guide */}
-        <button
-          type="button"
-          onClick={() => {
-            haptics.light();
-            onOpenArchetypeModal();
-          }}
-          className={`hidden lg:flex h-7 items-center gap-1.5 px-2.5 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
-          title="Open Black Hole & Star Archetypes Guide"
-        >
-          <Layers className={`w-3.5 h-3.5 ${iconMutedClass}`} />
-          <span>{t.archetypes}</span>
-        </button>
-
-        {/* Physics Quick-Guide */}
-        {onOpenQuickGuideModal && (
+          {/* Pinned Settings Button (Always visible on the far right) */}
           <button
             type="button"
+            data-testid="topbar-settings-btn"
             onClick={() => {
               haptics.light();
-              onOpenQuickGuideModal();
+              onOpenSettingsModal?.();
             }}
-            className={`h-7 flex items-center gap-1.5 px-2.5 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
-            title="Open Plain-English Physics Quick-Guide (Simple Analogies for Spin, Accretion Rate & Well Depth)"
-          >
-            <BookOpen className={`w-3.5 h-3.5 ${iconAccentClass}`} />
-            <span className="hidden sm:inline">{t.quickGuide}</span>
-          </button>
-        )}
-
-        {/* Spacetime Metrics Modal */}
-        <button
-          type="button"
-          onClick={() => {
-            haptics.light();
-            onOpenTheoryModal();
-          }}
-          className={`hidden xl:flex h-7 items-center gap-1.5 px-2.5 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
-          title="View Kerr Spacetime Metrics & Relativistic Potential"
-        >
-          <Activity className={`w-3.5 h-3.5 ${iconMutedClass}`} />
-          <span>{t.metrics}</span>
-        </button>
-
-        {/* Three.js Performance Monitor Toggle */}
-        {onTogglePerfMonitor && (
-          <button
-            type="button"
-            data-testid="topbar-perf-monitor-btn"
-            onClick={() => {
-              haptics.light();
-              onTogglePerfMonitor();
-            }}
-            className={`h-7 flex items-center gap-1.5 px-2.5 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
-              isPerfMonitorVisible ? btnActiveClass : btnInactiveClass
+            className={`h-7 flex items-center gap-1.5 px-2.5 text-[11px] font-semibold rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
+              isPhoneMode ? btnActiveClass : btnInactiveClass
             }`}
-            title="Toggle Three.js Performance Monitor (Frame Time, Draw Calls, GPU Memory & Shader Bottleneck Diagnostics)"
+            title="Open Visualizer Settings & Preferences"
           >
-            <Activity
-              className={`w-3.5 h-3.5 ${
-                isPerfMonitorVisible ? iconAccentClass : iconMutedClass
-              }`}
-            />
-            <span className="hidden sm:inline">Perf</span>
-          </button>
-        )}
-
-        {/* Settings Button */}
-        <button
-          type="button"
-          onClick={() => {
-            haptics.light();
-            onOpenSettingsModal?.();
-          }}
-          className={`h-7 flex items-center gap-1.5 px-2.5 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
-            isPhoneMode ? btnActiveClass : btnInactiveClass
-          }`}
-          title="Open Visualizer Settings & Preferences"
-        >
-          <Settings className={`w-3.5 h-3.5 ${iconAccentClass}`} />
-          <span className="hidden sm:inline">{t.settings}</span>
-          {isPhoneMode && (
-            <span className="flex items-center gap-1 text-[9.5px] font-bold" title="Phone Mode Active">
-              <span
-                className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                  isObsidian
-                    ? 'bg-[#D97757]'
-                    : isPlanck
-                    ? 'bg-emerald-400'
-                    : 'bg-[#D4AF37]'
-                }`}
-              />
-              <span className="hidden sm:inline">PHONE</span>
-            </span>
-          )}
-        </button>
-
-        {/* Export Snapshot */}
-        <button
-          type="button"
-          onClick={() => {
-            haptics.success();
-            onExportSnapshot();
-          }}
-          className={`h-7 flex items-center gap-1.5 px-2.5 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${btnInactiveClass}`}
-          title="Export high-resolution PNG snapshot"
-        >
-          <Download className={`w-3.5 h-3.5 ${iconAccentClass}`} />
-          <span className="hidden 2xl:inline">{t.exportSnapshot}</span>
-        </button>
-
-        {/* Record Video */}
-        {onToggleRecording && (
-          <button
-            type="button"
-            onClick={() => {
-              haptics.medium();
-              onToggleRecording();
-            }}
-            className={`h-7 flex items-center gap-1.5 px-2.5 text-[11px] rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer border ${
-              isRecording ? btnActiveClass : btnInactiveClass
-            }`}
-            title={
-              isRecording
-                ? 'Stop recording and download video file'
-                : 'Record high-bitrate video of the simulation'
-            }
-          >
-            {isRecording ? (
-              <>
-                <Square className={`w-3 h-3 fill-current ${iconAccentClass}`} />
-                <span className="font-mono text-[10.5px]">
-                  {t.stopRecording} {Math.floor(recordingSeconds / 60)}:
-                  {(recordingSeconds % 60).toString().padStart(2, '0')}
-                </span>
-              </>
-            ) : (
-              <>
-                <Video className={`w-3.5 h-3.5 ${iconMutedClass}`} />
-                <span className="hidden 2xl:inline">{t.recordVideo}</span>
-              </>
+            <Settings className={`w-3.5 h-3.5 ${iconAccentClass}`} />
+            <span>{t.settings}</span>
+            {isPhoneMode && (
+              <span className="flex items-center gap-1 text-[9.5px] font-bold" title="Phone Mode Active">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                    isObsidian
+                      ? 'bg-[#D97757]'
+                      : isPlanck
+                      ? 'bg-emerald-400'
+                      : 'bg-[#D4AF37]'
+                  }`}
+                />
+                <span className="hidden sm:inline">PHONE</span>
+              </span>
             )}
           </button>
-        )}
+        </div>
       </div>
     </header>
   );

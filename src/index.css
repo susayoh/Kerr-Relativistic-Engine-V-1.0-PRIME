@@ -8,7 +8,7 @@
     --font-mono: 'JetBrains Mono', monospace;
   }
 
-  body {
+  html, body, #root {
     font-family: var(--font-sans);
     background-color: #000000;
     color: #e5e5e5;

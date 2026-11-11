@@ -52,6 +52,9 @@ interface ControlDockProps {
   onResetParams: () => void;
   onSelectCamera: (preset: CameraPresetId) => void;
   activeCamera: CameraPresetId;
+  isCinematicTourActive?: boolean;
+  cinematicTourStageLabel?: string;
+  onToggleCinematicTour?: () => void;
   onLaunchPhoton: (impactB: number) => void;
   onClearPhotons: () => void;
   onExportGeodesicCsv?: (impactB: number) => void;
@@ -80,6 +83,9 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   onResetParams,
   onSelectCamera,
   activeCamera,
+  isCinematicTourActive = false,
+  cinematicTourStageLabel = 'Polar Axis',
+  onToggleCinematicTour,
   onLaunchPhoton,
   onClearPhotons,
   onExportGeodesicCsv,
@@ -920,7 +926,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
       className={`hud-dock fixed left-1/2 bottom-1 sm:bottom-3 z-20 pointer-events-auto transition-transform duration-200 ease-out ${
         isPhoneMode
           ? 'w-[calc(100vw-0.75rem)] max-w-sm sm:max-w-md'
-          : 'w-[min(860px,calc(100vw-1.5rem))] 2xl:w-[min(980px,calc(100vw-1.5rem))]'
+          : 'w-[calc(100vw-1.5rem)] max-w-5xl 2xl:max-w-6xl'
       }`}
       style={{
         transform: isCollapsed
@@ -1060,6 +1066,23 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 >
                   <Waves className="w-3.5 h-3.5 text-amber-300" />
                 </button>
+
+                {onToggleCinematicTour && (
+                  <button
+                    type="button"
+                    data-testid="control-dock-cinematic-tour-btn"
+                    onClick={onToggleCinematicTour}
+                    className={`flex items-center gap-1 px-2 py-1.5 rounded-lg border text-[10px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                      isCinematicTourActive
+                        ? 'bg-amber-500/25 text-amber-200 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                        : 'text-neutral-200 bg-neutral-900 hover:bg-neutral-800 border-neutral-700/80 hover:border-amber-400'
+                    }`}
+                    title="Cinematic Tour: Automatically pan through Polar, Equatorial, and 45° Plunge angles"
+                  >
+                    <Orbit className={`w-3.5 h-3.5 ${isCinematicTourActive ? 'text-amber-300 animate-spin' : 'text-amber-400'}`} />
+                    <span>Cinematic Tour</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -1224,7 +1247,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             </div>
 
             {/* Section B: System Category Dropdown + Astrophysical Target Selector */}
-            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
               {/* System Category Dropdown: Isolated Singularity vs Binary Accretion (shown on 2xl; TopBar always provides this dropdown) */}
               <div className="hidden 2xl:flex relative items-center shrink-0">
                 <select
@@ -1267,8 +1290,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
 
-              <div className="relative flex-1 flex items-center min-w-0">
-                <div className="absolute left-2.5 pointer-events-none flex items-center text-amber-400">
+              <div className="relative flex-1 min-w-0 overflow-hidden">
+                <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center text-amber-400 z-10">
                   {isStar ? (
                     <Zap className="w-3.5 h-3.5 text-emerald-400" />
                   ) : (
@@ -1281,32 +1304,32 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                     haptics.medium();
                     onSelectPreset(e.target.value);
                   }}
-                  className="w-full pl-8 pr-7 py-1.5 text-xs bg-neutral-900 hover:bg-neutral-850 border border-neutral-700/80 hover:border-amber-400/80 text-neutral-200 font-semibold rounded-lg transition-colors cursor-pointer appearance-none outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40 truncate"
+                  className="block w-full min-w-0 max-w-full pl-8 pr-6 py-1.5 text-xs bg-neutral-900 hover:bg-neutral-850 border border-neutral-700/80 hover:border-amber-400/80 text-neutral-200 font-semibold rounded-lg transition-colors cursor-pointer appearance-none outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40 truncate"
                   title="Select Astrophysical Target (TON 618, Sagittarius A*, M87*, Cygnus X-1, Pulsars, etc.)"
                 >
                   <optgroup label="Black Holes (Ultramassive to Primordial)" className="bg-neutral-950 text-neutral-200">
                     {ASTROPHYSICAL_PRESETS.filter((p) => p.category === 'black_hole').map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} ({p.plainMassExplanation} · {p.classification})
+                        {p.name} ({p.plainMassExplanation})
                       </option>
                     ))}
                   </optgroup>
                   <optgroup label="Compact Relativistic Stars" className="bg-neutral-950 text-neutral-200">
                     {ASTROPHYSICAL_PRESETS.filter((p) => p.category === 'star').map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} ({p.plainMassExplanation} · {p.classification})
+                        {p.name} ({p.plainMassExplanation})
                       </option>
                     ))}
                   </optgroup>
                   <optgroup label="Luminous & Hypergiant Stars" className="bg-neutral-950 text-neutral-200">
                     {ASTROPHYSICAL_PRESETS.filter((p) => p.category === 'luminous_star').map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} ({p.plainMassExplanation} · {p.classification})
+                        {p.name} ({p.plainMassExplanation})
                       </option>
                     ))}
                   </optgroup>
                 </select>
-                <div className="absolute right-2 pointer-events-none flex items-center text-neutral-400">
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none flex items-center text-neutral-400 z-10">
                   <ChevronDown className="w-3.5 h-3.5" />
                 </div>
               </div>
@@ -1332,7 +1355,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                     timeScale: prev.timeScale === 0 ? 1.0 : 0.0,
                   }));
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer border ${
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer border ${
                   isPaused
                     ? 'bg-amber-500/25 text-amber-200 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.25)]'
                     : 'text-neutral-300 bg-neutral-900 hover:bg-neutral-800 border-neutral-800 hover:text-white'
@@ -1358,6 +1381,31 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 <Waves className="w-3.5 h-3.5 text-slate-300" />
                 <span>Pulse</span>
               </button>
+
+              {onToggleCinematicTour && (
+                <button
+                  type="button"
+                  data-testid="control-dock-cinematic-tour-btn"
+                  onClick={onToggleCinematicTour}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all whitespace-nowrap cursor-pointer ${
+                    isCinematicTourActive
+                      ? 'bg-amber-500/25 text-amber-200 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+                      : 'text-amber-200/95 bg-neutral-900 hover:bg-neutral-800 border-amber-500/40 hover:border-amber-400 hover:text-white'
+                  }`}
+                  title="Cinematic Tour: Automatically pan camera through Polar, Equatorial, and 45-Degree Plunge angles to showcase Kerr geometry"
+                >
+                  <Orbit
+                    className={`w-3.5 h-3.5 shrink-0 ${
+                      isCinematicTourActive ? 'text-amber-300 animate-spin' : 'text-amber-400'
+                    }`}
+                  />
+                  <span>
+                    {isCinematicTourActive
+                      ? `Tour: ${cinematicTourStageLabel}`
+                      : 'Cinematic Tour'}
+                  </span>
+                </button>
+              )}
 
               <button
                 type="button"
@@ -1632,12 +1680,12 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               /* Desktop Sub-Strip: Accretion State + Gravitational Lensing Toggle + Doppler Beaming Slider + Telemetry */
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center pt-1.5 border-t border-neutral-800/80 text-xs">
                 {/* Accretion State: Quiescent vs Active */}
-                <div className="sm:col-span-4 flex items-center justify-between gap-1.5 px-2 py-1 bg-neutral-950 border border-neutral-800 rounded-md">
-                  <span className="text-[11px] font-mono text-neutral-400 whitespace-nowrap flex items-center gap-1">
-                    <Zap className="w-3 h-3 text-amber-400/90" />
+                <div className="sm:col-span-5 flex items-center justify-between gap-1.5 px-2.5 py-1 bg-neutral-950 border border-neutral-800 rounded-md overflow-hidden">
+                  <span className="text-[11px] font-mono text-neutral-400 whitespace-nowrap flex items-center gap-1 shrink-0">
+                    <Zap className="w-3 h-3 text-amber-400/90 shrink-0" />
                     <span>Accretion State:</span>
                   </span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
                     {(
                       [
                         { id: 'quiescent', label: 'Quiescent' },
@@ -1656,7 +1704,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                               accretionState: mode.id,
                             }));
                           }}
-                          className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border transition-colors cursor-pointer ${
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border transition-colors cursor-pointer whitespace-nowrap ${
                             isSelected
                               ? mode.id === 'active'
                                 ? 'bg-amber-500/20 text-amber-200 border-amber-400/70 font-bold shadow-sm'
@@ -1677,7 +1725,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 </div>
 
                 {/* Gravitational Lensing Toggle */}
-                <div className="sm:col-span-3 flex items-center gap-1.5">
+                <div className="sm:col-span-2 flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -1687,7 +1735,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                         gravitationalLensing: !prev.gravitationalLensing,
                       }));
                     }}
-                    className={`w-full flex items-center justify-between px-2.5 py-1 rounded-md border text-xs font-medium transition-all cursor-pointer ${
+                    className={`w-full flex items-center justify-between px-2 py-1 rounded-md border text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
                       params.gravitationalLensing
                         ? 'bg-neutral-800 text-amber-300 border-neutral-700 shadow-sm'
                         : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-neutral-200'
@@ -1695,7 +1743,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                     title="Toggle Interstellar Gargantua Double-Arch Deflection"
                   >
                     <span className="flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-amber-400/90" />
+                      <Sparkles className="w-3 h-3 text-amber-400/90 shrink-0" />
                       <span>Lensing:</span>
                     </span>
                     <span className="font-mono font-bold text-[10px] uppercase">
@@ -2219,15 +2267,48 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             className={`grid ${
               isPhoneMode
                 ? 'grid-cols-3 gap-1.5'
-                : `grid-cols-2 sm:grid-cols-3 ${
-                    params.layers.orbitalStars ? 'md:grid-cols-6' : 'md:grid-cols-5'
+                : `grid-cols-2 sm:grid-cols-4 ${
+                    params.layers.orbitalStars ? 'md:grid-cols-8' : 'md:grid-cols-7'
                   } gap-2`
             }`}
           >
+            {onToggleCinematicTour && (
+              <button
+                type="button"
+                data-testid="camera-tab-cinematic-tour-btn"
+                onClick={onToggleCinematicTour}
+                className={`flex flex-col items-center justify-center ${
+                  isPhoneMode ? 'p-1.5' : 'p-2'
+                } rounded-lg border text-center transition-all cursor-pointer ${
+                  isCinematicTourActive
+                    ? 'bg-amber-500/25 text-amber-200 font-semibold border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+                    : 'bg-neutral-950 text-amber-300 border-amber-500/40 hover:border-amber-400 hover:text-white'
+                }`}
+                title="Automatically pan camera through Polar, Equatorial, and 45-Degree Plunge angles to showcase Kerr geometry"
+              >
+                <Orbit
+                  className={`${isPhoneMode ? 'w-3 h-3 mb-0.5' : 'w-3.5 h-3.5 mb-0.5'} ${
+                    isCinematicTourActive ? 'text-amber-300 animate-spin' : 'text-amber-400'
+                  }`}
+                />
+                <span className={`${isPhoneMode ? 'text-[11px]' : 'text-xs'} font-semibold truncate w-full`}>
+                  Cinematic Tour
+                </span>
+                <span
+                  className={`text-[9px] font-mono ${
+                    isCinematicTourActive ? 'text-amber-200' : 'text-neutral-400'
+                  } truncate w-full`}
+                >
+                  {isCinematicTourActive ? cinematicTourStageLabel : 'Polar · Eq · 45° Plunge'}
+                </span>
+              </button>
+            )}
+
             {(
               [
                 { id: 'equatorial', label: 'Equatorial', desc: 'Accretion Plane' },
                 { id: 'polar', label: 'Polar Axis', desc: 'Overhead Jet' },
+                { id: 'plunge_45', label: '45° Plunge', desc: 'Kerr Infall' },
                 { id: 'grazing', label: 'Grazing', desc: 'Rim Horizon' },
                 { id: 'well', label: 'Gravity Well', desc: 'Throat Funnel' },
                 ...(params.layers.orbitalStars
@@ -2245,7 +2326,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 className={`flex flex-col items-center justify-center ${
                   isPhoneMode ? 'p-1.5' : 'p-2'
                 } rounded-lg border text-center transition-all cursor-pointer ${
-                  activeCamera === preset.id
+                  activeCamera === preset.id && !isCinematicTourActive
                     ? 'bg-neutral-800 text-amber-300 font-medium border-neutral-700 shadow-sm'
                     : 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:border-neutral-700 hover:text-white'
                 }`}
@@ -2256,7 +2337,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 </span>
                 <span
                   className={`text-[9px] font-mono ${
-                    activeCamera === preset.id ? 'text-amber-300/80' : 'text-neutral-500'
+                    activeCamera === preset.id && !isCinematicTourActive ? 'text-amber-300/80' : 'text-neutral-500'
                   } truncate w-full`}
                 >
                   {preset.desc}
