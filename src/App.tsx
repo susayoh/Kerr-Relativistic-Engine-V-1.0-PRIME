@@ -97,12 +97,24 @@ export default function App() {
   const [controllerInstance, setControllerInstance] = useState<BlackHoleSceneController | null>(null);
 
   const [params, setParams] = useState<BlackHoleParams>(DEFAULT_PARAMS);
-  const [settings, setSettings] = useState<VisualizerSettings>(() => ({
-    ...DEFAULT_VISUALIZER_SETTINGS,
-    showPerformanceMonitor: false,
-    showEventLog: false,
-    showMetricTelemetry: false,
-  }));
+  const [settings, setSettings] = useState<VisualizerSettings>(() => {
+    const isInitialMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+    return {
+      ...DEFAULT_VISUALIZER_SETTINGS,
+      showOverheadMap: !isInitialMobile,
+      showPerformanceMonitor: false,
+      showEventLog: false,
+      showMetricTelemetry: false,
+    };
+  });
+  const [isDevMode, setIsDevMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem('kerr_dev_auth') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [activePresetId, setActivePresetId] = useState<string>('ton618');
   const [isCompareMode, setIsCompareMode] = useState<boolean>(false);
   const [comparePresetId, setComparePresetId] = useState<string>('sgra');
@@ -160,17 +172,14 @@ export default function App() {
   }, []);
 
   const handleSingularitySeedLoaded = useCallback(() => {
-    const isFastBoot =
-      typeof window !== 'undefined' &&
-      typeof window.location?.search === 'string' &&
-      window.location.search.includes('fastboot=1');
-    const fadeDelayAfterSeedMs = isFastBoot ? 60 : 1250;
     if (watermarkFadeTimerRef.current !== null) {
       window.clearTimeout(watermarkFadeTimerRef.current);
+      watermarkFadeTimerRef.current = null;
     }
+    setIsWatermarkOverlayFading(true);
     watermarkFadeTimerRef.current = window.setTimeout(() => {
-      setIsWatermarkOverlayFading(true);
-    }, fadeDelayAfterSeedMs);
+      setShowWatermarkOverlay(false);
+    }, 550);
   }, []);
 
   const handleFinishWatermarkPause = useCallback(() => {
@@ -1787,6 +1796,11 @@ export default function App() {
             language={settings.language || 'en'}
             uiTheme={settings.uiTheme || 'observatory_gold'}
             onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
+            isDevMode={isDevMode}
+            onUnlockDevMode={() => {
+              setIsDevMode(true);
+              setIsSettingsModalOpen(true);
+            }}
           />
         </div>
       )}
@@ -2016,7 +2030,7 @@ export default function App() {
         {!isCleanMode && !isCompareMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation || Boolean(settings.showEventLog)) && (
           <div
             className={`hud-panel absolute top-2 sm:top-2.5 left-2 sm:left-3.5 z-10 flex flex-col items-start gap-1.5 sm:gap-2 pointer-events-none transition-all duration-[1850ms] delay-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-              isPhone ? 'w-[210px]' : 'w-[268px]'
+              isPhone ? 'w-[238px]' : 'w-[268px]'
             } ${
               isBootOrSeedStage
                 ? 'opacity-0 -translate-x-8'
@@ -2025,7 +2039,7 @@ export default function App() {
           >
             {/* Target Spec Badge */}
             {settings.showLeftHud && (
-              <div className={`hud-panel ${isBootOrSeedStage ? 'pointer-events-none' : 'pointer-events-auto'} bg-[#050811]/95 border border-slate-800/80 rounded-xl ${isPhone ? 'p-1.5' : 'p-2.5'} shadow-xl transition-all w-full`}>
+              <div className={`hud-panel ${isBootOrSeedStage ? 'pointer-events-none' : 'pointer-events-auto'} bg-[#050811]/95 border border-slate-800/80 rounded-xl ${isPhone ? 'px-2 py-1.5' : 'p-2.5'} shadow-xl transition-all w-full`}>
                 <div className="flex items-center justify-between gap-1.5">
                   <span
                     className={`px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold uppercase tracking-wider border shrink-0 ${
@@ -2039,29 +2053,29 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="flex items-baseline justify-between gap-1 mt-0.5">
+                <div className="flex items-baseline justify-between gap-1.5 mt-0.5">
                   <h1 className={`font-display ${isPhone ? 'text-sm' : 'text-base sm:text-lg'} font-bold text-slate-100 tracking-tight flex items-center gap-1 whitespace-nowrap`}>
                     <span>{activePreset.name}</span>
-                    {activePreset.id === 'ton618' && (
+                    {!isPhone && activePreset.id === 'ton618' && (
                       <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-normal flex items-center gap-0.5">
                         <Sparkles className="w-2.5 h-2.5 text-amber-400" />
                         Titan
                       </span>
                     )}
-                    {params.objectCategory === 'star' && (
+                    {!isPhone && params.objectCategory === 'star' && (
                       <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-normal flex items-center gap-0.5">
                         <Zap className="w-2.5 h-2.5 text-emerald-400" />
                         Remnant
                       </span>
                     )}
-                    {params.objectCategory === 'luminous_star' && (
+                    {!isPhone && params.objectCategory === 'luminous_star' && (
                       <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 font-mono font-normal flex items-center gap-0.5">
                         <Sparkles className="w-2.5 h-2.5 text-indigo-400" />
                         Star
                       </span>
                     )}
                   </h1>
-                  <span className="font-mono text-amber-300 font-bold text-[11px] shrink-0">
+                  <span className={`font-mono text-amber-300 font-bold ${isPhone ? 'text-[10px]' : 'text-[11px]'} shrink-0 whitespace-nowrap`}>
                     {activePreset.plainMassExplanation}
                   </span>
                 </div>
@@ -2072,22 +2086,22 @@ export default function App() {
                   </p>
                 )}
 
-                <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 pt-1 mt-1 border-t border-slate-800/60">
-                  <span>{params.objectCategory === 'luminous_star' ? t.photosphereLabel : isStar ? t.crustLabel : t.horizonLabel} <strong className="text-slate-200">{activePreset.horizonDiameterKmDisplay}</strong></span>
-                  <span>a* <strong className="text-cyan-300">{params.spin.toFixed(3)}</strong></span>
+                <div className="flex items-center justify-between gap-2 text-[9px] font-mono text-slate-400 pt-1 mt-1 border-t border-slate-800/60">
+                  <span className="truncate">{params.objectCategory === 'luminous_star' ? t.photosphereLabel : isStar ? t.crustLabel : t.horizonLabel} <strong className="text-slate-200">{activePreset.horizonDiameterKmDisplay}</strong></span>
+                  <span className="shrink-0">a* <strong className="text-cyan-300">{params.spin.toFixed(3)}</strong></span>
                 </div>
 
                 {/* Direct DOM-Ref Observer Spherical Readout (Zero React re-renders during OrbitControls drag) */}
                 <div
                   ref={observerReadoutRef}
                   data-testid="observer-readout"
-                  className="mt-1 pt-1 border-t border-slate-800/50 text-[9px] font-mono text-slate-300 tabular-nums truncate"
+                  className={`${isPhone ? 'hidden sm:block' : ''} mt-1 pt-1 border-t border-slate-800/50 text-[9px] font-mono text-slate-300 tabular-nums truncate`}
                 >
                   Observer: r = 16.5 Rₛ | θ = 71° | φ = 96°
                 </div>
 
                 {/* Quick Link to Real Scale Explorer if TON 618 is selected */}
-                {activePreset.id === 'ton618' && (
+                {activePreset.id === 'ton618' && !isPhone && (
                   <div className="mt-1 pt-1 border-t border-slate-800/60 flex items-center justify-between gap-1.5">
                     <span className="text-[9px] text-amber-400 font-mono whitespace-nowrap">True: 66B M☉ · 2,600 AU</span>
                     <button
@@ -2282,15 +2296,15 @@ export default function App() {
           </div>
         )}
 
-        {/* Post-Boot Kerr Relativity Engine Watermark Overlay (Displayed 1.5s after boot, positioned cleanly above the Singularity Seed) */}
+        {/* Post-Boot Kerr Relativity Engine Watermark Overlay (Displayed 1.5s after boot in the center of the screen) */}
         {showWatermarkOverlay && (
           <div
             data-testid="boot-watermark-overlay"
-            className={`absolute inset-0 z-30 flex flex-col items-center justify-center pointer-events-none select-none transition-opacity duration-700 ease-out ${
+            className={`absolute inset-0 z-30 flex flex-col items-center justify-center pointer-events-none select-none transition-opacity duration-500 ease-out ${
               isWatermarkOverlayFading ? 'opacity-0' : 'opacity-100'
             }`}
           >
-            <div className="flex items-center gap-4 px-6 py-4 -translate-y-20 sm:-translate-y-24 drop-shadow-[0_6px_28px_rgba(0,0,0,0.95)]">
+            <div className="flex items-center gap-4 px-6 py-4 drop-shadow-[0_6px_28px_rgba(0,0,0,0.95)]">
               {/* 12-Ray Starburst Singularity Emblem */}
               <svg
                 width="44"
@@ -2572,6 +2586,8 @@ export default function App() {
         onExportGeodesicCsv={() => handleExportGeodesicCsv()}
         activeParams={params}
         onRecordDiagnosticStressTest={handleRecordDiagnosticStressTest}
+        isDevMode={isDevMode}
+        onLockDevSession={() => setIsDevMode(false)}
       />
 
       {/* Real-Time Kerr Relativity Engine Pre-Load Terminal Modal */}

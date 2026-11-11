@@ -1761,25 +1761,25 @@ const SINGULARITY_BALL_FRAGMENT_SHADER = `
     float plasmaTurb = (sin(limbUv.x * 1.5 + cos(limbUv.y * 1.8)) + cos(limbUv.y * 2.1 - sin(limbUv.x * 1.7))) * 0.25 + 0.5;
     float fineRipple = sin(length(vLocalPos.xz) * 18.0 - uTime * 7.5 + plasmaTurb * 3.0) * 0.5 + 0.5;
 
-    // Deep pitch-black singularity shadow core in the interior (ndv > 0.42),
-    // surrounded by a razor-sharp incandescent photon-capture rim and outer corona
-    float horizonShadow = smoothstep(0.32, 0.52, ndv);
-    float photonRim = exp(-pow(abs((ndv - 0.36) * 8.5), 2.0)) * (1.15 + 0.55 * plasmaTurb);
-    float outerCorona = pow(max(0.0001, 1.0 - ndv), 2.6) * (0.75 + 0.45 * fineRipple);
+    // Deep pitch-black singularity shadow core in the interior (ndv > 0.24),
+    // surrounded by a razor-thin white photon-capture rim and subtle corona
+    float horizonShadow = smoothstep(0.16, 0.25, ndv);
+    float photonRim = exp(-pow(abs((ndv - 0.19) * 32.0), 2.0)) * (0.95 + 0.25 * plasmaTurb);
+    float outerCorona = pow(max(0.0001, 1.0 - ndv), 6.2) * (0.32 + 0.18 * fineRipple);
 
-    vec3 primaryGlow = vec3(1.0, 0.86, 0.48);
-    vec3 coreHot = vec3(1.0, 0.99, 0.94);
+    vec3 primaryGlow = vec3(1.0, 0.94, 0.82);
+    vec3 coreHot = vec3(1.0, 0.995, 0.98);
     int spectralMode = int(uSpectralMode + 0.5);
     if (spectralMode == 2) {
-      primaryGlow = vec3(0.38, 0.78, 1.0);
-      coreHot = vec3(0.90, 0.98, 1.0);
+      primaryGlow = vec3(0.45, 0.82, 1.0);
+      coreHot = vec3(0.94, 0.99, 1.0);
     } else if (spectralMode == 3) {
       primaryGlow = mix(vec3(0.98, 0.42, 0.14), vec3(0.28, 0.85, 1.0), clamp(vLocalPos.x * 0.8 + 0.5, 0.0, 1.0));
     }
 
-    vec3 rimColor = mix(primaryGlow, coreHot, clamp(photonRim * 0.75, 0.0, 1.0)) * (photonRim * 1.45 + outerCorona * 0.95);
+    vec3 rimColor = mix(primaryGlow, coreHot, clamp(photonRim * 0.92, 0.0, 1.0)) * (photonRim * 1.35 + outerCorona * 0.65);
     vec3 finalRgb = mix(rimColor, vec3(0.0, 0.0, 0.0), horizonShadow);
-    float alpha = clamp((horizonShadow + photonRim + outerCorona * 0.85) * uOpacity, 0.0, 1.0);
+    float alpha = clamp((horizonShadow + photonRim + outerCorona * 0.65) * uOpacity, 0.0, 1.0);
     gl_FragColor = vec4(finalRgb, alpha);
   }
 `;
@@ -1796,19 +1796,19 @@ const SINGULARITY_HALO_FRAGMENT_SHADER = `
     float r = length(p);
     if (r > 1.0) discard;
 
-    // Tightly coiled nascent micro-photon ring and gravitational lensing shimmer around the small singularity ball
-    float innerShadow = 1.0 - smoothstep(0.18, 0.25, r);
-    float photonRing = exp(-pow(abs((r - 0.26) * 18.0), 2.0)) * 1.35;
-    float secondRing = exp(-pow(abs((r - 0.36) * 11.0), 2.0)) * 0.55;
+    // Razor-thin micro-photon ring and subtle gravitational lensing shimmer around the small singularity ball
+    float innerShadow = 1.0 - smoothstep(0.242, 0.256, r);
+    float photonRing = exp(-pow(abs((r - 0.256) * 52.0), 2.0)) * 1.05;
+    float secondRing = exp(-pow(abs((r - 0.305) * 32.0), 2.0)) * 0.22;
     float angle = atan(p.y, p.x);
-    float spiralWisp = (0.5 + 0.5 * sin(angle * 3.0 + r * 16.0 - uTime * 5.2)) * exp(-max(0.0, r - 0.24) * 4.5);
-    float haloFalloff = exp(-max(0.0, r - 0.24) * 4.2) * (0.45 + 0.35 * spiralWisp);
+    float spiralWisp = (0.5 + 0.5 * sin(angle * 3.0 + r * 16.0 - uTime * 5.2)) * exp(-max(0.0, r - 0.25) * 6.5);
+    float haloFalloff = exp(-max(0.0, r - 0.25) * 6.2) * (0.24 + 0.18 * spiralWisp);
 
     int spectralMode = int(uSpectralMode + 0.5);
-    vec3 tint = (spectralMode == 2) ? vec3(0.45, 0.84, 1.0) : vec3(1.0, 0.82, 0.42);
-    vec3 col = mix(tint, vec3(1.0, 0.99, 0.94), clamp(photonRing, 0.0, 1.0)) * (photonRing + secondRing + haloFalloff);
+    vec3 tint = (spectralMode == 2) ? vec3(0.55, 0.88, 1.0) : vec3(1.0, 0.94, 0.82);
+    vec3 col = mix(tint, vec3(1.0, 0.995, 0.98), clamp(photonRing, 0.0, 1.0)) * (photonRing + secondRing + haloFalloff);
     col = mix(col, vec3(0.0), innerShadow);
-    float alpha = clamp((innerShadow * 0.95 + photonRing * 0.90 + secondRing * 0.55 + haloFalloff * 0.65) * (1.0 - smoothstep(0.75, 1.0, r)) * uOpacity, 0.0, 0.98);
+    float alpha = clamp((innerShadow * 0.96 + photonRing * 0.88 + secondRing * 0.40 + haloFalloff * 0.45) * (1.0 - smoothstep(0.75, 1.0, r)) * uOpacity, 0.0, 0.98);
     gl_FragColor = vec4(col, alpha);
   }
 `;
@@ -2301,8 +2301,8 @@ export class BlackHoleSceneController {
   private bootAutoExpandPending = false;
   private bootAutoExpandElapsed = 0.0;
   private bootWatermarkDelay = 1.5;
-  private bootSeedLoadDelay = 2.5;
-  private bootAutoExpandDelay = 4.5;
+  private bootSeedLoadDelay = 3.0;
+  private bootAutoExpandDelay = 5.0;
   private bootWatermarkEmitted = false;
   private singularitySeedLoaded = true;
   private seedLoadProgress = 1.0;

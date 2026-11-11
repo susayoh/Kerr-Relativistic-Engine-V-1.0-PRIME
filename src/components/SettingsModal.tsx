@@ -36,6 +36,7 @@ import {
   Layers,
   Palette,
   Activity,
+  Crown,
 } from 'lucide-react';
 import {
   VisualizerSettings,
@@ -67,6 +68,7 @@ import {
   generateKerrEngineCalculationRun,
 } from './KerrRelativityEngineModal';
 import { IQTestModule } from './IQTestModule';
+import { ChessModule } from './ChessModule';
 
 export const SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
   {
@@ -407,6 +409,8 @@ interface SettingsModalProps {
     run: KerrEngineRunLog,
     applyParamsToScene?: Partial<BlackHoleParams>
   ) => void;
+  isDevMode?: boolean;
+  onLockDevSession?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -428,14 +432,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onExportGeodesicCsv,
   activeParams,
   onRecordDiagnosticStressTest,
+  isDevMode = false,
+  onLockDevSession,
 }) => {
   const haptics = useHaptics({
     enabled: settings.hapticsEnabled !== false,
     intensity: settings.hapticsIntensity ?? 1.0,
   });
-  const [activeTab, setActiveTab] = useState<'settings' | 'songs' | 'iq_test' | 'diagnostic'>(
-    'settings'
-  );
+  const [activeTab, setActiveTab] = useState<
+    'settings' | 'songs' | 'iq_test' | 'chess' | 'diagnostic'
+  >('settings');
+
+  useEffect(() => {
+    if (!isDevMode && (activeTab === 'songs' || activeTab === 'iq_test' || activeTab === 'chess')) {
+      setActiveTab('settings');
+    }
+  }, [isDevMode, activeTab]);
   const [secretPasswordInput, setSecretPasswordInput] = useState<string>('');
   const [secretAuthError, setSecretAuthError] = useState<boolean>(false);
   const [isInlineKerrLogOpen, setIsInlineKerrLogOpen] = useState<boolean>(false);
@@ -751,48 +763,71 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <span>Settings</span>
           </button>
 
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'songs'}
-            data-testid="settings-tab-songs"
-            onClick={() => {
-              haptics.light();
-              setActiveTab('songs');
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'songs'
-                ? 'bg-fuchsia-500/20 border-fuchsia-400 text-fuchsia-200 shadow-[0_0_12px_rgba(217,70,239,0.22)]'
-                : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
-            }`}
-          >
-            <Music className="w-3.5 h-3.5 text-fuchsia-400" />
-            <span>Songs</span>
-            {playerState.isPlaying && (
-              <span className="text-[9.5px] text-amber-300 font-bold">
-                • {playerState.playbackRate.toFixed(2).replace(/\.00$/, '.0')}x
-              </span>
-            )}
-          </button>
+          {isDevMode && (
+            <>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'songs'}
+                data-testid="settings-tab-songs"
+                onClick={() => {
+                  haptics.light();
+                  setActiveTab('songs');
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === 'songs'
+                    ? 'bg-fuchsia-500/20 border-fuchsia-400 text-fuchsia-200 shadow-[0_0_12px_rgba(217,70,239,0.22)]'
+                    : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+                }`}
+              >
+                <Music className="w-3.5 h-3.5 text-fuchsia-400" />
+                <span>Songs</span>
+                {playerState.isPlaying && (
+                  <span className="text-[9.5px] text-amber-300 font-bold">
+                    • {playerState.playbackRate.toFixed(2).replace(/\.00$/, '.0')}x
+                  </span>
+                )}
+              </button>
 
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'iq_test'}
-            data-testid="settings-tab-iq-test"
-            onClick={() => {
-              haptics.light();
-              setActiveTab('iq_test');
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'iq_test'
-                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
-                : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
-            }`}
-          >
-            <Atom className="w-3.5 h-3.5 text-cyan-400" />
-            <span>IQ Test</span>
-          </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'iq_test'}
+                data-testid="settings-tab-iq-test"
+                onClick={() => {
+                  haptics.light();
+                  setActiveTab('iq_test');
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === 'iq_test'
+                    ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                    : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+                }`}
+              >
+                <Atom className="w-3.5 h-3.5 text-cyan-400" />
+                <span>IQ Test</span>
+              </button>
+
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'chess'}
+                data-testid="settings-tab-chess"
+                onClick={() => {
+                  haptics.light();
+                  setActiveTab('chess');
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === 'chess'
+                    ? 'bg-amber-500/20 border-amber-400 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.22)]'
+                    : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+                }`}
+              >
+                <Crown className="w-3.5 h-3.5 text-amber-400" />
+                <span>Chess</span>
+              </button>
+            </>
+          )}
 
           <button
             type="button"
@@ -2666,8 +2701,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
         )}
 
-        {/* TAB 2: Songs Studio Deck, Web Audio DSP Mastering & Speed Changer */}
-        {activeTab === 'songs' && (
+        {/* TAB 2: Songs Studio Deck, Web Audio DSP Mastering & Speed Changer (Dev Mode Only) */}
+        {isDevMode && activeTab === 'songs' && (
           <div
             data-testid="settings-tab-panel-songs"
             className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs"
@@ -3160,9 +3195,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         )}
 
-        {/* TAB 3: IQ Test Module (General Relativity & Astrophysics IQ Assessment) */}
-        {activeTab === 'iq_test' && (
+        {/* TAB 3: IQ Test Module (Dev Mode Only) */}
+        {isDevMode && activeTab === 'iq_test' && (
           <IQTestModule
+            uiTheme={activeUiThemeId}
+            onHapticLight={() => haptics.light()}
+            onHapticMedium={() => haptics.medium()}
+            onHapticSuccess={() => haptics.success()}
+          />
+        )}
+
+        {/* TAB 3b: Chess Sandbox Module (Dev Mode Only) */}
+        {isDevMode && activeTab === 'chess' && (
+          <ChessModule
             uiTheme={activeUiThemeId}
             onHapticLight={() => haptics.light()}
             onHapticMedium={() => haptics.medium()}
@@ -3457,7 +3502,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Modal Footer */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 border-t border-neutral-800/90 bg-neutral-950">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => {
@@ -3478,6 +3523,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 <Compass className="w-3.5 h-3.5 text-sky-400" />
                 <span>{t.resetPhysics}</span>
+              </button>
+            )}
+
+            {isDevMode && (
+              <button
+                type="button"
+                data-testid="lock-dev-session-btn"
+                onClick={() => {
+                  haptics.medium();
+                  try {
+                    window.localStorage.removeItem('kerr_dev_auth');
+                  } catch {
+                    // Ignore storage errors
+                  }
+                  trapQueenPlayer.stopAndReset();
+                  setActiveTab('settings');
+                  onLockDevSession?.();
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/70 border border-rose-500/45 text-rose-300 hover:text-rose-100 transition-colors text-xs font-mono cursor-pointer"
+                title="Clear developer authentication token and restore public mode"
+              >
+                <Lock className="w-3.5 h-3.5 text-rose-400" />
+                <span>Lock Dev Session</span>
               </button>
             )}
           </div>

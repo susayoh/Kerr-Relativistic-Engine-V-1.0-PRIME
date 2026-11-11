@@ -1,5 +1,5 @@
 {
-  "name": Kerr Engine",
+  "name": "Kerr Engine",
   "description": "Interactive 3D relativistic black hole visualization featuring Kerr spacetime geodesics, Doppler-beamed accretion disk shaders, gravitational lensing, and live telemetry.",
   "requestFramePermissions": [],
   "majorCapabilities": [
