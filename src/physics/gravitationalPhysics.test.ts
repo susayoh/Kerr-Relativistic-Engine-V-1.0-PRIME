@@ -90,3 +90,11 @@ test('buildGeodesicTrajectoryCsv formats header and rows with valid columns', ()
   assert.ok(lines[0].startsWith('ray_id,step_index,is_live_pulse_head,outcome'));
   assert.ok(ASTROPHYSICAL_PRESETS.length >= 5);
 });
+
+test('DEFAULT_VISUALIZER_SETTINGS defaults to classic 3D disk and ULTRA Kerr engine', async () => {
+  const { DEFAULT_VISUALIZER_SETTINGS } = await import('../scene/BlackHoleScene');
+  assert.equal(DEFAULT_VISUALIZER_SETTINGS.accretionDiskStyle, 'classic');
+  assert.equal(DEFAULT_VISUALIZER_SETTINGS.kerrEngineTier, 'ultra');
+  assert.equal(DEFAULT_VISUALIZER_SETTINGS.dynamicResolutionScaling, false);
+});
+

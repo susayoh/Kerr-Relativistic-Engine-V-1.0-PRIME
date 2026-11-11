@@ -472,15 +472,35 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
             </div>
 
-            <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-300 shrink-0 ml-1">
-              <Terminal className="w-4 h-4" />
+            <div className="relative flex items-center justify-center w-7 h-7 rounded-md bg-[#201A17] border border-[#D97757]/55 shadow-[0_0_14px_rgba(217,119,87,0.28)] shrink-0 ml-1">
+              <svg
+                viewBox="0 0 24 24"
+                className="w-4 h-4 text-[#E08263] drop-shadow-[0_0_6px_rgba(217,119,87,0.55)]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7" />
+                <path d="M8.4 3.2l7.2 17.6M15.6 3.2L8.4 20.8M3.2 8.4l17.6 7.2M3.2 15.6l17.6-7.2" strokeWidth="1.4" opacity="0.8" />
+                <circle cx="12" cy="12" r="2.6" className="fill-[#1F1B18] stroke-[#F4B097]" strokeWidth="1.75" />
+              </svg>
             </div>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-mono text-xs sm:text-sm font-bold tracking-wider uppercase text-white">
-                  Kerr Relativity Engine
-                </h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-display text-xs sm:text-sm font-bold tracking-[0.06em] text-[#F7F4EE] drop-shadow-[0_0_10px_rgba(244,241,234,0.28)]">
+                    Kerr Engine
+                  </h2>
+                  <span className="inline-flex items-center justify-center px-1.5 py-[2px] rounded-[4px] bg-[#241C18] border border-[#D97757]/75 font-mono text-[9.5px] font-bold text-[#F4A688] tracking-[0.08em] leading-none shadow-[0_0_10px_rgba(217,119,87,0.28),inset_0_0_4px_rgba(217,119,87,0.18)]">
+                    v1.4
+                  </span>
+                  <span className="font-mono text-[10px] font-bold text-[#D97757]/80">-</span>
+                  <span className="font-mono text-[10px] font-bold tracking-[0.08em] text-[#E89578] drop-shadow-[0_0_8px_rgba(217,119,87,0.24)]">
+                    Apex Metric Core
+                  </span>
+                </div>
                 <span
                   className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase border ${tier.badgeClass}`}
                 >
@@ -728,20 +748,40 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
         {/* Header */}
         <div className="px-4 sm:px-5 py-3.5 bg-neutral-950 border-b border-slate-800 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-300 shrink-0">
-              <Terminal className="w-4 h-4" />
+            <div className="relative flex items-center justify-center w-8 h-8 rounded-md bg-[#201A17] border border-[#D97757]/55 shadow-[0_0_14px_rgba(217,119,87,0.28)] shrink-0">
+              <svg
+                viewBox="0 0 24 24"
+                className="w-4.5 h-4.5 text-[#E08263] drop-shadow-[0_0_6px_rgba(217,119,87,0.55)]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7" />
+                <path d="M8.4 3.2l7.2 17.6M15.6 3.2L8.4 20.8M3.2 8.4l17.6 7.2M3.2 15.6l17.6-7.2" strokeWidth="1.4" opacity="0.8" />
+                <circle cx="12" cy="12" r="2.6" className="fill-[#1F1B18] stroke-[#F4B097]" strokeWidth="1.75" />
+              </svg>
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="font-display text-sm font-bold uppercase tracking-wider text-white">
-                  Kerr Relativity Engine — Calculation & Telemetry Log
-                </h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-display text-sm font-bold tracking-[0.06em] text-[#F7F4EE] drop-shadow-[0_0_10px_rgba(244,241,234,0.28)]">
+                    Kerr Engine
+                  </h2>
+                  <span className="inline-flex items-center justify-center px-1.5 py-[2px] rounded-[4px] bg-[#241C18] border border-[#D97757]/75 font-mono text-[9.5px] font-bold text-[#F4A688] tracking-[0.08em] leading-none shadow-[0_0_10px_rgba(217,119,87,0.28),inset_0_0_4px_rgba(217,119,87,0.18)]">
+                    v1.4
+                  </span>
+                  <span className="font-mono text-[10px] font-bold text-[#D97757]/80">-</span>
+                  <span className="font-mono text-[10px] font-bold tracking-[0.08em] text-[#E89578] drop-shadow-[0_0_8px_rgba(217,119,87,0.24)]">
+                    Apex Metric Core
+                  </span>
+                </div>
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
                   {logs.length} {logs.length === 1 ? 'SOLVE' : 'SOLVES'}
                 </span>
               </div>
               <p className="text-[11px] font-mono text-slate-400">
-                Complete audit trail of pre-load Boyer-Lindquist tensors, Christoffel symbols, geodesic roots & compute billing
+                Calculation & Telemetry Log — Pre-load Boyer-Lindquist tensors, Christoffel symbols & geodesic roots
               </p>
             </div>
           </div>
@@ -910,7 +950,7 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
             </div>
           ) : (
             <div className="p-8 text-center font-mono text-slate-400">
-              No Kerr Relativity Engine calculations recorded yet. Select any black hole or star to run the solver.
+              No Kerr Engine [v1.4] (Apex Metric Core) calculations recorded yet. Select any black hole or star to run the solver.
             </div>
           )}
         </div>
@@ -918,7 +958,7 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
         {/* Footer */}
         <div className="px-5 py-3 bg-neutral-950 border-t border-slate-800 flex items-center justify-between">
           <span className="font-mono text-[11px] text-slate-400">
-            Kerr Relativity Engine v4.2 · Exact Boyer-Lindquist & BPT Tensor Verification
+            Kerr Engine [v1.4] · Apex Metric Core · Exact Boyer-Lindquist & BPT Tensor Verification
           </span>
           <button
             type="button"

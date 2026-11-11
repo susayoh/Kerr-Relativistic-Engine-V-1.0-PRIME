@@ -330,7 +330,9 @@ export default function App() {
       // Never append WARNING: Frame spike detected or background spike warnings while the user is actively orbiting/zooming the camera
       if (
         (isDraggingCameraRef.current || sceneControllerRef.current?.isOrbitingCamera()) &&
-        (message.toLowerCase().includes('spike') || category !== 'system')
+        (message.includes('WARNING: Frame spike detected') ||
+          message.toLowerCase().includes('spike') ||
+          category !== 'system')
       ) {
         return;
       }
@@ -349,6 +351,11 @@ export default function App() {
     [formatLogTimestamp]
   );
 
+  const appendLogEventRef = useRef(appendLogEvent);
+  useEffect(() => {
+    appendLogEventRef.current = appendLogEvent;
+  }, [appendLogEvent]);
+
   // Initialize Three.js WebGL scene once inside isolated ref container
   useEffect(() => {
     const mountEl = canvasMountRef.current;
@@ -358,26 +365,26 @@ export default function App() {
       onFeatureSelect: (feat) => {
         setInspectedFeature(feat);
         if (feat) {
-          appendLogEvent('system', `Inspected anatomical region: ${feat.title}`, feat.formula);
+          appendLogEventRef.current('system', `Inspected anatomical region: ${feat.title}`, feat.formula);
         }
       },
       onTrajectoryCreated: (traj) => {
         setLastTrajectory(traj);
         relativisticAudio.triggerGeodesicPing(traj.outcome);
         if (traj.outcome === 'captured') {
-          appendLogEvent(
+          appendLogEventRef.current(
             'geodesic',
             'Geodesic trajectory completed',
             `Photon captured by r₊ event horizon (b = ${traj.impactParameterB.toFixed(2)} Rₛ)`
           );
         } else if (traj.outcome === 'critical-orbit') {
-          appendLogEvent(
+          appendLogEventRef.current(
             'geodesic',
             'Geodesic trajectory completed',
             `Critical photon-ring resonance orbit (b = ${traj.impactParameterB.toFixed(2)} Rₛ)`
           );
         } else {
-          appendLogEvent(
+          appendLogEventRef.current(
             'geodesic',
             'Geodesic trajectory completed',
             `Gravitational lensing deflection scattered ray (b = ${traj.impactParameterB.toFixed(2)} Rₛ)`
@@ -399,7 +406,7 @@ export default function App() {
       onObserverReadoutChange: ({ rRs, thetaDeg, phiDeg }, forceImmediate) => {
         cameraCoordsRef.current = { r: rRs, theta: thetaDeg, phi: phiDeg };
         const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        if (forceImmediate || now - lastObserverDomUpdateRef.current >= 100) {
+        if (forceImmediate || now - lastObserverDomUpdateRef.current >= 200) {
           lastObserverDomUpdateRef.current = now;
           const el = observerReadoutRef.current;
           if (el) {
@@ -414,7 +421,7 @@ export default function App() {
         setIsSingularityCollapsed(collapsed);
         if (!collapsed) {
           relativisticAudio.triggerAccretionShockPulse(false);
-          appendLogEvent(
+          appendLogEventRef.current(
             'metric',
             'Singularity seed expanded into full horizon',
             'Kerr event horizon r₊ & relativistic accretion disk deployed'
@@ -434,7 +441,7 @@ export default function App() {
       setControllerInstance(null);
       relativisticAudio.dispose();
     };
-  }, [appendLogEvent]);
+  }, []);
 
   // Initialize & synchronize secondary Three.js WebGL scene when Side-by-Side Compare Mode is active
   useEffect(() => {
@@ -717,7 +724,7 @@ export default function App() {
       relativisticAudio.triggerAccretionShockPulse(isStellarCategory(found.category));
       appendLogEvent(
         'metric',
-        `Kerr Relativity Engine [${run.tierName.toUpperCase()}] converged (${run.totalDurationMs} ms)`,
+        `Kerr Engine [v1.4] Apex Metric Core (${run.tierName.toUpperCase()}) converged (${run.totalDurationMs} ms)`,
         `${run.modelCode} · Cost: $${run.costUsd.toFixed(3)} · g_tt = ${run.summaryMetrics.g_tt.toFixed(3)}`
       );
     },
@@ -728,7 +735,7 @@ export default function App() {
     (tierOverride?: KerrEngineTierId) => {
       const currentPreset =
         ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
-      const tierToUse = tierOverride || settings.kerrEngineTier || 'standard';
+      const tierToUse = tierOverride || settings.kerrEngineTier || 'ultra';
       const run = generateKerrEngineCalculationRun(currentPreset, params, tierToUse);
       setKerrEngineLogs((prev) => [run, ...prev.slice(0, 29)]);
       setActiveKerrTerminalRun(run);
@@ -739,7 +746,7 @@ export default function App() {
   // Kerr Relativity Engine is ALWAYS active on Standard, Linear, and Advanced tiers,
   // and can only be bypassed when the Ultra tier is selected and toggled off.
   const isKerrEngineActive =
-    (settings.kerrEngineTier || 'standard') !== 'ultra' || settings.kerrEngineEnabled !== false;
+    (settings.kerrEngineTier || 'ultra') !== 'ultra' || settings.kerrEngineEnabled !== false;
 
   const handleSelectPreset = useCallback(
     (presetId: string) => {
@@ -753,10 +760,13 @@ export default function App() {
         presetId: found.id,
         trueMassSolar: found.trueMassSolar,
         objectCategory: found.category,
+        accretionState: found.params.accretionState ?? params.accretionState ?? 'quiescent',
         // Ensure ergosphere, anatomy guide, and stars remain off when clicking a black hole
         layers: {
           ...params.layers,
           ...(found.params.layers || {}),
+          accretionDisk: true,
+          spacetimeGrid: true,
           ergosphereCage: false,
           orbitalStars: false,
           microlensingStar: false,
@@ -769,7 +779,7 @@ export default function App() {
       const run = generateKerrEngineCalculationRun(
         found,
         nextParams,
-        settings.kerrEngineTier || 'standard'
+        settings.kerrEngineTier || 'ultra'
       );
       setKerrEngineLogs((prev) => [run, ...prev.slice(0, 29)]);
 
@@ -814,7 +824,7 @@ export default function App() {
       const run = generateKerrEngineCalculationRun(
         found,
         nextCompareParams,
-        settings.kerrEngineTier || 'standard'
+        settings.kerrEngineTier || 'ultra'
       );
       setKerrEngineLogs((prev) => [run, ...prev.slice(0, 29)]);
 
@@ -852,9 +862,12 @@ export default function App() {
       presetId: currentPreset.id,
       trueMassSolar: currentPreset.trueMassSolar,
       objectCategory: currentPreset.category,
+      accretionState: currentPreset.params.accretionState ?? 'quiescent',
       layers: {
         ...DEFAULT_PARAMS.layers,
         ...(currentPreset.params.layers || {}),
+        accretionDisk: true,
+        spacetimeGrid: true,
         ergosphereCage: false,
         orbitalStars: false,
         microlensingStar: false,
@@ -992,6 +1005,104 @@ export default function App() {
     setAudioEnabled(enabled);
   }, [params]);
 
+  const drawKerrEngineWatermark = useCallback(
+    (ctx: CanvasRenderingContext2D, canvasWidth: number, canvasHeight: number) => {
+      const s = Math.max(0.85, Math.min(2.2, canvasWidth / 1400));
+      const padX = Math.round(28 * s);
+      const padY = Math.round(24 * s);
+
+      ctx.save();
+
+      // Subtle optical drop shadow for legibility over both deep space and bright accretion glow (zero background box)
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.88)';
+      ctx.shadowBlur = 9 * s;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 1.5 * s;
+
+      const primaryFont = `700 ${Math.round(12 * s)}px "Chakra Petch", "Plus Jakarta Sans", sans-serif`;
+      const versionFont = `600 ${Math.round(10.5 * s)}px "JetBrains Mono", monospace`;
+      const subFont = `500 ${Math.round(8.5 * s)}px "JetBrains Mono", monospace`;
+
+      const titleStr = 'KERR RELATIVITY ENGINE';
+      const versionStr = 'v1.4';
+      const subStr = 'GENERATED BY KERR ENGINE · APEX METRIC CORE';
+
+      ctx.font = primaryFont;
+      const titleW = ctx.measureText(titleStr).width;
+      ctx.font = versionFont;
+      const versionW = ctx.measureText(versionStr).width;
+      ctx.font = subFont;
+      const subW = ctx.measureText(subStr).width;
+
+      const topRowW = titleW + Math.round(7 * s) + versionW;
+      const textBlockW = Math.max(topRowW, subW);
+      const emblemRadius = 9.5 * s;
+      const dividerGap = Math.round(11 * s);
+      const totalWidth = Math.round(emblemRadius * 2) + dividerGap * 2 + textBlockW;
+
+      const startX = Math.max(16, canvasWidth - totalWidth - padX);
+      const centerY = Math.max(24, canvasHeight - padY - Math.round(14 * s));
+
+      // 1. Floating 12-ray starburst singularity logo emblem (no enclosing box)
+      const cx = startX + emblemRadius;
+      const cy = centerY;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.strokeStyle = 'rgba(232, 139, 107, 0.92)';
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 6; i++) {
+        const angle = (i * Math.PI) / 6;
+        const rRay = (i % 2 === 0 ? emblemRadius : emblemRadius * 0.82);
+        ctx.beginPath();
+        ctx.lineWidth = (i % 3 === 0 ? 1.75 : 1.2) * s;
+        ctx.moveTo(Math.cos(angle) * -rRay, Math.sin(angle) * -rRay);
+        ctx.lineTo(Math.cos(angle) * rRay, Math.sin(angle) * rRay);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, 2.6 * s, 0, Math.PI * 2);
+      ctx.fillStyle = '#090A0F';
+      ctx.fill();
+      ctx.lineWidth = 1.5 * s;
+      ctx.strokeStyle = 'rgba(246, 184, 158, 0.95)';
+      ctx.stroke();
+      ctx.restore();
+
+      // 2. Delicate vertical architectural hairline divider
+      const dividerX = cx + emblemRadius + dividerGap;
+      const dividerHalfH = 11.5 * s;
+      ctx.beginPath();
+      ctx.lineWidth = Math.max(1, 1 * s);
+      ctx.strokeStyle = 'rgba(244, 241, 234, 0.24)';
+      ctx.moveTo(dividerX, centerY - dividerHalfH);
+      ctx.lineTo(dividerX, centerY + dividerHalfH);
+      ctx.stroke();
+
+      // 3. Two-line precision typography stack (unboxed)
+      const textX = dividerX + dividerGap;
+      const topRowY = centerY - 5.5 * s;
+      const bottomRowY = centerY + 7.5 * s;
+
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+
+      ctx.font = primaryFont;
+      ctx.fillStyle = 'rgba(247, 244, 238, 0.92)';
+      ctx.fillText(titleStr, textX, topRowY);
+
+      ctx.font = versionFont;
+      ctx.fillStyle = 'rgba(232, 139, 107, 0.95)';
+      ctx.fillText(versionStr, textX + titleW + Math.round(7 * s), topRowY + 0.5 * s);
+
+      ctx.font = subFont;
+      ctx.fillStyle = 'rgba(214, 208, 198, 0.68)';
+      ctx.fillText(subStr, textX, bottomRowY);
+
+      ctx.restore();
+    },
+    []
+  );
+
   const handleExportSnapshot = useCallback(async () => {
     if (!sceneControllerRef.current) return;
     haptics.success();
@@ -1056,6 +1167,7 @@ export default function App() {
         if (ctx) {
           ctx.drawImage(bgImg, 0, 0, compositeCanvas.width, compositeCanvas.height);
           ctx.drawImage(uiImg, 0, 0, compositeCanvas.width, compositeCanvas.height);
+          drawKerrEngineWatermark(ctx, compositeCanvas.width, compositeCanvas.height);
           const compositeUrl = compositeCanvas.toDataURL('image/png');
           const link = document.createElement('a');
           link.download = filename;
@@ -1068,13 +1180,38 @@ export default function App() {
       }
     }
 
-    // Default clean 3D WebGL render (auto-off behavior)
+    // Default clean 3D WebGL render with Kerr Relativity Engine v1.4 watermark
     const dataUrl = sceneControllerRef.current.captureSnapshotDataUrl();
+    try {
+      const cleanImg = new Image();
+      await new Promise<void>((resolve, reject) => {
+        cleanImg.onload = () => resolve();
+        cleanImg.onerror = reject;
+        cleanImg.src = dataUrl;
+      });
+      const watermarkCanvas = document.createElement('canvas');
+      watermarkCanvas.width = cleanImg.naturalWidth || cleanImg.width || 1920;
+      watermarkCanvas.height = cleanImg.naturalHeight || cleanImg.height || 1080;
+      const wCtx = watermarkCanvas.getContext('2d');
+      if (wCtx) {
+        wCtx.drawImage(cleanImg, 0, 0, watermarkCanvas.width, watermarkCanvas.height);
+        drawKerrEngineWatermark(wCtx, watermarkCanvas.width, watermarkCanvas.height);
+        const watermarkedUrl = watermarkCanvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = watermarkedUrl;
+        link.click();
+        return;
+      }
+    } catch {
+      // Fallback if image decode fails
+    }
+
     const link = document.createElement('a');
     link.download = filename;
     link.href = dataUrl;
     link.click();
-  }, [activePresetId, haptics, settings.includeUiInExport]);
+  }, [activePresetId, drawKerrEngineWatermark, haptics, settings.includeUiInExport]);
 
   const stopRecordingCleanup = useCallback(() => {
     if (recordingRafRef.current !== null) {
@@ -1176,6 +1313,9 @@ export default function App() {
           ctx.drawImage(uiOverlayCanvas, 0, 0, recordCanvas.width, recordCanvas.height);
         }
       }
+
+      // Stamp the Kerr Relativity Engine v1.4 watermark & starburst logo on every video frame
+      drawKerrEngineWatermark(ctx, recordCanvas.width, recordCanvas.height);
 
       recordingRafRef.current = requestAnimationFrame(renderCompositeFrame);
     };
@@ -1823,7 +1963,7 @@ export default function App() {
         isOpen={isKerrLogModalOpen}
         onClose={() => setIsKerrLogModalOpen(false)}
         logs={kerrEngineLogs}
-        activeTierId={settings.kerrEngineTier || 'standard'}
+        activeTierId={settings.kerrEngineTier || 'ultra'}
         onSelectTier={(nextTier) =>
           setSettings((prev) => ({
             ...prev,

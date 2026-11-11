@@ -96,9 +96,13 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
   useEffect(() => {
     if (!sceneController) return;
     setTelemetry(sceneController.getPerformanceTelemetry());
+    let lastPerfUpdateMs = performance.now();
 
-    const FRAME_INTERVAL_MS = 250; // 4 Hz (once every 250ms)
+    const FRAME_INTERVAL_MS = 150;
     const timerId = window.setInterval(() => {
+      const now = performance.now();
+      if (now - lastPerfUpdateMs < 150) return;
+      lastPerfUpdateMs = now;
       setTelemetry(sceneController.getPerformanceTelemetry());
     }, FRAME_INTERVAL_MS);
 
@@ -192,7 +196,7 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
 
   const handleToggleSafeDiagnosticMode = () => {
     if (isSafeDiagnosticMode) {
-      // Restore full relativistic shaders
+      // Restore full relativistic shaders while keeping WebGL2 Hardware & Volumetric Raymarched active
       onChangeParams((prev) => ({
         ...prev,
         gravitationalLensing: true,
@@ -204,19 +208,19 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
       }));
       onUpdateSettings((prev) => ({
         ...prev,
-        accretionDiskStyle: 'classic',
+        accretionDiskStyle: 'raymarched',
         lensFlareIntensity: 1.0,
         motionBlurEnabled: true,
       }));
     } else {
-      // Isolate core geometry by bypassing heavy full-screen fragment passes
+      // Isolate core geometry without downgrading WebGL2 Hardware or Volumetric Raymarched mode
       onChangeParams((prev) => ({
         ...prev,
         gravitationalLensing: false,
       }));
       onUpdateSettings((prev) => ({
         ...prev,
-        accretionDiskStyle: 'classic',
+        accretionDiskStyle: 'raymarched',
         lensFlareIntensity: 0.0,
         motionBlurEnabled: false,
         timeLapseEnabled: false,

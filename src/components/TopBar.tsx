@@ -66,31 +66,62 @@ export const TopBar: React.FC<TopBarProps> = ({
   const activePreset = ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
 
   return (
-    <header className="hud-panel relative z-20 flex items-center justify-between gap-1.5 sm:gap-2 px-2 sm:px-3.5 py-1.5 sm:py-2 bg-[#05070d]/95 border-b border-neutral-800 overflow-x-auto no-scrollbar">
-      {/* Zone 1: Smart Brand, Active Target Badge & System Category Dropdown */}
-      <div className="flex items-center gap-2 shrink-0">
+    <header className="hud-panel relative z-20 flex items-center justify-between gap-1.5 sm:gap-2.5 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-[#0c0b0a]/95 border-b border-[#292420] shadow-[0_4px_24px_rgba(0,0,0,0.75)] overflow-x-auto no-scrollbar">
+      {/* Zone 1: Claude-Inspired Terminal Brand Selector, Active Target Badge & System Category Dropdown */}
+      <div className="flex items-center gap-2.5 shrink-0">
         <a
           href="#top"
           onClick={(e) => {
             e.preventDefault();
             onSelectPreset('ton618');
           }}
-          className="font-display text-sm sm:text-base font-bold tracking-tight text-neutral-200 whitespace-nowrap hover:text-amber-300 transition-colors flex items-center gap-1.5"
+          className="group flex items-center gap-2.5 px-2.5 py-1 rounded-lg bg-[#151311] hover:bg-[#1D1A17] border border-[#332B25] hover:border-[#D97757]/60 shadow-[0_2px_14px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,248,240,0.05)] whitespace-nowrap transition-all"
+          title="Kerr Engine [v1.4] — Apex Metric Core (Reset to TON 618)"
         >
-          <span>Kerr</span>
-          <span className={isPhoneMode ? 'hidden sm:inline' : 'inline'}>{t.brandVisualizer}</span>
+          {/* Claude-Inspired Warm Terracotta Starburst / Singularity Terminal Emblem */}
+          <div className="relative flex items-center justify-center w-7 h-7 rounded-md bg-[#201A17] border border-[#D97757]/50 shadow-[0_0_14px_rgba(217,119,87,0.26)] group-hover:border-[#E89578] group-hover:shadow-[0_0_18px_rgba(217,119,87,0.42)] transition-all shrink-0">
+            <svg
+              viewBox="0 0 24 24"
+              className="w-4 h-4 text-[#E08263] drop-shadow-[0_0_6px_rgba(217,119,87,0.55)] group-hover:scale-105 transition-transform"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7" />
+              <path d="M8.4 3.2l7.2 17.6M15.6 3.2L8.4 20.8M3.2 8.4l17.6 7.2M3.2 15.6l17.6-7.2" strokeWidth="1.4" opacity="0.8" />
+              <circle cx="12" cy="12" r="2.6" className="fill-[#1F1B18] stroke-[#F4B097]" strokeWidth="1.75" />
+            </svg>
+          </div>
+
+          <div className="flex flex-col leading-none">
+            <div className="flex items-center gap-1.5">
+              <span className="font-display text-sm sm:text-[15px] font-bold tracking-[0.06em] text-[#F7F4EE] drop-shadow-[0_0_10px_rgba(244,241,234,0.28)] group-hover:text-white transition-colors">
+                Kerr Engine
+              </span>
+              <span className="inline-flex items-center justify-center px-1.5 py-[2px] rounded-[4px] bg-[#241C18] border border-[#D97757]/75 font-mono text-[9.5px] font-bold text-[#F4A688] tracking-[0.08em] leading-none shadow-[0_0_10px_rgba(217,119,87,0.28),inset_0_0_4px_rgba(217,119,87,0.18)]">
+                v1.4
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#D97757] shadow-[0_0_7px_rgba(217,119,87,0.9)]" />
+              <span className="font-mono text-[9.5px] font-bold tracking-[0.08em] text-[#E89578] drop-shadow-[0_0_8px_rgba(217,119,87,0.24)] group-hover:text-[#F4B097] transition-colors">
+                Apex Metric Core
+              </span>
+            </div>
+          </div>
         </a>
 
-        <div className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
-          <span className="text-neutral-200 font-semibold">{activePreset.name}</span>
+        <div className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#141311] border border-[#2A2521] text-[11px] font-mono tracking-wider shadow-inner">
+          <span className="text-[#F4F1EA] font-bold drop-shadow-[0_0_6px_rgba(244,241,234,0.18)]">{activePreset.name}</span>
           <span className="text-neutral-600">·</span>
           <span
             className={
               activePreset.category === 'star'
-                ? 'text-emerald-400'
+                ? 'text-emerald-400 font-semibold'
                 : activePreset.category === 'luminous_star'
-                ? 'text-indigo-400'
-                : 'text-neutral-400'
+                ? 'text-indigo-400 font-semibold'
+                : 'text-[#B8B1A6] font-medium'
             }
           >
             {activePreset.classification}

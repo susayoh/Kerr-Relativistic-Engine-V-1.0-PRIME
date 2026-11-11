@@ -424,9 +424,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             className="bg-gradient-to-br from-[#090d1a] via-neutral-950 to-neutral-950 border border-amber-500/40 rounded-xl p-4 space-y-3.5 shadow-[0_0_25px_rgba(245,158,11,0.08)]"
           >
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2 text-amber-300 font-mono text-[11px] uppercase tracking-wider font-bold">
-                <Terminal className="w-4 h-4 text-amber-400" />
-                <span>Real-Time Kerr Relativity Engine Calculation</span>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+                <Terminal className="w-4 h-4 text-[#E08263]" />
+                <span className="font-display text-xs font-bold tracking-[0.06em] text-[#F7F4EE] drop-shadow-[0_0_8px_rgba(244,241,234,0.25)]">
+                  Kerr Engine
+                </span>
+                <span className="inline-flex items-center justify-center px-1.5 py-[2px] rounded-[4px] bg-[#241C18] border border-[#D97757]/75 font-mono text-[9px] font-bold text-[#F4A688] tracking-[0.08em] leading-none shadow-[0_0_8px_rgba(217,119,87,0.25)]">
+                  v1.4
+                </span>
+                <span className="font-mono text-[10px] font-bold text-[#D97757]/80">-</span>
+                <span className="font-mono text-[10px] font-bold tracking-[0.08em] text-[#E89578]">
+                  Apex Metric Core
+                </span>
               </div>
 
               <div className="flex items-center gap-2">
@@ -463,12 +472,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <span
                   className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
-                    (settings.kerrEngineTier || 'standard') !== 'ultra' || settings.kerrEngineEnabled !== false
+                    (settings.kerrEngineTier || 'ultra') !== 'ultra' || settings.kerrEngineEnabled !== false
                       ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                       : 'bg-amber-500/20 text-amber-200 border-amber-500/40'
                   }`}
                 >
-                  {(settings.kerrEngineTier || 'standard') !== 'ultra'
+                  {(settings.kerrEngineTier || 'ultra') !== 'ultra'
                     ? 'ALWAYS ACTIVE'
                     : settings.kerrEngineEnabled !== false
                       ? 'ENGINE ACTIVE'
@@ -481,56 +490,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-start justify-between gap-4 pt-1">
               <div className="space-y-1">
                 <div className="text-neutral-100 font-semibold text-xs flex items-center gap-2 flex-wrap">
-                  <span>Pre-Load Kerr Relativity Engine Terminal</span>
-                  <span className="text-[10px] font-mono text-amber-300 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.2 rounded">
-                    {KERR_ENGINE_TIERS[settings.kerrEngineTier || 'standard'].modelCode}
+                  <span>Pre-Load Kerr Engine Terminal</span>
+                  <span className="inline-flex items-center justify-center px-1.5 py-[2px] rounded-[4px] bg-[#241C18] border border-[#D97757]/75 font-mono text-[9px] font-bold text-[#F4A688] tracking-[0.08em] leading-none">
+                    v1.4
                   </span>
-                  {(settings.kerrEngineTier || 'standard') !== 'ultra' && (
+                  <span className="font-mono text-[10px] font-bold tracking-[0.06em] text-[#E89578]">
+                    Apex Metric Core
+                  </span>
+                  <span className="text-[10px] font-mono text-amber-300 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.2 rounded">
+                    {KERR_ENGINE_TIERS[settings.kerrEngineTier || 'ultra'].modelCode}
+                  </span>
+                  {(settings.kerrEngineTier || 'ultra') !== 'ultra' && (
                     <span className="inline-flex items-center gap-1 text-[9px] font-mono text-rose-300 bg-rose-950/60 border border-rose-500/40 px-1.5 py-0.2 rounded">
                       <Lock className="w-2.5 h-2.5" /> Bypass Requires Ultra ($499/mo)
                     </span>
                   )}
                 </div>
                 <p className="text-[11px] text-neutral-400 leading-relaxed">
-                  Executes the <strong className="text-amber-200">Kerr Relativity Engine</strong> terminal before any black hole or star loads, streaming exact Boyer-Lindquist metric tensors (<span className="font-mono text-cyan-300">g_μν</span>), Christoffel symbols, ISCO roots, and radiative transfer telemetry. Always active on Standard, Linear, and Advanced tiers — only the flagship <strong className="text-amber-300">Ultra</strong> model unlocks optional terminal bypass.
+                  Executes the <strong className="text-[#F4F1EA]">Kerr Engine [v1.4] (Apex Metric Core)</strong> terminal before any black hole or star loads, streaming exact Boyer-Lindquist metric tensors (<span className="font-mono text-cyan-300">g_μν</span>), Christoffel symbols, ISCO roots, and radiative transfer telemetry. Always active on Standard, Linear, and Advanced tiers — only the flagship <strong className="text-amber-300">Ultra</strong> model unlocks optional terminal bypass.
                 </p>
               </div>
 
               <button
                 type="button"
-                disabled={(settings.kerrEngineTier || 'standard') !== 'ultra'}
+                disabled={(settings.kerrEngineTier || 'ultra') !== 'ultra'}
                 onClick={() => {
-                  if ((settings.kerrEngineTier || 'standard') === 'ultra') {
+                  if ((settings.kerrEngineTier || 'ultra') === 'ultra') {
                     toggleSetting('kerrEngineEnabled');
                   } else {
                     haptics.heavy();
                   }
                 }}
                 title={
-                  (settings.kerrEngineTier || 'standard') === 'ultra'
+                  (settings.kerrEngineTier || 'ultra') === 'ultra'
                     ? 'Toggle Ultra Instant Bypass'
                     : 'Engine is always active. Select the Ultra ($499/mo) tier to unlock engine bypass.'
                 }
                 className={`w-12 h-6.5 rounded-full transition-colors p-0.5 shrink-0 border ${
-                  (settings.kerrEngineTier || 'standard') !== 'ultra'
+                  (settings.kerrEngineTier || 'ultra') !== 'ultra'
                     ? 'bg-emerald-500/30 border-emerald-500/50 opacity-80 cursor-not-allowed'
                     : settings.kerrEngineEnabled !== false
                       ? 'bg-amber-500/40 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)] cursor-pointer'
                       : 'bg-neutral-900 border-neutral-700 cursor-pointer'
                 }`}
                 aria-pressed={
-                  (settings.kerrEngineTier || 'standard') !== 'ultra' || settings.kerrEngineEnabled !== false
+                  (settings.kerrEngineTier || 'ultra') !== 'ultra' || settings.kerrEngineEnabled !== false
                 }
                 aria-label="Toggle Real-Time Kerr Relativity Engine Calculation"
               >
                 <div
                   className={`w-5 h-5 rounded-full transition-transform flex items-center justify-center ${
-                    (settings.kerrEngineTier || 'standard') !== 'ultra' || settings.kerrEngineEnabled !== false
+                    (settings.kerrEngineTier || 'ultra') !== 'ultra' || settings.kerrEngineEnabled !== false
                       ? 'translate-x-5.5 bg-amber-300 text-neutral-950'
                       : 'translate-x-0 bg-neutral-500 text-neutral-200'
                   }`}
                 >
-                  {(settings.kerrEngineTier || 'standard') !== 'ultra' && (
+                  {(settings.kerrEngineTier || 'ultra') !== 'ultra' && (
                     <Lock className="w-2.5 h-2.5 text-neutral-950" />
                   )}
                 </div>
@@ -541,7 +556,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
               {(Object.keys(KERR_ENGINE_TIERS) as KerrEngineTierId[]).map((tierKey) => {
                 const tier = KERR_ENGINE_TIERS[tierKey];
-                const isSelected = (settings.kerrEngineTier || 'standard') === tierKey;
+                const isSelected = (settings.kerrEngineTier || 'ultra') === tierKey;
 
                 return (
                   <button
@@ -672,7 +687,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={() => {
                       haptics.medium();
                       onClose();
-                      onTriggerKerrCalculation(settings.kerrEngineTier || 'standard');
+                      onTriggerKerrCalculation(settings.kerrEngineTier || 'ultra');
                     }}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 font-bold cursor-pointer transition-colors"
                   >
@@ -690,9 +705,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 className="mt-2 p-3 rounded-xl bg-[#03060c] border border-amber-500/40 space-y-2.5 font-mono text-[10px]"
               >
                 <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2 flex-wrap">
-                  <div className="flex items-center gap-1.5 text-amber-300 font-bold uppercase">
+                  <div className="flex items-center gap-1.5 text-[#E89578] font-bold tracking-wider">
                     <Terminal className="w-3.5 h-3.5" />
-                    <span>Kerr Relativity Engine — Calculation & Logic Log</span>
+                    <span>Kerr Engine [v1.4] · Apex Metric Core — Calculation & Logic Log</span>
                   </div>
                   {kerrEngineLogs.length > 1 && (
                     <div className="flex items-center gap-1 flex-wrap">

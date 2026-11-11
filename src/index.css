@@ -109,21 +109,25 @@ input[type="range"].sci-slider::-webkit-slider-thumb:hover {
   border-radius: 9999px;
 }
 
-/* GPU compositor layer isolation for floating HUD panels to prevent full-screen canvas repaints */
+/* GPU compositor layer isolation & premium terminal typography for floating HUD panels */
 .hud-panel {
   contain: layout style paint;
   transform: translateZ(0);
   backface-visibility: hidden;
   will-change: transform;
-  background-color: rgba(10, 12, 18, 0.88);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  letter-spacing: 0.03em;
+  -webkit-font-smoothing: antialiased;
+  text-shadow: 0 0 12px rgba(244, 241, 234, 0.08);
 }
 
 .hud-dock {
   contain: layout style paint;
+  transform: translateZ(0);
   backface-visibility: hidden;
   will-change: transform;
+  letter-spacing: 0.03em;
+  -webkit-font-smoothing: antialiased;
+  text-shadow: 0 0 12px rgba(244, 241, 234, 0.08);
 }
 
 

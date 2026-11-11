@@ -40,13 +40,15 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
   const s2DilationValRef = useRef<HTMLSpanElement | null>(null);
 
   const [hoverRadius, setHoverRadius] = useState<number | null>(null);
+  const lastStateUpdateRef = useRef<number>(0);
+  const lastHoverUpdateRef = useRef<number>(0);
 
   // Pulse animation phase for real-time radar sweep / beacon effect
   const radarSweepAngleRef = useRef<number>(0);
 
-  // Imperative 2D canvas + DOM ref update loop throttled to 12.5 FPS (every 80ms)
+  // Imperative 2D canvas + DOM ref update loop throttled to at most once every 150ms
   useEffect(() => {
-    const FRAME_INTERVAL_MS = 80; // 12.5 FPS (10-15 FPS maximum)
+    const FRAME_INTERVAL_MS = 150;
 
     const render = () => {
       const time = performance.now();
@@ -57,8 +59,12 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
 
       const data: OverheadTelemetryData = sceneController.getOverheadTelemetry();
 
-      // Only toggle React state if S-Stars layer visibility boolean actually changes
-      if (data.orbitalStarsVisible !== orbitalStarsVisibleRef.current) {
+      // Throttle React state updates to at most once every 150ms
+      if (
+        data.orbitalStarsVisible !== orbitalStarsVisibleRef.current &&
+        time - lastStateUpdateRef.current >= 150
+      ) {
+        lastStateUpdateRef.current = time;
         orbitalStarsVisibleRef.current = data.orbitalStarsVisible;
         setOrbitalStarsVisible(data.orbitalStarsVisible);
       }
@@ -373,6 +379,9 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
 
   const handleCanvasMouseMove = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const now = performance.now();
+      if (now - lastHoverUpdateRef.current < 150) return;
+      lastHoverUpdateRef.current = now;
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
