@@ -36,9 +36,7 @@ import { BackgroundSelectorModal } from './components/BackgroundSelectorModal';
 import { BlackHoleAnatomyOverlay } from './components/BlackHoleAnatomyOverlay';
 import { OverheadMapWidget } from './components/OverheadMapWidget';
 import { TimeDilationDisplay } from './components/TimeDilationDisplay';
-const LazySettingsModal = React.lazy(() =>
-  import('./components/SettingsModal').then((m) => ({ default: m.SettingsModal }))
-);
+import { SettingsModal } from './components/SettingsModal';
 import {
   EventLogOverlay,
   AstrophysicalLogEvent,
@@ -2422,10 +2420,11 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   {/* 12-Ray Starburst Singularity Emblem (Same as Watermark Logo) */}
                   <svg
+                    data-testid="boot-kerr-engine-logo"
                     width="18"
                     height="18"
                     viewBox="-24 -24 48 48"
-                    className="shrink-0 overflow-visible"
+                    className="shrink-0 overflow-visible animate-[spin_3.6s_linear_infinite] origin-center will-change-transform"
                     aria-hidden="true"
                   >
                     {[0, 1, 2, 3, 4, 5].map((i) => {
@@ -2468,11 +2467,11 @@ export default function App() {
 
               <div className="flex items-center gap-2.5 text-zinc-100 font-semibold tracking-wider text-[11px]">
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-200 animate-pulse shrink-0" />
-                <span>INITIALIZING KERR ENGINE...</span>
+                <span>{t.bootInitializingTitle}</span>
               </div>
 
               <div className="text-[10px] text-zinc-400 tracking-wider pl-4">
-                Loading Apex Metric Core &amp; Geodesic Solver
+                {t.bootInitializingSubtitle}
               </div>
 
               <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
@@ -2491,8 +2490,9 @@ export default function App() {
             }`}
           >
             <div className="flex items-center gap-4 px-6 py-4 drop-shadow-[0_6px_28px_rgba(0,0,0,0.95)]">
-              {/* 12-Ray Starburst Singularity Emblem */}
+              {/* 12-Ray Starburst Singularity Emblem (Static on Watermark; Only Initializing UI Spins) */}
               <svg
+                data-testid="watermark-kerr-engine-logo"
                 width="44"
                 height="44"
                 viewBox="-24 -24 48 48"
@@ -2833,35 +2833,31 @@ export default function App() {
         }
       />
 
-      {/* Visualizer Settings & Preferences Modal (Lazy-loaded on first open) */}
-      <React.Suspense fallback={null}>
-        {hasOpenedSettingsModal && (
-          <LazySettingsModal
-            isOpen={isSettingsModalOpen}
-            onClose={handleCloseSettingsModal}
-            settings={settings}
-            onUpdateSettings={setSettings}
-            accretionState={params.accretionState || 'quiescent'}
-            onChangeAccretionState={handleChangeAccretionState}
-            onResetPhysics={handleResetParams}
-            currentSpin={params.spin}
-            onSelectPhysicsPreset={handleSelectPhysicsPreset}
-            isRecording={isRecording}
-            recordingSeconds={recordingSeconds}
-            onToggleRecording={handleToggleRecording}
-            kerrEngineLogs={kerrEngineLogs}
-            onOpenKerrLogModal={handleOpenKerrLogModal}
-            onTriggerKerrCalculation={handleTriggerManualKerrSolve}
-            onExportGeodesicCsv={handleExportGeodesicCsvClick}
-            onExportEventLogJson={handleExportEventLogJson}
-            eventLogCount={eventLogs.length}
-            activeParams={params}
-            onRecordDiagnosticStressTest={handleRecordDiagnosticStressTest}
-            isDevMode={isDevMode}
-            onLockDevSession={handleLockDevSession}
-          />
-        )}
-      </React.Suspense>
+      {/* Visualizer Settings & Preferences Modal */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={handleCloseSettingsModal}
+        settings={settings}
+        onUpdateSettings={setSettings}
+        accretionState={params.accretionState || 'quiescent'}
+        onChangeAccretionState={handleChangeAccretionState}
+        onResetPhysics={handleResetParams}
+        currentSpin={params.spin}
+        onSelectPhysicsPreset={handleSelectPhysicsPreset}
+        isRecording={isRecording}
+        recordingSeconds={recordingSeconds}
+        onToggleRecording={handleToggleRecording}
+        kerrEngineLogs={kerrEngineLogs}
+        onOpenKerrLogModal={handleOpenKerrLogModal}
+        onTriggerKerrCalculation={handleTriggerManualKerrSolve}
+        onExportGeodesicCsv={handleExportGeodesicCsvClick}
+        onExportEventLogJson={handleExportEventLogJson}
+        eventLogCount={eventLogs.length}
+        activeParams={params}
+        onRecordDiagnosticStressTest={handleRecordDiagnosticStressTest}
+        isDevMode={isDevMode}
+        onLockDevSession={handleLockDevSession}
+      />
 
       {/* Real-Time Kerr Relativity Engine Pre-Load Terminal Modal */}
       <KerrRelativityEngineModal

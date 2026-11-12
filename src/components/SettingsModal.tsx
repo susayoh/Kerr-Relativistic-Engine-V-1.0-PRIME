@@ -81,7 +81,11 @@ const LazyIQTestModule = React.lazy(() =>
 const LazyChessModule = React.lazy(() =>
   import('./ChessModule').then((m) => ({ default: m.ChessModule }))
 );
-import { CodebaseDetailsView } from './CodebaseDetailsView';
+import {
+  CodebaseDetailsView,
+  FORMAT_CODEBASE_LINES_BADGE,
+  TOTAL_CODEBASE_LINES,
+} from './CodebaseDetailsView';
 import { DiagnosticSuiteView } from './DiagnosticSuiteView';
 
 const RAW_SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
@@ -1078,7 +1082,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
             }`}
           >
-            <span>Settings</span>
+            <span>{t.tabSettings}</span>
           </button>
 
           <button
@@ -1096,7 +1100,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
             }`}
           >
-            <span>Songs</span>
+            <span>{t.tabSongs}</span>
             {playerState.isPlaying && (
               <span className="hidden sm:inline text-[9px] text-[#1DB954] font-bold">
                 • {playerState.playbackRate.toFixed(2).replace(/\.00$/, '.0')}x
@@ -1119,7 +1123,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
             }`}
           >
-            <span>IQ Test</span>
+            <span>{t.tabIqTest}</span>
           </button>
 
           <button
@@ -1137,7 +1141,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
             }`}
           >
-            <span>Chess</span>
+            <span>{t.tabChess}</span>
           </button>
 
           <button
@@ -1155,7 +1159,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
             }`}
           >
-            <span>Diagnostic</span>
+            <span>{t.tabDiagnostic}</span>
             {Object.keys(diagnosticCompletedRuns).length > 0 && (
               <span className="hidden sm:inline text-[9px] text-zinc-300 font-bold">
                 • {Object.keys(diagnosticCompletedRuns).length}/{SPACETIME_CURVATURE_STRESS_TESTS.length}
@@ -1178,9 +1182,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
             }`}
           >
-            <span>Code</span>
-            <span className="hidden sm:inline text-[9px] text-zinc-400 font-bold">
-              • 35k
+            <span>{t.tabCode}</span>
+            <span
+              data-testid="settings-tab-code-lines"
+              title={`${TOTAL_CODEBASE_LINES.toLocaleString()} live lines of code`}
+              className="hidden sm:inline text-[9px] text-amber-300/90 font-mono font-bold"
+            >
+              • {FORMAT_CODEBASE_LINES_BADGE}
             </span>
           </button>
         </div>
@@ -1214,7 +1222,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       : 'text-zinc-200'
                   }`}
                 />
-                <span>Interface Theme & Color Architecture</span>
+                <span>{t.uiThemeSectionTitle}</span>
               </div>
               <span
                 className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${activeUiThemeOption.badgeClass}`}
@@ -1353,7 +1361,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-cyan-300 font-mono text-[11px] uppercase tracking-wider font-semibold">
                 <Zap className="w-4 h-4 text-cyan-400" />
-                <span>High-Performance Mode (WebGL Depth-Peeling &amp; Telemetry Throttle)</span>
+                <span>{t.highPerfSectionTitle}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 {Boolean(settings.webglDepthPeeling ?? settings.highPerformanceMode) && (
@@ -1376,7 +1384,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-start justify-between gap-4 pt-1">
               <div>
                 <div className="text-neutral-100 font-medium text-xs">
-                  Enable High-Performance Mode
+                  {t.enableHighPerfTitle}
                 </div>
                 <p className="text-[11px] text-neutral-300 leading-relaxed mt-0.5">
                   Alleviates main-thread UI lag and GPU fill-rate contention during continuous relativistic simulation:
@@ -1702,7 +1710,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-start justify-between gap-4 pt-1">
               <div className="space-y-1">
                 <div className="text-neutral-100 font-semibold text-xs flex items-center gap-2 flex-wrap">
-                  <span>Pre-Load Kerr Engine Terminal</span>
+                  <span>{t.kerrEnginePreloadTitle}</span>
                   <span className="inline-flex items-center justify-center px-1.5 py-[2px] rounded-[4px] bg-[#241C18] border border-[#D97757]/75 font-mono text-[9px] font-bold text-[#F4A688] tracking-[0.08em] leading-none">
                     v1.4
                   </span>
@@ -1719,7 +1727,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
                 </div>
                 <p className="text-[11px] text-neutral-400 leading-relaxed">
-                  Executes the <strong className="text-[#F4F1EA]">Kerr Engine [v1.4] (Apex Metric Core)</strong> terminal before any black hole or star loads, streaming exact Boyer-Lindquist metric tensors (<span className="font-mono text-cyan-300">g_μν</span>), Christoffel symbols, ISCO roots, and radiative transfer telemetry. Always active on Standard, Linear, and Advanced tiers — only the flagship <strong className="text-amber-300">Ultra</strong> model unlocks optional terminal bypass.
+                  Executes the <strong className="text-[#F4F1EA]">Kerr Engine [v1.4] (Apex Metric Core)</strong> terminal before any black hole or star loads, streaming exact Boyer-Lindquist metric tensors (<span className="font-mono text-cyan-300">g_μν</span>), Christoffel symbols, ISCO roots, and radiative transfer telemetry. Always active on Standard, Linear, and Advanced tiers — only the exact covariant <strong className="text-amber-300">Ultra</strong> solver unlocks optional terminal bypass.
                 </p>
               </div>
 
@@ -1764,7 +1772,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
 
-            {/* 4 Flagship Compute Tiers Grid: Standard, Linear, Advanced, Ultra */}
+            {/* 4 Covariant Metric Solvers Grid: Standard, Linear, Advanced, Ultra */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
               {(Object.keys(KERR_ENGINE_TIERS) as KerrEngineTierId[]).map((tierKey) => {
                 const tier = KERR_ENGINE_TIERS[tierKey];
@@ -2115,7 +2123,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
                   <span className="text-neutral-100 font-medium text-xs">
-                    Rapid Parameter Adjustment Ripples
+                    {t.rapidRipplesTitle}
                   </span>
                   <span
                     className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold ${
@@ -2157,14 +2165,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-4 space-y-3.5">
             <div className="flex items-center gap-2 text-amber-300 font-mono text-[11px] uppercase tracking-wider font-semibold">
               <Lock className="w-3.5 h-3.5" />
-              <span>Background & Anatomy Behavior</span>
+              <span>{t.backgroundAnatomySectionTitle}</span>
             </div>
 
             {/* Lock Background When Moving Screen */}
             <div className="flex items-center justify-between gap-4 pt-1">
               <div>
                 <div className="text-neutral-100 font-medium text-xs">
-                  Lock Background When Moving Screen
+                  {t.lockBackgroundTitle}
                 </div>
                 <p className="text-[11px] text-neutral-400 leading-relaxed mt-0.5">
                   Keeps the background stars and nebula completely stationary on screen when rotating or panning the camera.
@@ -2193,7 +2201,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between gap-4 pt-2 border-t border-neutral-900">
               <div>
                 <div className="text-neutral-100 font-medium text-xs">
-                  Toggle Off Singularity When Closing Anatomy Guide
+                  {t.syncSingularityTitle}
                 </div>
                 <p className="text-[11px] text-neutral-400 leading-relaxed mt-0.5">
                   Automatically hides the central Kerr ring singularity when you click off the Anatomy Guide.
@@ -2222,7 +2230,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between gap-4 pt-2 border-t border-neutral-900">
               <div>
                 <div className="text-neutral-100 font-medium text-xs">
-                  Always Show Central Singularity
+                  {t.alwaysShowSingularityTitle}
                 </div>
                 <p className="text-[11px] text-neutral-400 leading-relaxed mt-0.5">
                   Keep the pinpoint singularity and Kerr ring visible inside the black hole shadow even when the Anatomy Guide is off.
@@ -2252,14 +2260,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-4 space-y-3.5">
             <div className="flex items-center gap-2 text-sky-300 font-mono text-[11px] uppercase tracking-wider font-semibold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Accretion Disk Style & Relativistic Optics</span>
+              <span>{t.accretionOpticsSectionTitle}</span>
             </div>
 
             {/* Accretion State Physical Geometry Toggle (Quiescent vs Active) */}
             {onChangeAccretionState && (
               <div className="pt-1 pb-2 border-b border-neutral-900">
                 <div className="text-neutral-100 font-medium text-xs mb-1.5">
-                  Accretion State (Physical Geometry)
+                  {t.accretionStateTitle}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -2271,7 +2279,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-neutral-200'
                     }`}
                   >
-                    <div className="font-semibold text-xs">Quiescent (Razor-Thin)</div>
+                    <div className="font-semibold text-xs">{t.quiescentThin}</div>
                     <div className="text-[10px] text-neutral-400 mt-0.5 leading-snug">
                       Standard thin equatorial Novikov-Thorne disk geometry
                     </div>
@@ -2286,7 +2294,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-neutral-200'
                     }`}
                   >
-                    <div className="font-semibold text-xs">Active (Volumetric Thick)</div>
+                    <div className="font-semibold text-xs">{t.activeThick}</div>
                     <div className="text-[10px] text-neutral-400 mt-0.5 leading-snug">
                       Turbulent high-emission torus smoothly connecting lensed arcs
                     </div>
@@ -2300,7 +2308,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
                   <span className="text-neutral-100 font-medium text-xs">
-                    Accretion Shockwave Animation
+                    {t.accretionShockwaveTitle}
                   </span>
                   <span
                     className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold ${
@@ -2340,7 +2348,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Accretion Disk Renderer Toggle (Classic vs Raymarched) */}
             <div className="pt-1 pb-2 border-b border-neutral-900">
               <div className="text-neutral-100 font-medium text-xs mb-1.5">
-                Accretion Disk Renderer
+                {t.accretionRendererTitle}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -2357,7 +2365,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-neutral-200'
                   }`}
                 >
-                  <div className="font-semibold text-xs">Classic 3D Disk (Original)</div>
+                  <div className="font-semibold text-xs">{t.classicDisk}</div>
                   <div className="text-[10px] text-neutral-400 mt-0.5 leading-snug">
                     Original wide 3D equatorial ring mesh with Einstein-lensed arches
                   </div>
@@ -2377,7 +2385,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-neutral-200'
                   }`}
                 >
-                  <div className="font-semibold text-xs">Volumetric Raymarched</div>
+                  <div className="font-semibold text-xs">{t.volumetricRaymarched}</div>
                   <div className="text-[10px] text-neutral-400 mt-0.5 leading-snug">
                     Full 3D geodesic raymarched disk with ACES tone mapping
                   </div>
@@ -2389,7 +2397,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between gap-3 pt-1 pb-2 border-b border-neutral-900">
               <div>
                 <div className="text-neutral-100 font-medium text-xs flex items-center gap-1.5">
-                  <span>Dynamic Resolution Downscaling</span>
+                  <span>{t.dynamicResScalingTitle}</span>
                   <span className="text-[9.5px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                     {settings.dynamicResolutionScaling ? 'OPT-IN ON' : 'LOCKED HIGH-DPI'}
                   </span>
@@ -2422,7 +2430,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between gap-3 pt-1 pb-2 border-b border-neutral-900">
               <div>
                 <div className="text-neutral-100 font-medium text-xs flex items-center gap-1.5">
-                  <span>WebGL Depth-Peeling</span>
+                  <span>{t.webglDepthPeelingTitle}</span>
                   <span
                     className={`text-[9.5px] font-mono px-1.5 py-0.2 rounded border ${
                       Boolean(settings.webglDepthPeeling ?? settings.highPerformanceMode)
@@ -2549,7 +2557,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-neutral-100 font-medium text-xs">
-                  Naked Spacetime Distortion Intensity (No Accretion Disk)
+                  {t.nakedDistortionTitle}
                 </span>
                 <span className="font-mono text-amber-300 text-xs">
                   {settings.nakedDistortionIntensity.toFixed(2)}×
@@ -2575,7 +2583,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between gap-4 pt-2 border-t border-neutral-900">
               <div>
                 <div className="text-neutral-100 font-medium text-xs">
-                  Relativistic Camera Motion Blur
+                  {t.cameraMotionBlurTitle}
                 </div>
                 <p className="text-[11px] text-neutral-400 leading-relaxed mt-0.5">
                   Applies directional screen-space velocity blur during rapid orbital camera slews.
@@ -2666,7 +2674,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-neutral-100 font-medium text-xs">
-                  Camera Field of View (FOV)
+                  {t.cameraFovTitle}
                 </span>
                 <span className="font-mono text-emerald-300 text-xs">
                   {settings.cameraFov}°
@@ -2686,7 +2694,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between gap-4 pt-2 border-t border-neutral-900">
               <div>
                 <div className="text-neutral-100 font-medium text-xs">
-                  Sonic Boom Screen Shake
+                  {t.sonicBoomShakeTitle}
                 </div>
                 <p className="text-[11px] text-neutral-400 leading-relaxed mt-0.5">
                   Applies physical camera recoil and seismic aftershock vibration when triggering a sonic boom pulse.
@@ -2714,7 +2722,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between gap-4 pt-2 border-t border-neutral-900">
               <div>
                 <div className="text-neutral-100 font-medium text-xs">
-                  Auto-Rotate Camera Mode (Y-Axis Orbit)
+                  {t.autoRotateCameraTitle}
                 </div>
                 <p className="text-[11px] text-neutral-400 leading-relaxed mt-0.5">
                   Slowly orbits the camera around the black hole&apos;s Y-axis for a dynamic, cinematic perspective of the accretion disk.
@@ -2742,7 +2750,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {settings.autoRotate && (
               <div className="pt-1">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-neutral-300 text-[11px]">Auto-Orbit Speed</span>
+                  <span className="text-neutral-300 text-[11px]">{t.autoOrbitSpeedTitle}</span>
                   <span className="font-mono text-emerald-300 text-[11px]">
                     {settings.autoRotateSpeed.toFixed(1)}×
                   </span>
@@ -2785,7 +2793,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-neutral-100 font-medium text-xs">
-                      Focus Mode (Cinematic Immersion)
+                      {t.focusModeTitle}
                     </span>
                     <span
                       className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold ${
@@ -2983,7 +2991,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-neutral-100 font-medium text-xs">
-                      Show Performance Monitor (Three.js GPU Diagnostics)
+                      {t.showPerfMonitorTitle}
                     </span>
                     <span
                       className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold ${

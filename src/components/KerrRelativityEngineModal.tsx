@@ -50,17 +50,17 @@ export const KERR_ENGINE_TIERS: Record<KerrEngineTierId, KerrEngineTierConfig> =
   standard: {
     id: 'standard',
     name: 'Standard',
-    modelCode: 'Kerr-1S Baseline (Default)',
-    tagline: '1st-Order Weak-Field & Schwarzschild Approximation',
+    modelCode: 'Schwarzschild-Static',
+    tagline: 'Isotropic Weak-Field & Static Horizon Solver',
     monthlyPriceDisplay: 'TIER I',
     costPerSolveUsd: 1,
-    costPerSolveDisplay: 'Tier I · Baseline',
+    costPerSolveDisplay: 'Tier I · Static Metric',
     tflops: 14.2,
     tflopsDisplay: '14.2 TFLOPS',
     stepDelayMs: 280,
     holdAfterCompleteMs: 550,
     expectedLatencyDisplay: '~2.80s',
-    precisionLabel: 'FP16 Weak-Field',
+    precisionLabel: 'FP16 Isotropic Metric',
     fidelityPercent: '84.2%',
     gridResolution: '64³ Mesh',
     speedScore: 22,
@@ -70,22 +70,22 @@ export const KERR_ENGINE_TIERS: Record<KerrEngineTierId, KerrEngineTierConfig> =
     borderClass: 'border-zinc-800/90',
     accentColor: '#a1a1aa',
     description:
-      'Default single-threaded sequential solver using 1st-order Post-Newtonian and static Schwarzschild approximations. Cannot be bypassed.',
+      'Sequential static-spacetime solver using Post-Newtonian weak-field potentials and non-rotating Schwarzschild horizon geometry. Cannot be bypassed.',
   },
   linear: {
     id: 'linear',
     name: 'Linear',
-    modelCode: 'Kerr-2L Linearized',
-    tagline: '2nd-Order Linearized Lense-Thirring Spin Solver',
+    modelCode: 'Lense-Thirring Drag',
+    tagline: 'Gravitomagnetic Frame-Dragging & Spin Perturbation',
     monthlyPriceDisplay: 'TIER II',
     costPerSolveUsd: 2,
-    costPerSolveDisplay: 'Tier II · Linearized',
+    costPerSolveDisplay: 'Tier II · Frame-Drag',
     tflops: 88.5,
     tflopsDisplay: '88.5 TFLOPS',
     stepDelayMs: 185,
     holdAfterCompleteMs: 440,
     expectedLatencyDisplay: '~1.92s',
-    precisionLabel: 'FP32 Linearized Kerr',
+    precisionLabel: 'FP32 Slow-Rotation Kerr',
     fidelityPercent: '92.8%',
     gridResolution: '128³ Mesh',
     speedScore: 48,
@@ -95,22 +95,22 @@ export const KERR_ENGINE_TIERS: Record<KerrEngineTierId, KerrEngineTierConfig> =
     borderClass: 'border-zinc-700/85',
     accentColor: '#d4d4d8',
     description:
-      'Linearized Boyer-Lindquist metric expansion in spin parameter a*. Captures first-order gravitomagnetic frame-dragging and ISCO shifts.',
+      'Perturbative Boyer-Lindquist metric expansion in dimensionless spin parameter a*. Captures gravitomagnetic frame-dragging ω(r) and prograde ISCO shifts.',
   },
   advanced: {
     id: 'advanced',
     name: 'Advanced',
-    modelCode: 'Kerr-4A Pro Tensor',
-    tagline: '4th-Order Runge-Kutta Geodesic & Novikov-Thorne Solver',
+    modelCode: 'Boyer-Lindquist RK4',
+    tagline: 'Symplectic Null-Geodesic & Novikov-Thorne Integrator',
     monthlyPriceDisplay: 'TIER III',
     costPerSolveUsd: 3,
-    costPerSolveDisplay: 'Tier III · Pro Tensor',
+    costPerSolveDisplay: 'Tier III · Symplectic RK4',
     tflops: 460.0,
     tflopsDisplay: '460.0 TFLOPS',
     stepDelayMs: 55,
     holdAfterCompleteMs: 260,
     expectedLatencyDisplay: '~0.72s',
-    precisionLabel: 'FP64 Exact Covariant',
+    precisionLabel: 'FP64 Covariant Geodesic',
     fidelityPercent: '98.6%',
     gridResolution: '512³ AMR Grid',
     speedScore: 84,
@@ -120,22 +120,22 @@ export const KERR_ENGINE_TIERS: Record<KerrEngineTierId, KerrEngineTierConfig> =
     borderClass: 'border-zinc-700/90',
     accentColor: '#f4f4f5',
     description:
-      'Multi-GPU tensor solver integrating exact Bardeen-Press-Teukolsky roots, 4th-order Runge-Kutta null geodesics, and relativistic Doppler radiative transfer.',
+      'Parallel geodesic integrator solving exact Bardeen-Press-Teukolsky roots, Hamiltonian null trajectories, and relativistic Doppler radiative transfer.',
   },
   ultra: {
     id: 'ultra',
     name: 'Ultra',
-    modelCode: 'Kerr-Ω Flagship Cluster',
-    tagline: 'Flagship BSSN Numerical Relativity + 3D GRMHD Tensor Core',
+    modelCode: 'Kerr-Newman Exact',
+    tagline: 'Full Covariant Boyer-Lindquist & Carter Separable Solver',
     monthlyPriceDisplay: 'TIER IV',
     costPerSolveUsd: 4,
-    costPerSolveDisplay: 'Tier IV · Apex Cluster',
+    costPerSolveDisplay: 'Tier IV · Exact Covariant',
     tflops: 1920.0,
     tflopsDisplay: '1,920 TFLOPS',
     stepDelayMs: 24,
     holdAfterCompleteMs: 190,
     expectedLatencyDisplay: '~0.34s',
-    precisionLabel: 'FP128 Spectral Tensor',
+    precisionLabel: 'FP128 Spectral Covariant',
     fidelityPercent: '99.9994%',
     gridResolution: '2048³ Spectral AMR',
     speedScore: 100,
@@ -145,7 +145,7 @@ export const KERR_ENGINE_TIERS: Record<KerrEngineTierId, KerrEngineTierConfig> =
     borderClass: 'border-amber-500/45',
     accentColor: '#d4af37',
     description:
-      'Uncompromised flagship compute cluster. Executes sub-second full covariant Boyer-Lindquist tensor decomposition, Christoffel symbols, Carter constant Q, and Kretschmann invariants.',
+      'Direct analytical and spectral spacetime solver. Evaluates exact covariant Boyer-Lindquist metric tensors, Christoffel connections, Carter constant Q, and Kretschmann curvature invariants.',
   },
 };
 
@@ -497,7 +497,7 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
                 width="18"
                 height="18"
                 viewBox="-24 -24 48 48"
-                className="shrink-0 overflow-visible"
+                className="shrink-0 overflow-visible origin-center"
                 aria-hidden="true"
               >
                 {[0, 1, 2, 3, 4, 5].map((i) => {

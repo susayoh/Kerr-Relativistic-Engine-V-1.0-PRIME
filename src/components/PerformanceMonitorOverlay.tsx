@@ -542,6 +542,76 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
                   {telemetry.passTimings.classification}
                 </span>
               </div>
+
+              <div className="pt-1 border-t border-slate-800/80 flex items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className="text-slate-400 shrink-0">Shader Tier:</span>
+                  <span
+                    data-testid="perf-shader-quality-tier"
+                    className={`px-1.5 py-0.2 rounded font-bold border truncate ${
+                      (telemetry.shaderQualityTier ??
+                        telemetry.passTimings.shaderQualityTier ??
+                        'Full Geodesic') === 'Full Geodesic'
+                        ? 'border-cyan-500/50 bg-cyan-950/60 text-cyan-300'
+                        : 'border-amber-500/50 bg-amber-950/60 text-amber-300'
+                    }`}
+                  >
+                    {telemetry.shaderQualityTier ??
+                      telemetry.passTimings.shaderQualityTier ??
+                      'Full Geodesic'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  data-testid="perf-shader-tier-mode-btn"
+                  onClick={() => {
+                    if (!sceneController) return;
+                    const curr = sceneController.getShaderQualityMode();
+                    const next =
+                      curr === 'auto'
+                        ? 'Full Geodesic'
+                        : curr === 'Full Geodesic'
+                        ? 'Approximated Null-Geodesic'
+                        : 'auto';
+                    sceneController.setShaderQualityMode(next);
+                    setTelemetry(sceneController.getPerformanceTelemetry());
+                  }}
+                  className="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 cursor-pointer transition-colors shrink-0"
+                  title="Cycle shader quality mode: Auto (telemetry-driven) -> Force Full Geodesic -> Force Approximated Null-Geodesic"
+                >
+                  Mode: {(telemetry.shaderQualityMode ?? 'auto').toUpperCase()}
+                </button>
+              </div>
+
+              {telemetry.thermalState && (
+                <div
+                  data-testid="perf-thermal-throttling-row"
+                  className="pt-1 border-t border-slate-800/80 flex items-center justify-between gap-1.5"
+                >
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="text-slate-400 shrink-0">Thermal Throttle:</span>
+                    <span
+                      data-testid="perf-thermal-level"
+                      className={`px-1.5 py-0.2 rounded font-bold border ${
+                        telemetry.thermalState.level === 'NOMINAL'
+                          ? 'border-emerald-500/50 bg-emerald-950/60 text-emerald-300'
+                          : telemetry.thermalState.level === 'WARM'
+                          ? 'border-amber-500/50 bg-amber-950/60 text-amber-300'
+                          : 'border-rose-500/50 bg-rose-950/60 text-rose-300'
+                      }`}
+                    >
+                      {telemetry.thermalState.level} · {telemetry.thermalState.estimatedTempC.toFixed(1)}°C
+                    </span>
+                  </div>
+                  <span
+                    data-testid="perf-thermal-step-count"
+                    className="px-1.5 py-0.2 rounded bg-slate-900 border border-slate-700 text-cyan-300 font-bold shrink-0"
+                    title="Active raymarching ray steps (u_stepCount) dynamically regulated by GPU thermal/load model"
+                  >
+                    u_stepCount: {telemetry.thermalState.uStepCount}/{telemetry.thermalState.maxStepCount}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 

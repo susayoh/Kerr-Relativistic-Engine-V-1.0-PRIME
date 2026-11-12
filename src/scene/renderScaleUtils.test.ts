@@ -1,17 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildShaderPrewarmCacheReport,
   classifyFrameBottleneck,
   clearKerrPerfMarksAndMeasures,
   computeBaseDesktopPixelRatio,
   computeOrbitStepMultiplier,
   computeRollingAverageFps,
+  createInitialThermalState,
+  evaluateDynamicShaderQualityTier,
+  GEODESIC_SHADER_SNIPPETS,
   KERR_PERF_MARKS,
   KERR_PERF_MEASURES,
   safePerfMark,
   safePerfMeasureMs,
+  SHADER_PREWARM_MANIFEST,
   shouldEmitThrottledTelemetry,
   stepDynamicResolutionScale,
+  stepThermalThrottlingState,
 } from './renderScaleUtils';
 
 test('computeBaseDesktopPixelRatio clamps >1024px to 1.25 and >1920px to 1.0', () => {
@@ -142,4 +148,145 @@ test('classifyFrameBottleneck distinguishes GPU fragment, CPU rAF, and iframe co
   assert.equal(compositorWait.classification, 'IFRAME_COMPOSITOR_OR_VSYNC_WAIT');
   assert.equal(compositorWait.unaccountedFrameGapMs, 25.2);
 });
+
+test('evaluateDynamicShaderQualityTier swaps between Full Geodesic and Approximated Null-Geodesic based on telemetry', () => {
+  assert.equal(GEODESIC_SHADER_SNIPPETS['Full Geodesic'].includes('VOL_RAYMARCH_STEPS 5'), true);
+  assert.equal(
+    GEODESIC_SHADER_SNIPPETS['Approximated Null-Geodesic'].includes('VOL_RAYMARCH_STEPS 2'),
+    true
+  );
+
+  const gpuBoundTelemetry = classifyFrameBottleneck({
+    interFrameMs: 28.5,
+    rafTotalMs: 12.0,
+    cpuSimPhysicsMs: 0.5,
+    cpuCameraUniformsMs: 0.4,
+    gpuScenePassMs: 11.1,
+    gpuPostPassMs: 0.0,
+    gpuTimerQueryMs: 16.2,
+    renderPasses: 1,
+    isOrbiting: false,
+    pixelRatio: 1.0,
+  });
+
+  // Respects hysteresis cooldown when elapsedSinceLastSwapMs < 2500ms
+  const blockedByHysteresis = evaluateDynamicShaderQualityTier(
+    'Full Geodesic',
+    gpuBoundTelemetry,
+    800,
+    'auto'
+  );
+  assert.equal(blockedByHysteresis.swapped, false);
+  assert.equal(blockedByHysteresis.nextTier, 'Full Geodesic');
+
+  // Swaps to 'Approximated Null-Geodesic' when GPU_FRAGMENT_BOUND after cooldown
+  const downgraded = evaluateDynamicShaderQualityTier(
+    'Full Geodesic',
+    gpuBoundTelemetry,
+    3000,
+    'auto'
+  );
+  assert.equal(downgraded.swapped, true);
+  assert.equal(downgraded.nextTier, 'Approximated Null-Geodesic');
+
+  // Upgrades back to 'Full Geodesic' once telemetry recovers to OPTIMAL_60FPS with low GPU pass time
+  const recoveredTelemetry = classifyFrameBottleneck({
+    interFrameMs: 16.5,
+    rafTotalMs: 3.2,
+    cpuSimPhysicsMs: 0.5,
+    cpuCameraUniformsMs: 0.3,
+    gpuScenePassMs: 2.4,
+    gpuPostPassMs: 0.0,
+    gpuTimerQueryMs: 4.8,
+    renderPasses: 1,
+    isOrbiting: false,
+    pixelRatio: 1.0,
+    shaderQualityTier: 'Approximated Null-Geodesic',
+  });
+  const upgraded = evaluateDynamicShaderQualityTier(
+    'Approximated Null-Geodesic',
+    recoveredTelemetry,
+    3200,
+    'auto'
+  );
+  assert.equal(upgraded.swapped, true);
+  assert.equal(upgraded.nextTier, 'Full Geodesic');
+
+  // Supports explicit manual override
+  const manualApprox = evaluateDynamicShaderQualityTier(
+    'Full Geodesic',
+    recoveredTelemetry,
+    100,
+    'Approximated Null-Geodesic'
+  );
+  assert.equal(manualApprox.swapped, true);
+  assert.equal(manualApprox.nextTier, 'Approximated Null-Geodesic');
+});
+
+test('stepThermalThrottlingState reduces u_stepCount under sustained GPU bottlenecks via performance.now() and recovers on cooling', () => {
+  let state = createInitialThermalState(1000, 5);
+  assert.equal(state.uStepCount, 5);
+  assert.equal(state.level, 'NOMINAL');
+  assert.equal(state.throttled, false);
+
+  // Simulate 5.5 seconds of sustained GPU bottlenecks (36ms interFrame, 18ms GPU pass)
+  let nowMs = 1000;
+  for (let i = 0; i < 55; i++) {
+    nowMs += 100;
+    state = stepThermalThrottlingState(state, {
+      nowMs,
+      interFrameMs: 36.0,
+      gpuScenePassMs: 14.5,
+      gpuTimerQueryMs: 19.0,
+      rafTotalMs: 15.5,
+      maxStepCount: 5,
+    });
+  }
+
+  assert.equal(state.throttled, true);
+  assert.equal(state.uStepCount <= 3, true);
+  assert.equal(state.estimatedTempC > 55, true);
+  assert.equal(state.sustainedBottleneckMs >= 4800, true);
+  assert.equal(state.level, 'CRITICAL');
+
+  // Simulate passive cooling over 20 seconds of light 60 FPS frames (16.6ms interFrame, 2.0ms GPU pass)
+  for (let i = 0; i < 100; i++) {
+    nowMs += 200;
+    state = stepThermalThrottlingState(state, {
+      nowMs,
+      interFrameMs: 16.5,
+      gpuScenePassMs: 2.0,
+      gpuTimerQueryMs: 3.2,
+      rafTotalMs: 2.8,
+      maxStepCount: 5,
+    });
+  }
+
+  assert.equal(state.uStepCount, 5);
+  assert.equal(state.level, 'NOMINAL');
+  assert.equal(state.throttled, false);
+});
+
+test('buildShaderPrewarmCacheReport verifies geodesic, accretion disk, and ergosphere variants are pre-warmed', () => {
+  const allIds = SHADER_PREWARM_MANIFEST.map((m) => m.id);
+  const fullReport = buildShaderPrewarmCacheReport(allIds, 6.45, 19);
+
+  assert.equal(fullReport.isPrewarmed, true);
+  assert.equal(fullReport.isComplete, true);
+  assert.equal(fullReport.compiledVariants.includes('geodesic_full'), true);
+  assert.equal(fullReport.compiledVariants.includes('geodesic_approx'), true);
+  assert.equal(fullReport.compiledVariants.includes('accretion_disk_classic'), true);
+  assert.equal(fullReport.compiledVariants.includes('accretion_disk_volumetric'), true);
+  assert.equal(fullReport.compiledVariants.includes('ergosphere_static_limit'), true);
+  assert.equal(fullReport.prewarmDurationMs, 6.45);
+  assert.equal(fullReport.webglProgramsCount, 19);
+
+  // Incomplete if ergosphere is missing
+  const partialReport = buildShaderPrewarmCacheReport(['geodesic_full', 'accretion_disk_classic'], 2.1, 4);
+  assert.equal(partialReport.isPrewarmed, true);
+  assert.equal(partialReport.isComplete, false);
+});
+
+
+
 

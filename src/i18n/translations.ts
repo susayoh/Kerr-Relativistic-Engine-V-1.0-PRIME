@@ -35,6 +35,10 @@ export interface UiTranslations {
   recordVideo: string;
   stopRecording: string;
 
+  // Boot & Watermark UI
+  bootInitializingTitle: string;
+  bootInitializingSubtitle: string;
+
   // Main HUD & Viewport Prompts
   simulationPaused: string;
   resume: string;
@@ -47,12 +51,24 @@ export interface UiTranslations {
   pulseButton: string;
   controlsButton: string;
 
-  // Settings Modal Header & Footer
+  // Settings Modal Header, Tabs & Footer
   settingsTitle: string;
   settingsSubtitle: string;
+  tabSettings: string;
+  tabSongs: string;
+  tabIqTest: string;
+  tabChess: string;
+  tabDiagnostic: string;
+  tabCode: string;
   resetSettings: string;
   resetPhysics: string;
   done: string;
+
+  // Theme & High-Performance Sections
+  uiThemeSectionTitle: string;
+  highPerfSectionTitle: string;
+  enableHighPerfTitle: string;
+  kerrEnginePreloadTitle: string;
 
   // Language Section in Settings
   languageSectionTitle: string;
@@ -78,6 +94,8 @@ export interface UiTranslations {
   accretionRendererTitle: string;
   classicDisk: string;
   volumetricRaymarched: string;
+  dynamicResScalingTitle: string;
+  webglDepthPeelingTitle: string;
   bloomIntensityTitle: string;
   lensFlareIntensityTitle: string;
   lensFlareIntensityDesc: string;
@@ -91,6 +109,7 @@ export interface UiTranslations {
   autoRotateCameraTitle: string;
   autoOrbitSpeedTitle: string;
   hudVisibilitySectionTitle: string;
+  focusModeTitle: string;
   leftHudLabel: string;
   overheadRadarLabel: string;
   timeDilationLabel: string;
@@ -100,6 +119,7 @@ export interface UiTranslations {
   metricTelemetryTitle: string;
   showMetricTelemetryTitle: string;
   showMetricTelemetryDesc: string;
+  showPerfMonitorTitle: string;
   visibleStatus: string;
   hiddenStatus: string;
   snapshotVideoSectionTitle: string;
@@ -134,6 +154,9 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     recordVideo: 'Record',
     stopRecording: 'REC',
 
+    bootInitializingTitle: 'INITIALIZING KERR ENGINE...',
+    bootInitializingSubtitle: 'Pre-Warming Geodesic Shaders & Covariant Metric Core',
+
     simulationPaused: 'SIMULATION PAUSED',
     resume: 'Resume',
     horizonLabel: 'Horizon',
@@ -147,9 +170,20 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
 
     settingsTitle: 'Visualizer Settings & Preferences',
     settingsSubtitle: 'Customize language, camera behavior, Phone Mode layout, spacetime optics & HUD',
+    tabSettings: 'Settings',
+    tabSongs: 'Songs',
+    tabIqTest: 'IQ Test',
+    tabChess: 'Chess',
+    tabDiagnostic: 'Diagnostic',
+    tabCode: 'Code',
     resetSettings: 'Reset Settings',
     resetPhysics: 'Reset Physics',
     done: 'Done',
+
+    uiThemeSectionTitle: 'Interface Theme & Color Architecture',
+    highPerfSectionTitle: 'High-Performance Mode (WebGL Depth-Peeling & Telemetry Throttle)',
+    enableHighPerfTitle: 'Enable High-Performance Mode',
+    kerrEnginePreloadTitle: 'Pre-Load Kerr Engine Terminal',
 
     languageSectionTitle: 'Language & Localization',
     languageSectionDesc: 'Select your preferred interface language (English is default).',
@@ -173,6 +207,8 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     accretionRendererTitle: 'Accretion Disk Renderer',
     classicDisk: 'Classic 3D Disk (Original)',
     volumetricRaymarched: 'Volumetric Raymarched',
+    dynamicResScalingTitle: 'Dynamic Resolution Downscaling',
+    webglDepthPeelingTitle: 'WebGL Depth-Peeling',
     bloomIntensityTitle: 'Bloom Intensity',
     lensFlareIntensityTitle: 'Lens Flare Intensity',
     lensFlareIntensityDesc:
@@ -188,6 +224,7 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     autoRotateCameraTitle: 'Auto-Rotate Camera Mode (Y-Axis Orbit)',
     autoOrbitSpeedTitle: 'Auto-Orbit Speed',
     hudVisibilitySectionTitle: 'HUD & Telemetry Visibility',
+    focusModeTitle: 'Focus Mode (Cinematic Immersion)',
     leftHudLabel: 'Left HUD',
     overheadRadarLabel: 'Overhead Radar',
     timeDilationLabel: 'Time Dilation',
@@ -198,6 +235,7 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     showMetricTelemetryTitle: 'Show Metric Telemetry',
     showMetricTelemetryDesc:
       'Displays a real-time Boyer-Lindquist spacetime metric tensor (g_μν) evolution graph, ADM lapse readout, and Kretschmann curvature scalar overlay for advanced users.',
+    showPerfMonitorTitle: 'Show Performance Monitor (Three.js GPU Diagnostics)',
     visibleStatus: 'Visible',
     hiddenStatus: 'Hidden',
     snapshotVideoSectionTitle: 'Snapshot & Video Recording',
@@ -231,6 +269,9 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     recordVideo: 'Aufnehmen',
     stopRecording: 'AUFN',
 
+    bootInitializingTitle: 'KERR-ENGINE WIRD INITIALISIERT...',
+    bootInitializingSubtitle: 'Geodäten-Shader & Kovarianter Metrik-Kern werden vorbereitet',
+
     simulationPaused: 'SIMULATION PAUSIERT',
     resume: 'Fortsetzen',
     horizonLabel: 'Horizont',
@@ -244,9 +285,20 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
 
     settingsTitle: 'Visualisierer-Einstellungen & Präferenzen',
     settingsSubtitle: 'Sprache, Kameraverhalten, Smartphone-Modus, Raumzeit-Optik & HUD anpassen',
+    tabSettings: 'Einstellungen',
+    tabSongs: 'Musik',
+    tabIqTest: 'IQ-Test',
+    tabChess: 'Schach',
+    tabDiagnostic: 'Diagnose',
+    tabCode: 'Quellcode',
     resetSettings: 'Einstellungen zurücksetzen',
     resetPhysics: 'Physik zurücksetzen',
     done: 'Fertig',
+
+    uiThemeSectionTitle: 'Oberflächen-Design & Farbarchitektur',
+    highPerfSectionTitle: 'Hochleistungsmodus (WebGL Depth-Peeling & Telemetrie-Drosselung)',
+    enableHighPerfTitle: 'Hochleistungsmodus aktivieren',
+    kerrEnginePreloadTitle: 'Kerr-Engine-Terminal vorladen',
 
     languageSectionTitle: 'Sprache & Lokalisierung',
     languageSectionDesc: 'Wählen Sie Ihre bevorzugte Oberflächensprache (Englisch ist Standard).',
@@ -270,8 +322,10 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     accretionRendererTitle: 'Akkretionsscheiben-Renderer',
     classicDisk: 'Klassische 3D-Scheibe (Original)',
     volumetricRaymarched: 'Volumetrisches Raymarching',
+    dynamicResScalingTitle: 'Dynamische Auflösungsskalierung',
+    webglDepthPeelingTitle: 'WebGL Depth-Peeling (Tiefenschichtung)',
     bloomIntensityTitle: 'Leuchtintensität (Bloom)',
-    lensFlareIntensityTitle: 'Lens Flare Intensity (Linsenreflexions-Intensität)',
+    lensFlareIntensityTitle: 'Linsenreflexions-Intensität (Lens Flare)',
     lensFlareIntensityDesc:
       'Steuert die Stärke der kameraseitigen anamorphotischen Streifen, Beugungssterne und chromatischen Blendenreflexe beim Betrachten des Sterns oder Schwarzen Lochs aus verschiedenen Winkeln.',
     nakedDistortionTitle: 'Reine Raumzeit-Verzerrung (Ohne Akkretionsscheibe)',
@@ -285,6 +339,7 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     autoRotateCameraTitle: 'Automatische Kameradrehung (Y-Achsen-Orbit)',
     autoOrbitSpeedTitle: 'Orbit-Geschwindigkeit',
     hudVisibilitySectionTitle: 'HUD- & Telemetrie-Sichtbarkeit',
+    focusModeTitle: 'Fokus-Modus (Kinoreife Immersion)',
     leftHudLabel: 'Linkes HUD',
     overheadRadarLabel: 'Orbital-Radar',
     timeDilationLabel: 'Zeitdilatation',
@@ -292,9 +347,10 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     eventLogTitle: 'Astrophysikalisches Ereignisprotokoll',
     eventLogLabel: 'Ereignisprotokoll',
     metricTelemetryTitle: 'Metriktensor-Telemetrie',
-    showMetricTelemetryTitle: 'Show Metric Telemetry (Metrik-Telemetrie anzeigen)',
+    showMetricTelemetryTitle: 'Metriktensor-Telemetrie anzeigen',
     showMetricTelemetryDesc:
       'Zeigt ein Echtzeit-Diagramm der Raumzeit-Metriktensor-Entwicklung (g_μν), ADM-Lapse und Kretschmann-Krümmungsinvariante für fortgeschrittene Nutzer.',
+    showPerfMonitorTitle: 'Leistungsmonitor anzeigen (Three.js GPU-Diagnose)',
     visibleStatus: 'Sichtbar',
     hiddenStatus: 'Versteckt',
     snapshotVideoSectionTitle: 'Schnappschuss & Videoaufnahme',
@@ -328,6 +384,9 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     recordVideo: '録画',
     stopRecording: '録画中',
 
+    bootInitializingTitle: 'KERR ENGINE 初期化中...',
+    bootInitializingSubtitle: '測地線シェーダー＆共変計量コアをプリウォーム中',
+
     simulationPaused: 'シミュレーション一時停止中',
     resume: '再開',
     horizonLabel: '事象の地平面',
@@ -341,9 +400,20 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
 
     settingsTitle: 'ビジュアライザー設定・環境設定',
     settingsSubtitle: '言語、カメラ動作、スマホモード、時空レンズ光学、HUD表示をカスタマイズ',
+    tabSettings: '設定',
+    tabSongs: '音楽',
+    tabIqTest: 'IQテスト',
+    tabChess: 'チェス',
+    tabDiagnostic: '診断スイート',
+    tabCode: 'コード',
     resetSettings: '設定をリセット',
     resetPhysics: '物理パラメータを初期化',
     done: '完了',
+
+    uiThemeSectionTitle: 'インターフェーステーマ＆色彩設計',
+    highPerfSectionTitle: 'ハイパフォーマンス・モード（WebGL深度ピーリング＆テレメトリ制御）',
+    enableHighPerfTitle: 'ハイパフォーマンス・モードを有効化',
+    kerrEnginePreloadTitle: 'Kerr Engine ターミナルのプリロード',
 
     languageSectionTitle: '言語設定 (Language)',
     languageSectionDesc: 'インターフェースの表示言語を選択してください（デフォルトは英語）。',
@@ -367,8 +437,10 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     accretionRendererTitle: '降着円盤レンダラー',
     classicDisk: 'クラシック3D円盤（標準）',
     volumetricRaymarched: 'ボリューメトリック・レイマーチング',
+    dynamicResScalingTitle: '動的解像度ダウンスケーリング',
+    webglDepthPeelingTitle: 'WebGL デプス・ピーリング（深度カリング）',
     bloomIntensityTitle: 'ブルーム（発光）強度',
-    lensFlareIntensityTitle: 'Lens Flare Intensity (レンズフレア強度)',
+    lensFlareIntensityTitle: 'レンズフレア強度',
     lensFlareIntensityDesc:
       'ブラックホールや恒星をさまざまな角度から観測した際に発生する、カメラ空間のアナモルフィック光条、回折スパイク、色収差ゴーストの強度を制御します。',
     nakedDistortionTitle: '裸の時空歪曲強度（降着円盤オフ時）',
@@ -382,6 +454,7 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     autoRotateCameraTitle: 'カメラ自動回転モード（Y軸周回）',
     autoOrbitSpeedTitle: '自動回転スピード',
     hudVisibilitySectionTitle: 'HUD＆テレメトリ表示切り替え',
+    focusModeTitle: 'フォーカスモード（シネマティック没入表示）',
     leftHudLabel: '左パネルHUD',
     overheadRadarLabel: '軌道レーダー',
     timeDilationLabel: '時間の遅れ',
@@ -389,9 +462,10 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     eventLogTitle: '天体物理イベントログ',
     eventLogLabel: 'イベントログ',
     metricTelemetryTitle: '時空計量テンソル・テレメトリ',
-    showMetricTelemetryTitle: 'Show Metric Telemetry (計量テンソル波形を表示)',
+    showMetricTelemetryTitle: '計量テンソル波形を表示',
     showMetricTelemetryDesc:
       '上級ユーザー向けに、ボイヤー・リンキスト座標系における時空計量テンソル (g_μν) のリアルタイム時間発展グラフとクレッチマン曲率不変量をオーバーレイ表示します。',
+    showPerfMonitorTitle: 'パフォーマンスモニターを表示（Three.js GPU診断）',
     visibleStatus: '表示中',
     hiddenStatus: '非表示',
     snapshotVideoSectionTitle: 'スナップショット＆動画録画',
@@ -425,6 +499,9 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     recordVideo: 'Grabar',
     stopRecording: 'GRAB',
 
+    bootInitializingTitle: 'INICIALIZANDO MOTOR KERR...',
+    bootInitializingSubtitle: 'Precalentando Shaders Geodésicos y Núcleo Métrico Covariante',
+
     simulationPaused: 'SIMULACIÓN EN PAUSA',
     resume: 'Reanudar',
     horizonLabel: 'Horizonte',
@@ -438,9 +515,20 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
 
     settingsTitle: 'Ajustes y Preferencias del Visualizador',
     settingsSubtitle: 'Personaliza el idioma, cámara, Modo Teléfono, óptica del espacio-tiempo y HUD',
+    tabSettings: 'Ajustes',
+    tabSongs: 'Música',
+    tabIqTest: 'Test de CI',
+    tabChess: 'Ajedrez',
+    tabDiagnostic: 'Diagnóstico',
+    tabCode: 'Código',
     resetSettings: 'Restablecer Ajustes',
     resetPhysics: 'Restablecer Física',
     done: 'Listo',
+
+    uiThemeSectionTitle: 'Tema de Interfaz y Arquitectura de Color',
+    highPerfSectionTitle: 'Modo de Alto Rendimiento (WebGL Depth-Peeling y Telemetría)',
+    enableHighPerfTitle: 'Activar Modo de Alto Rendimiento',
+    kerrEnginePreloadTitle: 'Precargar Terminal del Motor Kerr',
 
     languageSectionTitle: 'Idioma y Localización',
     languageSectionDesc: 'Selecciona el idioma de la interfaz (Inglés por defecto).',
@@ -450,7 +538,7 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     touchHapticsTitle: 'Vibración Háptica Táctil',
     hapticIntensityTitle: 'Intensidad de Respuesta Háptica',
     testPulse: 'Probar Pulso',
-    physicsPresetsSectionTitle: 'ajustes Físicos (Métricas de Relatividad General)',
+    physicsPresetsSectionTitle: 'Ajustes Físicos (Métricas de Relatividad General)',
     rapidRipplesTitle: 'Ondas por Ajuste Rápido de Parámetros',
     backgroundAnatomySectionTitle: 'Comportamiento del Fondo y Anatomía',
     lockBackgroundTitle: 'Bloquear Fondo al Mover la Cámara',
@@ -458,14 +546,16 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     alwaysShowSingularityTitle: 'Mostrar Siempre la Singularidad Central',
     accretionOpticsSectionTitle: 'Estilo del Disco de Acreción y Óptica Relativista',
     accretionStateTitle: 'Estado de Acreción (Geometría Física)',
-    quiescentThin: 'Quiescente (Ulhodelgado)',
+    quiescentThin: 'Quiescente (Ultradelgado)',
     activeThick: 'Activo (Toro Volumétrico)',
     accretionShockwaveTitle: 'Animación de Onda de Choque de Acreción',
     accretionRendererTitle: 'Renderizador del Disco de Acreción',
     classicDisk: 'Disco 3D Clásico (Original)',
     volumetricRaymarched: 'Raymarching Volumétrico',
+    dynamicResScalingTitle: 'Escalado Dinámico de Resolución',
+    webglDepthPeelingTitle: 'WebGL Depth-Peeling (Capas de Profundidad)',
     bloomIntensityTitle: 'Intensidad de Resplandor (Bloom)',
-    lensFlareIntensityTitle: 'Lens Flare Intensity (Intensidad de Destello de Lente)',
+    lensFlareIntensityTitle: 'Intensidad de Destello de Lente (Lens Flare)',
     lensFlareIntensityDesc:
       'Controla la intensidad de los destellos anamórficos en el espacio de cámara, picos de difracción y reflejos ópticos cromáticos al observar la estrella o el agujero negro desde distintos ángulos.',
     nakedDistortionTitle: 'Distorsión del Espacio-Tiempo Desnudo (Sin Disco)',
@@ -479,6 +569,7 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     autoRotateCameraTitle: 'Rotación Automática de Cámara (Órbita Eje Y)',
     autoOrbitSpeedTitle: 'Velocidad de Auto-Órbita',
     hudVisibilitySectionTitle: 'Visibilidad de HUD y Telemetría',
+    focusModeTitle: 'Modo Enfoque (Inmersión Cinematográfica)',
     leftHudLabel: 'HUD Izquierdo',
     overheadRadarLabel: 'Radar Orbital',
     timeDilationLabel: 'Dilatación Temporal',
@@ -486,9 +577,10 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     eventLogTitle: 'Registro de Eventos Astrofísicos',
     eventLogLabel: 'Registro de Eventos',
     metricTelemetryTitle: 'Telemetría del Tensor Métrico',
-    showMetricTelemetryTitle: 'Show Metric Telemetry (Mostrar Telemetría Métrica)',
+    showMetricTelemetryTitle: 'Mostrar Telemetría del Tensor Métrico',
     showMetricTelemetryDesc:
       'Muestra un gráfico en tiempo real de la evolución del tensor métrico del espacio-tiempo (g_μν) y el escalar de curvatura de Kretschmann para usuarios avanzados.',
+    showPerfMonitorTitle: 'Mostrar Monitor de Rendimiento (Diagnóstico GPU Three.js)',
     visibleStatus: 'Visible',
     hiddenStatus: 'Oculto',
     snapshotVideoSectionTitle: 'Capturas y Grabación de Video',
@@ -522,6 +614,9 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     recordVideo: '录制视频',
     stopRecording: '录制中',
 
+    bootInitializingTitle: '正在初始化 KERR 引擎...',
+    bootInitializingSubtitle: '正在预热测地线着色器与协变度规核心',
+
     simulationPaused: '模拟已暂停',
     resume: '继续运行',
     horizonLabel: '事件视界',
@@ -535,9 +630,20 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
 
     settingsTitle: '可视化设置与偏好',
     settingsSubtitle: '自定义界面语言、相机轨道、手机模式布局、相对论光学与 HUD 遥测面板',
+    tabSettings: '设置',
+    tabSongs: '音乐库',
+    tabIqTest: '智商测试',
+    tabChess: '国际象棋',
+    tabDiagnostic: '曲率诊断',
+    tabCode: '代码库',
     resetSettings: '重置设置',
     resetPhysics: '重置物理参数',
     done: '完成',
+
+    uiThemeSectionTitle: '界面主题与色彩架构',
+    highPerfSectionTitle: '高性能模式（WebGL 深度剥离与遥测节流）',
+    enableHighPerfTitle: '启用高性能模式',
+    kerrEnginePreloadTitle: '预加载克尔相对论计算终端',
 
     languageSectionTitle: '语言与多语种支持 (Language)',
     languageSectionDesc: '选择您的界面显示语言（默认为英语 English）。',
@@ -561,8 +667,10 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     accretionRendererTitle: '吸积盘渲染引擎',
     classicDisk: '经典 3D 吸积盘（原版）',
     volumetricRaymarched: '体光线步进渲染 (Raymarched)',
+    dynamicResScalingTitle: '动态分辨率降采样',
+    webglDepthPeelingTitle: 'WebGL 深度剥离 (Depth-Peeling)',
     bloomIntensityTitle: '辉光强度 (Bloom)',
-    lensFlareIntensityTitle: 'Lens Flare Intensity (镜头眩光强度)',
+    lensFlareIntensityTitle: '镜头眩光强度 (Lens Flare)',
     lensFlareIntensityDesc:
       '控制从不同视角观测恒星或黑洞时，相机空间变形宽银幕光斑、衍射星芒与色散光圈重影的伪影强度。',
     nakedDistortionTitle: '裸奇点时空引力透镜强度（关闭吸积盘时）',
@@ -576,6 +684,7 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     autoRotateCameraTitle: '相机自动环绕模式（Y轴轨道）',
     autoOrbitSpeedTitle: '自动环绕速度',
     hudVisibilitySectionTitle: 'HUD 与遥测面板显示控制',
+    focusModeTitle: '专注模式（电影级沉浸视图）',
     leftHudLabel: '左侧信息栏',
     overheadRadarLabel: '俯视轨道雷达',
     timeDilationLabel: '引力时间膨胀',
@@ -583,9 +692,10 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     eventLogTitle: '天体物理事件日志',
     eventLogLabel: '事件日志',
     metricTelemetryTitle: '时空度规张量遥测',
-    showMetricTelemetryTitle: 'Show Metric Telemetry (显示度规张量遥测图)',
+    showMetricTelemetryTitle: '显示度规张量遥测图',
     showMetricTelemetryDesc:
       '为高级用户叠加实时博耶-林德奎斯特时空度规张量 (g_μν) 演化波形图、ADM 流逝函数与克雷奇曼曲率标量读数。',
+    showPerfMonitorTitle: '显示性能监控面板（Three.js GPU 诊断）',
     visibleStatus: '显示',
     hiddenStatus: '隐藏',
     snapshotVideoSectionTitle: '截图导出与视频录制',

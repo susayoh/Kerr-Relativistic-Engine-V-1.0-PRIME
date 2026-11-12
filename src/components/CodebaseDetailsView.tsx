@@ -25,6 +25,8 @@ export interface CodeFileInfo {
   path: string;
   name: string;
   lines: number;
+  bytes?: number;
+  liveSourcePreview?: string;
   subsystem: 'shaders' | 'hud' | 'interactive' | 'physics' | 'audio' | 'infra';
   subsystemName: string;
   description: string;
@@ -32,17 +34,64 @@ export interface CodeFileInfo {
   techTags: string[];
 }
 
-export const CODEBASE_FILES: CodeFileInfo[] = [
+// Live Vite raw source glob so every code edit or newly added file in /src automatically updates the Code tab
+const RAW_SRC_FILES: Record<string, string> =
+  typeof import.meta !== 'undefined' && typeof (import.meta as unknown as { glob?: unknown }).glob === 'function'
+    ? (import.meta as unknown as {
+        glob: (pattern: string[], opts: { query: string; import: string; eager: boolean }) => Record<string, string>;
+      }).glob(
+        [
+          '/src/**/*.{ts,tsx,css}',
+          '/server.ts',
+          '/index.html',
+          '/package.json',
+          '/vite.config.ts',
+          '/tsconfig.json',
+          '/metadata.json',
+        ],
+        { query: '?raw', import: 'default', eager: true }
+      )
+    : {};
+
+function countRawLines(raw: string): number {
+  if (!raw) return 0;
+  const lines = raw.split(/\r?\n/).length;
+  return raw.endsWith('\n') ? Math.max(1, lines - 1) : lines;
+}
+
+const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/scene/BlackHoleScene.ts',
     name: 'BlackHoleScene.ts',
-    lines: 8554,
+    lines: 9636,
     subsystem: 'shaders',
     subsystemName: '3D Graphics & Shaders',
     description:
-      'Three.js WebGL rendering pipeline, custom GLSL spacetime raymarching shaders (gravitational lensing, accretion disk with relativistic Doppler beaming & breathing pulsations, frame-dragging ergosphere cage, camera lens flare, spacetime grid), Boyer-Lindquist null geodesic raytracer, and automated camera tour controllers.',
-    role: 'Primary 3D WebGL Engine & Shader Core',
-    techTags: ['Three.js', 'Custom GLSL', 'Raymarching', 'Boyer-Lindquist', 'WebGL2', 'Post-Processing'],
+      'Three.js WebGL rendering pipeline, custom GLSL spacetime raymarching shaders (gravitational lensing, accretion disk with relativistic Doppler beaming & breathing pulsations, frame-dragging ergosphere cage, camera lens flare, spacetime grid), Hardware WebGL Shader Pre-Warming Cache (geodesic, accretion disk, ergosphere), IMAX Multi-Stage Supersonic Boom shockwave, Dynamic Quality Tier shader swapping, and Thermal Throttling (u_stepCount).',
+    role: 'Primary 3D WebGL Engine, Shader Pre-Warmer & Core',
+    techTags: ['Three.js', 'Custom GLSL', 'Shader Pre-Warming', 'Supersonic Mach Boom', 'Thermal Throttling', 'WebGL2'],
+  },
+  {
+    path: 'src/scene/renderScaleUtils.ts',
+    name: 'renderScaleUtils.ts',
+    lines: 615,
+    subsystem: 'shaders',
+    subsystemName: '3D Graphics & Shaders',
+    description:
+      'Desktop pixel-ratio clamping, 30-frame rolling FPS dynamic resolution scaler, User Timing API (performance.mark / performance.measure) pass classifier, Full Geodesic vs. Approximated Null-Geodesic shader snippet generator, passive-cooling RC thermal throttling state machine for u_stepCount, and Shader Pre-Warming Cache manifest & telemetry report builder.',
+    role: 'GPU Performance, Shader Pre-Warming & Thermal Engine',
+    techTags: ['Shader Pre-Warming', 'Thermal Throttling', 'User Timing API', 'Dynamic DPR', 'GLSL Snippets'],
+  },
+  {
+    path: 'src/scene/renderScaleUtils.test.ts',
+    name: 'renderScaleUtils.test.ts',
+    lines: 332,
+    subsystem: 'shaders',
+    subsystemName: '3D Graphics & Shaders',
+    description:
+      'Automated unit test suite verifying desktop DPR caps, rolling 30-frame resolution scaling, bottleneck classification, dynamic shader quality tier hysteresis, sustained thermal throttling u_stepCount step-down/recovery, and Shader Pre-Warming Cache manifest verification.',
+    role: 'GPU Scaler, Shader Pre-Warmer & Thermal Unit Tests',
+    techTags: ['node:test', 'Unit Testing', 'Shader Cache Verification', 'Thermal Model Assertions'],
   },
   {
     path: 'src/components/SettingsModal.tsx',
@@ -408,6 +457,92 @@ export const CODEBASE_FILES: CodeFileInfo[] = [
   },
 ];
 
+function buildLiveCodebaseFiles(): CodeFileInfo[] {
+  const knownPaths = new Set<string>();
+  const rootConfigPaths = ['/package.json', '/vite.config.ts', '/tsconfig.json', '/index.html', '/metadata.json'];
+
+  const updatedBase = BASE_CODEBASE_FILES.map((entry) => {
+    if (entry.path.startsWith('root/config')) {
+      let rootLines = 0;
+      let rootBytes = 0;
+      const rootSnippets: string[] = [];
+      for (const rp of rootConfigPaths) {
+        const raw = RAW_SRC_FILES[rp];
+        if (typeof raw === 'string') {
+          rootLines += countRawLines(raw);
+          rootBytes += raw.length;
+          rootSnippets.push(`// --- ${rp.slice(1)} ---\n${raw.split(/\r?\n/).slice(0, 12).join('\n')}`);
+        }
+      }
+      return {
+        ...entry,
+        lines: rootLines > 0 ? rootLines : entry.lines,
+        bytes: rootBytes > 0 ? rootBytes : undefined,
+        liveSourcePreview: rootSnippets.length > 0 ? rootSnippets.join('\n\n') : undefined,
+      };
+    }
+
+    const normalizedKey = entry.path.startsWith('/') ? entry.path : `/${entry.path}`;
+    knownPaths.add(normalizedKey);
+    const raw = RAW_SRC_FILES[normalizedKey];
+    if (typeof raw === 'string') {
+      const allLines = raw.split(/\r?\n/);
+      const previewLines = allLines.slice(0, 28).join('\n');
+      return {
+        ...entry,
+        lines: countRawLines(raw),
+        bytes: raw.length,
+        liveSourcePreview: previewLines,
+      };
+    }
+    return entry;
+  });
+
+  // Automatically discover any new files added under /src/** that weren't in BASE_CODEBASE_FILES
+  for (const [globPath, raw] of Object.entries(RAW_SRC_FILES)) {
+    if (!globPath.startsWith('/src/') || knownPaths.has(globPath) || typeof raw !== 'string') {
+      continue;
+    }
+    const relPath = globPath.slice(1);
+    const fileName = relPath.split('/').pop() || relPath;
+    let subsystem: CodeFileInfo['subsystem'] = 'infra';
+    let subsystemName = 'Styling & Infrastructure';
+    if (relPath.startsWith('src/scene/')) {
+      subsystem = 'shaders';
+      subsystemName = '3D Graphics & Shaders';
+    } else if (relPath.startsWith('src/components/')) {
+      subsystem = 'hud';
+      subsystemName = 'UI & Command HUD';
+    } else if (relPath.startsWith('src/physics/')) {
+      subsystem = 'physics';
+      subsystemName = 'Mathematical Physics';
+    } else if (relPath.startsWith('src/audio/')) {
+      subsystem = 'audio';
+      subsystemName = 'Audio & Sonification';
+    }
+    updatedBase.push({
+      path: relPath,
+      name: fileName,
+      lines: countRawLines(raw),
+      bytes: raw.length,
+      liveSourcePreview: raw.split(/\r?\n/).slice(0, 28).join('\n'),
+      subsystem,
+      subsystemName,
+      description: `Live auto-indexed project module (${relPath}) dynamically tracked via Vite raw source introspection.`,
+      role: 'Auto-Indexed Source Module',
+      techTags: ['TypeScript', 'Live Auto-Sync'],
+    });
+  }
+
+  return updatedBase;
+}
+
+export const CODEBASE_FILES: CodeFileInfo[] = buildLiveCodebaseFiles();
+
+export const TOTAL_CODEBASE_LINES: number = CODEBASE_FILES.reduce((sum, f) => sum + f.lines, 0);
+
+export const FORMAT_CODEBASE_LINES_BADGE: string = `${(TOTAL_CODEBASE_LINES / 1000).toFixed(1)}k`;
+
 const SUBSYSTEM_METRICS = [
   {
     id: 'shaders',
@@ -580,12 +715,15 @@ ${rows}
             <h3 className="text-lg font-bold text-white tracking-wide font-display">
               Codebase Metrics &amp; Details
             </h3>
-            <span className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 font-mono text-xs font-semibold">
-              35,000+ Lines
+            <span
+              data-testid="codebase-live-lines-badge"
+              className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 font-mono text-xs font-semibold"
+            >
+              {totalLines.toLocaleString()} Lines · LIVE SYNC
             </span>
           </div>
           <p className="text-xs text-zinc-400">
-            Clean architectural breakdown of all 31 source files across 6 core subsystems.
+            Live auto-updating architectural breakdown of all {totalFiles} source files across 6 core subsystems (synced directly from raw source).
           </p>
         </div>
 
@@ -940,9 +1078,16 @@ ${rows}
                         {/* Collapsible Deep Details */}
                         {isExpanded && (
                           <div className="mt-3 pt-3 border-t border-zinc-800/80 space-y-2 text-xs text-zinc-300 leading-relaxed bg-zinc-900/40 p-3 rounded-lg">
-                            <div>
-                              <strong className="text-white">Path: </strong>
-                              <code className="text-zinc-400 font-mono text-xs">{file.path}</code>
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div>
+                                <strong className="text-white">Path: </strong>
+                                <code className="text-zinc-400 font-mono text-xs">{file.path}</code>
+                              </div>
+                              {typeof file.bytes === 'number' && (
+                                <span className="px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 font-mono text-[10px]">
+                                  Live Size: {(file.bytes / 1024).toFixed(1)} KB ({file.lines.toLocaleString()} lines)
+                                </span>
+                              )}
                             </div>
                             <div>
                               <strong className="text-white">Implementation: </strong>
@@ -959,6 +1104,16 @@ ${rows}
                                 </span>
                               ))}
                             </div>
+                            {file.liveSourcePreview && (
+                              <div className="pt-2">
+                                <div className="text-[10px] font-mono uppercase tracking-wider text-amber-300/90 mb-1">
+                                  Live Source Snapshot (Auto-Synced via Vite ?raw):
+                                </div>
+                                <pre className="p-2.5 rounded-lg bg-black/70 border border-zinc-800 text-[10.5px] font-mono text-zinc-300 overflow-x-auto max-h-44 leading-snug">
+                                  <code>{file.liveSourcePreview}</code>
+                                </pre>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1061,9 +1216,16 @@ ${rows}
                   {/* Expanded Card Details */}
                   {isExpanded && (
                     <div className="mt-3 pt-3 border-t border-zinc-800/80 space-y-2 text-xs text-zinc-300 leading-relaxed bg-zinc-900/40 p-3 rounded-lg ml-8 sm:ml-0">
-                      <div>
-                        <strong className="text-white">Path: </strong>
-                        <code className="text-zinc-400 font-mono text-xs">{file.path}</code>
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                          <strong className="text-white">Path: </strong>
+                          <code className="text-zinc-400 font-mono text-xs">{file.path}</code>
+                        </div>
+                        {typeof file.bytes === 'number' && (
+                          <span className="px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 font-mono text-[10px]">
+                            Live Size: {(file.bytes / 1024).toFixed(1)} KB ({file.lines.toLocaleString()} lines)
+                          </span>
+                        )}
                       </div>
                       <div>
                         <strong className="text-white">Implementation: </strong>
@@ -1080,6 +1242,16 @@ ${rows}
                           </span>
                         ))}
                       </div>
+                      {file.liveSourcePreview && (
+                        <div className="pt-2">
+                          <div className="text-[10px] font-mono uppercase tracking-wider text-amber-300/90 mb-1">
+                            Live Source Snapshot (Auto-Synced via Vite ?raw):
+                          </div>
+                          <pre className="p-2.5 rounded-lg bg-black/70 border border-zinc-800 text-[10.5px] font-mono text-zinc-300 overflow-x-auto max-h-44 leading-snug">
+                            <code>{file.liveSourcePreview}</code>
+                          </pre>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

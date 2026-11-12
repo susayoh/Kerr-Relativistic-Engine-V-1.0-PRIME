@@ -350,38 +350,51 @@ class RelativisticAudioEngine {
     osc.stop(now + 0.4);
   }
 
-  public triggerAccretionShockPulse(isStar = false) {
+  public triggerAccretionShockPulse(isStar = false, isCinematicBoom = true) {
     if (!this.ctx || this.isMuted || !this.masterGain) return;
     const now = this.ctx.currentTime;
+    const durScale = isCinematicBoom ? 1.55 : 1.0;
 
-    // 1. Deep N-Wave Sub-Bass Sonic Boom Thump
+    // 1. Deep IMAX N-Wave Sub-Bass Sonic Boom Detonation (Dual detuned sub-oscillators)
     const osc = this.ctx.createOscillator();
+    const subOsc2 = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
 
     osc.type = isStar ? 'triangle' : 'sine';
-    const startFreq = isStar ? 135 : 88;
-    const endFreq = isStar ? 28 : 22;
+    subOsc2.type = 'triangle';
+    const startFreq = isStar ? 148 : isCinematicBoom ? 118 : 96;
+    const endFreq = isStar ? 24 : isCinematicBoom ? 16 : 20;
 
     osc.frequency.setValueAtTime(startFreq, now);
-    osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.65);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.85 * durScale);
+
+    subOsc2.frequency.setValueAtTime(startFreq * 0.5, now);
+    subOsc2.frequency.exponentialRampToValueAtTime(Math.max(12, endFreq * 0.75), now + 0.95 * durScale);
 
     subGain.gain.setValueAtTime(0.001, now);
-    subGain.gain.linearRampToValueAtTime(0.34, now + 0.018);
-    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+    subGain.gain.linearRampToValueAtTime(isCinematicBoom ? 0.54 : 0.40, now + 0.014);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.98 * durScale);
 
     osc.connect(subGain);
+    subOsc2.connect(subGain);
     subGain.connect(this.ctx.destination);
     osc.start(now);
-    osc.stop(now + 0.78);
+    subOsc2.start(now);
+    osc.stop(now + 1.02 * durScale);
+    subOsc2.stop(now + 1.02 * durScale);
 
-    // 2. Supersonic Pressure-Front Broadband Shock Crack (Low-passed Noise Burst)
-    const bufferSize = Math.floor(this.ctx.sampleRate * 0.45);
+    // 2. Supersonic Pressure-Front Double-Peaked N-Wave Broadband Shock Crack
+    const noiseDur = 0.68 * durScale;
+    const bufferSize = Math.floor(this.ctx.sampleRate * noiseDur);
     const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = noiseBuffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
       const t = i / bufferSize;
-      // N-wave double-shock envelope
-      const nWave = Math.exp(-t * 14.0) + 0.45 * Math.exp(-Math.pow((t - 0.16) / 0.06, 2.0));
+      // N-wave double-shock + seismic rumble tail envelope
+      const leadShock = Math.exp(-t * 16.0);
+      const tailShock = 0.72 * Math.exp(-Math.pow((t - 0.14) / 0.048, 2.0));
+      const rumbleTail = 0.28 * Math.exp(-t * 3.2);
+      const nWave = leadShock + tailShock + rumbleTail;
       data[i] = (Math.random() * 2.0 - 1.0) * nWave;
     }
 
@@ -390,18 +403,43 @@ class RelativisticAudioEngine {
 
     const shockFilter = this.ctx.createBiquadFilter();
     shockFilter.type = 'lowpass';
-    shockFilter.frequency.setValueAtTime(isStar ? 420 : 280, now);
-    shockFilter.frequency.exponentialRampToValueAtTime(45, now + 0.4);
-    shockFilter.Q.value = 1.8;
+    shockFilter.frequency.setValueAtTime(isStar ? 620 : isCinematicBoom ? 540 : 360, now);
+    shockFilter.frequency.exponentialRampToValueAtTime(38, now + noiseDur * 0.92);
+    shockFilter.Q.value = isCinematicBoom ? 2.6 : 1.9;
 
     const noiseGain = this.ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.28, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.44);
+    noiseGain.gain.setValueAtTime(isCinematicBoom ? 0.44 : 0.32, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + noiseDur);
 
     noiseSource.connect(shockFilter);
     shockFilter.connect(noiseGain);
     noiseGain.connect(this.ctx.destination);
     noiseSource.start(now);
+
+    // 3. Relativistic Quasinormal Ringdown Harmonic Afterglow (for cinematic boot expansion)
+    if (isCinematicBoom) {
+      const ringOsc = this.ctx.createOscillator();
+      const ringGain = this.ctx.createGain();
+      ringOsc.type = 'sawtooth';
+      ringOsc.frequency.setValueAtTime(isStar ? 165 : 110, now + 0.02);
+      ringOsc.frequency.exponentialRampToValueAtTime(isStar ? 82.5 : 44, now + 1.45);
+
+      const ringFilter = this.ctx.createBiquadFilter();
+      ringFilter.type = 'bandpass';
+      ringFilter.frequency.setValueAtTime(180, now);
+      ringFilter.frequency.exponentialRampToValueAtTime(62, now + 1.45);
+      ringFilter.Q.value = 3.2;
+
+      ringGain.gain.setValueAtTime(0.001, now);
+      ringGain.gain.linearRampToValueAtTime(0.16, now + 0.06);
+      ringGain.gain.exponentialRampToValueAtTime(0.0008, now + 1.5);
+
+      ringOsc.connect(ringFilter);
+      ringFilter.connect(ringGain);
+      ringGain.connect(this.ctx.destination);
+      ringOsc.start(now);
+      ringOsc.stop(now + 1.55);
+    }
   }
 
   public dispose() {

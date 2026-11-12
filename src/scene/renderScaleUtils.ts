@@ -146,6 +146,12 @@ export type LagBottleneckClassification =
   | 'CPU_RAF_BOUND'
   | 'IFRAME_COMPOSITOR_OR_VSYNC_WAIT';
 
+export type GeodesicShaderQualityTier = 'Full Geodesic' | 'Approximated Null-Geodesic';
+
+export type GeodesicShaderQualityMode = 'auto' | GeodesicShaderQualityTier;
+
+export const SHADER_QUALITY_HYSTERESIS_MS = 2500;
+
 export interface ShaderPassTimingInput {
   interFrameMs: number;
   rafTotalMs: number;
@@ -157,12 +163,115 @@ export interface ShaderPassTimingInput {
   renderPasses: number;
   isOrbiting: boolean;
   pixelRatio: number;
+  shaderQualityTier?: GeodesicShaderQualityTier;
 }
 
 export interface ShaderPassTimingSnapshot extends ShaderPassTimingInput {
+  shaderQualityTier: GeodesicShaderQualityTier;
   unaccountedFrameGapMs: number;
   classification: LagBottleneckClassification;
   diagnosisSummary: string;
+}
+
+/**
+ * GLSL snippet definitions for the 'Full Geodesic' (high detail) vs.
+ * 'Approximated Null-Geodesic' (lower fidelity, high FPS) fragment shader variants.
+ */
+export const GEODESIC_SHADER_SNIPPETS: Record<GeodesicShaderQualityTier, string> = {
+  'Full Geodesic': `
+  #define KERR_APPROX_NULL_GEODESIC 0
+  #define VOL_RAYMARCH_STEPS 5
+  `,
+  'Approximated Null-Geodesic': `
+  #define KERR_APPROX_NULL_GEODESIC 1
+  #define VOL_RAYMARCH_STEPS 2
+  `,
+};
+
+/**
+ * Evaluates whether the engine should swap between 'Full Geodesic' (high detail)
+ * and 'Approximated Null-Geodesic' (lower fidelity) fragment shaders based on
+ * the instrumented performance telemetry averages and a hysteresis cooldown.
+ */
+export function evaluateDynamicShaderQualityTier(
+  currentTier: GeodesicShaderQualityTier,
+  averagedTelemetry: ShaderPassTimingSnapshot,
+  elapsedSinceLastSwapMs: number,
+  mode: GeodesicShaderQualityMode = 'auto',
+  hysteresisMs = SHADER_QUALITY_HYSTERESIS_MS
+): {
+  nextTier: GeodesicShaderQualityTier;
+  swapped: boolean;
+  reason: string;
+} {
+  if (mode === 'Full Geodesic' || mode === 'Approximated Null-Geodesic') {
+    const swapped = currentTier !== mode;
+    return {
+      nextTier: mode,
+      swapped,
+      reason: swapped ? `Manual override locked to '${mode}'.` : `Locked to '${mode}'.`,
+    };
+  }
+
+  // Enforce cooldown between automatic tier swaps to prevent visual oscillation
+  if (elapsedSinceLastSwapMs < hysteresisMs) {
+    return {
+      nextTier: currentTier,
+      swapped: false,
+      reason: 'Within hysteresis stabilization window.',
+    };
+  }
+
+  const effectiveGpuMs =
+    averagedTelemetry.gpuTimerQueryMs !== null && averagedTelemetry.gpuTimerQueryMs > 0
+      ? Math.max(averagedTelemetry.gpuScenePassMs, averagedTelemetry.gpuTimerQueryMs)
+      : averagedTelemetry.gpuScenePassMs;
+
+  if (currentTier === 'Full Geodesic') {
+    const isGpuBottlenecked =
+      averagedTelemetry.classification === 'GPU_FRAGMENT_BOUND' ||
+      (averagedTelemetry.interFrameMs > 20.8 && effectiveGpuMs >= 4.5) ||
+      effectiveGpuMs >= 9.5;
+
+    if (isGpuBottlenecked) {
+      return {
+        nextTier: 'Approximated Null-Geodesic',
+        swapped: true,
+        reason: `Telemetry avg ${averagedTelemetry.interFrameMs.toFixed(
+          2
+        )}ms/frame (GPU Scene Pass ${averagedTelemetry.gpuScenePassMs.toFixed(2)}ms${
+          averagedTelemetry.gpuTimerQueryMs !== null
+            ? `, HW GPU ${averagedTelemetry.gpuTimerQueryMs.toFixed(2)}ms`
+            : ''
+        }) exceeded Full Geodesic budget -> swapping to 'Approximated Null-Geodesic'.`,
+      };
+    }
+  } else {
+    // Currently in 'Approximated Null-Geodesic': upgrade back to 'Full Geodesic' once frame times and GPU pass have comfortable headroom
+    const canUpgradeToFull =
+      averagedTelemetry.classification === 'OPTIMAL_60FPS' &&
+      averagedTelemetry.interFrameMs <= 17.6 &&
+      averagedTelemetry.gpuScenePassMs <= 3.8 &&
+      (averagedTelemetry.gpuTimerQueryMs === null || averagedTelemetry.gpuTimerQueryMs <= 7.5);
+
+    if (canUpgradeToFull) {
+      return {
+        nextTier: 'Full Geodesic',
+        swapped: true,
+        reason: `Telemetry avg recovered to ${averagedTelemetry.interFrameMs.toFixed(
+          2
+        )}ms/frame (GPU Scene Pass ${averagedTelemetry.gpuScenePassMs.toFixed(
+          2
+        )}ms) -> restoring 'Full Geodesic' shader.`,
+      };
+    }
+  }
+
+  return {
+    nextTier: currentTier,
+    swapped: false,
+    reason: `Maintaining '${currentTier}' tier.`,
+  };
 }
 
 /**
@@ -227,13 +336,153 @@ export function clearKerrPerfMarksAndMeasures(): void {
   }
 }
 
+export type ThermalThrottleLevel = 'NOMINAL' | 'WARM' | 'THROTTLED' | 'CRITICAL';
+
+export interface ThermalThrottleState {
+  /** Current raymarching step count fed into the shader uniform u_stepCount (1..5) */
+  uStepCount: number;
+  /** Maximum unthrottled step count for the current quality tier */
+  maxStepCount: number;
+  /** Estimated passive-cooling thermal load percentage (0..100%) */
+  thermalLoadPct: number;
+  /** Estimated GPU die temperature in Celsius for passive/fanless chassis model (38..92°C) */
+  estimatedTempC: number;
+  /** Continuous duration in ms that GPU/frame times have remained above the sustained bottleneck threshold */
+  sustainedBottleneckMs: number;
+  /** Timestamp (performance.now() ms) of the last thermal state integration step */
+  lastSampleTimeMs: number;
+  /** Discrete thermal throttling state classification */
+  level: ThermalThrottleLevel;
+  /** True when uStepCount has been reduced below maxStepCount due to thermal load */
+  throttled: boolean;
+}
+
+export interface ThermalSampleInput {
+  nowMs: number;
+  interFrameMs: number;
+  gpuScenePassMs: number;
+  gpuTimerQueryMs: number | null;
+  rafTotalMs: number;
+  maxStepCount?: number;
+}
+
+export const THERMAL_DEFAULT_MAX_STEPS = 5;
+export const THERMAL_MIN_STEPS = 1;
+export const THERMAL_AMBIENT_TEMP_C = 38.0;
+export const THERMAL_MAX_TEMP_C = 92.0;
+
+/**
+ * Creates the initial nominal thermal throttling state.
+ */
+export function createInitialThermalState(
+  nowMs = 0,
+  maxStepCount = THERMAL_DEFAULT_MAX_STEPS
+): ThermalThrottleState {
+  return {
+    uStepCount: maxStepCount,
+    maxStepCount,
+    thermalLoadPct: 0,
+    estimatedTempC: THERMAL_AMBIENT_TEMP_C,
+    sustainedBottleneckMs: 0,
+    lastSampleTimeMs: nowMs,
+    level: 'NOMINAL',
+    throttled: false,
+  };
+}
+
+/**
+ * Integrates GPU frame time metrics over wall-clock time via performance.now() using an asymmetric
+ * passive-cooling RC thermal model (faster heating under sustained GPU load, slower passive dissipation)
+ * and computes the reduced raymarching ray count (u_stepCount) to prevent thermal runaway on fanless devices.
+ */
+export function stepThermalThrottlingState(
+  prevState: ThermalThrottleState,
+  sample: ThermalSampleInput
+): ThermalThrottleState {
+  const maxSteps = Math.max(
+    THERMAL_MIN_STEPS,
+    Math.round(sample.maxStepCount ?? prevState.maxStepCount ?? THERMAL_DEFAULT_MAX_STEPS)
+  );
+  const rawDtMs =
+    prevState.lastSampleTimeMs > 0 ? sample.nowMs - prevState.lastSampleTimeMs : sample.interFrameMs;
+  const dtMs = Number.isFinite(rawDtMs) ? Math.max(1.0, Math.min(500.0, rawDtMs)) : 16.67;
+
+  const effectiveGpuMs =
+    sample.gpuTimerQueryMs !== null && sample.gpuTimerQueryMs > 0
+      ? Math.max(sample.gpuScenePassMs, sample.gpuTimerQueryMs)
+      : Math.max(sample.gpuScenePassMs, sample.rafTotalMs * 0.72);
+
+  // Instantaneous GPU/frame load ratio relative to a 16.67ms (60 FPS) / 8.0ms GPU pass envelope
+  const frameLoadRatio = Math.max(0, (sample.interFrameMs - 15.5) / 26.0);
+  const gpuLoadRatio = Math.max(0, (effectiveGpuMs - 4.2) / 14.0);
+  const instantLoadPct = Math.max(0, Math.min(100, Math.max(frameLoadRatio, gpuLoadRatio) * 100));
+
+  const isBottleneckedFrame = sample.interFrameMs > 20.5 || effectiveGpuMs > 8.5;
+  const sustainedBottleneckMs = isBottleneckedFrame
+    ? Math.min(30000, prevState.sustainedBottleneckMs + dtMs)
+    : Math.max(0, prevState.sustainedBottleneckMs - dtMs * 1.5);
+
+  // Asymmetric RC thermal time constants: passive chassis heats up in ~2.6s under sustained bottleneck,
+  // and cools down more gradually (~5.2s) once GPU load drops.
+  const tauMs = instantLoadPct > prevState.thermalLoadPct ? 2600.0 : 5200.0;
+  const alpha = 1.0 - Math.exp(-dtMs / tauMs);
+  const sustainedBoostPct = Math.min(28.0, (sustainedBottleneckMs / 4000.0) * 22.0);
+  const targetThermalLoadPct = Math.min(100, instantLoadPct * 0.82 + sustainedBoostPct);
+
+  const nextThermalLoadPct = Number(
+    Math.max(0, Math.min(100, prevState.thermalLoadPct + (targetThermalLoadPct - prevState.thermalLoadPct) * alpha)).toFixed(1)
+  );
+
+  const estimatedTempC = Number(
+    (
+      THERMAL_AMBIENT_TEMP_C +
+      (THERMAL_MAX_TEMP_C - THERMAL_AMBIENT_TEMP_C) * (nextThermalLoadPct / 100)
+    ).toFixed(1)
+  );
+
+  let level: ThermalThrottleLevel = 'NOMINAL';
+  let stepReduction = 0;
+
+  if (nextThermalLoadPct >= 78 || sustainedBottleneckMs >= 4800) {
+    level = 'CRITICAL';
+    stepReduction = 3;
+  } else if (nextThermalLoadPct >= 54 || sustainedBottleneckMs >= 2600) {
+    level = 'THROTTLED';
+    stepReduction = 2;
+  } else if (nextThermalLoadPct >= 32 || sustainedBottleneckMs >= 1200) {
+    level = 'WARM';
+    stepReduction = 1;
+  }
+
+  const uStepCount = Math.max(THERMAL_MIN_STEPS, Math.min(maxSteps, maxSteps - stepReduction));
+
+  return {
+    uStepCount,
+    maxStepCount: maxSteps,
+    thermalLoadPct: nextThermalLoadPct,
+    estimatedTempC,
+    sustainedBottleneckMs: Math.round(sustainedBottleneckMs),
+    lastSampleTimeMs: sample.nowMs,
+    level,
+    throttled: uStepCount < maxSteps,
+  };
+}
+
 /**
  * Classifies whether frame lag stems from GPU fragment complexity, CPU-bound requestAnimationFrame
  * work, or iframe compositor / GPU command buffer synchronization wait between rAF callbacks.
  */
 export function classifyFrameBottleneck(
-  input: ShaderPassTimingInput
-): ShaderPassTimingSnapshot {
+  input: ShaderPassTimingInput & {
+    uStepCount?: number;
+    thermalLevel?: ThermalThrottleLevel;
+    estimatedTempC?: number;
+  }
+): ShaderPassTimingSnapshot & {
+  uStepCount?: number;
+  thermalLevel?: ThermalThrottleLevel;
+  estimatedTempC?: number;
+} {
   const cpuTotalMs = input.cpuSimPhysicsMs + input.cpuCameraUniformsMs;
   const gpuSubmitTotalMs = input.gpuScenePassMs + input.gpuPostPassMs;
   const effectiveGpuMs =
@@ -244,6 +493,8 @@ export function classifyFrameBottleneck(
     0,
     Number((input.interFrameMs - input.rafTotalMs).toFixed(2))
   );
+  const shaderQualityTier: GeodesicShaderQualityTier =
+    input.shaderQualityTier ?? 'Full Geodesic';
 
   let classification: LagBottleneckClassification = 'OPTIMAL_60FPS';
   let diagnosisSummary =
@@ -260,7 +511,9 @@ export function classifyFrameBottleneck(
         2
       )}ms across ${input.renderPasses} pass${
         input.renderPasses === 1 ? '' : 'es'
-      } @ ${input.pixelRatio.toFixed(2)}x DPR; CPU rAF pre-render took ${cpuTotalMs.toFixed(2)}ms).`;
+      } @ ${input.pixelRatio.toFixed(2)}x DPR [${shaderQualityTier}${
+        input.uStepCount !== undefined ? ` · u_stepCount=${input.uStepCount}` : ''
+      }]; CPU rAF pre-render took ${cpuTotalMs.toFixed(2)}ms).`;
     } else if (cpuTotalMs >= 7.0 || cpuTotalMs >= input.rafTotalMs * 0.55) {
       classification = 'CPU_RAF_BOUND';
       diagnosisSummary = `CPU requestAnimationFrame JS work dominates (${cpuTotalMs.toFixed(
@@ -280,9 +533,131 @@ export function classifyFrameBottleneck(
 
   return {
     ...input,
+    shaderQualityTier,
     unaccountedFrameGapMs,
     classification,
     diagnosisSummary,
   };
 }
+
+export type ShaderPrewarmVariantId =
+  | 'geodesic_full'
+  | 'geodesic_approx'
+  | 'accretion_disk_classic'
+  | 'accretion_disk_volumetric'
+  | 'ergosphere_static_limit'
+  | 'event_horizon_supersonic_boom'
+  | 'spacetime_post_dispersion'
+  | 'starfield_and_compact_remnants';
+
+export interface ShaderPrewarmVariantEntry {
+  id: ShaderPrewarmVariantId;
+  programKey: string;
+  subsystem: 'geodesic' | 'accretion_disk' | 'ergosphere' | 'shockwave' | 'post_pass' | 'stellar';
+  label: string;
+}
+
+export const SHADER_PREWARM_MANIFEST: readonly ShaderPrewarmVariantEntry[] = [
+  {
+    id: 'geodesic_full',
+    programKey: 'lensing_kerr_raymarcher_full_geodesic_v1',
+    subsystem: 'geodesic',
+    label: 'Full Geodesic 5-Step Boyer-Lindquist Raymarcher',
+  },
+  {
+    id: 'geodesic_approx',
+    programKey: 'lensing_kerr_raymarcher_approx_null_geodesic_v1',
+    subsystem: 'geodesic',
+    label: 'Approximated Null-Geodesic 2-Step Midpoint Raymarcher',
+  },
+  {
+    id: 'accretion_disk_classic',
+    programKey: 'accretion_disk_classic_v1',
+    subsystem: 'accretion_disk',
+    label: 'Novikov-Thorne Equatorial Accretion Disk (Classic)',
+  },
+  {
+    id: 'accretion_disk_volumetric',
+    programKey: 'accretion_disk_volumetric_fbm_v1',
+    subsystem: 'accretion_disk',
+    label: 'Volumetric Raymarched Plasma Torus & Strata',
+  },
+  {
+    id: 'ergosphere_static_limit',
+    programKey: 'ergosphere_lense_thirring_cage_v1',
+    subsystem: 'ergosphere',
+    label: 'Lense-Thirring Oblate Ergosphere Static-Limit Cage',
+  },
+  {
+    id: 'event_horizon_supersonic_boom',
+    programKey: 'event_horizon_sonic_boom_v1',
+    subsystem: 'shockwave',
+    label: 'Supersonic N-Wave Mach Shell & Equatorial Shock Rings',
+  },
+  {
+    id: 'spacetime_post_dispersion',
+    programKey: 'relativistic_motion_blur_post_v1',
+    subsystem: 'post_pass',
+    label: 'Relativistic Chromatic Dispersion & Time-Lapse Post-Pass',
+  },
+  {
+    id: 'starfield_and_compact_remnants',
+    programKey: 'compact_star_crust_beloborodov_v1',
+    subsystem: 'stellar',
+    label: 'Instanced Deep Starfield & Compact Remnant Photosphere',
+  },
+] as const;
+
+export interface ShaderPrewarmCacheReport {
+  isPrewarmed: boolean;
+  isComplete: boolean;
+  compiledVariants: ShaderPrewarmVariantId[];
+  compiledProgramKeys: string[];
+  totalRequiredVariants: number;
+  prewarmDurationMs: number;
+  webglProgramsCount: number;
+}
+
+/**
+ * Evaluates and formats a boot-in shader pre-warming cache report verifying that
+ * geodesic, accretion disk, ergosphere, shockwave, and post-processing shader variants
+ * were compiled ahead of first-frame dispatch.
+ */
+export function buildShaderPrewarmCacheReport(
+  compiledVariants: readonly ShaderPrewarmVariantId[],
+  prewarmDurationMs: number,
+  webglProgramsCount = 0
+): ShaderPrewarmCacheReport {
+  const uniqueSet = new Set<ShaderPrewarmVariantId>(compiledVariants);
+  const orderedVariants: ShaderPrewarmVariantId[] = [];
+  const programKeys: string[] = [];
+
+  for (const entry of SHADER_PREWARM_MANIFEST) {
+    if (uniqueSet.has(entry.id)) {
+      orderedVariants.push(entry.id);
+      programKeys.push(entry.programKey);
+    }
+  }
+
+  const requiredCoreIds: ShaderPrewarmVariantId[] = [
+    'geodesic_full',
+    'geodesic_approx',
+    'accretion_disk_classic',
+    'accretion_disk_volumetric',
+    'ergosphere_static_limit',
+  ];
+  const isComplete = requiredCoreIds.every((id) => uniqueSet.has(id));
+
+  return {
+    isPrewarmed: orderedVariants.length > 0,
+    isComplete,
+    compiledVariants: orderedVariants,
+    compiledProgramKeys: programKeys,
+    totalRequiredVariants: SHADER_PREWARM_MANIFEST.length,
+    prewarmDurationMs: Number(Math.max(0, prewarmDurationMs).toFixed(2)),
+    webglProgramsCount: Math.max(orderedVariants.length, webglProgramsCount),
+  };
+}
+
+
 

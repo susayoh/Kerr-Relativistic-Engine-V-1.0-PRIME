@@ -20,20 +20,42 @@ import {
   updateCompactStarPrecession,
 } from './CompactStarMaterial';
 import {
+  buildShaderPrewarmCacheReport,
   classifyFrameBottleneck,
   clearKerrPerfMarksAndMeasures,
   computeBaseDesktopPixelRatio,
   computeRollingAverageFps,
+  createInitialThermalState,
   DYNAMIC_RES_MIN_DPR,
   DYNAMIC_RES_ROLLING_WINDOW,
   DYNAMIC_RES_STEP_DPR,
+  evaluateDynamicShaderQualityTier,
+  GEODESIC_SHADER_SNIPPETS,
+  GeodesicShaderQualityMode,
+  GeodesicShaderQualityTier,
   KERR_PERF_MARKS,
   KERR_PERF_MEASURES,
   safePerfMark,
   safePerfMeasureMs,
+  SHADER_PREWARM_MANIFEST,
+  SHADER_QUALITY_HYSTERESIS_MS,
   ShaderPassTimingSnapshot,
+  ShaderPrewarmCacheReport,
+  ShaderPrewarmVariantId,
   stepDynamicResolutionScale,
+  stepThermalThrottlingState,
+  ThermalThrottleLevel,
+  ThermalThrottleState,
 } from './renderScaleUtils';
+
+export type {
+  GeodesicShaderQualityMode,
+  GeodesicShaderQualityTier,
+  ShaderPrewarmCacheReport,
+  ShaderPrewarmVariantId,
+  ThermalThrottleLevel,
+  ThermalThrottleState,
+};
 
 export interface AnatomyCalloutAnchor {
   id: string;
@@ -247,7 +269,11 @@ export interface ScenePerformanceTelemetry {
   lowResolutionRender?: boolean;
   renderResolutionScale?: number;
   telemetryThrottleHz?: number;
+  shaderQualityTier?: GeodesicShaderQualityTier;
+  shaderQualityMode?: GeodesicShaderQualityMode;
   passTimings?: ShaderPassTimingSnapshot;
+  thermalState?: ThermalThrottleState;
+  shaderPrewarm?: ShaderPrewarmCacheReport;
   layerDiagnostics: ShaderLayerDiagnosticItem[];
   gpuCache: GPUResourceCacheMetrics;
 }
@@ -861,7 +887,7 @@ const LENSING_VERTEX_SHADER = `
   }
 `;
 
-const LENSING_FRAGMENT_SHADER = `
+const LENSING_FRAGMENT_SHADER_BODY = `
   uniform vec3 uCameraPos;
   uniform vec3 uBlackHolePos;
   uniform float uScale;
@@ -885,6 +911,7 @@ const LENSING_FRAGMENT_SHADER = `
   uniform float uCompanionStarRadius;
   uniform float uDepthPeeling;
   uniform float u_isOrbiting;
+  uniform float u_stepCount;
 
   varying vec2 vUv;
   varying vec3 vWorldPos;
@@ -897,14 +924,19 @@ const LENSING_FRAGMENT_SHADER = `
     return dot(sin(p), cos(p.yzx)) * 0.3333 + 0.5;
   }
 
-  // Fast 3-octave 3D Fractional Brownian Motion (fBM) without heavy simplex lattice instruction bloat
+  // Fast 3-octave 3D Fractional Brownian Motion (fBM) in Full Geodesic tier,
+  // or single-octave gyroid evaluation in Approximated Null-Geodesic tier
   float fbmSphere(vec3 p) {
+#if KERR_APPROX_NULL_GEODESIC == 1
+    return clamp(gyroidOctave(p * 2.2), 0.0, 1.0);
+#else
     float v = 0.52 * gyroidOctave(p * 2.2);
     p = vec3(p.y + p.z * 0.6, p.z - p.x * 0.6, p.x + p.y * 0.6) * 1.65 + vec3(1.7, 3.1, 2.3);
     v += 0.30 * gyroidOctave(p * 2.2);
     p = vec3(p.y - p.z * 0.6, p.z + p.x * 0.6, p.x - p.y * 0.6) * 1.65 + vec3(4.1, 1.9, 3.7);
     v += 0.18 * gyroidOctave(p * 2.2);
     return clamp(v, 0.0, 1.0);
+#endif
   }
 
   // Evaluates gravitationally lensed light of the companion donor star (boiling fBM surface + coronal Fresnel glow)
@@ -1049,12 +1081,15 @@ const LENSING_FRAGMENT_SHADER = `
 
     float turbScale = mix(1.05, 1.38, uAccretionState);
     float turbA = fastTurb2D(rotDir * (rHit * 0.62 * turbScale) + vec2(uTime * 0.12, -uTime * 0.10 + verticalY * 0.42));
-    float turbB = fastTurb2D(rotDir * (rHit * 1.28 * turbScale) - vec2(uTime * 0.16, uTime * 0.14 - verticalY * 0.52));
-
     float band1 = sin(rHit * 4.4 * turbScale - uTime * 1.8 + cos2Phi * 1.15 + (turbA - 0.5) * (2.0 + 0.65 * uAccretionState) + verticalY * 1.35) * 0.5 + 0.5;
+#if KERR_APPROX_NULL_GEODESIC == 1
+    float diskFilaments = clamp(mix(turbA, band1, 0.68), 0.14, 1.0);
+#else
+    float turbB = fastTurb2D(rotDir * (rHit * 1.28 * turbScale) - vec2(uTime * 0.16, uTime * 0.14 - verticalY * 0.52));
     float band2 = cos(rHit * 8.8 * turbScale - uTime * 2.5 + sin2Phi * 0.85 + (turbB - 0.5) * (1.5 + 0.55 * uAccretionState) - verticalY * 1.05) * 0.5 + 0.5;
     float plasmaBands = pow(max(0.0001, mix(band1, band2, 0.45)), 1.22);
     float diskFilaments = clamp(mix(turbA, plasmaBands, 0.72), 0.14, 1.0);
+#endif
 
     vec2 toCamXZ = length(uCameraPos.xz - uBlackHolePos.xz) > 0.001
       ? normalize(uCameraPos.xz - uBlackHolePos.xz)
@@ -1198,12 +1233,16 @@ const LENSING_FRAGMENT_SHADER = `
       float lensedDiskAlpha = 0.0;
 
       if (uShowDisk > 0.5 && uLensingActive > 0.5 && uExpansionProgress > 0.02 && b >= r_horizon) {
+#if KERR_APPROX_NULL_GEODESIC == 1
+        float r_isco = r_horizon * (1.64 - 0.38 * spin * spin);
+#else
         float aIsco = clamp(spin, 0.0, 0.999);
         float cbrt1 = pow(max(0.0001, 1.0 - aIsco * aIsco), 1.0 / 3.0);
         float z1 = 1.0 + cbrt1 * (pow(1.0 + aIsco, 1.0 / 3.0) + pow(max(0.0001, 1.0 - aIsco), 1.0 / 3.0));
         float z2 = sqrt(3.0 * aIsco * aIsco + z1 * z1);
         float rIscoRg = 3.0 + z2 - sqrt(max(0.0, (3.0 - z1) * (3.0 + z1 + 2.0 * z2)));
         float r_isco = r_horizon * 1.22 + clamp((rIscoRg - 1.0) / 5.0, 0.0, 1.0) * 0.42;
+#endif
         float rPlungeInner = r_horizon * 1.02;
         float rOut = mix(5.5, 6.2, uAccretionState);
 
@@ -1263,13 +1302,18 @@ const LENSING_FRAGMENT_SHADER = `
 
                 float turbScale = mix(1.0, 1.35, uAccretionState);
                 float turbA = fastTurb2D(rotDir * (rHit * 0.65 * turbScale) + vec2(uTime * 0.12, -uTime * 0.10));
-                float turbVertical = fastTurb2D(vec2(pLocal.x * 0.45 + uTime * 0.18, pLocal.y * 0.55 - uTime * 0.14));
                 float band1 = sin(rHit * 5.2 * turbScale - uTime * 1.8 + cos2Phi * 1.15 + (turbA - 0.5) * (1.8 + 0.65 * uAccretionState)) * 0.5 + 0.5;
+#if KERR_APPROX_NULL_GEODESIC == 1
+                float turbVertical = 0.5;
+                float diskFilaments = mix(turbA, band1, 0.65);
+#else
+                float turbVertical = fastTurb2D(vec2(pLocal.x * 0.45 + uTime * 0.18, pLocal.y * 0.55 - uTime * 0.14));
                 float band2 = cos(rHit * 10.4 * turbScale - uTime * 2.4 + sin2Phi * 0.85 + (turbVertical - 0.5) * 1.2 * uAccretionState) * 0.5 + 0.5;
                 float diskFilaments = mix(turbA, mix(band1, band2, 0.45), 0.65);
                 if (uAccretionState > 0.5) {
                   diskFilaments = mix(diskFilaments, turbVertical, 0.28);
                 }
+#endif
 
                 float approach = clamp(uvCentered.x / max(0.001, length(uvCentered)), -1.0, 1.0);
                 float beta = clamp(0.68 / sqrt(max(0.75, rHit - 0.4)), 0.05, 0.78);
@@ -1399,12 +1443,16 @@ const LENSING_FRAGMENT_SHADER = `
     float bloomMult = max(0.0, uBloomIntensity);
     float distFromHorizon = max(0.0, b - r_horizon);
 
+#if KERR_APPROX_NULL_GEODESIC == 1
+    float rIn = r_horizon * (1.64 - 0.38 * spin * spin);
+#else
     float aIsco = clamp(spin, 0.0, 0.999);
     float cbrt1 = pow(max(0.0001, 1.0 - aIsco * aIsco), 1.0 / 3.0);
     float z1 = 1.0 + cbrt1 * (pow(1.0 + aIsco, 1.0 / 3.0) + pow(max(0.0001, 1.0 - aIsco), 1.0 / 3.0));
     float z2 = sqrt(3.0 * aIsco * aIsco + z1 * z1);
     float rIscoRg = 3.0 + z2 - sqrt(max(0.0, (3.0 - z1) * (3.0 + z1 + 2.0 * z2)));
     float rIn = r_horizon * 1.22 + clamp((rIscoRg - 1.0) / 5.0, 0.0, 1.0) * 0.42;
+#endif
     float rOut = mix(5.6, 6.3, uAccretionState);
 
     vec3 accumColor = vec3(0.0);
@@ -1437,20 +1485,20 @@ const LENSING_FRAGMENT_SHADER = `
           float tHalfSpan = clamp(torusHalfHeight / max(0.18, abs(effectiveBentY)), 0.15, 1.65);
           float limbBlend = exp(-abs(pLocal.y) * 1.35);
 
-          // 5-Step Front-to-Back Beer-Lambert Volumetric Geodesic Raymarcher through the lensed 3D plasma torus
-          // When WebGL Depth-Peeling (uDepthPeeling > 0.5) is active, peels the front-most 3 strata with early optical-depth termination
-          // Orbit Step-Size Relaxation: multiplies integration step size dt by mix(1.0, 1.45, u_isOrbiting) during active drags/zooms
+          // Front-to-Back Beer-Lambert Volumetric Geodesic Raymarcher through the lensed 3D plasma torus
+          // VOL_RAYMARCH_STEPS is 5 in 'Full Geodesic' tier and 2 in 'Approximated Null-Geodesic' tier;
+          // u_stepCount dynamically throttles active raymarching steps under sustained GPU thermal/load bottlenecks
+          int activeStepCount = clamp(int(u_stepCount + 0.5), 1, VOL_RAYMARCH_STEPS);
           float transmittance = 1.0;
-          const int VOL_RAYMARCH_STEPS = 5;
           float orbitStepMult = mix(1.0, 1.45, clamp(u_isOrbiting, 0.0, 1.0));
           float tSpanHalf = tHalfSpan * 0.72;
           float tStart = tCenter - tSpanHalf;
           float tEnd = tCenter + tSpanHalf;
-          float baseDt = (2.0 * tSpanHalf) / float(VOL_RAYMARCH_STEPS);
+          float baseDt = (2.0 * tSpanHalf) / float(activeStepCount);
           float dt = baseDt * orbitStepMult;
           float tCurr = tStart + 0.5 * dt;
           for (int i = 0; i < VOL_RAYMARCH_STEPS; i++) {
-            if ((uDepthPeeling > 0.5 && i >= 3) || tCurr > tEnd + 0.001) {
+            if (i >= activeStepCount || (uDepthPeeling > 0.5 && i >= 3) || tCurr > tEnd + 0.001) {
               break;
             }
             float sNorm = clamp((tCurr - tCenter) / max(0.001, tSpanHalf), -1.0, 1.0);
@@ -1477,7 +1525,7 @@ const LENSING_FRAGMENT_SHADER = `
 
             if (stepAlpha > 0.001) {
               float vertDensity = exp(-pow(abs(sNorm), 1.60) * 2.10);
-              float stepOpticalDepth = stepAlpha * vertDensity * (0.28 + 0.08 * uAccretionState) * orbitStepMult;
+              float stepOpticalDepth = stepAlpha * vertDensity * (0.28 + 0.08 * uAccretionState) * orbitStepMult * (5.0 / float(activeStepCount));
               float stepAbsorb = 1.0 - exp(-stepOpticalDepth * 1.65);
               accumColor += transmittance * stepCol * stepAbsorb;
               transmittance *= (1.0 - stepAbsorb * 0.90);
@@ -1510,9 +1558,13 @@ const LENSING_FRAGMENT_SHADER = `
 
           // Volumetric arch envelope: full intensity across the upper/lower Einstein arches and inner photon ring,
           // while smoothly tapering into the 3D volumetric equatorial torus strata along the outer midplane
+#if KERR_APPROX_NULL_GEODESIC == 1
+          float yTurbOffset = 0.0;
+#else
           float turbVertical = fastTurb2D(vec2(pLocal.x * 0.45 + uTime * 0.18, pLocal.y * 0.55 - uTime * 0.14));
-          float scaleHeightY = 0.74 + 0.20 * max(0.0, b - rIn);
           float yTurbOffset = (turbVertical - 0.5) * 0.62;
+#endif
+          float scaleHeightY = 0.74 + 0.20 * max(0.0, b - rIn);
           float activeVolumetricEnvelope = exp(-pow(max(0.0001, abs(pLocal.y + yTurbOffset) - 0.34) / scaleHeightY, 1.45));
           float quiescentArchMask = smoothstep(0.12, 0.62, abs(pLocal.y));
           float activeArchMask = mix(0.78, 1.0, smoothstep(0.0, 0.42, abs(pLocal.y))) * clamp(activeVolumetricEnvelope * 1.16, 0.0, 1.0);
@@ -1555,6 +1607,13 @@ const LENSING_FRAGMENT_SHADER = `
     gl_FragColor = vec4(tonemapped, outAlpha);
   }
 `;
+
+function buildLensingFragmentShader(tier: GeodesicShaderQualityTier): string {
+  return `${GEODESIC_SHADER_SNIPPETS[tier]}\n${LENSING_FRAGMENT_SHADER_BODY}`;
+}
+
+const LENSING_FRAGMENT_SHADER_FULL = buildLensingFragmentShader('Full Geodesic');
+const LENSING_FRAGMENT_SHADER_APPROX = buildLensingFragmentShader('Approximated Null-Geodesic');
 
 // 3c. High-Fidelity Volumetric Companion Star Shader (Fractional Brownian Motion Boiling Solar Surface + Coronal Fresnel Glow + Roche Lobe Overflow)
 const BINARY_STAR_VERTEX_SHADER = `
@@ -2303,8 +2362,14 @@ export class BlackHoleSceneController {
   private recentGeodesicHistory: GeodesicTrajectory[] = [];
 
   // Relativistic Gravitational Lensing Shader Mesh (Interstellar Gargantua ray-marched distortion)
+  // Pre-compiled dual quality tier materials ('Full Geodesic' vs 'Approximated Null-Geodesic') sharing the same uniform dictionary
   private gravitationalLensMesh!: THREE.Mesh;
   private gravitationalLensMat!: THREE.ShaderMaterial;
+  private gravitationalLensMatFull!: THREE.ShaderMaterial;
+  private gravitationalLensMatApprox!: THREE.ShaderMaterial;
+  private activeShaderQualityTier: GeodesicShaderQualityTier = 'Full Geodesic';
+  private shaderQualityMode: GeodesicShaderQualityMode = 'auto';
+  private lastShaderTierSwapMs = 0;
 
   // Panoramic Soothing Cosmic Sky Dome
   private cosmicSkyDomeMesh!: THREE.Mesh;
@@ -2333,11 +2398,12 @@ export class BlackHoleSceneController {
   private gravitationalWaveShellMesh!: THREE.Mesh;
   private horizonFlashMesh!: THREE.Mesh;
   private isPulseActive = false;
+  private isCinematicBootBoom = false;
   private pulseProgress = 0.0;
   private pulseDuration = 2.45;
   private pulseStrength = 0.0;
   private pulseRadius = 1.75;
-  private pulseColor = new THREE.Color(0x94a3b8);
+  private pulseColor = new THREE.Color(0xdbe4f0);
 
   // Subtle Event Horizon Echo Pulse state (triggered when collapsing to Singularity Seed)
   private pendingCollapseEchoPulse = false;
@@ -2511,6 +2577,9 @@ export class BlackHoleSceneController {
   private gpuTimerExt: { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null = null;
   private activeGpuTimerQuery: WebGLQuery | null = null;
   private lastGpuTimerQueryMs: number | null = null;
+  private thermalState: ThermalThrottleState = createInitialThermalState(0, 5);
+  private thermalStepOverride: number | null = null;
+  private shaderPrewarmReport: ShaderPrewarmCacheReport = buildShaderPrewarmCacheReport([], 0, 0);
 
   constructor(
     container: HTMLElement,
@@ -2763,6 +2832,12 @@ export class BlackHoleSceneController {
               setAutoConsoleLog: (enabled: boolean) => void;
               getLatest: () => ShaderPassTimingSnapshot | null;
               getHistory: () => ShaderPassTimingSnapshot[];
+              getQualityTier: () => GeodesicShaderQualityTier;
+              getQualityMode: () => GeodesicShaderQualityMode;
+              setQualityMode: (mode: GeodesicShaderQualityMode) => GeodesicShaderQualityTier;
+              getThermalState: () => ThermalThrottleState;
+              setThermalStepOverride: (steps: number | null) => number;
+              getShaderPrewarmReport: () => ShaderPrewarmCacheReport;
             };
           }
         ).__kerrPerfProfiler = {
@@ -2775,6 +2850,33 @@ export class BlackHoleSceneController {
           },
           getLatest: () => this.latestPassTiming,
           getHistory: () => [...this.passTimingHistory],
+          getQualityTier: () => this.activeShaderQualityTier,
+          getQualityMode: () => this.shaderQualityMode,
+          setQualityMode: (mode: GeodesicShaderQualityMode) => {
+            this.setShaderQualityMode(mode);
+            return this.activeShaderQualityTier;
+          },
+          getThermalState: () => ({ ...this.thermalState }),
+          setThermalStepOverride: (steps: number | null) => {
+            if (steps === null || !Number.isFinite(steps)) {
+              this.thermalStepOverride = null;
+            } else {
+              this.thermalStepOverride = Math.max(1, Math.min(5, Math.round(steps)));
+            }
+            const effectiveSteps =
+              this.thermalStepOverride !== null
+                ? this.thermalStepOverride
+                : this.thermalState.uStepCount;
+            if (this.gravitationalLensMat) {
+              this.gravitationalLensMat.uniforms.u_stepCount.value = effectiveSteps;
+            }
+            return effectiveSteps;
+          },
+          getShaderPrewarmReport: () => ({
+            ...this.shaderPrewarmReport,
+            compiledVariants: [...this.shaderPrewarmReport.compiledVariants],
+            compiledProgramKeys: [...this.shaderPrewarmReport.compiledProgramKeys],
+          }),
         };
       }
 
@@ -2973,19 +3075,21 @@ export class BlackHoleSceneController {
   }
 
   /**
-   * Dedicated Shader Pre-Warming Phase:
-   * Pre-compiles all material shaders for stars (Neutron Stars, Pulsars, Magnetars, Luminous Stars,
-   * S-Star Cluster, Background Microlensing Star, Instanced Deep Starfield, Binary Donor Star & Corona)
-   * and black holes (Kerr Gravitational Lensing Raymarcher, Classic & Raymarched Accretion Disks,
-   * Volumetric Torus Strata, Singularity Seed Core/Halo, Sonic Boom & Accretion Shockwaves,
-   * Parameter Ripples, Camera Lens Flare, and Relativistic Motion-Blur / Time-Lapse Post-Pass)
-   * during initial app load so first-time rendering and preset switches never drop frames.
+   * Dedicated Boot-In Shader Pre-Warming Cache:
+   * Pre-compiles and links all required WebGL program variants (Full & Approximated Null-Geodesic
+   * raymarchers, Classic & Volumetric Raymarched accretion disks, Lense-Thirring Ergosphere cage,
+   * Supersonic Boom N-wave shockwaves, and Relativistic Motion-Blur Post-Pass) during the boot-in
+   * sequence so that zero GLSL compilation stutter occurs when new shader variants are first
+   * dispatched to the GPU.
    */
-  public prewarmAllMaterialShaders() {
+  public prewarmAllMaterialShaders(): ShaderPrewarmCacheReport {
+    const startMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
     const programKeys = [
-      'lensing_kerr_raymarcher_v1',
+      'lensing_kerr_raymarcher_full_geodesic_v1',
+      'lensing_kerr_raymarcher_approx_null_geodesic_v1',
       'accretion_disk_classic_v1',
       'accretion_disk_volumetric_fbm_v1',
+      'ergosphere_lense_thirring_cage_v1',
       'singularity_core_seed_v1',
       'singularity_halo_seed_v1',
       'compact_star_crust_beloborodov_v1',
@@ -3003,6 +3107,107 @@ export class BlackHoleSceneController {
     for (const key of programKeys) {
       gpuResourceCache.registerShaderProgram(key);
     }
+
+    const compiledVariants: ShaderPrewarmVariantId[] = SHADER_PREWARM_MANIFEST.map((m) => m.id);
+
+    if (this.renderer) {
+      const savedStates: Array<{
+        obj: THREE.Object3D;
+        visible: boolean;
+        frustumCulled: boolean;
+      }> = [];
+      this.scene.traverse((obj) => {
+        savedStates.push({
+          obj,
+          visible: obj.visible,
+          frustumCulled: obj.frustumCulled,
+        });
+        obj.visible = true;
+        obj.frustumCulled = false;
+      });
+
+      const savedLensMat = this.gravitationalLensMesh?.material;
+      const savedDiskStyle = this.accretionDiskMat?.uniforms?.uDiskStyle?.value ?? 0.0;
+      const savedLensDiskStyle = this.gravitationalLensMat?.uniforms?.uDiskStyle?.value ?? 0.0;
+      const savedRenderTarget = this.renderer.getRenderTarget();
+      const prewarmTarget = new THREE.WebGLRenderTarget(1, 1, {
+        depthBuffer: true,
+        stencilBuffer: false,
+      });
+
+      try {
+        // Variant Pass 1: Full Geodesic Raymarcher + Classic Accretion Disk + Ergosphere + Sonic Boom
+        if (this.gravitationalLensMesh && this.gravitationalLensMatFull) {
+          this.gravitationalLensMesh.material = this.gravitationalLensMatFull;
+          this.gravitationalLensMatFull.uniforms.uDiskStyle.value = 0.0;
+        }
+        if (this.accretionDiskMat?.uniforms?.uDiskStyle) {
+          this.accretionDiskMat.uniforms.uDiskStyle.value = 0.0;
+        }
+        this.renderer.compile(this.scene, this.camera);
+        this.renderer.setRenderTarget(prewarmTarget);
+        this.renderer.render(this.scene, this.camera);
+
+        // Variant Pass 2: Approximated Null-Geodesic Raymarcher + Volumetric Raymarched Accretion Disk
+        if (this.gravitationalLensMesh && this.gravitationalLensMatApprox) {
+          this.gravitationalLensMesh.material = this.gravitationalLensMatApprox;
+          this.gravitationalLensMatApprox.uniforms.uDiskStyle.value = 1.0;
+        }
+        if (this.accretionDiskMat?.uniforms?.uDiskStyle) {
+          this.accretionDiskMat.uniforms.uDiskStyle.value = 1.0;
+        }
+        this.renderer.compile(this.scene, this.camera);
+        this.renderer.render(this.scene, this.camera);
+
+        // Variant Pass 3: Post-Processing Chromatic Dispersion & Time-Lapse Shader
+        if (this.postScene && this.postCamera) {
+          this.renderer.compile(this.postScene, this.postCamera);
+        }
+      } catch {
+        // Ignore non-fatal headless WebGL driver quirks during offscreen warm-up
+      } finally {
+        for (const st of savedStates) {
+          st.obj.visible = st.visible;
+          st.obj.frustumCulled = st.frustumCulled;
+        }
+        if (this.gravitationalLensMesh && savedLensMat) {
+          this.gravitationalLensMesh.material = savedLensMat;
+        }
+        if (this.accretionDiskMat?.uniforms?.uDiskStyle) {
+          this.accretionDiskMat.uniforms.uDiskStyle.value = savedDiskStyle;
+        }
+        if (this.gravitationalLensMatFull?.uniforms?.uDiskStyle) {
+          this.gravitationalLensMatFull.uniforms.uDiskStyle.value = savedLensDiskStyle;
+        }
+        if (this.gravitationalLensMatApprox?.uniforms?.uDiskStyle) {
+          this.gravitationalLensMatApprox.uniforms.uDiskStyle.value = savedLensDiskStyle;
+        }
+        this.renderer.setRenderTarget(savedRenderTarget);
+        prewarmTarget.dispose();
+      }
+    }
+
+    const endMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const programsCount = this.renderer?.info?.programs?.length ?? programKeys.length;
+    this.shaderPrewarmReport = buildShaderPrewarmCacheReport(
+      compiledVariants,
+      endMs - startMs,
+      programsCount
+    );
+    if (this.perfConsoleLoggingEnabled) {
+      console.info(
+        `[Kerr Shader Pre-Warm Cache] Pre-compiled ${this.shaderPrewarmReport.compiledVariants.length} core variants (${this.shaderPrewarmReport.webglProgramsCount} WebGL programs) in ${this.shaderPrewarmReport.prewarmDurationMs}ms [${this.shaderPrewarmReport.compiledVariants.join(', ')}]`
+      );
+    }
+    return this.shaderPrewarmReport;
+  }
+
+  public getShaderPrewarmReport(): ShaderPrewarmCacheReport {
+    return {
+      ...this.shaderPrewarmReport,
+      compiledVariants: [...this.shaderPrewarmReport.compiledVariants],
+      compiledProgramKeys: [...this.shaderPrewarmReport.compiledProgramKeys],
+    };
   }
 
   private setupLightingRig() {
@@ -3293,19 +3498,20 @@ export class BlackHoleSceneController {
           // Signed offset relative to outer Mach shock front at radial = 0.90
           float delta = radial - 0.90;
           // Razor-sharp leading Mach compression front (Prandtl-Glauert condensation cone edge)
-          float leadShock = exp(-pow(abs(delta * 26.0), 2.0));
+          float leadShock = exp(-pow(abs(delta * 24.0), 2.0));
           // Deep dark rarefaction / decompression trough right behind the leading shock front
-          float rarefaction = exp(-pow(abs((delta + 0.09) * 11.5), 2.0));
+          float rarefaction = exp(-pow(abs((delta + 0.085) * 11.0), 2.0));
           // Secondary trailing recovery Mach wave (N-wave tail)
-          float tailShock = exp(-pow(abs((delta + 0.20) * 18.0), 2.0)) * 0.55;
-          // Subtle acoustic pressure striations inside the shock wake
-          float wakeRipples = (0.5 + 0.5 * cos(delta * 58.0)) * exp(-pow(abs((delta + 0.11) * 7.5), 2.0)) * 0.30;
+          float tailShock = exp(-pow(abs((delta + 0.19) * 16.5), 2.0)) * 0.72;
+          // High-energy acoustic pressure striations inside the shock wake
+          float wakeRipples = (0.5 + 0.5 * cos(delta * 64.0)) * exp(-pow(abs((delta + 0.11) * 6.8), 2.0)) * 0.42;
 
-          vec3 compressionTone = mix(uColor, vec3(0.72, 0.75, 0.80), 0.45) * 0.78;
-          vec3 rarefactionTone = vec3(0.01, 0.015, 0.025);
-          float compWeight = clamp(leadShock + tailShock + wakeRipples, 0.0, 1.0);
-          vec3 finalRgb = mix(rarefactionTone, compressionTone, compWeight / max(0.001, compWeight + rarefaction * 0.95));
-          float alpha = clamp(leadShock * 0.62 + rarefaction * 0.58 + tailShock * 0.36 + wakeRipples * 0.22, 0.0, 0.85) * uOpacity;
+          vec3 incandescentEdge = mix(vec3(0.98, 0.84, 0.62), vec3(0.94, 0.97, 1.0), leadShock);
+          vec3 compressionTone = mix(uColor, incandescentEdge, 0.68) * 1.18;
+          vec3 rarefactionTone = vec3(0.008, 0.012, 0.022);
+          float compWeight = clamp(leadShock * 1.25 + tailShock + wakeRipples, 0.0, 1.0);
+          vec3 finalRgb = mix(rarefactionTone, compressionTone, compWeight / max(0.001, compWeight + rarefaction * 0.85));
+          float alpha = clamp(leadShock * 0.86 + rarefaction * 0.68 + tailShock * 0.54 + wakeRipples * 0.34, 0.0, 0.96) * uOpacity;
           gl_FragColor = vec4(finalRgb, alpha);
         }
       `,
@@ -3331,8 +3537,13 @@ export class BlackHoleSceneController {
     this.tertiaryPulseMesh.visible = false;
     this.eventHorizonPulseGroup.add(this.tertiaryPulseMesh);
 
-    // Additional concentric acoustic pressure ripple rings
-    const extraRatios: Array<{ ratio: number; opacityWeight: number }> = [];
+    // Multi-stage concentric relativistic Mach harmonic wave train rings for cinematic supersonic boom
+    const extraRatios: Array<{ ratio: number; opacityWeight: number }> = [
+      { ratio: 1.18, opacityWeight: 0.78 },
+      { ratio: 0.88, opacityWeight: 0.68 },
+      { ratio: 0.62, opacityWeight: 0.54 },
+      { ratio: 0.44, opacityWeight: 0.42 },
+    ];
     this.extraPulseRippleMeshes = [];
     for (const def of extraRatios) {
       const mat = pulseShaderMat.clone();
@@ -3342,11 +3553,11 @@ export class BlackHoleSceneController {
       this.extraPulseRippleMeshes.push({ mesh, ratio: def.ratio, opacityWeight: def.opacityWeight });
     }
 
-    // 3D Spherical Sonic Boom Mach Wavefront Shell (achromatic Prandtl-Glauert vapor/pressure boundary)
+    // 3D Spherical Sonic Boom Mach Wavefront Shell (Prandtl-Glauert vapor/pressure boundary)
     const shellGeo = new THREE.SphereGeometry(1.0, 48, 32);
     const shellMat = new THREE.ShaderMaterial({
       uniforms: {
-        uColor: { value: new THREE.Color(0x94a3b8) },
+        uColor: { value: new THREE.Color(0xdbe4f0) },
         uOpacity: { value: 0.0 },
         uTime: { value: 0.0 },
       },
@@ -3366,14 +3577,14 @@ export class BlackHoleSceneController {
         varying vec3 vPos;
         void main() {
           float theta = acos(clamp(vPos.y, -1.0, 1.0));
-          float equatorialFocus = pow(max(0.0001, sin(theta)), 1.4);
+          float equatorialFocus = pow(max(0.0001, sin(theta)), 1.25);
           // Sharp grazing-angle Mach shock rim + inner dark rarefaction band
           float viewCos = abs(vNormalVec.z);
-          float outerRim = exp(-pow(abs(viewCos * 5.2), 2.0));
-          float innerTrough = exp(-pow(abs((viewCos - 0.24) * 7.5), 2.0));
-          vec3 rimColor = mix(uColor, vec3(0.68, 0.72, 0.77), 0.5) * 0.65;
-          vec3 rgb = mix(vec3(0.02, 0.025, 0.04), rimColor, outerRim / max(0.001, outerRim + innerTrough));
-          float alpha = (outerRim * 0.42 + innerTrough * 0.28) * equatorialFocus * uOpacity;
+          float outerRim = exp(-pow(abs(viewCos * 4.6), 2.0));
+          float innerTrough = exp(-pow(abs((viewCos - 0.22) * 6.8), 2.0));
+          vec3 rimColor = mix(uColor, vec3(0.98, 0.86, 0.66), 0.55) * 0.96;
+          vec3 rgb = mix(vec3(0.015, 0.02, 0.035), rimColor, outerRim / max(0.001, outerRim + innerTrough));
+          float alpha = (outerRim * 0.64 + innerTrough * 0.38) * equatorialFocus * uOpacity;
           gl_FragColor = vec4(rgb, alpha);
         }
       `,
@@ -3386,13 +3597,13 @@ export class BlackHoleSceneController {
     this.gravitationalWaveShellMesh.visible = false;
     this.eventHorizonPulseGroup.add(this.gravitationalWaveShellMesh);
 
-    // Subtle neutral boundary pressure-condensation shell (no bright flash)
+    // High-energy boundary pressure-condensation shell hugging the inflating event horizon
     const burstGeo = new THREE.SphereGeometry(1.85, 32, 32);
     const burstMat = new THREE.MeshBasicMaterial({
-      color: 0x8892a0,
+      color: 0xfef3c7,
       transparent: true,
       opacity: 0.0,
-      blending: THREE.NormalBlending,
+      blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
     this.horizonFlashMesh = new THREE.Mesh(burstGeo, burstMat);
@@ -4272,47 +4483,124 @@ export class BlackHoleSceneController {
     );
     const spectrumLut = this.createProceduralSpectrumTexture();
 
-    this.gravitationalLensMat = new THREE.ShaderMaterial({
-      uniforms: {
-        uCameraPos: { value: new THREE.Vector3() },
-        uBlackHolePos: { value: new THREE.Vector3() },
-        uScale: { value: this.currentScale },
-        uSpin: { value: this.params.spin },
-        uAccretionRate: { value: this.params.accretionRate },
-        uDopplerStrength: { value: this.params.dopplerStrength },
-        uSpectralMode: { value: 0 },
-        uSpectrumLut: { value: spectrumLut },
-        uLensingActive: { value: this.params.gravitationalLensing ? 1.0 : 0.0 },
-        uShowDisk: { value: this.params.layers.accretionDisk ? 1.0 : 0.0 },
-        uIsStar: { value: isStellarCategory(this.params.objectCategory) ? 1.0 : 0.0 },
-        uPulseRadius: { value: 0 },
-        uPulseStrength: { value: 0 },
-        uTime: { value: 0 },
-        uDiskStyle: { value: this.settings.accretionDiskStyle === 'raymarched' ? 1.0 : 0.0 },
-        uBloomIntensity: { value: this.settings.bloomIntensity },
-        uAccretionState: { value: (this.params.accretionState ?? 'quiescent') === 'active' ? 1.0 : 0.0 },
-        uExpansionProgress: { value: this.expansionProgress },
-        uIsBinarySystem: { value: this.params.systemCategory === 'binary' ? 1.0 : 0.0 },
-        uCompanionStarPos: { value: new THREE.Vector3(21.0, 0, 0) },
-        uCompanionStarRadius: { value: this.companionStarBaseRadius },
-        uDepthPeeling: {
-          value: Boolean(this.settings.webglDepthPeeling ?? this.settings.highPerformanceMode)
-            ? 1.0
-            : 0.0,
-        },
-        u_isOrbiting: { value: 0.0 },
+    const sharedLensUniforms = {
+      uCameraPos: { value: new THREE.Vector3() },
+      uBlackHolePos: { value: new THREE.Vector3() },
+      uScale: { value: this.currentScale },
+      uSpin: { value: this.params.spin },
+      uAccretionRate: { value: this.params.accretionRate },
+      uDopplerStrength: { value: this.params.dopplerStrength },
+      uSpectralMode: { value: 0 },
+      uSpectrumLut: { value: spectrumLut },
+      uLensingActive: { value: this.params.gravitationalLensing ? 1.0 : 0.0 },
+      uShowDisk: { value: this.params.layers.accretionDisk ? 1.0 : 0.0 },
+      uIsStar: { value: isStellarCategory(this.params.objectCategory) ? 1.0 : 0.0 },
+      uPulseRadius: { value: 0 },
+      uPulseStrength: { value: 0 },
+      uTime: { value: 0 },
+      uDiskStyle: { value: this.settings.accretionDiskStyle === 'raymarched' ? 1.0 : 0.0 },
+      uBloomIntensity: { value: this.settings.bloomIntensity },
+      uAccretionState: { value: (this.params.accretionState ?? 'quiescent') === 'active' ? 1.0 : 0.0 },
+      uExpansionProgress: { value: this.expansionProgress },
+      uIsBinarySystem: { value: this.params.systemCategory === 'binary' ? 1.0 : 0.0 },
+      uCompanionStarPos: { value: new THREE.Vector3(21.0, 0, 0) },
+      uCompanionStarRadius: { value: this.companionStarBaseRadius },
+      uDepthPeeling: {
+        value: Boolean(this.settings.webglDepthPeeling ?? this.settings.highPerformanceMode)
+          ? 1.0
+          : 0.0,
       },
+      u_isOrbiting: { value: 0.0 },
+      u_stepCount: { value: 5.0 },
+    };
+
+    this.gravitationalLensMatFull = new THREE.ShaderMaterial({
+      uniforms: sharedLensUniforms,
       vertexShader: LENSING_VERTEX_SHADER,
-      fragmentShader: LENSING_FRAGMENT_SHADER,
+      fragmentShader: LENSING_FRAGMENT_SHADER_FULL,
       transparent: true,
       depthWrite: false,
       depthTest: false,
       side: THREE.DoubleSide,
     });
 
+    this.gravitationalLensMatApprox = new THREE.ShaderMaterial({
+      uniforms: sharedLensUniforms,
+      vertexShader: LENSING_VERTEX_SHADER,
+      fragmentShader: LENSING_FRAGMENT_SHADER_APPROX,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      side: THREE.DoubleSide,
+    });
+
+    this.gravitationalLensMat =
+      this.activeShaderQualityTier === 'Approximated Null-Geodesic'
+        ? this.gravitationalLensMatApprox
+        : this.gravitationalLensMatFull;
+
     this.gravitationalLensMesh = new THREE.Mesh(lensGeo, this.gravitationalLensMat);
     this.gravitationalLensMesh.renderOrder = 8;
     this.blackHoleGroup.add(this.gravitationalLensMesh);
+  }
+
+  /**
+   * Swaps the active gravitational lensing fragment shader between 'Full Geodesic' (5-step volumetric
+   * raymarching + multi-octave turbulence + exact cubic-root Kerr ISCO) and 'Approximated Null-Geodesic'
+   * (2-step midpoint raymarching + single-tap turbulence + rational polynomial Kerr ISCO) in O(1) time
+   * without triggering GLSL recompilation stutter.
+   */
+  public applyShaderQualityTier(nextTier: GeodesicShaderQualityTier, reason?: string): void {
+    if (this.activeShaderQualityTier === nextTier) return;
+    this.activeShaderQualityTier = nextTier;
+    this.lastShaderTierSwapMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const targetMat =
+      nextTier === 'Approximated Null-Geodesic'
+        ? this.gravitationalLensMatApprox
+        : this.gravitationalLensMatFull;
+    if (targetMat) {
+      this.gravitationalLensMat = targetMat;
+      if (this.gravitationalLensMesh) {
+        this.gravitationalLensMesh.material = targetMat;
+      }
+    }
+    if (this.perfConsoleLoggingEnabled) {
+      console.info(
+        `[Kerr Quality Tier] Swapped fragment shader -> '${nextTier}'${
+          reason ? ` (${reason})` : ''
+        }`
+      );
+    }
+  }
+
+  public setShaderQualityMode(mode: GeodesicShaderQualityMode): void {
+    this.shaderQualityMode = mode;
+    if (mode === 'Full Geodesic' || mode === 'Approximated Null-Geodesic') {
+      this.applyShaderQualityTier(mode, `Manual override: ${mode}`);
+    } else {
+      const avg = this.getAveragedPassTimingsSnapshot();
+      if (avg) {
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        const evalRes = evaluateDynamicShaderQualityTier(
+          this.activeShaderQualityTier,
+          avg,
+          now - this.lastShaderTierSwapMs,
+          'auto',
+          0
+        );
+        if (evalRes.swapped) {
+          this.applyShaderQualityTier(evalRes.nextTier, evalRes.reason);
+        }
+      }
+    }
+  }
+
+  public getShaderQualityTier(): GeodesicShaderQualityTier {
+    return this.activeShaderQualityTier;
+  }
+
+  public getShaderQualityMode(): GeodesicShaderQualityMode {
+    return this.shaderQualityMode;
   }
 
   private buildRelativisticMotionBlurPass() {
@@ -5067,7 +5355,7 @@ export class BlackHoleSceneController {
     return buildGeodesicTrajectoryCsv(trajectories, this.params, visualHorizonR);
   }
 
-  public triggerEventHorizonPulse(category?: ObjectCategory) {
+  public triggerEventHorizonPulse(category?: ObjectCategory, isCinematicBootBoom = false) {
     const isStar = isStellarCategory(category || this.params.objectCategory);
 
     // If triggering a pulse while the black hole is in its small singularity ball state,
@@ -5077,20 +5365,23 @@ export class BlackHoleSceneController {
     }
 
     this.isPulseActive = true;
+    this.isCinematicBootBoom = isCinematicBootBoom;
+    this.pulseDuration = isCinematicBootBoom ? 2.65 : 2.35;
     this.pulseProgress = 0.0;
-    this.pulseStrength = 1.0;
+    this.pulseStrength = isCinematicBootBoom ? 1.35 : 1.0;
     const minSeedWorldScale = 0.11;
     const startScale = isStar
       ? this.currentScale
       : THREE.MathUtils.lerp(minSeedWorldScale, this.currentScale, this.expansionProgress);
     this.pulseRadius = 2.26 * startScale;
 
-    // Trigger Sonic Boom Camera Screen Shake recoil
-    this.shakeIntensity = 1.0;
+    // Trigger Sonic Boom Camera Screen Shake recoil (amplified for initial singularity detonation)
+    this.shakeIntensity = isCinematicBootBoom ? 1.85 : 1.15;
+    this.shakeDuration = isCinematicBootBoom ? 1.95 : 1.65;
     this.shakeElapsed = 0.0;
 
-    // Achromatic neutral slate/silver sonic boom tone (no bright colors)
-    this.pulseColor.set(isStar ? 0x94a3b8 : 0x8a94a6);
+    // Incandescent relativistic gold-silver Mach shock tone
+    this.pulseColor.set(isStar ? 0xbae6fd : isCinematicBootBoom ? 0xfde68a : 0xdbe4f0);
 
     if (this.primaryPulseMesh) {
       this.primaryPulseMesh.visible = true;
@@ -5115,6 +5406,12 @@ export class BlackHoleSceneController {
     if (this.horizonFlashMesh) {
       this.horizonFlashMesh.visible = true;
       (this.horizonFlashMesh.material as THREE.MeshBasicMaterial).color.copy(this.pulseColor);
+    }
+
+    if (isCinematicBootBoom) {
+      this.triggerAccretionShockwave(1.9, true);
+      this.spawnParameterRipple('mixed', 1.65);
+      relativisticAudio.triggerAccretionShockPulse(isStar, true);
     }
   }
 
@@ -5152,7 +5449,7 @@ export class BlackHoleSceneController {
       this.isSingularityCollapsed = false;
       this.onSingularityStateChange?.(false);
     }
-    this.triggerEventHorizonPulse(this.params.objectCategory);
+    this.triggerEventHorizonPulse(this.params.objectCategory, true);
   }
 
   public triggerEventHorizonEchoPulse() {
@@ -5257,7 +5554,7 @@ export class BlackHoleSceneController {
       this.needsWellDeform = true;
     }
     this.onSingularityStateChange?.(false);
-    this.triggerEventHorizonPulse(this.params.objectCategory);
+    this.triggerEventHorizonPulse(this.params.objectCategory, true);
   }
 
   public getIsSingularityCollapsed(): boolean {
@@ -6459,11 +6756,14 @@ export class BlackHoleSceneController {
         this.needsWellDeform = true;
       } else {
         // Synchronized N-wave blast expansion: starts at the small singularity ball (2.26 * minSeedWorldScale ≈ 0.25)
-        // and expands outward in lockstep with the growing black hole and unfurling accretion disk
-        const ease = 1.0 - Math.pow(1.0 - this.pulseProgress, 2.6);
-        this.pulseStrength = Math.pow(1.0 - this.pulseProgress, 1.45);
+        // and expands outward in lockstep with the growing black hole and unfurling accretion disk.
+        // On initial boot expansion (isCinematicBootBoom), the supersonic Mach shell blasts out to 38.0 * scale
+        // right past the observer camera for a massive cinematic first impression!
+        const ease = 1.0 - Math.pow(1.0 - this.pulseProgress, this.isCinematicBootBoom ? 2.9 : 2.6);
+        const boostMult = this.isCinematicBootBoom ? 1.32 : 1.0;
+        this.pulseStrength = Math.pow(1.0 - this.pulseProgress, 1.32) * boostMult;
         const startR = isStar ? 1.75 * this.currentScale : 2.26 * minSeedWorldScale;
-        const maxShockRadius = 18.5 * this.currentScale;
+        const maxShockRadius = (this.isCinematicBootBoom ? 38.0 : 24.5) * this.currentScale;
         this.pulseRadius = THREE.MathUtils.lerp(startR, maxShockRadius, ease);
 
         // Update accretion disk sonic-boom rarefaction & compression uniforms in local effectiveScale space
@@ -6474,19 +6774,19 @@ export class BlackHoleSceneController {
         // Primary leading sonic shockwave ring riding on the outer growing boundary of the accretion disk
         this.primaryPulseMesh.visible = true;
         this.primaryPulseMesh.scale.set(this.pulseRadius, this.pulseRadius, this.pulseRadius);
-        (this.primaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.82;
+        (this.primaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = Math.min(1.0, this.pulseStrength * 0.94);
 
         // Secondary trailing N-wave shock ring coupled to the expanding mid-disk
         const secondaryR = Math.max(startR, this.pulseRadius * 0.76);
         this.secondaryPulseMesh.visible = true;
         this.secondaryPulseMesh.scale.set(secondaryR, secondaryR, secondaryR);
-        (this.secondaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.56;
+        (this.secondaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = Math.min(1.0, this.pulseStrength * 0.72);
 
         // Tertiary acoustic ring riding right along the growing Event Horizon shadow boundary
-        const horizonShockR = Math.max(startR, 2.35 * effectiveScale);
+        const horizonShockR = Math.max(startR, 2.42 * effectiveScale);
         this.tertiaryPulseMesh.visible = true;
         this.tertiaryPulseMesh.scale.set(horizonShockR, horizonShockR, horizonShockR);
-        (this.tertiaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.48;
+        (this.tertiaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = Math.min(1.0, this.pulseStrength * 0.64);
 
         // Additional concentric pressure ripple rings
         for (const extra of this.extraPulseRippleMeshes) {
@@ -6494,22 +6794,23 @@ export class BlackHoleSceneController {
           extra.mesh.visible = true;
           extra.mesh.scale.set(ringR, ringR, ringR);
           (extra.mesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value =
-            this.pulseStrength * extra.opacityWeight;
+            Math.min(1.0, this.pulseStrength * extra.opacityWeight);
         }
 
         // 3D Spherical Sonic Boom Mach Shell expanding outward from the small singularity ball
-        const gwShellR = THREE.MathUtils.lerp(startR, maxShockRadius * 1.12, ease);
+        const gwShellR = THREE.MathUtils.lerp(startR, maxShockRadius * 1.18, ease);
         this.gravitationalWaveShellMesh.visible = true;
         this.gravitationalWaveShellMesh.scale.set(gwShellR, gwShellR, gwShellR);
-        (this.gravitationalWaveShellMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.pulseStrength * 0.58;
+        (this.gravitationalWaveShellMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = Math.min(1.0, this.pulseStrength * 0.78);
 
-        // Boundary pressure-condensation shell hugging the growing event horizon sphere as it inflates
-        if (this.pulseProgress < 0.65) {
-          const burstT = this.pulseProgress / 0.65;
-          const burstScale = 1.25 * effectiveScale;
+        // Boundary pressure-condensation flash shell hugging the growing event horizon sphere as it inflates
+        if (this.pulseProgress < 0.72) {
+          const burstT = this.pulseProgress / 0.72;
+          const burstScale = (this.isCinematicBootBoom ? 2.45 : 1.45) * effectiveScale * (0.85 + 0.45 * burstT);
           this.horizonFlashMesh.visible = true;
           this.horizonFlashMesh.scale.set(burstScale, burstScale, burstScale);
-          (this.horizonFlashMesh.material as THREE.MeshBasicMaterial).opacity = (1.0 - burstT) * 0.22;
+          (this.horizonFlashMesh.material as THREE.MeshBasicMaterial).opacity =
+            Math.pow(1.0 - burstT, 1.4) * (this.isCinematicBootBoom ? 0.62 : 0.34);
         } else {
           this.horizonFlashMesh.visible = false;
         }
@@ -6907,9 +7208,10 @@ export class BlackHoleSceneController {
         this.controls.target.lerp(this.targetCamLook, 1 - Math.exp(-6.0 * rawDelta));
         this.camera.lookAt(this.controls.target);
 
-        // Subtle IMAX relativistic shockwave FOV breathing that settles cleanly to settings.cameraFov
+        // Cinematic IMAX relativistic shockwave FOV punch that settles cleanly to settings.cameraFov
         const baseFov = this.settings?.cameraFov ?? 46;
-        const fovBreath = Math.sin(p * Math.PI) * 3.0 * (1.0 - p * 0.35);
+        const shockPunch = Math.exp(-p * 5.2) * Math.sin(p * Math.PI * 3.5) * 6.8;
+        const fovBreath = Math.sin(p * Math.PI) * 5.2 * (1.0 - p * 0.35) + shockPunch;
         this.camera.fov = baseFov + fovBreath;
         this.camera.updateProjectionMatrix();
 
@@ -7368,6 +7670,38 @@ export class BlackHoleSceneController {
         ? Math.max(4.0, Math.min(120.0, Math.max(interFrameMs, frameCpuMs)))
         : Math.max(16.67, Math.min(120.0, frameCpuMs));
 
+    // Thermal Throttling System:
+    // Samples GPU frame time metrics and performance.now() timestamps via an asymmetric
+    // passive-cooling RC thermal model, reducing raymarching ray count (u_stepCount)
+    // when sustained bottlenecks indicate rising hardware temperature/load.
+    const maxStepsForTier =
+      this.activeShaderQualityTier === 'Approximated Null-Geodesic' ? 2 : 5;
+    const prevThermalLevel = this.thermalState.level;
+    this.thermalState = stepThermalThrottlingState(this.thermalState, {
+      nowMs: tickEndMs,
+      interFrameMs: measuredFrameMs,
+      gpuScenePassMs,
+      gpuTimerQueryMs: this.lastGpuTimerQueryMs,
+      rafTotalMs: frameCpuMs,
+      maxStepCount: maxStepsForTier,
+    });
+    const effectiveRayStepCount =
+      this.thermalStepOverride !== null
+        ? Math.min(maxStepsForTier, this.thermalStepOverride)
+        : this.thermalState.uStepCount;
+    if (this.gravitationalLensMat) {
+      this.gravitationalLensMat.uniforms.u_stepCount.value = effectiveRayStepCount;
+    }
+    if (prevThermalLevel !== this.thermalState.level && this.perfConsoleLoggingEnabled) {
+      console.info(
+        `[Kerr Thermal Throttling] ${prevThermalLevel} -> ${this.thermalState.level} | ` +
+          `u_stepCount: ${effectiveRayStepCount}/${maxStepsForTier} rays | ` +
+          `Est. Temp: ${this.thermalState.estimatedTempC.toFixed(1)}°C (Load ${this.thermalState.thermalLoadPct.toFixed(
+            1
+          )}%, Sustained ${this.thermalState.sustainedBottleneckMs}ms)`
+      );
+    }
+
     const passSnapshot = classifyFrameBottleneck({
       interFrameMs: Number(measuredFrameMs.toFixed(2)),
       rafTotalMs: Number((rafTotalMs > 0 ? rafTotalMs : tickEndMs - tickStartMs).toFixed(2)),
@@ -7380,11 +7714,34 @@ export class BlackHoleSceneController {
       renderPasses: this.lastRenderPasses,
       isOrbiting: this.isUserInteracting,
       pixelRatio: this.lastAppliedPixelRatio || this.basePixelRatioCap || 1.0,
+      shaderQualityTier: this.activeShaderQualityTier,
+      uStepCount: effectiveRayStepCount,
+      thermalLevel: this.thermalState.level,
+      estimatedTempC: this.thermalState.estimatedTempC,
     });
     this.latestPassTiming = passSnapshot;
     this.passTimingHistory.push(passSnapshot);
     if (this.passTimingHistory.length > 60) {
       this.passTimingHistory.shift();
+    }
+
+    // Dynamic Quality Tier Evaluator:
+    // Uses rolling performance telemetry averages to swap between 'Full Geodesic' and
+    // 'Approximated Null-Geodesic' fragment shader snippets with a 2.5s hysteresis cooldown.
+    if (this.passTimingHistory.length >= 15) {
+      const avgPassSnapshot = this.getAveragedPassTimingsSnapshot();
+      if (avgPassSnapshot) {
+        const tierEval = evaluateDynamicShaderQualityTier(
+          this.activeShaderQualityTier,
+          avgPassSnapshot,
+          tickEndMs - this.lastShaderTierSwapMs,
+          this.shaderQualityMode,
+          SHADER_QUALITY_HYSTERESIS_MS
+        );
+        if (tierEval.swapped) {
+          this.applyShaderQualityTier(tierEval.nextTier, tierEval.reason);
+        }
+      }
     }
 
     if (
@@ -8678,18 +9035,32 @@ export class BlackHoleSceneController {
     const layerDiagnostics: ShaderLayerDiagnosticItem[] = [
       {
         id: 'gravitationalLensing',
-        name: 'Gravitational Lensing Raymarcher',
+        name: `Gravitational Lensing (${this.activeShaderQualityTier})`,
         shaderPass: isRaymarchedDisk
-          ? 'Billboard Volumetric Geodesic Raymarcher'
-          : 'Billboard Kerr Photon-Ring & Einstein Arch Shader',
+          ? `Billboard Volumetric Raymarcher · ${this.activeShaderQualityTier}`
+          : `Billboard Kerr Photon-Ring Shader · ${this.activeShaderQualityTier}`,
         active: lensingActive,
-        gpuCostTier: lensingActive ? (isRaymarchedDisk ? 'EXTREME' : 'HIGH') : 'LOW',
-        estimatedGpuSharePct: lensingActive ? (isRaymarchedDisk ? 44 : 32) : 0,
+        gpuCostTier: lensingActive
+          ? this.activeShaderQualityTier === 'Approximated Null-Geodesic'
+            ? 'MODERATE'
+            : isRaymarchedDisk
+            ? 'EXTREME'
+            : 'HIGH'
+          : 'LOW',
+        estimatedGpuSharePct: lensingActive
+          ? this.activeShaderQualityTier === 'Approximated Null-Geodesic'
+            ? 24
+            : isRaymarchedDisk
+            ? 44
+            : 32
+          : 0,
         drawCalls: lensingActive ? 1 : 0,
         details: lensingActive
-          ? isRaymarchedDisk
-            ? 'Raymarching volumetric disk & secondary Einstein rings per pixel'
-            : 'Evaluating Kerr shadow boundary, photon ring & lensed arches'
+          ? this.activeShaderQualityTier === 'Approximated Null-Geodesic'
+            ? 'Approximated Null-Geodesic snippet active (2-step midpoint raymarch, rational ISCO, 1-tap turbulence)'
+            : isRaymarchedDisk
+            ? 'Full Geodesic snippet active (5-step volumetric raymarching, multi-octave turbulence & exact Kerr ISCO)'
+            : 'Full Geodesic snippet active (exact Kerr shadow boundary, photon ring & lensed arches)'
           : 'Bypassed (Gravitational Lensing disabled)',
       },
       {
@@ -8854,7 +9225,17 @@ export class BlackHoleSceneController {
       lowResolutionRender: Boolean(this.settings.lowResolutionRender),
       renderResolutionScale: this.settings.lowResolutionRender ? 0.5 : pixelRatio,
       telemetryThrottleHz: this.settings.highPerformanceMode ? 4 : 10,
+      shaderQualityTier: this.activeShaderQualityTier,
+      shaderQualityMode: this.shaderQualityMode,
       passTimings: this.getAveragedPassTimingsSnapshot(),
+      thermalState: {
+        ...this.thermalState,
+        uStepCount:
+          this.thermalStepOverride !== null
+            ? Math.min(this.thermalState.maxStepCount, this.thermalStepOverride)
+            : this.thermalState.uStepCount,
+      },
+      shaderPrewarm: this.getShaderPrewarmReport(),
       layerDiagnostics,
       gpuCache: gpuResourceCache.getMetrics(programsCount),
     };
@@ -8952,6 +9333,13 @@ export class BlackHoleSceneController {
       renderPasses: latest.renderPasses,
       isOrbiting: latest.isOrbiting,
       pixelRatio: latest.pixelRatio,
+      shaderQualityTier: this.activeShaderQualityTier,
+      uStepCount:
+        this.thermalStepOverride !== null
+          ? Math.min(this.thermalState.maxStepCount, this.thermalStepOverride)
+          : this.thermalState.uStepCount,
+      thermalLevel: this.thermalState.level,
+      estimatedTempC: this.thermalState.estimatedTempC,
     });
   }
 
@@ -8965,13 +9353,22 @@ export class BlackHoleSceneController {
     const fps = Math.min(240, Math.round(1000 / Math.max(1.0, avg.interFrameMs)));
     const gpuTimerStr =
       avg.gpuTimerQueryMs !== null ? `${avg.gpuTimerQueryMs.toFixed(2)}ms` : 'N/A (CPU submit)';
+    const effectiveSteps =
+      this.thermalStepOverride !== null
+        ? Math.min(this.thermalState.maxStepCount, this.thermalStepOverride)
+        : this.thermalState.uStepCount;
 
     console.info(
       `[Kerr Perf Profiler${forceImmediate ? ' · MANUAL DUMP' : ''}] ${fps} FPS (${avg.interFrameMs.toFixed(
         2
       )}ms/frame @ ${avg.pixelRatio.toFixed(2)}x DPR · ${avg.renderPasses} pass${
         avg.renderPasses === 1 ? '' : 'es'
-      }${avg.isOrbiting ? ' · ORBITING' : ''}) | ` +
+      } · Tier: '${this.activeShaderQualityTier}' [${this.shaderQualityMode.toUpperCase()}] · ` +
+        `Thermal: ${this.thermalState.level} ${this.thermalState.estimatedTempC.toFixed(
+          1
+        )}°C [u_stepCount=${effectiveSteps}/${this.thermalState.maxStepCount}]${
+          avg.isOrbiting ? ' · ORBITING' : ''
+        }) | ` +
         `rAF Total: ${avg.rafTotalMs.toFixed(2)}ms ` +
         `[CPU Sim/Well: ${avg.cpuSimPhysicsMs.toFixed(2)}ms | ` +
         `CPU Cam/Uniforms: ${avg.cpuCameraUniformsMs.toFixed(2)}ms | ` +
@@ -9033,6 +9430,8 @@ export class BlackHoleSceneController {
     this.domElement.removeEventListener('click', this.handleCanvasClick);
     this.domElement.removeEventListener('dblclick', this.handleCanvasDoubleClick);
     this.controls.dispose();
+    this.gravitationalLensMatFull?.dispose();
+    this.gravitationalLensMatApprox?.dispose();
     this.gravitationalLensMat?.dispose();
     this.accretionDiskMat?.dispose();
     this.singularityCoreMat?.dispose();
