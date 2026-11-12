@@ -4,7 +4,8 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, X, Zap, Maximize2, Eye, Download, Video, Square } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Sparkles, X, Zap, Maximize2, Eye, Download, Video, Square, Settings } from 'lucide-react';
 import {
   ARCHETYPE_DEFINITIONS,
   ASTROPHYSICAL_PRESETS,
@@ -40,6 +41,7 @@ import {
   EventLogOverlay,
   AstrophysicalLogEvent,
   AstrophysicalEventCategory,
+  triggerEventLogJsonDownload,
 } from './components/EventLogOverlay';
 import { MetricTelemetryOverlay } from './components/MetricTelemetryOverlay';
 import {
@@ -103,7 +105,7 @@ export default function App() {
       ...DEFAULT_VISUALIZER_SETTINGS,
       showOverheadMap: !isInitialMobile,
       showPerformanceMonitor: false,
-      showEventLog: false,
+      showEventLog: !isInitialMobile,
       showMetricTelemetry: false,
     };
   });
@@ -664,6 +666,12 @@ export default function App() {
             'Singularity seed expanded into full horizon',
             'Kerr event horizon r₊ & relativistic accretion disk deployed'
           );
+        } else {
+          appendLogEventRef.current(
+            'metric',
+            'Black hole collapsed to Singularity Seed',
+            'Event horizon echo pulse emitted · Quasinormal ringdown active'
+          );
         }
       },
       onCameraChange: (pos, target) => {
@@ -961,8 +969,11 @@ export default function App() {
         setIsDockCollapsed((prev) => !prev);
       } else if (e.key === 'c' || e.key === 'C') {
         handleToggleCleanMode();
+      } else if (e.key === 'f' || e.key === 'F') {
+        setSettings((prev) => ({ ...prev, focusMode: !prev.focusMode }));
       } else if (e.key === 'Escape') {
         handleSetCleanMode(false);
+        setSettings((prev) => (prev.focusMode ? { ...prev, focusMode: false } : prev));
       } else if (e.code === 'Space') {
         e.preventDefault();
         // Initial 6s boot and 4s watermark pause are strictly non-skippable
@@ -1330,6 +1341,35 @@ export default function App() {
     },
     [activePresetId, appendLogEvent, haptics, lastTrajectory, params]
   );
+
+  const handleExportEventLogJson = useCallback(() => {
+    haptics.success();
+    triggerEventLogJsonDownload(
+      eventLogs,
+      {
+        presetId: activePresetId,
+        objectCategory: params.objectCategory,
+        spin: params.spin,
+        accretionRate: params.accretionRate,
+        observerInclinationDeg: params.inclinationDeg,
+      },
+      `kerr-event-log-${activePresetId}-${Date.now()}.json`
+    );
+    appendLogEvent(
+      'system',
+      'Simulation event log exported as JSON',
+      `${eventLogs.length} telemetry events saved to device`
+    );
+  }, [
+    activePresetId,
+    appendLogEvent,
+    eventLogs,
+    haptics,
+    params.accretionRate,
+    params.inclinationDeg,
+    params.objectCategory,
+    params.spin,
+  ]);
 
   const handleToggleAudio = useCallback(() => {
     const enabled = relativisticAudio.toggleAudio(params);
@@ -1725,12 +1765,13 @@ export default function App() {
   }, [settings.uiTheme]);
 
   const isStar = isStellarCategory(params.objectCategory);
+  const isFocusMode = Boolean(settings.focusMode);
   const isBootOrSeedStage =
     (showBootOverlay && !isBootOverlayFading) ||
     isPostBootSequenceActive ||
     showWatermarkOverlay ||
     (!isStar && isSingularityCollapsed);
-  const isUiHiddenForBootOrSeed = isCleanMode || isBootOrSeedStage;
+  const isUiHiddenForBootOrSeed = isCleanMode || isFocusMode || isBootOrSeedStage;
   const t = TRANSLATIONS[settings.language || 'en'] || TRANSLATIONS.en;
 
   return (
@@ -1740,7 +1781,7 @@ export default function App() {
       className="relative w-screen h-screen overflow-hidden bg-black select-none flex flex-col"
     >
       {/* Zone 1-3 Top Navigation Bar (Flows smoothly in with the post-singularity camera pan-in) */}
-      {!isCleanMode && (
+      {!isCleanMode && !isFocusMode && (
         <div
           className={`relative z-30 transition-all duration-[1800ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
             isBootOrSeedStage
@@ -2027,7 +2068,7 @@ export default function App() {
         )}
 
         {/* Left HUD Column: Target Specification Badge + Overhead Radar + Event Log (Flows smoothly in with camera pan-in) */}
-        {!isCleanMode && !isCompareMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation || Boolean(settings.showEventLog)) && (
+        {!isCleanMode && !isFocusMode && !isCompareMode && (settings.showLeftHud || settings.showOverheadMap || settings.showTimeDilation || Boolean(settings.showEventLog)) && (
           <div
             className={`hud-panel absolute top-2 sm:top-2.5 left-2 sm:left-3.5 z-10 flex flex-col items-start gap-1.5 sm:gap-2 pointer-events-none transition-all duration-[1850ms] delay-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
               isPhone ? 'w-[238px]' : 'w-[268px]'
@@ -2039,7 +2080,12 @@ export default function App() {
           >
             {/* Target Spec Badge */}
             {settings.showLeftHud && (
-              <div className={`hud-panel ${isBootOrSeedStage ? 'pointer-events-none' : 'pointer-events-auto'} bg-[#050811]/95 border border-slate-800/80 rounded-xl ${isPhone ? 'px-2 py-1.5' : 'p-2.5'} shadow-xl transition-all w-full`}>
+              <motion.div
+                initial={{ opacity: 0, x: -12, y: 6 }}
+                animate={{ opacity: 1, x: 0, y: 0 }}
+                transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+                className={`hud-panel ${isBootOrSeedStage ? 'pointer-events-none' : 'pointer-events-auto'} bg-[#050811]/95 border border-slate-800/80 rounded-xl ${isPhone ? 'px-2 py-1.5' : 'p-2.5'} shadow-xl transition-all w-full`}
+              >
                 <div className="flex items-center justify-between gap-1.5">
                   <span
                     className={`px-1.5 py-0.5 rounded text-[8.5px] font-mono font-bold uppercase tracking-wider border shrink-0 ${
@@ -2122,12 +2168,17 @@ export default function App() {
                     className="mt-1 pt-1 border-t border-slate-800/50 text-[9.5px] font-mono text-cyan-300/90 tabular-nums truncate"
                   />
                 )}
-              </div>
+              </motion.div>
             )}
 
             {/* 2D Overhead Radar Widget: Replaces Time Dilation UI in Left HUD Column */}
             {settings.showOverheadMap && (
-              <div className="pointer-events-auto">
+              <motion.div
+                initial={{ opacity: 0, x: -12, y: 6 }}
+                animate={{ opacity: 1, x: 0, y: 0 }}
+                transition={{ duration: 0.34, delay: 0.04, ease: [0.16, 1, 0.3, 1] }}
+                className="pointer-events-auto"
+              >
                 <OverheadMapWidget
                   sceneController={controllerInstance || sceneControllerRef.current}
                   cameraCoordsRef={cameraCoordsRef}
@@ -2135,12 +2186,17 @@ export default function App() {
                     setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
                   }
                 />
-              </div>
+              </motion.div>
             )}
 
             {/* Optional Local Time Dilation Display (Toggled in Settings, off initially) */}
             {settings.showTimeDilation && (
-              <div className="pointer-events-auto">
+              <motion.div
+                initial={{ opacity: 0, x: -12, y: 6 }}
+                animate={{ opacity: 1, x: 0, y: 0 }}
+                transition={{ duration: 0.34, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
+                className="pointer-events-auto"
+              >
                 <TimeDilationDisplay
                   probeRadiusRs={params.probeRadiusRs}
                   spin={params.spin}
@@ -2150,7 +2206,7 @@ export default function App() {
                     setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
                   }
                 />
-              </div>
+              </motion.div>
             )}
 
             {/* Real-Time Astrophysical Event Log Stacked in Left HUD Column */}
@@ -2158,6 +2214,7 @@ export default function App() {
               <EventLogOverlay
                 events={eventLogs}
                 onClearEvents={() => setEventLogs([])}
+                onExportEvents={handleExportEventLogJson}
                 isPaused={params.timeScale === 0}
                 isDockCollapsed={isDockCollapsed}
                 isPhoneMode={isPhone}
@@ -2170,7 +2227,13 @@ export default function App() {
 
         {/* Interactive Click-to-Inspect Feature Popover (Bottom-Right when active) */}
         {!isCleanMode && inspectedFeature && (
-          <div className="hud-panel absolute bottom-24 right-6 z-20 w-80 bg-[#080c16]/95 border border-slate-800 rounded-lg p-3.5 shadow-xl pointer-events-auto">
+          <motion.div
+            key={inspectedFeature.title}
+            initial={{ opacity: 0, y: 12, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="hud-panel absolute bottom-24 right-6 z-20 w-80 bg-[#080c16]/95 border border-slate-800 rounded-lg p-3.5 shadow-xl pointer-events-auto"
+          >
             <div className="flex items-start justify-between gap-2">
               <div>
                 <div className="text-[11px] font-mono text-amber-400">
@@ -2195,12 +2258,12 @@ export default function App() {
             <p className="mt-2 text-xs text-slate-300 leading-relaxed">
               {inspectedFeature.description}
             </p>
-          </div>
+          </motion.div>
         )}
 
-        {/* Interactive Singularity Ball Prompt (Only displayed if the user manually collapses the black hole after the startup sequence) */}
+        {/* Interactive Singularity Seed Prompt (Simple top-centered text prompt without box outline) */}
         {hasCompletedStartupSequence && !isCleanMode && !showBootOverlay && !isStar && isSingularityCollapsed && (
-          <div className="hud-panel absolute bottom-10 sm:bottom-12 left-1/2 -translate-x-1/2 z-20 pointer-events-auto px-2 w-full max-w-sm flex justify-center transition-all">
+          <div className="absolute top-6 sm:top-8 left-1/2 -translate-x-1/2 z-20 pointer-events-auto flex justify-center select-none">
             <button
               type="button"
               data-testid="singularity-seed-expand-button"
@@ -2211,17 +2274,15 @@ export default function App() {
                 }
                 sceneControllerRef.current?.expandFromSingularity();
               }}
-              className="group flex items-center justify-center gap-2.5 px-4 py-2 rounded-xl bg-[#050811]/90 hover:bg-[#0a1022] border border-amber-500/40 hover:border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.2)] transition-all cursor-pointer text-center"
+              className="flex items-center gap-2 px-3 py-1 bg-transparent border-0 outline-none shadow-none text-neutral-300 hover:text-white font-mono text-[11px] sm:text-xs tracking-[0.12em] uppercase transition-opacity opacity-85 hover:opacity-100 cursor-pointer"
             >
-              <span className="inline-flex rounded-full h-2.5 w-2.5 bg-amber-400 shrink-0" />
-              <span className="font-mono text-xs font-semibold text-amber-200 group-hover:text-white tracking-wide">
-                {t.singularitySeedPrompt}
-              </span>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse shrink-0" />
+              <span>{t.singularitySeedPrompt}</span>
             </button>
           </div>
         )}
 
-        {/* Ultra-Dark Telemetry Boot Terminal Overlay (Centered during 6.0s Non-Skippable Camera Fly-In from max distance) */}
+        {/* Clean Kerr Engine Initialization Overlay (Centered during initial boot sequence, consistent with Watermark Logo & Color) */}
         {showBootOverlay && (
           <div
             data-testid="cinematic-boot-overlay"
@@ -2229,68 +2290,67 @@ export default function App() {
               isBootOverlayFading ? 'opacity-0' : 'opacity-100'
             }`}
           >
-            <div
-              className={`pointer-events-none px-5 py-4 rounded-xl bg-[#020203]/92 border backdrop-blur-md shadow-[0_24px_70px_rgba(0,0,0,0.98)] font-mono text-[11px] sm:text-xs text-left space-y-1.5 max-w-md ${
-                settings.uiTheme === 'cryo_quantum'
-                  ? 'border-emerald-500/25'
-                  : settings.uiTheme === 'kerr_claude'
-                  ? 'border-[#D97757]/25'
-                  : 'border-zinc-800/90'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-3 pb-1.5 mb-1 border-b border-zinc-900">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-zinc-800 border border-zinc-700" />
-                  <span className="w-2 h-2 rounded-full bg-zinc-800 border border-zinc-700" />
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      settings.uiTheme === 'cryo_quantum'
-                        ? 'bg-emerald-400/80'
-                        : settings.uiTheme === 'kerr_claude'
-                        ? 'bg-[#D97757]/80'
-                        : 'bg-[#D4AF37]/80'
-                    }`}
-                  />
-                  <span className="ml-1 text-[10px] text-zinc-500 uppercase tracking-widest">
-                    kerr-engine // boot-manifold
+            <div className="pointer-events-none px-6 py-4 rounded-xl bg-[#080605]/95 border border-[#D97757]/40 backdrop-blur-md shadow-[0_24px_70px_rgba(0,0,0,0.98)] font-mono text-xs text-left space-y-2.5 max-w-sm w-full">
+              <div className="flex items-center justify-between gap-3 pb-2 border-b border-[#D97757]/25">
+                <div className="flex items-center gap-2">
+                  {/* 12-Ray Starburst Singularity Emblem (Consistent with Watermark Logo) */}
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="-24 -24 48 48"
+                    className="shrink-0 overflow-visible animate-spin"
+                    style={{ animationDuration: '8s' }}
+                    aria-hidden="true"
+                  >
+                    {[0, 1, 2, 3, 4, 5].map((i) => {
+                      const angle = (i * Math.PI) / 6;
+                      const rRay = i % 2 === 0 ? 18 : 14.5;
+                      const x1 = Math.cos(angle) * -rRay;
+                      const y1 = Math.sin(angle) * -rRay;
+                      const x2 = Math.cos(angle) * rRay;
+                      const y2 = Math.sin(angle) * rRay;
+                      return (
+                        <line
+                          key={i}
+                          x1={x1}
+                          y1={y1}
+                          x2={x2}
+                          y2={y2}
+                          stroke="rgba(232, 139, 107, 0.94)"
+                          strokeWidth={i % 3 === 0 ? '2.4' : '1.6'}
+                          strokeLinecap="round"
+                        />
+                      );
+                    })}
+                    <circle
+                      cx="0"
+                      cy="0"
+                      r="4.6"
+                      fill="#090A0F"
+                      stroke="rgba(246, 184, 158, 0.96)"
+                      strokeWidth="2.1"
+                    />
+                  </svg>
+                  <span className="font-display text-[11px] font-bold text-[#F7F4EE] uppercase tracking-widest">
+                    Kerr Engine
                   </span>
                 </div>
-                <span className="text-[9.5px] text-zinc-500">v1.4</span>
+                <span className="px-1.5 py-0.5 rounded bg-[#201815] border border-[#D97757]/65 text-[9.5px] text-[#F4A688] font-bold">
+                  v1.4
+                </span>
               </div>
 
-              <div className="flex items-center gap-2 text-zinc-200 font-semibold tracking-wider">
-                <span
-                  className={`w-1.5 h-1.5 rounded-full animate-pulse shrink-0 ${
-                    settings.uiTheme === 'cryo_quantum'
-                      ? 'bg-emerald-400'
-                      : settings.uiTheme === 'kerr_claude'
-                      ? 'bg-[#D97757]'
-                      : 'bg-[#D4AF37]'
-                  }`}
-                />
-                <span>
-                  INITIALIZING KERR-NEWMAN METRIC CORE [a* = {params.spin.toFixed(3)}]...
-                </span>
+              <div className="flex items-center gap-2.5 text-[#F7F4EE] font-semibold tracking-wider text-[11px]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#E88B6B] animate-pulse shrink-0" />
+                <span>INITIALIZING KERR ENGINE...</span>
               </div>
-              <div className="flex items-center gap-2 text-zinc-400 tracking-wider pl-3.5">
-                <span>SOLVING NULL GEODESICS &amp; BPT ROOTS...</span>
+
+              <div className="text-[10px] text-zinc-400 tracking-wider pl-4">
+                Loading Apex Metric Core &amp; Geodesic Solver
               </div>
-              <div
-                className={`flex items-center gap-2 font-semibold tracking-wider pl-3.5 ${
-                  settings.uiTheme === 'cryo_quantum'
-                    ? 'text-emerald-300/90'
-                    : settings.uiTheme === 'kerr_claude'
-                    ? 'text-[#F4A688]'
-                    : 'text-[#D4AF37]'
-                }`}
-              >
-                <span>OBSERVER LOCK ESTABLISHED</span>
-              </div>
-              <div className="pt-2 mt-1.5 border-t border-zinc-900 flex items-center justify-between gap-4 text-[10px] text-zinc-500">
-                <span>r₀ = 260.0 → SINGULARITY SEED STAGING</span>
-                <span className="text-zinc-400 uppercase tracking-wider">
-                  6.0s Telemetry Lock
-                </span>
+
+              <div className="w-full h-1 bg-[#14100e] rounded-full overflow-hidden border border-[#D97757]/30">
+                <div className="h-full w-full bg-[#E88B6B] animate-pulse rounded-full" />
               </div>
             </div>
           </div>
@@ -2468,7 +2528,7 @@ export default function App() {
 
 
         {/* Unified Collapsible Bottom Control Dock (Flows smoothly in with the post-singularity camera pan-in) */}
-        {!isCleanMode && (
+        {!isCleanMode && !isFocusMode && (
           <div
             className={`fixed inset-0 z-20 pointer-events-none transition-all duration-[1900ms] delay-100 ease-[cubic-bezier(0.16,1,0.3,1)] ${
               isBootOrSeedStage
@@ -2518,6 +2578,91 @@ export default function App() {
               }}
             />
           </div>
+        )}
+
+        {/* Focus Mode Small Unobtrusive Status Line at the Bottom */}
+        {!isCleanMode && isFocusMode && !isBootOrSeedStage && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            data-testid="focus-mode-status-line"
+            className="hud-panel absolute bottom-3.5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 rounded-full bg-[#080605]/88 backdrop-blur-md border border-[#D97757]/35 text-zinc-300 font-mono text-[10px] sm:text-[11px] shadow-[0_8px_30px_rgba(0,0,0,0.85)] whitespace-nowrap max-w-[95vw]"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="-24 -24 48 48"
+              className="shrink-0 overflow-visible"
+              aria-hidden="true"
+            >
+              {[0, 1, 2, 3, 4, 5].map((i) => {
+                const angle = (i * Math.PI) / 6;
+                const rRay = i % 2 === 0 ? 18 : 14.5;
+                return (
+                  <line
+                    key={i}
+                    x1={Math.cos(angle) * -rRay}
+                    y1={Math.sin(angle) * -rRay}
+                    x2={Math.cos(angle) * rRay}
+                    y2={Math.sin(angle) * rRay}
+                    stroke="rgba(232, 139, 107, 0.94)"
+                    strokeWidth={i % 3 === 0 ? '2.4' : '1.6'}
+                    strokeLinecap="round"
+                  />
+                );
+              })}
+              <circle
+                cx="0"
+                cy="0"
+                r="4.6"
+                fill="#090A0F"
+                stroke="rgba(246, 184, 158, 0.96)"
+                strokeWidth="2.1"
+              />
+            </svg>
+            <span className="font-semibold text-[#F7F4EE] truncate">
+              {activePreset.name}
+            </span>
+            <span className="text-zinc-600 hidden sm:inline">·</span>
+            <span className="text-[#F4A688] hidden sm:inline tabular-nums">
+              {activePreset.plainMassExplanation}
+            </span>
+            <span className="text-zinc-600">·</span>
+            <span className="text-zinc-300 tabular-nums">
+              a* = <strong className="text-[#F7F4EE]">{params.spin.toFixed(3)}</strong>
+            </span>
+            <span className="text-zinc-600 hidden md:inline">·</span>
+            <span className="text-zinc-400 hidden md:inline tabular-nums">
+              r₊ = {(metrics.eventHorizonRg * 0.5).toFixed(2)} Rₛ · ISCO = {(metrics.iscoProgradeRg * 0.5).toFixed(2)} Rₛ
+            </span>
+            <div className="h-3 w-px bg-zinc-800 mx-0.5" />
+            <button
+              type="button"
+              onClick={() => {
+                haptics.light();
+                setIsSettingsModalOpen(true);
+              }}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700/70 transition-colors cursor-pointer"
+              title="Open Settings"
+            >
+              <Settings className="w-3 h-3" />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
+            <button
+              type="button"
+              data-testid="exit-focus-mode-btn"
+              onClick={() => {
+                haptics.light();
+                setSettings((prev) => ({ ...prev, focusMode: false }));
+              }}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#201815] hover:bg-[#2c201c] text-[#F4A688] border border-[#D97757]/60 transition-colors cursor-pointer"
+              title="Exit Focus Mode (F / Esc)"
+            >
+              <Eye className="w-3 h-3" />
+              <span>Exit Focus</span>
+            </button>
+          </motion.div>
         )}
       </main>
 
@@ -2584,6 +2729,8 @@ export default function App() {
         onOpenKerrLogModal={() => setIsKerrLogModalOpen(true)}
         onTriggerKerrCalculation={handleTriggerManualKerrSolve}
         onExportGeodesicCsv={() => handleExportGeodesicCsv()}
+        onExportEventLogJson={handleExportEventLogJson}
+        eventLogCount={eventLogs.length}
         activeParams={params}
         onRecordDiagnosticStressTest={handleRecordDiagnosticStressTest}
         isDevMode={isDevMode}

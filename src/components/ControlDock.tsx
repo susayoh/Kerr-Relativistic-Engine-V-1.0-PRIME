@@ -781,10 +781,37 @@ export const ControlDock: React.FC<ControlDockProps> = ({
           {/* Tab 3: Camera Viewports */}
           {activeTab === 'camera' && (
             <div className="grid grid-cols-3 gap-1">
+              {onToggleCinematicTour && (
+                <button
+                  type="button"
+                  data-testid="camera-tab-cinematic-tour-btn"
+                  onClick={() => {
+                    haptics.medium();
+                    onToggleCinematicTour();
+                  }}
+                  className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-md border text-center transition-all cursor-pointer ${
+                    isCinematicTourActive
+                      ? 'bg-amber-500/25 text-amber-200 font-semibold border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                      : 'bg-neutral-950 text-amber-300 border-amber-500/40 hover:border-amber-400 hover:text-white'
+                  }`}
+                  title="Toggle Automated Cinematic Camera Tour"
+                >
+                  <Orbit
+                    className={`w-3 h-3 shrink-0 ${
+                      isCinematicTourActive ? 'text-amber-300 animate-spin' : 'text-amber-400'
+                    }`}
+                  />
+                  <span className="text-[10px] font-semibold truncate">
+                    {isCinematicTourActive ? 'Tour: On' : 'Cinematic'}
+                  </span>
+                </button>
+              )}
+
               {(
                 [
                   { id: 'equatorial', label: 'Equatorial' },
                   { id: 'polar', label: 'Polar Jet' },
+                  { id: 'plunge_45', label: '45° Plunge' },
                   { id: 'grazing', label: 'Grazing' },
                   { id: 'well', label: 'Gravity Well' },
                   ...(params.layers.orbitalStars
@@ -800,7 +827,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                     onSelectCamera(preset.id);
                   }}
                   className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-md border text-center transition-all cursor-pointer ${
-                    activeCamera === preset.id
+                    activeCamera === preset.id && !isCinematicTourActive
                       ? 'bg-neutral-800 text-amber-300 font-semibold border-neutral-700 shadow-sm'
                       : 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:text-white'
                   }`}

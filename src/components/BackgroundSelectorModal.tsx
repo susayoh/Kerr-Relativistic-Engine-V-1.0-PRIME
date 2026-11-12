@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { X, Check, Sun, Moon, Sparkles, Compass } from 'lucide-react';
 import {
   BackgroundThemeId,
@@ -23,8 +24,18 @@ export const BackgroundSelectorModal: React.FC<BackgroundSelectorModalProps> = (
   const themes = Object.values(BACKGROUND_THEMES);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-xl bg-black border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+        className="relative w-full max-w-xl bg-black border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden"
+      >
         {/* Modal Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800 bg-neutral-950">
           <div className="flex items-center gap-2.5">
@@ -126,7 +137,7 @@ export const BackgroundSelectorModal: React.FC<BackgroundSelectorModalProps> = (
             Done
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };

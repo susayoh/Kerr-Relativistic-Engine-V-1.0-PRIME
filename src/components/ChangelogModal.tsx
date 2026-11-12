@@ -61,30 +61,15 @@ interface ChangelogModalProps {
 export const ChangelogModal: React.FC<ChangelogModalProps> = ({
   isOpen,
   onClose,
-  uiTheme = 'observatory_gold',
 }) => {
   if (!isOpen) return null;
 
-  const isObsidian = uiTheme === 'kerr_claude';
-  const isPlanck = uiTheme === 'cryo_quantum';
+  const shellClass =
+    'bg-[#0b0908] border-[#D97757]/40 shadow-[0_24px_64px_rgba(0,0,0,0.92),0_0_32px_rgba(217,119,87,0.12)]';
 
-  const shellClass = isObsidian
-    ? 'bg-[#0b0908] border-[#3d3029] shadow-[0_24px_64px_rgba(0,0,0,0.92),0_0_32px_rgba(217,119,87,0.12)]'
-    : isPlanck
-    ? 'bg-[#040605] border-emerald-500/35 shadow-[0_24px_64px_rgba(0,0,0,0.92),0_0_32px_rgba(16,185,129,0.1)]'
-    : 'bg-[#050506] border-zinc-600/45 shadow-[0_24px_64px_rgba(0,0,0,0.94),0_0_32px_rgba(244,244,245,0.08)]';
+  const headerClass = 'bg-[#120e0c] border-[#D97757]/25';
 
-  const headerClass = isObsidian
-    ? 'bg-[#120e0c] border-[#2e241f]'
-    : isPlanck
-    ? 'bg-[#070b09] border-emerald-900/50'
-    : 'bg-[#09090b] border-zinc-800/90';
-
-  const accentBadgeClass = isObsidian
-    ? 'bg-[#241C18] border-[#D97757]/70 text-[#F4A688]'
-    : isPlanck
-    ? 'bg-emerald-500/15 border-emerald-400/60 text-emerald-200'
-    : 'bg-zinc-800 border-zinc-400/60 text-zinc-100';
+  const accentBadgeClass = 'bg-[#201815] border-[#D97757]/65 text-[#F4A688]';
 
   return (
     <div
@@ -104,7 +89,38 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({
         <div className={`flex items-center justify-between px-4 sm:px-5 py-3.5 border-b ${headerClass}`}>
           <div className="flex items-center gap-2.5">
             <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${accentBadgeClass}`}>
-              <Terminal className="w-4 h-4" />
+              <svg
+                width="18"
+                height="18"
+                viewBox="-24 -24 48 48"
+                className="shrink-0 overflow-visible"
+                aria-hidden="true"
+              >
+                {[0, 1, 2, 3, 4, 5].map((i) => {
+                  const angle = (i * Math.PI) / 6;
+                  const rRay = i % 2 === 0 ? 18 : 14.5;
+                  return (
+                    <line
+                      key={i}
+                      x1={Math.cos(angle) * -rRay}
+                      y1={Math.sin(angle) * -rRay}
+                      x2={Math.cos(angle) * rRay}
+                      y2={Math.sin(angle) * rRay}
+                      stroke="rgba(232, 139, 107, 0.94)"
+                      strokeWidth={i % 3 === 0 ? '2.4' : '1.6'}
+                      strokeLinecap="round"
+                    />
+                  );
+                })}
+                <circle
+                  cx="0"
+                  cy="0"
+                  r="4.6"
+                  fill="#090A0F"
+                  stroke="rgba(246, 184, 158, 0.96)"
+                  strokeWidth="2.1"
+                />
+              </svg>
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -143,11 +159,7 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({
               data-testid={`changelog-entry-${entry.version}`}
               className={`rounded-xl border p-4 space-y-2.5 transition-colors ${
                 entry.isCurrent
-                  ? isObsidian
-                    ? 'bg-[#14100d] border-[#D97757]/60 shadow-[0_0_20px_rgba(217,119,87,0.1)]'
-                    : isPlanck
-                    ? 'bg-[#080d0a] border-emerald-400/55 shadow-[0_0_20px_rgba(16,185,129,0.1)]'
-                    : 'bg-[#0c0c0e] border-zinc-400/55 shadow-[0_0_20px_rgba(244,244,245,0.08)]'
+                  ? 'bg-[#14100d] border-[#D97757]/60 shadow-[0_0_20px_rgba(217,119,87,0.1)]'
                   : 'bg-neutral-950/80 border-neutral-800/90'
               }`}
             >

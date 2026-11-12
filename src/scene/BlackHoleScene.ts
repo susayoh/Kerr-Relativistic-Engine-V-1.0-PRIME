@@ -59,6 +59,7 @@ export interface VisualizerSettings {
   showEventLog: boolean;
   showMetricTelemetry: boolean;
   showPerformanceMonitor: boolean;
+  focusMode?: boolean;
   kerrEngineEnabled: boolean;
   kerrEngineTier: 'standard' | 'linear' | 'advanced' | 'ultra';
   phoneMode: boolean;
@@ -101,6 +102,7 @@ export const DEFAULT_VISUALIZER_SETTINGS: VisualizerSettings = {
   showEventLog: false,
   showMetricTelemetry: false,
   showPerformanceMonitor: false,
+  focusMode: false,
   kerrEngineEnabled: true,
   kerrEngineTier: 'ultra',
   phoneMode: isMobileDevice,
@@ -581,9 +583,15 @@ const ACCRETION_FRAGMENT_SHADER = `
       diskDensity *= innerTaper;
       float radialProfile = diskDensity * outerTaper;
 
-      // Base Emission Multiplier significantly boosted with inner ISCO caustic peak
-      float activeEmissionMult = mix(1.0, 2.45, uAccretionState) * (1.0 + ignitionWave);
+      // Base Emission Multiplier significantly boosted with inner ISCO caustic peak + accretion-rate breathing feedback loop
       float iscoNormR = clamp((r - r_isco) / max(0.001, rOut - r_isco), 0.0, 1.0);
+      float breatheRate = 1.45 + 1.25 * clamp(accretionRate, 0.0, 2.5);
+      float breatheAmp = 0.055 + 0.075 * clamp(accretionRate / 2.0, 0.0, 1.35);
+      float accretionBreathing = 1.0 + breatheAmp * (
+        0.65 * sin(uTurbulenceBuffer.x * breatheRate - normR * 2.8) +
+        0.35 * cos(uTurbulenceBuffer.x * (breatheRate * 1.618) - iscoNormR * 4.5)
+      );
+      float activeEmissionMult = mix(1.0, 2.45, uAccretionState) * (1.0 + ignitionWave) * accretionBreathing;
       float innerIscoRing = 1.0 + 1.45 * exp(-iscoNormR * 5.6) * innerTaper;
       float flux = radialProfile * innerIscoRing * (0.28 + 0.72 * diskFilaments) * dopplerBoost * (0.68 + 0.45 * accretionRate) * activeEmissionMult;
 
@@ -718,9 +726,15 @@ const ACCRETION_FRAGMENT_SHADER = `
     diskDensity *= innerTaper;
     float radialProfile = diskDensity * outerTaper;
 
-    float activeEmissionMult = mix(1.18, 2.45, uAccretionState) * (1.0 + ignitionWave);
-    float accretionScale = (0.95 + 0.52 * clamp(accretionRate, 0.0, 2.5)) * activeEmissionMult;
     float iscoNormR = clamp((r - r_isco) / max(0.001, rOut - r_isco), 0.0, 1.0);
+    float breatheRate = 1.45 + 1.25 * clamp(accretionRate, 0.0, 2.5);
+    float breatheAmp = 0.055 + 0.075 * clamp(accretionRate / 2.0, 0.0, 1.35);
+    float accretionBreathing = 1.0 + breatheAmp * (
+      0.65 * sin(uTurbulenceBuffer.x * breatheRate - normR * 2.8) +
+      0.35 * cos(uTurbulenceBuffer.x * (breatheRate * 1.618) - iscoNormR * 4.5)
+    );
+    float activeEmissionMult = mix(1.18, 2.45, uAccretionState) * (1.0 + ignitionWave) * accretionBreathing;
+    float accretionScale = (0.95 + 0.52 * clamp(accretionRate, 0.0, 2.5)) * activeEmissionMult;
     float innerCoreBoost = 1.0 + mix(1.75, 2.75, uAccretionState) * exp(-iscoNormR * 5.2) * innerTaper;
     float flux = radialProfile * innerCoreBoost * (0.32 + 0.68 * diskFilaments) * dopplerBoost * accretionScale;
 
@@ -1030,10 +1044,16 @@ const LENSING_FRAGMENT_SHADER = `
     diskDensity *= innerTaper;
     float radialProfile = diskDensity * outerTaper;
 
-    // Boosted base emission multiplier in Active and Volumetric modes
-    float activeEmissionMult = mix(1.18, 2.45, uAccretionState) * (1.0 + ignitionWave);
-    float accretionScale = (0.95 + 0.52 * clamp(uAccretionRate, 0.0, 2.5)) * activeEmissionMult;
+    // Boosted base emission multiplier in Active and Volumetric modes + accretion-rate breathing feedback loop
     float iscoNormR = clamp((rHit - rIn) / max(0.001, rOut - rIn), 0.0, 1.0);
+    float breatheRate = 1.45 + 1.25 * clamp(uAccretionRate, 0.0, 2.5);
+    float breatheAmp = 0.055 + 0.075 * clamp(uAccretionRate / 2.0, 0.0, 1.35);
+    float accretionBreathing = 1.0 + breatheAmp * (
+      0.65 * sin(uTime * breatheRate - normR * 2.8) +
+      0.35 * cos(uTime * (breatheRate * 1.618) - iscoNormR * 4.5)
+    );
+    float activeEmissionMult = mix(1.18, 2.45, uAccretionState) * (1.0 + ignitionWave) * accretionBreathing;
+    float accretionScale = (0.95 + 0.52 * clamp(uAccretionRate, 0.0, 2.5)) * activeEmissionMult;
     float innerCoreBoost = 1.0 + mix(1.75, 2.75, uAccretionState) * exp(-iscoNormR * 5.2) * innerTaper;
     float flux = radialProfile * innerCoreBoost * (0.34 + 0.66 * diskFilaments) * dopplerBoost * accretionScale;
 
@@ -1220,8 +1240,14 @@ const LENSING_FRAGMENT_SHADER = `
                 float activeArchMask = mix(0.78, 1.0, smoothstep(0.0, 0.45, abs(pLocal.y))) * clamp(activeVolumetricEnvelope * 1.15, 0.0, 1.0);
                 float archMask = mix(quiescentArchMask, activeArchMask, uAccretionState) * unfurlMask * smoothstep(0.02, 0.16, uExpansionProgress);
 
-                // Constraint 2: Significantly increase base emission intensity in Active mode
-                float activeEmissionMult = mix(1.0, 2.45, uAccretionState) * (1.0 + ignitionWave);
+                // Constraint 2: Significantly increase base emission intensity in Active mode + accretion-rate breathing feedback loop
+                float breatheRate = 1.45 + 1.25 * clamp(uAccretionRate, 0.0, 2.5);
+                float breatheAmp = 0.055 + 0.075 * clamp(uAccretionRate / 2.0, 0.0, 1.35);
+                float accretionBreathing = 1.0 + breatheAmp * (
+                  0.65 * sin(uTime * breatheRate - normR * 2.8) +
+                  0.35 * cos(uTime * (breatheRate * 1.618) - normR * 4.2)
+                );
+                float activeEmissionMult = mix(1.0, 2.45, uAccretionState) * (1.0 + ignitionWave) * accretionBreathing;
                 float flux = radialProfile * (0.28 + 0.72 * diskFilaments) * dopplerBoost * (0.65 + 0.45 * uAccretionRate) * activeEmissionMult;
                 float sonicRarefaction = 0.0;
                 float sonicCompression = 0.0;
@@ -1418,7 +1444,10 @@ const LENSING_FRAGMENT_SHADER = `
             : (spectralMode == 3)
             ? mix(vec3(1.0, 0.58, 0.25), vec3(0.70, 0.94, 1.0), clamp(approachRim * 0.5 + 0.5, 0.0, 1.0))
             : vec3(1.0, 0.94, 0.78);
-          float photonRingGain = photonRingProfile * rimDoppler * (0.42 + 0.35 * clamp(uAccretionRate, 0.0, 2.5)) * (0.65 + 0.45 * bloomMult) * ringUnfurl;
+          float ringBreatheRate = 1.45 + 1.25 * clamp(uAccretionRate, 0.0, 2.5);
+          float ringBreatheAmp = 0.045 + 0.060 * clamp(uAccretionRate / 2.0, 0.0, 1.35);
+          float ringBreathing = 1.0 + ringBreatheAmp * sin(uTime * ringBreatheRate);
+          float photonRingGain = photonRingProfile * rimDoppler * (0.42 + 0.35 * clamp(uAccretionRate, 0.0, 2.5)) * (0.65 + 0.45 * bloomMult) * ringUnfurl * ringBreathing;
 
           // Volumetric arch envelope: full intensity across the upper/lower Einstein arches and inner photon ring,
           // while smoothly tapering into the 3D volumetric equatorial torus strata along the outer midplane
@@ -2235,6 +2264,13 @@ export class BlackHoleSceneController {
   private pulseRadius = 1.75;
   private pulseColor = new THREE.Color(0x94a3b8);
 
+  // Subtle Event Horizon Echo Pulse state (triggered when collapsing to Singularity Seed)
+  private pendingCollapseEchoPulse = false;
+  private isEchoPulseActive = false;
+  private echoPulseProgress = 0.0;
+  private readonly echoPulseDuration = 1.35;
+  private echoPulseColor = new THREE.Color(0xd4af37);
+
   // Sonic Boom Camera Screen Shake state
   private shakeIntensity = 0.0;
   private shakeElapsed = 0.0;
@@ -2301,9 +2337,12 @@ export class BlackHoleSceneController {
   private bootAutoExpandPending = false;
   private bootAutoExpandElapsed = 0.0;
   private bootWatermarkDelay = 1.5;
-  private bootSeedLoadDelay = 3.0;
-  private bootAutoExpandDelay = 5.0;
+  private bootWatermarkFadeOutDelay = 3.9;
+  private bootSeedLoadDelay = 4.45;
+  private bootAutoExpandDelay = 6.4;
   private bootWatermarkEmitted = false;
+  private bootWatermarkFadeEmitted = false;
+  private isWatermarkOverlayVisible = false;
   private singularitySeedLoaded = true;
   private seedLoadProgress = 1.0;
   private cinematicTourActive = false;
@@ -2431,9 +2470,10 @@ export class BlackHoleSceneController {
       window.location.search.includes('fastboot=1');
     if (isFastBootParam) {
       this.bootIntroDuration = 0.25;
-      this.bootWatermarkDelay = 0.1;
-      this.bootSeedLoadDelay = 0.2;
-      this.bootAutoExpandDelay = 0.35;
+      this.bootWatermarkDelay = 0.08;
+      this.bootWatermarkFadeOutDelay = 0.16;
+      this.bootSeedLoadDelay = 0.24;
+      this.bootAutoExpandDelay = 0.38;
     }
     this.bootIntroActive = callbacks?.enableBootIntro !== false;
     if (this.bootIntroActive) {
@@ -4942,7 +4982,12 @@ export class BlackHoleSceneController {
     if (!this.isSingularityCollapsed && this.targetExpansionProgress >= 0.99) return;
     this.bootIntroActive = false;
     this.bootAutoExpandPending = false;
+    this.isWatermarkOverlayVisible = false;
+    this.pendingCollapseEchoPulse = false;
+    this.isEchoPulseActive = false;
     this.controls.enabled = true;
+    this.singularitySeedLoaded = true;
+    this.seedLoadProgress = 1.0;
     this.expansionProgress = Math.max(0.04, this.expansionProgress);
     this.targetExpansionProgress = 1.0;
     // Scale observer camera radius with targetScale so ultramassive black holes like TON 618 (scale 4.85) are framed outside their accretion disk
@@ -4970,27 +5015,76 @@ export class BlackHoleSceneController {
     this.triggerEventHorizonPulse(this.params.objectCategory);
   }
 
+  public triggerEventHorizonEchoPulse() {
+    this.isEchoPulseActive = true;
+    this.echoPulseProgress = 0.0;
+    // Subtle silver-gold relativistic horizon echo tint
+    if (this.params.spectralMode === 'xray') {
+      this.echoPulseColor.setHex(0x7dd3fc);
+    } else if (this.params.spectralMode === 'doppler') {
+      this.echoPulseColor.setHex(0x93c5fd);
+    } else {
+      this.echoPulseColor.setHex(0xd4af37);
+    }
+
+    // Gentle micro-recoil when the singularity seed locks in
+    this.shakeIntensity = Math.max(this.shakeIntensity, 0.24);
+    this.shakeElapsed = 0.0;
+
+    if (this.primaryPulseMesh) {
+      this.primaryPulseMesh.visible = true;
+      (this.primaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uColor.value.copy(this.echoPulseColor);
+    }
+    if (this.secondaryPulseMesh) {
+      this.secondaryPulseMesh.visible = true;
+      (this.secondaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uColor.value.copy(this.echoPulseColor);
+    }
+    if (this.gravitationalWaveShellMesh) {
+      this.gravitationalWaveShellMesh.visible = true;
+      (this.gravitationalWaveShellMesh.material as THREE.ShaderMaterial).uniforms.uColor.value.copy(this.echoPulseColor);
+    }
+    if (this.horizonFlashMesh) {
+      this.horizonFlashMesh.visible = true;
+      (this.horizonFlashMesh.material as THREE.MeshBasicMaterial).color.copy(this.echoPulseColor);
+    }
+
+    // Also emit a subtle damped quasinormal ripple ring from the newly formed singularity seed
+    this.spawnParameterRipple('spin', 0.65);
+  }
+
   public collapseToSingularity() {
     this.bootAutoExpandPending = false;
+    this.isWatermarkOverlayVisible = false;
     this.slowCameraPanIn = false;
     if (this.cinematicTourActive) {
       this.stopCinematicTour();
     }
+    this.singularitySeedLoaded = true;
+    this.seedLoadProgress = 1.0;
     this.isSingularityCollapsed = true;
     this.targetExpansionProgress = 0.0;
     this.isPulseActive = false;
     this.pulseStrength = 0.0;
+    if (this.expansionProgress > 0.06) {
+      this.pendingCollapseEchoPulse = true;
+      this.isEchoPulseActive = false;
+    } else {
+      this.pendingCollapseEchoPulse = false;
+      this.triggerEventHorizonEchoPulse();
+    }
     if (this.spacetimeWellMesh) {
       this.spacetimeWellMesh.visible = false;
     }
-    if (this.primaryPulseMesh) this.primaryPulseMesh.visible = false;
-    if (this.secondaryPulseMesh) this.secondaryPulseMesh.visible = false;
+    if (!this.isEchoPulseActive) {
+      if (this.primaryPulseMesh) this.primaryPulseMesh.visible = false;
+      if (this.secondaryPulseMesh) this.secondaryPulseMesh.visible = false;
+      if (this.gravitationalWaveShellMesh) this.gravitationalWaveShellMesh.visible = false;
+      if (this.horizonFlashMesh) this.horizonFlashMesh.visible = false;
+    }
     this.tertiaryPulseMesh && (this.tertiaryPulseMesh.visible = false);
     for (const extra of this.extraPulseRippleMeshes) {
       extra.mesh.visible = false;
     }
-    if (this.gravitationalWaveShellMesh) this.gravitationalWaveShellMesh.visible = false;
-    if (this.horizonFlashMesh) this.horizonFlashMesh.visible = false;
     if (this.accretionDiskMat) this.accretionDiskMat.uniforms.uPulseStrength.value = 0.0;
     this.onSingularityStateChange?.(true);
   }
@@ -4998,6 +5092,9 @@ export class BlackHoleSceneController {
   public replaySingularityExpansion() {
     this.bootIntroActive = false;
     this.bootAutoExpandPending = false;
+    this.isWatermarkOverlayVisible = false;
+    this.pendingCollapseEchoPulse = false;
+    this.isEchoPulseActive = false;
     this.controls.enabled = true;
     this.expansionProgress = 0.04;
     this.isSingularityCollapsed = false;
@@ -5528,6 +5625,7 @@ export class BlackHoleSceneController {
     this.controls.update();
     if (immediateExpand) {
       this.bootAutoExpandPending = false;
+      this.isWatermarkOverlayVisible = false;
       this.singularitySeedLoaded = true;
       this.seedLoadProgress = 1.0;
       this.onSingularitySeedLoaded?.();
@@ -5537,6 +5635,8 @@ export class BlackHoleSceneController {
       this.bootAutoExpandPending = true;
       this.bootAutoExpandElapsed = 0.0;
       this.bootWatermarkEmitted = false;
+      this.bootWatermarkFadeEmitted = false;
+      this.isWatermarkOverlayVisible = false;
     }
     if (this.onObserverReadoutChange) {
       this.onObserverReadoutChange(this.getObserverSphericalCoords(), true);
@@ -5647,10 +5747,12 @@ export class BlackHoleSceneController {
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
     const ray = this.raycaster.ray;
 
-    // Show interactive pointer cursor when hovering over the clickable singularity ball
-    if (!isStellarCategory(this.params.objectCategory) && this.isSingularityCollapsed) {
+    // Show interactive pointer cursor when hovering over the clickable singularity ball or the expanded black hole event horizon
+    if (!isStellarCategory(this.params.objectCategory)) {
       const distToOrigin = ray.distanceToPoint(this.blackHoleGroup.position);
-      const hitRadius = Math.max(3.8, 1.8 * this.currentScale);
+      const hitRadius = this.isSingularityCollapsed
+        ? Math.max(3.8, 1.8 * this.currentScale)
+        : Math.max(2.0, 2.26 * this.currentScale);
       const targetCursor = distToOrigin < hitRadius ? 'pointer' : 'crosshair';
       if (this.domElement.style.cursor !== targetCursor) {
         this.domElement.style.cursor = targetCursor;
@@ -5703,9 +5805,26 @@ export class BlackHoleSceneController {
       }
     }
 
+    if (!isStar && !this.isSingularityCollapsed) {
+      // Clicking the central black hole event horizon shrinks/collapses it back into a Singularity Seed
+      const clampedSpin = Math.min(1.0, Math.max(0.0, this.params.spin));
+      const horizonSpinFactor = ((2.12 - 0.16 * clampedSpin * 0.45) / 2.12) * 0.94;
+      const horizonHitRadius = Math.max(2.0, 2.28 * this.currentScale * horizonSpinFactor);
+      if (distToCenter <= horizonHitRadius) {
+        this.onFeatureSelect?.(null);
+        this.collapseToSingularity();
+        return;
+      }
+    }
+
     const hits = this.raycaster.intersectObjects(this.scene.children, true);
     for (const hit of hits) {
       if (hit.object.visible && hit.object.userData?.feature) {
+        if (!isStar && hit.object === this.eventHorizonMesh) {
+          this.onFeatureSelect?.(null);
+          this.collapseToSingularity();
+          return;
+        }
         this.onFeatureSelect?.(hit.object.userData.feature as InspectedFeature);
         return;
       }
@@ -5774,19 +5893,42 @@ export class BlackHoleSceneController {
     const isStar = isStellarCategory(this.params.objectCategory);
     const minSeedWorldScale = 0.11; // Small singularity ball initial scale (~0.25 world units radius)
 
+    const collapseOrExpandDelta =
+      this.targetExpansionProgress < this.expansionProgress
+        ? Math.max(simDelta, wallDelta * 0.9)
+        : simDelta;
+
     if (isStar) {
       this.expansionProgress = 1.0;
-    } else if (simDelta > 0 && Math.abs(this.expansionProgress - this.targetExpansionProgress) > 0.0005) {
+    } else if (
+      collapseOrExpandDelta > 0 &&
+      Math.abs(this.expansionProgress - this.targetExpansionProgress) > 0.0005
+    ) {
       if (this.targetExpansionProgress > this.expansionProgress) {
         // Grow from the Singularity Seed with a weighty, movie-grade expansion duration during slow pan-in
         const expandDuration = this.slowCameraPanIn ? 2.2 : this.pulseDuration;
-        this.expansionProgress = Math.min(1.0, this.expansionProgress + simDelta / expandDuration);
+        this.expansionProgress = Math.min(
+          1.0,
+          this.expansionProgress + collapseOrExpandDelta / expandDuration
+        );
       } else {
         // Smooth gravitational collapse back to the small singularity ball
-        this.expansionProgress = Math.max(0.0, this.expansionProgress - simDelta * 1.65);
+        this.expansionProgress = Math.max(
+          0.0,
+          this.expansionProgress - collapseOrExpandDelta * 1.65
+        );
+        // Trigger subtle 'event horizon echo' pulse effect right when the singularity seed is formed
+        if (this.pendingCollapseEchoPulse && this.expansionProgress <= 0.06) {
+          this.pendingCollapseEchoPulse = false;
+          this.triggerEventHorizonEchoPulse();
+        }
       }
-    } else if (simDelta > 0) {
+    } else if (collapseOrExpandDelta > 0) {
       this.expansionProgress = this.targetExpansionProgress;
+      if (this.pendingCollapseEchoPulse && this.expansionProgress <= 0.06) {
+        this.pendingCollapseEchoPulse = false;
+        this.triggerEventHorizonEchoPulse();
+      }
     }
 
     // Reveal the UI only after the Singularity Seed has expanded and the slow camera pan-in reaches its final stretch (so UI never blocks the animation)
@@ -5910,26 +6052,39 @@ export class BlackHoleSceneController {
       this.accretionDiskMat.uniforms.uExpansionProgress.value = isStar ? 1.0 : this.expansionProgress;
     }
 
-    // Smoothly materialize the Singularity Seed once singularitySeedLoaded becomes true (at t = 8.5s)
-    if (this.singularitySeedLoaded && this.seedLoadProgress < 1.0) {
+    // Smoothly materialize the Singularity Seed once singularitySeedLoaded becomes true (only after watermark is no longer active)
+    if (this.singularitySeedLoaded && !this.isWatermarkOverlayVisible && this.seedLoadProgress < 1.0) {
       this.seedLoadProgress = Math.min(1.0, this.seedLoadProgress + wallDelta / 0.42);
     }
     const seedAppearEase = 1.0 - Math.pow(1.0 - this.seedLoadProgress, 3.0);
 
-    // Hide the central blackHoleGroup until the Singularity Seed is loaded (1.5s after boot + 1.0s after watermark)
+    // Hide the central blackHoleGroup until the Singularity Seed is loaded and the watermark overlay has cleared
     if (!isStar) {
-      this.blackHoleGroup.visible = this.singularitySeedLoaded;
+      this.blackHoleGroup.visible = this.singularitySeedLoaded && !this.isWatermarkOverlayVisible;
     } else {
       this.blackHoleGroup.visible = true;
     }
 
     // Update Small Singularity Ball (grows directly into the black hole event horizon along with effectiveScale)
     if (this.singularitySeedGroup) {
-      const showSeed = !isStar && this.singularitySeedLoaded && this.expansionProgress < 0.82;
+      const showSeed =
+        !isStar &&
+        this.singularitySeedLoaded &&
+        !this.isWatermarkOverlayVisible &&
+        this.expansionProgress < 0.82;
       this.singularitySeedGroup.visible = showSeed;
       if (showSeed) {
-        const seedFade = (1.0 - THREE.MathUtils.smoothstep(shockGrowth, 0.18, 0.78)) * seedAppearEase;
-        const idlePulse = (1.0 - shockGrowth) * (Math.sin(elapsed * 5.2) * 0.06 + Math.cos(elapsed * 11.3) * 0.03);
+        const echoHaloBoost = this.isEchoPulseActive
+          ? 0.28 * Math.sin(this.echoPulseProgress * Math.PI) * (1.0 - this.echoPulseProgress)
+          : 0.0;
+        const seedFade =
+          Math.min(
+            1.0,
+            (1.0 - THREE.MathUtils.smoothstep(shockGrowth, 0.18, 0.78)) + echoHaloBoost * 0.5
+          ) * seedAppearEase;
+        const idlePulse =
+          (1.0 - shockGrowth) * (Math.sin(elapsed * 5.2) * 0.06 + Math.cos(elapsed * 11.3) * 0.03) +
+          echoHaloBoost;
         const camDistForSeed = this.camera.position.length();
         const distVisibilityBoost = THREE.MathUtils.lerp(
           THREE.MathUtils.clamp(camDistForSeed / 22.0, 1.0, 4.6),
@@ -6146,6 +6301,55 @@ export class BlackHoleSceneController {
         // Ripple and plunge the spacetime well manifold in real-time with the shockwave
         this.needsWellDeform = true;
       }
+    } else if (this.isEchoPulseActive) {
+      // 4b-echo. Subtle 'Event Horizon Echo' Pulse Effect when the Singularity Seed is formed upon collapse
+      const echoStep = Math.min(0.05, Math.max(0.005, rawDelta));
+      this.echoPulseProgress += echoStep / this.echoPulseDuration;
+      if (this.echoPulseProgress >= 1.0) {
+        this.isEchoPulseActive = false;
+        this.echoPulseProgress = 1.0;
+        this.primaryPulseMesh.visible = false;
+        this.secondaryPulseMesh.visible = false;
+        this.gravitationalWaveShellMesh.visible = false;
+        this.horizonFlashMesh.visible = false;
+      } else {
+        const tEcho = this.echoPulseProgress;
+        const echoEase = 1.0 - Math.pow(1.0 - tEcho, 2.3);
+        // Subtle quasinormal harmonic ringdown envelope
+        const harmonicMod = 0.8 + 0.2 * Math.cos(tEcho * Math.PI * 3.5);
+        const echoStrength = Math.pow(1.0 - tEcho, 1.65) * harmonicMod;
+        const seedR = 2.26 * minSeedWorldScale;
+        const maxEchoR = Math.max(4.2, 6.4 * this.currentScale);
+        const currentEchoR = THREE.MathUtils.lerp(seedR, maxEchoR, echoEase);
+
+        this.primaryPulseMesh.visible = true;
+        this.primaryPulseMesh.scale.set(currentEchoR, currentEchoR, currentEchoR);
+        (this.primaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value =
+          echoStrength * 0.42;
+
+        const innerEchoR = Math.max(seedR, currentEchoR * 0.68);
+        this.secondaryPulseMesh.visible = true;
+        this.secondaryPulseMesh.scale.set(innerEchoR, innerEchoR, innerEchoR);
+        (this.secondaryPulseMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value =
+          echoStrength * 0.28;
+
+        const shellEchoR = THREE.MathUtils.lerp(seedR, maxEchoR * 0.92, echoEase);
+        this.gravitationalWaveShellMesh.visible = true;
+        this.gravitationalWaveShellMesh.scale.set(shellEchoR, shellEchoR, shellEchoR);
+        (this.gravitationalWaveShellMesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value =
+          echoStrength * 0.32;
+
+        if (tEcho < 0.45) {
+          const flashT = tEcho / 0.45;
+          const flashR = seedR * (1.2 + flashT * 2.2);
+          this.horizonFlashMesh.visible = true;
+          this.horizonFlashMesh.scale.set(flashR, flashR, flashR);
+          (this.horizonFlashMesh.material as THREE.MeshBasicMaterial).opacity =
+            (1.0 - flashT) * 0.18;
+        } else {
+          this.horizonFlashMesh.visible = false;
+        }
+      }
     }
 
     // 4c. Rapid Parameter Adjustment Gravitational Wave Ripples Animation
@@ -6287,10 +6491,10 @@ export class BlackHoleSceneController {
       item.mesh.position.lerpVectors(p0, p1, frac);
     }
 
-    // 9. Camera Controls, Movie-Grade Helical Boot Fly-In (6s), Post-Boot Sequence (+1.5s Watermark -> +1.0s Singularity Seed -> +2.0s Expand) & Cinematic Tour
+    // 9. Camera Controls, Movie-Grade Helical Boot Fly-In (6s), Post-Boot Sequence (+1.5s Watermark for 2.4s -> +4.45s Singularity Seed -> +6.4s Expand) & Cinematic Tour
     if (this.bootAutoExpandPending) {
       this.bootAutoExpandElapsed += wallDelta;
-      // Maintain weightless orbital drift during the 4.5s post-boot sequence (1.5s wait + 1.0s watermark + 2.0s singularity seed hold)
+      // Maintain weightless orbital drift during the post-boot sequence (1.5s wait + 2.4s watermark + 0.55s fade + ~2.0s singularity seed hold)
       const holdT = Math.min(1.0, this.bootAutoExpandElapsed / this.bootAutoExpandDelay);
       const rHold = THREE.MathUtils.lerp(95.0, 91.5, holdT);
       const thetaHold = THREE.MathUtils.degToRad(THREE.MathUtils.lerp(69.0, 69.6, holdT));
@@ -6305,19 +6509,27 @@ export class BlackHoleSceneController {
       // Step 1 (+1.5s after boot): Display the Kerr Relativity Engine watermark
       if (!this.bootWatermarkEmitted && this.bootAutoExpandElapsed >= this.bootWatermarkDelay) {
         this.bootWatermarkEmitted = true;
+        this.isWatermarkOverlayVisible = true;
         this.onWatermarkDisplayStart?.();
       }
 
-      // Step 2 (+2.5s after boot, i.e., 1.0s after watermark): Load & materialize the Singularity Seed
-      if (!this.singularitySeedLoaded && this.bootAutoExpandElapsed >= this.bootSeedLoadDelay) {
-        this.singularitySeedLoaded = true;
-        this.seedLoadProgress = 0.0;
+      // Step 2a (+3.9s after boot, after 2.4s of watermark display): Begin fading out the watermark BEFORE the Singularity Seed flare appears
+      if (!this.bootWatermarkFadeEmitted && this.bootAutoExpandElapsed >= this.bootWatermarkFadeOutDelay) {
+        this.bootWatermarkFadeEmitted = true;
         this.onSingularitySeedLoaded?.();
       }
 
-      // Step 3 (+4.5s after boot, i.e., 2.0s after loading the Singularity Seed): Expand into full Kerr Black Hole
+      // Step 2b (+4.45s after boot, after watermark has faded out): Materialize the Singularity Seed
+      if (!this.singularitySeedLoaded && this.bootAutoExpandElapsed >= this.bootSeedLoadDelay) {
+        this.isWatermarkOverlayVisible = false;
+        this.singularitySeedLoaded = true;
+        this.seedLoadProgress = 0.0;
+      }
+
+      // Step 3 (+6.4s after boot): Expand into full Kerr Black Hole
       if (this.bootAutoExpandElapsed >= this.bootAutoExpandDelay) {
         this.bootAutoExpandPending = false;
+        this.isWatermarkOverlayVisible = false;
         this.singularitySeedLoaded = true;
         this.seedLoadProgress = 1.0;
         this.onWatermarkPauseComplete?.();
@@ -6609,10 +6821,20 @@ export class BlackHoleSceneController {
     }
 
     // 12b. Update Camera-Space Optical Lens Flare & Viewing-Angle Diffraction Artifacts
+    // Suppress camera-space lens flare during boot, while watermark is active, or when collapsed to a Singularity Seed
     if (this.cameraLensFlareMesh && this.cameraLensFlareMat) {
       const flareIntensity = this.settings.lensFlareIntensity ?? 1.0;
       const hasEmission = isStar || this.params.layers.accretionDisk || this.params.gravitationalLensing;
-      this.cameraLensFlareMesh.visible = !isSoftwareGl && flareIntensity > 0.001 && hasEmission;
+      const isSeedOrWatermarkStage =
+        !isStar &&
+        (this.bootIntroActive ||
+          this.bootAutoExpandPending ||
+          this.isWatermarkOverlayVisible ||
+          !this.singularitySeedLoaded ||
+          this.isSingularityCollapsed ||
+          this.expansionProgress < 0.08);
+      this.cameraLensFlareMesh.visible =
+        !isSoftwareGl && flareIntensity > 0.001 && hasEmission && !isSeedOrWatermarkStage;
 
       if (this.cameraLensFlareMesh.visible) {
         const u = this.cameraLensFlareMat.uniforms;
@@ -6637,7 +6859,7 @@ export class BlackHoleSceneController {
           0.0,
           1.0
         );
-        const expansionGain = isStar ? 1.0 : (0.35 + 0.65 * this.expansionProgress);
+        const expansionGain = isStar ? 1.0 : THREE.MathUtils.smoothstep(this.expansionProgress, 0.08, 1.0);
         const primaryVis = inFront ? offScreenFade * expansionGain : 0.0;
         u.uSourceNdc.value.set(_vec3C.x, _vec3C.y, primaryVis);
 

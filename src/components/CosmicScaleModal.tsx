@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import { X, Sparkles, Scale, Maximize2, Compass, AlertCircle, ArrowRight } from 'lucide-react';
 import { ASTROPHYSICAL_PRESETS } from '../physics/gravitationalPhysics';
 
@@ -131,8 +132,18 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
     COSMIC_BENCHMARKS.find((b) => b.id === selectedBenchmarkId) || COSMIC_BENCHMARKS[7];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md pointer-events-auto">
-      <div className="w-full max-w-4xl bg-black border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md pointer-events-auto"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-4xl bg-black border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+      >
         {/* Modal Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-neutral-800/80 bg-neutral-950">
           <div>
@@ -318,7 +329,7 @@ export const CosmicScaleModal: React.FC<CosmicScaleModalProps> = ({
             Close Explorer
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };

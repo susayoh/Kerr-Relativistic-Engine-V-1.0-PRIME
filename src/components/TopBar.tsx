@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { motion } from 'motion/react';
 import {
   Layers,
   Activity,
@@ -254,7 +255,10 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   return (
     <>
-      <header
+      <motion.header
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         className={`hud-panel relative z-20 flex items-center justify-between gap-1 sm:gap-2 px-1.5 sm:px-3.5 py-1 sm:py-1.5 border-b shadow-[0_4px_24px_rgba(0,0,0,0.9)] transition-colors ${
           isObsidian
             ? 'bg-[#080605]/96 border-[#D97757]/25'
@@ -278,15 +282,9 @@ export const TopBar: React.FC<TopBarProps> = ({
             onTouchEnd={handleBrandPointerEnd}
             onTouchCancel={handleBrandPointerEnd}
             onContextMenu={(e) => e.preventDefault()}
-            className={`group relative overflow-hidden flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-1 rounded-md border whitespace-nowrap transition-all select-none touch-none ${
-              isObsidian
-                ? 'bg-[#120e0c] hover:bg-[#1a1412] border-[#D97757]/30 hover:border-[#D97757]/60'
-                : isPlanck
-                ? 'bg-[#080d0b] hover:bg-[#0e1713] border-emerald-500/30 hover:border-emerald-400/60'
-                : 'bg-[#0a0a0c] hover:bg-[#121216] border-zinc-700/65 hover:border-zinc-500'
-            }`}
+            className="group relative overflow-hidden flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-1 rounded-md border bg-[#120e0c] hover:bg-[#1a1412] border-[#D97757]/35 hover:border-[#D97757]/65 whitespace-nowrap transition-all select-none touch-none"
           >
-            {/* Theme-Responsive Starburst / Singularity Emblem */}
+            {/* Signature 12-Ray Starburst Singularity Emblem (Consistent across all UI themes) */}
             <button
               type="button"
               onClick={() => {
@@ -295,46 +293,38 @@ export const TopBar: React.FC<TopBarProps> = ({
                 onSelectPreset('ton618');
               }}
               title="Kerr Engine — Reset to TON 618"
-              className={`relative flex items-center justify-center w-4.5 h-4.5 sm:w-5 sm:h-5 rounded border transition-all shrink-0 cursor-pointer ${
-                isObsidian
-                  ? 'bg-[#1a1412] border-[#D97757]/50 group-hover:border-[#E89578]'
-                  : isPlanck
-                  ? 'bg-[#0c1410] border-emerald-400/50 group-hover:border-emerald-300'
-                  : 'bg-[#121216] border-zinc-500/55 group-hover:border-[#D4AF37]'
-              }`}
+              className="relative flex items-center justify-center w-4.5 h-4.5 sm:w-5 sm:h-5 rounded border bg-[#1a1412] border-[#D97757]/55 group-hover:border-[#E89578] transition-all shrink-0 cursor-pointer"
             >
               <svg
-                viewBox="0 0 24 24"
-                className={`w-3 h-3 sm:w-3.5 sm:h-3.5 group-hover:scale-105 transition-transform ${
-                  isObsidian
-                    ? 'text-[#E08263]'
-                    : isPlanck
-                    ? 'text-emerald-400'
-                    : 'text-[#D4AF37]'
-                }`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
+                width="14"
+                height="14"
+                viewBox="-24 -24 48 48"
+                className="w-3.5 h-3.5 group-hover:scale-105 transition-transform shrink-0 overflow-visible"
+                aria-hidden="true"
               >
-                <path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7" />
-                <path
-                  d="M8.4 3.2l7.2 17.6M15.6 3.2L8.4 20.8M3.2 8.4l17.6 7.2M3.2 15.6l17.6-7.2"
-                  strokeWidth="1.4"
-                  opacity="0.8"
-                />
+                {[0, 1, 2, 3, 4, 5].map((i) => {
+                  const angle = (i * Math.PI) / 6;
+                  const rRay = i % 2 === 0 ? 18 : 14.5;
+                  return (
+                    <line
+                      key={i}
+                      x1={Math.cos(angle) * -rRay}
+                      y1={Math.sin(angle) * -rRay}
+                      x2={Math.cos(angle) * rRay}
+                      y2={Math.sin(angle) * rRay}
+                      stroke="rgba(232, 139, 107, 0.94)"
+                      strokeWidth={i % 3 === 0 ? '2.4' : '1.6'}
+                      strokeLinecap="round"
+                    />
+                  );
+                })}
                 <circle
-                  cx="12"
-                  cy="12"
-                  r="2.6"
-                  className={
-                    isObsidian
-                      ? 'fill-[#171210] stroke-[#F4B097]'
-                      : isPlanck
-                      ? 'fill-[#060b09] stroke-emerald-200'
-                      : 'fill-[#09090b] stroke-zinc-100'
-                  }
-                  strokeWidth="1.75"
+                  cx="0"
+                  cy="0"
+                  r="4.6"
+                  fill="#090A0F"
+                  stroke="rgba(246, 184, 158, 0.96)"
+                  strokeWidth="2.1"
                 />
               </svg>
             </button>
@@ -348,13 +338,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                   onSelectPreset('ton618');
                 }}
                 title="Kerr Engine — Reset to TON 618"
-                className={`font-display text-[11px] sm:text-xs font-bold tracking-[0.04em] sm:tracking-[0.05em] transition-colors cursor-pointer ${
-                  isObsidian
-                    ? 'text-[#F7F4EE]'
-                    : isPlanck
-                    ? 'text-emerald-50'
-                    : 'text-zinc-50'
-                }`}
+                className="font-display text-[11px] sm:text-xs font-bold tracking-[0.04em] sm:tracking-[0.05em] text-[#F7F4EE] transition-colors cursor-pointer"
               >
                 Kerr Engine
               </button>
@@ -367,13 +351,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                   onOpenChangelogModal?.();
                 }}
                 title="View Kerr Engine [v1.4] Release Changelog"
-                className={`inline-flex items-center justify-center px-1 sm:px-1.5 py-[1.5px] rounded-[3px] border font-mono text-[8.5px] sm:text-[9px] font-bold tracking-[0.05em] leading-none transition-all cursor-pointer ${
-                  isObsidian
-                    ? 'bg-[#201815] hover:bg-[#2c201c] border-[#D97757]/60 text-[#F4A688]'
-                    : isPlanck
-                    ? 'bg-emerald-950/70 hover:bg-emerald-900/70 border-emerald-400/60 text-emerald-300'
-                    : 'bg-zinc-900 hover:bg-zinc-800 border-[#D4AF37]/55 text-[#D4AF37]'
-                }`}
+                className="inline-flex items-center justify-center px-1 sm:px-1.5 py-[1.5px] rounded-[3px] border bg-[#201815] hover:bg-[#2c201c] border-[#D97757]/65 text-[#F4A688] font-mono text-[8.5px] sm:text-[9px] font-bold tracking-[0.05em] leading-none transition-all cursor-pointer"
               >
                 v1.4
               </button>
@@ -679,16 +657,22 @@ export const TopBar: React.FC<TopBarProps> = ({
             </button>
           </div>
         </div>
-      </header>
+      </motion.header>
 
       {/* [APEX SECURE GATEWAY] ENTER ACCESS CODE Modal */}
       {isGatewayModalOpen && (
-        <div
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
           data-testid="apex-secure-gateway-modal"
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md pointer-events-auto"
           onClick={() => setIsGatewayModalOpen(false)}
         >
-          <div
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             onClick={(e) => e.stopPropagation()}
             className={`relative w-full max-w-md rounded-2xl border p-5 font-mono shadow-[0_24px_70px_rgba(0,0,0,0.96)] transition-all ${
               gatewayAccessDenied
@@ -780,8 +764,8 @@ export const TopBar: React.FC<TopBarProps> = ({
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
     </>
   );

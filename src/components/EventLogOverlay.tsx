@@ -1,9 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'motion/react';
 import {
   Terminal,
   ChevronDown,
   ChevronUp,
   Trash2,
+  Download,
   Activity,
   Sparkles,
   Orbit,
@@ -27,9 +29,44 @@ export interface AstrophysicalLogEvent {
   detail?: string;
 }
 
+export function buildEventLogJsonPayload(
+  events: AstrophysicalLogEvent[],
+  metadata?: Record<string, unknown>
+): string {
+  return JSON.stringify(
+    {
+      exportedAt: new Date().toISOString(),
+      application: 'Kerr Relativity Engine v1.4',
+      eventCount: events.length,
+      ...(metadata ? { simulationContext: metadata } : {}),
+      events,
+    },
+    null,
+    2
+  );
+}
+
+export function triggerEventLogJsonDownload(
+  events: AstrophysicalLogEvent[],
+  metadata?: Record<string, unknown>,
+  customFilename?: string
+): void {
+  const jsonContent = buildEventLogJsonPayload(events, metadata);
+  const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = customFilename || `kerr-simulation-event-log-${Date.now()}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
 interface EventLogOverlayProps {
   events: AstrophysicalLogEvent[];
   onClearEvents: () => void;
+  onExportEvents?: () => void;
   isPaused: boolean;
   isDockCollapsed: boolean;
   isPhoneMode?: boolean;
@@ -81,6 +118,7 @@ const CATEGORY_STYLES: Record<
 export const EventLogOverlay: React.FC<EventLogOverlayProps> = ({
   events,
   onClearEvents,
+  onExportEvents,
   isPaused,
   isDockCollapsed,
   isPhoneMode = false,
@@ -90,6 +128,14 @@ export const EventLogOverlay: React.FC<EventLogOverlayProps> = ({
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
+
+  const jsonDataHref = useMemo(
+    () =>
+      `data:application/json;charset=utf-8,${encodeURIComponent(
+        buildEventLogJsonPayload(events)
+      )}`,
+    [events]
+  );
 
   // Auto-scroll to bottom when a new event arrives
   useEffect(() => {
@@ -108,7 +154,11 @@ export const EventLogOverlay: React.FC<EventLogOverlayProps> = ({
   const latestEvent = events.length > 0 ? events[events.length - 1] : null;
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, x: -12, y: 6 }}
+      animate={{ opacity: 1, x: 0, y: 0 }}
+      transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+      data-testid="event-log-overlay"
       className={`hud-panel ${
         inlineStack
           ? 'relative z-20 pointer-events-auto transition-all duration-200 ease-out'
@@ -143,6 +193,25 @@ export const EventLogOverlay: React.FC<EventLogOverlayProps> = ({
             <span className="text-[10px] font-mono text-slate-400 px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 tabular-nums">
               {events.length}
             </span>
+
+            <a
+              href={jsonDataHref}
+              download="simulation-event-log.json"
+              data-testid="export-event-log-btn"
+              onClick={(e) => {
+                e.preventDefault();
+                if (onExportEvents) {
+                  onExportEvents();
+                } else {
+                  triggerEventLogJsonDownload(events);
+                }
+              }}
+              className="p-1 text-neutral-300 hover:text-cyan-300 bg-neutral-900 hover:bg-neutral-800 rounded border border-neutral-800 hover:border-cyan-500/40 transition-colors cursor-pointer inline-flex items-center justify-center"
+              title="Export Event Log as JSON"
+              aria-label="Export Event Log as JSON"
+            >
+              <Download className="w-3 h-3" />
+            </a>
 
             {events.length > 0 && (
               <button
@@ -245,6 +314,6 @@ export const EventLogOverlay: React.FC<EventLogOverlayProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 };

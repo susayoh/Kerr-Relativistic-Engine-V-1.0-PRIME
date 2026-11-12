@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { X, Download } from 'lucide-react';
 import { BlackHoleParams, DerivedRelativisticMetrics } from '../physics/gravitationalPhysics';
 
@@ -40,8 +41,18 @@ export const PhysicsModal: React.FC<PhysicsModalProps> = ({
   const photonX = 40 + ((metrics.photonSphereRg - 1.25) / 12.0) * 440;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 pointer-events-auto">
-      <div className="w-full max-w-3xl bg-black border border-neutral-800 rounded-xl shadow-2xl overflow-hidden">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 pointer-events-auto"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-3xl bg-black border border-neutral-800 rounded-xl shadow-2xl overflow-hidden"
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-950 gap-3">
           <div>
             <h2 className="font-display text-lg font-bold text-neutral-100">
@@ -215,7 +226,7 @@ export const PhysicsModal: React.FC<PhysicsModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };

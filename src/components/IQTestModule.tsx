@@ -3,194 +3,1648 @@ import {
   Brain,
   Play,
   RotateCcw,
-  CheckCircle2,
-  XCircle,
-  Sparkles,
   Award,
   ChevronRight,
   ChevronLeft,
-  Layers,
   Clock,
-  HelpCircle,
+  Grid,
+  Flag,
 } from 'lucide-react';
 import { UiThemeId } from '../scene/BlackHoleScene';
+
+/**
+ * Declarative geometric descriptor for rendering an authentic Raven's Progressive Matrices (APM)
+ * or Mensa Non-Verbal Matrix Reasoning tile inside a 100x100 SVG coordinate space.
+ */
+export type MatrixCellDescriptor =
+  | {
+      kind: 'quant_dots';
+      frame: 'circle' | 'square' | 'diamond' | 'hexagon';
+      dots: number;
+    }
+  | {
+      kind: 'vector_dial';
+      angleDeg: number;
+      hubFill: 'hollow' | 'ring' | 'solid';
+      tailTick?: boolean;
+    }
+  | {
+      kind: 'latin_perm';
+      shape: 'triangle' | 'circle' | 'hexagon';
+      fill: 'hollow' | 'striped' | 'solid';
+      axis: 'horiz' | 'vert' | 'plus' | 'none';
+    }
+  | {
+      kind: 'bar_stack';
+      horizBars: number;
+      vertBars: number;
+      centerNode: 'none' | 'hollow' | 'solid';
+    }
+  | {
+      kind: 'line_boolean';
+      /** Segments: T, B, L, R, D1 (\), D2 (/), VM (vertical mid), HM (horizontal mid) */
+      segments: Array<'T' | 'B' | 'L' | 'R' | 'D1' | 'D2' | 'VM' | 'HM'>;
+    }
+  | {
+      kind: 'quadrant_xor';
+      /** Shaded quadrants: 0=TL, 1=TR, 2=BR, 3=BL */
+      quadrants: number[];
+      /** Corner dots: 0=TL, 1=TR, 2=BR, 3=BL */
+      corners: number[];
+    }
+  | {
+      kind: 'grid_bitmask';
+      /** Active cells in a 3x3 bitmask grid (indices 0..8) */
+      cells: number[];
+      mode: 'cyan' | 'amber';
+    }
+  | {
+      kind: 'concentric_cycle';
+      /** From outer to inner: 'square' | 'circle' | 'diamond' */
+      layers: [
+        'square' | 'circle' | 'diamond',
+        'square' | 'circle' | 'diamond',
+        'square' | 'circle' | 'diamond',
+      ];
+      centerSolid: boolean;
+    }
+  | {
+      kind: 'mirror_rotate';
+      /** Orientation in degrees (0, 90, 180, 270) */
+      rotDeg: number;
+      /** Horizontal flip applied before rotation */
+      flipX: boolean;
+      dotPos: 'top' | 'bottom';
+    }
+  | {
+      kind: 'vector_balance';
+      /** Net horizontal spikes: -2, -1, 0, +1, +2 */
+      dx: number;
+      /** Net vertical spikes: -2, -1, 0, +1, +2 */
+      dy: number;
+      coreShape: 'circle' | 'square';
+    }
+  | {
+      kind: 'orbital_phase';
+      /** Outer satellite angle in deg */
+      outerDeg: number;
+      /** Inner satellite angle in deg */
+      innerDeg: number;
+      /** Central polygon sides (3, 4, 6) */
+      coreSides: 3 | 4 | 6;
+    }
+  | {
+      kind: 'subgrid_automaton';
+      /** 0..8 index in 3x3 subgrid for solid circle */
+      dotIdx: number;
+      /** 0..8 index in 3x3 subgrid for open diamond */
+      diamondIdx: number;
+      /** 0..8 index in 3x3 subgrid for cross marker */
+      crossIdx: number;
+    }
+  | {
+      kind: 'vertex_dot_conservation';
+      sides: 3 | 4 | 5 | 6 | 7;
+      dots: number;
+      invertedRing: boolean;
+    }
+  | {
+      kind: 'phase_aperture';
+      outerShape: 'circle' | 'square' | 'hexagon';
+      baseAngleDeg: number;
+      spreadAngleDeg: number;
+      cornerArcs: Array<'TL' | 'TR' | 'BR' | 'BL'>;
+    };
 
 export interface IQQuestion {
   id: string;
   moduleCode: 'MOD-01' | 'MOD-02' | 'MOD-03' | 'MOD-04';
   moduleTitle: string;
+  batteryOrigin: 'Raven’s SPM/APM' | 'Mensa Norway' | 'Mensa Denmark' | 'Raven’s Set II Apex';
   domain: string;
   difficulty: 'Standard' | 'Advanced' | 'Apex';
   points: number;
   question: string;
   formulaHint: string;
+  /** 8 given matrix cells in row-major order: [R1C1, R1C2, R1C3, R2C1, R2C2, R2C3, R3C1, R3C2] */
+  matrixCells: [
+    MatrixCellDescriptor,
+    MatrixCellDescriptor,
+    MatrixCellDescriptor,
+    MatrixCellDescriptor,
+    MatrixCellDescriptor,
+    MatrixCellDescriptor,
+    MatrixCellDescriptor,
+    MatrixCellDescriptor,
+  ];
+  /** Visual descriptors for the 6 answer options (A-F) */
+  optionCells: MatrixCellDescriptor[];
+  /** Accessible concise text labels for the 6 answer options */
   options: string[];
   correctIndex: number;
   explanation: string;
 }
 
+/**
+ * 16 Comprehensive Non-Verbal Progressive Matrix Items (4 per sub-scale) modeled after
+ * Raven's Standard/Advanced Progressive Matrices (SPM / APM Set II) and Mensa IQ Assessments.
+ */
 export const RELATIVITY_IQ_QUESTIONS: IQQuestion[] = [
+  // ============================================================================
+  // MOD-01 · RAVEN'S SET C/D — PROGRESSIVE QUANTITATIVE & PERMUTATION SERIES (4 ITEMS)
+  // ============================================================================
   {
-    id: 'q_isco_spin',
+    id: 'rpm_c01_quant_progression',
     moduleCode: 'MOD-01',
-    moduleTitle: 'Non-Euclidean Geodesic Spatial Folding',
-    domain: 'Spatial Geodesics',
+    moduleTitle: 'Raven’s Progressive Series & Permutations',
+    batteryOrigin: 'Raven’s SPM/APM',
+    domain: 'Quantitative & Frame Progression',
     difficulty: 'Standard',
-    points: 15,
+    points: 10,
     question:
-      'As a black hole’s dimensionless Kerr spin parameter a* increases from 0 (Schwarzschild) toward 1 (extremal prograde Kerr), how does the prograde Innermost Stable Circular Orbit (R_ISCO) shift?',
-    formulaHint: 'R_ISCO(a*) = R_g [3 + Z₂ - √((3 - Z₁)(3 + Z₁ + 2Z₂))]',
+      'Matrix Set C-04: Identify the missing tile (R3, C3) that completes both the horizontal quantitative progression and the vertical boundary transformation.',
+    formulaHint: 'Row Rule: Interior Nodes +1 per column  |  Col Rule: Circle → Square → Diamond',
+    matrixCells: [
+      { kind: 'quant_dots', frame: 'circle', dots: 1 },
+      { kind: 'quant_dots', frame: 'square', dots: 2 },
+      { kind: 'quant_dots', frame: 'diamond', dots: 3 },
+      { kind: 'quant_dots', frame: 'circle', dots: 2 },
+      { kind: 'quant_dots', frame: 'square', dots: 3 },
+      { kind: 'quant_dots', frame: 'diamond', dots: 4 },
+      { kind: 'quant_dots', frame: 'circle', dots: 3 },
+      { kind: 'quant_dots', frame: 'square', dots: 4 },
+    ],
+    optionCells: [
+      { kind: 'quant_dots', frame: 'diamond', dots: 5 },
+      { kind: 'quant_dots', frame: 'square', dots: 5 },
+      { kind: 'quant_dots', frame: 'diamond', dots: 4 },
+      { kind: 'quant_dots', frame: 'circle', dots: 5 },
+      { kind: 'quant_dots', frame: 'diamond', dots: 6 },
+      { kind: 'quant_dots', frame: 'hexagon', dots: 5 },
+    ],
     options: [
-      'Contracts inward from 6 R_g (3 R_s) down to 1 R_g (0.5 R_s) at the horizon',
-      'Expands outward from 6 R_g to 9 R_g due to centrifugal repulsion',
-      'Remains fixed at 6 R_g (3 R_s) regardless of angular momentum',
-      'Collapses directly to r = 0 once spin exceeds a* = 0.50',
+      'Diamond frame with 5 symmetric quincunx nodes',
+      'Square frame with 5 symmetric quincunx nodes',
+      'Diamond frame with 4 corner nodes',
+      'Circle frame with 5 symmetric quincunx nodes',
+      'Diamond frame with 6 parallel nodes',
+      'Hexagon frame with 5 symmetric quincunx nodes',
     ],
     correctIndex: 0,
     explanation:
-      'Frame-dragging stabilizes prograde orbits closer to the horizon, shrinking R_ISCO from 6 R_g (3 R_s) for a static Schwarzschild black hole down to 1 R_g (0.5 R_s) for an extremal prograde Kerr black hole (while retrograde ISCO expands to 9 R_g).',
+      'Across each row and down each column, the node count increments by +1 (Row 3: 3 → 4 → 5). Each column preserves its outer geometric boundary (Col 1 = Circle, Col 2 = Square, Col 3 = Diamond), yielding a Diamond containing 5 nodes.',
   },
   {
-    id: 'q_ergosphere_dragging',
+    id: 'mensa_r02_vector_phase',
     moduleCode: 'MOD-01',
-    moduleTitle: 'Non-Euclidean Geodesic Spatial Folding',
-    domain: 'Spacetime Topology',
+    moduleTitle: 'Raven’s Progressive Series & Permutations',
+    batteryOrigin: 'Mensa Norway',
+    domain: 'Angular Phase & Core Density',
+    difficulty: 'Standard',
+    points: 10,
+    question:
+      'Mensa Matrix R-08: Deduce the missing orientation and central core state at (R3, C3) from the 2D angular phase progression.',
+    formulaHint: 'Row/Col Angle: Δθ = +45° clockwise per step  |  Row Core: Hollow → Ring → Solid',
+    matrixCells: [
+      { kind: 'vector_dial', angleDeg: 0, hubFill: 'hollow', tailTick: true },
+      { kind: 'vector_dial', angleDeg: 45, hubFill: 'hollow', tailTick: true },
+      { kind: 'vector_dial', angleDeg: 90, hubFill: 'hollow', tailTick: true },
+      { kind: 'vector_dial', angleDeg: 45, hubFill: 'ring', tailTick: true },
+      { kind: 'vector_dial', angleDeg: 90, hubFill: 'ring', tailTick: true },
+      { kind: 'vector_dial', angleDeg: 135, hubFill: 'ring', tailTick: true },
+      { kind: 'vector_dial', angleDeg: 90, hubFill: 'solid', tailTick: true },
+      { kind: 'vector_dial', angleDeg: 135, hubFill: 'solid', tailTick: true },
+    ],
+    optionCells: [
+      { kind: 'vector_dial', angleDeg: 225, hubFill: 'solid', tailTick: true },
+      { kind: 'vector_dial', angleDeg: 180, hubFill: 'solid', tailTick: true },
+      { kind: 'vector_dial', angleDeg: 180, hubFill: 'ring', tailTick: true },
+      { kind: 'vector_dial', angleDeg: 270, hubFill: 'solid', tailTick: true },
+      { kind: 'vector_dial', angleDeg: 135, hubFill: 'solid', tailTick: true },
+      { kind: 'vector_dial', angleDeg: 180, hubFill: 'hollow', tailTick: true },
+    ],
+    options: [
+      'Solid hub · Vector at 225° (South-West)',
+      'Solid hub · Vector at 180° (South)',
+      'Ring hub · Vector at 180° (South)',
+      'Solid hub · Vector at 270° (West)',
+      'Solid hub · Vector at 135° (South-East)',
+      'Hollow hub · Vector at 180° (South)',
+    ],
+    correctIndex: 1,
+    explanation:
+      'The vector rotates +45° clockwise across every column and +45° clockwise down every row: θ(r, c) = (r + c) × 45°. At (r=2, c=2), θ = 4 × 45° = 180° (pointing straight down). Row 3 features a solid central hub.',
+  },
+  {
+    id: 'rpm_c03_orthogonal_grid_bars',
+    moduleCode: 'MOD-01',
+    moduleTitle: 'Raven’s Progressive Series & Permutations',
+    batteryOrigin: 'Raven’s SPM/APM',
+    domain: 'Orthogonal Lattice Accumulation',
+    difficulty: 'Standard',
+    points: 12,
+    question:
+      'Matrix Set C-11: Horizontal and vertical chords accumulate independently along orthogonal axes. Identify the completing lattice at (R3, C3).',
+    formulaHint: 'Row Rule: Vertical Bars +1 per column (1→2→3)  |  Col Rule: Horizontal Bars +1 per row (1→2→3)',
+    matrixCells: [
+      { kind: 'bar_stack', horizBars: 1, vertBars: 1, centerNode: 'hollow' },
+      { kind: 'bar_stack', horizBars: 1, vertBars: 2, centerNode: 'solid' },
+      { kind: 'bar_stack', horizBars: 1, vertBars: 3, centerNode: 'hollow' },
+      { kind: 'bar_stack', horizBars: 2, vertBars: 1, centerNode: 'solid' },
+      { kind: 'bar_stack', horizBars: 2, vertBars: 2, centerNode: 'hollow' },
+      { kind: 'bar_stack', horizBars: 2, vertBars: 3, centerNode: 'solid' },
+      { kind: 'bar_stack', horizBars: 3, vertBars: 1, centerNode: 'hollow' },
+      { kind: 'bar_stack', horizBars: 3, vertBars: 2, centerNode: 'solid' },
+    ],
+    optionCells: [
+      { kind: 'bar_stack', horizBars: 3, vertBars: 3, centerNode: 'solid' },
+      { kind: 'bar_stack', horizBars: 2, vertBars: 3, centerNode: 'hollow' },
+      { kind: 'bar_stack', horizBars: 3, vertBars: 2, centerNode: 'hollow' },
+      { kind: 'bar_stack', horizBars: 3, vertBars: 3, centerNode: 'hollow' },
+      { kind: 'bar_stack', horizBars: 3, vertBars: 1, centerNode: 'hollow' },
+      { kind: 'bar_stack', horizBars: 1, vertBars: 3, centerNode: 'hollow' },
+    ],
+    options: [
+      '3 Horizontal × 3 Vertical bars · Solid center node',
+      '2 Horizontal × 3 Vertical bars · Hollow center node',
+      '3 Horizontal × 2 Vertical bars · Hollow center node',
+      '3 Horizontal × 3 Vertical bars · Hollow center node',
+      '3 Horizontal × 1 Vertical bar · Hollow center node',
+      '1 Horizontal × 3 Vertical bars · Hollow center node',
+    ],
+    correctIndex: 3,
+    explanation:
+      'Horizontal bars count the row index (Row 3 = 3 horizontal bars), while vertical bars count the column index (Col 3 = 3 vertical bars). The central node alternates Hollow/Solid in a checkerboard pattern, making (R3, C3) a 3×3 lattice with a Hollow center node.',
+  },
+  {
+    id: 'rpm_d04_latin_square',
+    moduleCode: 'MOD-01',
+    moduleTitle: 'Raven’s Progressive Series & Permutations',
+    batteryOrigin: 'Raven’s SPM/APM',
+    domain: 'Latin-Square Group Permutation',
     difficulty: 'Standard',
     points: 15,
     question:
-      'Inside the ergosphere of a rotating Kerr black hole (r₊ < r < r_ergo(θ)), why can no physical observer remain static relative to distant stars?',
-    formulaHint: 'g_tt = -(1 - 2Mr / Σ) > 0  ⇒  dφ/dt > 0',
-    options: [
-      'Spacetime itself is dragged in the direction of rotation so strongly that static worldlines would be spacelike (superluminal)',
-      'All radial null geodesics are reflected outward by magnetic pressure',
-      'The Kretschmann curvature scalar vanishes identically inside the static limit',
-      'Proper time reverses sign for all timelike trajectories outside the event horizon',
+      'Matrix Set D-09: Each row and column forms a complete permutation of outer polygon, shading texture, and internal bisecting axis. Select the missing tile.',
+    formulaHint: '∀ Row, Col: {Triangle, Circle, Hexagon} × {Hollow, Striped, Solid} × {Horiz, Vert, Plus}',
+    matrixCells: [
+      { kind: 'latin_perm', shape: 'triangle', fill: 'hollow', axis: 'horiz' },
+      { kind: 'latin_perm', shape: 'circle', fill: 'striped', axis: 'vert' },
+      { kind: 'latin_perm', shape: 'hexagon', fill: 'solid', axis: 'plus' },
+      { kind: 'latin_perm', shape: 'circle', fill: 'solid', axis: 'plus' },
+      { kind: 'latin_perm', shape: 'hexagon', fill: 'hollow', axis: 'horiz' },
+      { kind: 'latin_perm', shape: 'triangle', fill: 'striped', axis: 'vert' },
+      { kind: 'latin_perm', shape: 'hexagon', fill: 'striped', axis: 'vert' },
+      { kind: 'latin_perm', shape: 'triangle', fill: 'solid', axis: 'plus' },
     ],
-    correctIndex: 0,
-    explanation:
-      'At the static limit surface r_ergo(θ), the metric component g_tt changes sign. Inside the ergosphere, a constant-φ worldline is spacelike, forcing all timelike and null trajectories to co-rotate with the black hole (Lense-Thirring frame-dragging).',
-  },
-  {
-    id: 'q_schwarzschild_density',
-    moduleCode: 'MOD-02',
-    moduleTitle: 'Boyer-Lindquist Tensor Pattern Matrix',
-    domain: 'Scaling & Invariants',
-    difficulty: 'Advanced',
-    points: 20,
-    question:
-      'If Black Hole A has mass M and Schwarzschild radius R_s, and Ultramassive Black Hole B has mass 1,000 M, how do B’s event horizon radius and effective horizon density (ρ ∝ M / R_s³) compare to A?',
-    formulaHint: 'R_s = 2GM / c² ∝ M   ⇒   ρ_horizon ∝ M / M³ = M⁻²',
-    options: [
-      'Horizon radius is 1,000× larger; effective density is 1,000,000× (10⁻⁶) lower',
-      'Horizon radius is 10× larger; effective density is 1,000× higher',
-      'Horizon radius is 1,000× larger; effective density remains constant',
-      'Horizon radius scales as √1,000; effective density scales linearly with M',
+    optionCells: [
+      { kind: 'latin_perm', shape: 'circle', fill: 'striped', axis: 'horiz' },
+      { kind: 'latin_perm', shape: 'hexagon', fill: 'hollow', axis: 'horiz' },
+      { kind: 'latin_perm', shape: 'circle', fill: 'hollow', axis: 'horiz' },
+      { kind: 'latin_perm', shape: 'circle', fill: 'hollow', axis: 'plus' },
+      { kind: 'latin_perm', shape: 'triangle', fill: 'hollow', axis: 'horiz' },
+      { kind: 'latin_perm', shape: 'circle', fill: 'solid', axis: 'horiz' },
     ],
-    correctIndex: 0,
+    options: [
+      'Striped Circle with Horizontal axis',
+      'Hollow Hexagon with Horizontal axis',
+      'Hollow Circle with Horizontal axis',
+      'Hollow Circle with Plus (+) crosshair',
+      'Hollow Triangle with Horizontal axis',
+      'Solid Circle with Horizontal axis',
+    ],
+    correctIndex: 2,
     explanation:
-      'Because R_s scales linearly with mass M, enclosing volume scales as R_s³ ∝ M³. Thus average density inside the horizon scales as M⁻² — which is why supermassive black holes like TON 618 have average densities lower than atmospheric air.',
+      'In Row 3, Hexagon and Triangle are present, leaving Circle; Striped and Solid are present, leaving Hollow; Vertical and Plus axes are present, leaving Horizontal. Thus (R3, C3) must be a Hollow Circle with a Horizontal axis.',
   },
+
+  // ============================================================================
+  // MOD-02 · RAVEN'S SET E — BOOLEAN SPATIAL SUPERPOSITION (OR / XOR / AND) (4 ITEMS)
+  // ============================================================================
   {
-    id: 'q_doppler_beaming',
+    id: 'rpm_e05_boolean_union',
     moduleCode: 'MOD-02',
-    moduleTitle: 'Boyer-Lindquist Tensor Pattern Matrix',
-    domain: 'Radiative Transfer',
+    moduleTitle: 'Boolean Spatial Superposition (OR / XOR / AND)',
+    batteryOrigin: 'Raven’s SPM/APM',
+    domain: 'Additive Line Superposition (A ∪ B)',
     difficulty: 'Standard',
     points: 15,
     question:
-      'Why does the approaching limb of a relativistic accretion disk appear dramatically brighter and bluer than the receding limb when viewed near edge-on?',
-    formulaHint: 'I_obs = D⁴ I_emit,   D = 1 / [γ (1 - β cos θ)]',
+      'Matrix Set E-03: In each row and column, the third figure is formed by a spatial Boolean operation on the first two figures. Identify (R3, C3).',
+    formulaHint: 'Superposition Rule: Cell(r, 3) = Cell(r, 1) ∪ Cell(r, 2)  (Additive Union)',
+    matrixCells: [
+      { kind: 'line_boolean', segments: ['L', 'R'] },
+      { kind: 'line_boolean', segments: ['T', 'B'] },
+      { kind: 'line_boolean', segments: ['T', 'B', 'L', 'R'] },
+      { kind: 'line_boolean', segments: ['D1', 'VM'] },
+      { kind: 'line_boolean', segments: ['D2', 'HM'] },
+      { kind: 'line_boolean', segments: ['D1', 'D2', 'VM', 'HM'] },
+      { kind: 'line_boolean', segments: ['L', 'R', 'D1', 'VM'] },
+      { kind: 'line_boolean', segments: ['T', 'B', 'D2', 'HM'] },
+    ],
+    optionCells: [
+      { kind: 'line_boolean', segments: ['T', 'B', 'L', 'R', 'D1', 'D2', 'VM', 'HM'] },
+      { kind: 'line_boolean', segments: ['T', 'B', 'L', 'R', 'D1', 'D2'] },
+      { kind: 'line_boolean', segments: ['D1', 'D2', 'VM', 'HM'] },
+      { kind: 'line_boolean', segments: ['T', 'B', 'L', 'R', 'VM', 'HM'] },
+      { kind: 'line_boolean', segments: ['L', 'R', 'D1', 'D2'] },
+      { kind: 'line_boolean', segments: ['T', 'B', 'D1', 'VM'] },
+    ],
     options: [
-      'Special-relativistic Doppler beaming (D⁴ bolometric intensity boost) and photon arrival-time compression from plasma orbiting at v ~ 0.5c',
-      'Gravitational lensing completely blocks all photons emitted from the receding half of the disk',
-      'Hawking radiation selectively heats only the approaching hemisphere of the accretion torus',
-      'Tidal shear destroys dust grains exclusively on the receding side of the orbit',
+      'Complete 8-segment lattice (Outer Square + Diagonals + Central Cross)',
+      'Outer Square + X-Diagonals only (missing Central Cross)',
+      'Internal 8-point Star only (missing Outer Square)',
+      'Outer Square + Central Cross only (missing Diagonals)',
+      'Left/Right verticals + X-Diagonals',
+      'Top/Bottom horizontals + single diagonal',
     ],
     correctIndex: 0,
     explanation:
-      'Relativistic aberration, frequency blueshift, and time-arrival compression combine via Liouville’s theorem (I_ν / ν³ = invariant) to amplify bolometric intensity by D⁴ on the approaching side while dimming and redshifting the receding side.',
+      'Both rows and columns obey the Boolean Union rule C = A ∪ B. Superimposing Row 3 Cell 1 (Left/Right verticals, \\-diagonal, vertical center) with Cell 2 (Top/Bottom horizontals, /-diagonal, horizontal center) produces the complete 8-segment geometric lattice.',
   },
   {
-    id: 'q_time_dilation',
+    id: 'mensa_x06_symmetric_xor',
+    moduleCode: 'MOD-02',
+    moduleTitle: 'Boolean Spatial Superposition (OR / XOR / AND)',
+    batteryOrigin: 'Mensa Norway',
+    domain: 'Exclusive-OR Cancellation (A ⊕ B)',
+    difficulty: 'Advanced',
+    points: 20,
+    question:
+      'Mensa Matrix X-14: Overlapping line segments between the first two cells in any row or column cancel out, while unique segments are retained. Solve for (R3, C3).',
+    formulaHint: 'Symmetric Difference (XOR): Cell(r, 3) = (A ∪ B) \\ (A ∩ B) = A ⊕ B',
+    matrixCells: [
+      { kind: 'line_boolean', segments: ['T', 'B', 'L', 'R', 'D1'] },
+      { kind: 'line_boolean', segments: ['L', 'R', 'D2'] },
+      { kind: 'line_boolean', segments: ['T', 'B', 'D1', 'D2'] },
+      { kind: 'line_boolean', segments: ['T', 'L', 'D1', 'VM'] },
+      { kind: 'line_boolean', segments: ['B', 'L', 'D2', 'HM'] },
+      { kind: 'line_boolean', segments: ['T', 'B', 'D1', 'D2', 'VM', 'HM'] },
+      { kind: 'line_boolean', segments: ['B', 'R', 'VM'] },
+      { kind: 'line_boolean', segments: ['B', 'R', 'HM'] },
+    ],
+    optionCells: [
+      { kind: 'line_boolean', segments: ['B', 'R', 'VM', 'HM'] },
+      { kind: 'line_boolean', segments: ['T', 'L', 'VM', 'HM'] },
+      { kind: 'line_boolean', segments: ['D1', 'D2'] },
+      { kind: 'line_boolean', segments: ['VM', 'HM'] },
+      { kind: 'line_boolean', segments: ['B', 'R'] },
+      { kind: 'line_boolean', segments: ['T', 'B', 'L', 'R'] },
+    ],
+    options: [
+      'Bottom + Right edges + Central Plus (+)',
+      'Top + Left edges + Central Plus (+)',
+      'Diagonal X-Cross only',
+      'Central Plus (+) crosshair only (VM + HM)',
+      'Bottom + Right L-border only',
+      'Outer Square frame only',
+    ],
+    correctIndex: 3,
+    explanation:
+      'Every row and column satisfies Exclusive-OR (A ⊕ B): common segments cancel and unique segments survive. In Row 3, Cell 1 has [Bottom, Right, Vertical-Mid] and Cell 2 has [Bottom, Right, Horizontal-Mid]. The shared Bottom and Right edges cancel, leaving only [Vertical-Mid, Horizontal-Mid] — the central Plus (+) crosshair.',
+  },
+  {
+    id: 'mensa_x07_bitmask_intersection',
+    moduleCode: 'MOD-02',
+    moduleTitle: 'Boolean Spatial Superposition (OR / XOR / AND)',
+    batteryOrigin: 'Mensa Denmark',
+    domain: '3×3 Bitmask Complement & XOR',
+    difficulty: 'Advanced',
+    points: 20,
+    question:
+      'Mensa Matrix D-19: Each 3×3 tile acts as a binary spatial mask. Deduce the row-wise logic gate connecting Column 1 and Column 2 to Column 3.',
+    formulaHint: 'Row Gate: Cell(r, 3) = Cell(r, 1) ⊕ Cell(r, 2)  (Active squares in both C1 and C2 annihilate)',
+    matrixCells: [
+      // Row 1: {0,1,2,4} XOR {1,4,7} = {0,2,7}
+      { kind: 'grid_bitmask', cells: [0, 1, 2, 4], mode: 'cyan' },
+      { kind: 'grid_bitmask', cells: [1, 4, 7], mode: 'cyan' },
+      { kind: 'grid_bitmask', cells: [0, 2, 7], mode: 'cyan' },
+      // Row 2: {0,3,6,4} XOR {3,4,5} = {0,5,6}
+      { kind: 'grid_bitmask', cells: [0, 3, 4, 6], mode: 'cyan' },
+      { kind: 'grid_bitmask', cells: [3, 4, 5], mode: 'cyan' },
+      { kind: 'grid_bitmask', cells: [0, 5, 6], mode: 'cyan' },
+      // Row 3: {0,2,4,6,8} (X-pattern) XOR {1,3,4,5,7} (Plus-pattern) = {0,1,2,3,5,6,7,8} (Outer Ring, hollow center 4!)
+      { kind: 'grid_bitmask', cells: [0, 2, 4, 6, 8], mode: 'cyan' },
+      { kind: 'grid_bitmask', cells: [1, 3, 4, 5, 7], mode: 'cyan' },
+    ],
+    optionCells: [
+      { kind: 'grid_bitmask', cells: [4], mode: 'cyan' },
+      { kind: 'grid_bitmask', cells: [0, 1, 2, 3, 4, 5, 6, 7, 8], mode: 'cyan' },
+      { kind: 'grid_bitmask', cells: [0, 1, 2, 3, 5, 6, 7, 8], mode: 'cyan' },
+      { kind: 'grid_bitmask', cells: [0, 2, 6, 8], mode: 'cyan' },
+      { kind: 'grid_bitmask', cells: [1, 3, 5, 7], mode: 'cyan' },
+      { kind: 'grid_bitmask', cells: [0, 4, 8], mode: 'cyan' },
+    ],
+    options: [
+      'Center square only (Intersection A ∩ B)',
+      'All 9 squares illuminated (Union A ∪ B)',
+      '8-square perimeter ring with hollow center (A ⊕ B)',
+      '4 corner squares only',
+      '4 orthogonal edge squares only',
+      'Main diagonal only',
+    ],
+    correctIndex: 2,
+    explanation:
+      'Across every row, active sub-squares combine via Exclusive-OR (A ⊕ B). In Row 3, Cell 1 is the 5-square X-diagonal {0,2,4,6,8} and Cell 2 is the 5-square Plus-cross {1,3,4,5,7}. Only the center square (4) overlaps and cancels out, leaving all 8 outer perimeter squares illuminated.',
+  },
+  {
+    id: 'rpm_e08_dual_boolean',
+    moduleCode: 'MOD-02',
+    moduleTitle: 'Boolean Spatial Superposition (OR / XOR / AND)',
+    batteryOrigin: 'Raven’s SPM/APM',
+    domain: 'Dual-Operator Sector XOR & Corner AND',
+    difficulty: 'Advanced',
+    points: 20,
+    question:
+      'Matrix Set E-11: Inner circular quadrants and outer corner nodes follow two different Boolean logic operators across each row. Determine (R3, C3).',
+    formulaHint: 'Inner Wedges: C = A ⊕ B (XOR)  |  Outer Corner Nodes: C = A ∩ B (Intersection / AND)',
+    matrixCells: [
+      { kind: 'quadrant_xor', quadrants: [0, 1], corners: [0, 1, 3] },
+      { kind: 'quadrant_xor', quadrants: [1, 2], corners: [0, 2, 3] },
+      { kind: 'quadrant_xor', quadrants: [0, 2], corners: [0, 3] },
+      { kind: 'quadrant_xor', quadrants: [1, 3], corners: [1, 2] },
+      { kind: 'quadrant_xor', quadrants: [0, 1, 3], corners: [1, 2, 3] },
+      { kind: 'quadrant_xor', quadrants: [0], corners: [1, 2] },
+      { kind: 'quadrant_xor', quadrants: [0, 2, 3], corners: [0, 2, 3] },
+      { kind: 'quadrant_xor', quadrants: [0, 1], corners: [1, 2, 3] },
+    ],
+    optionCells: [
+      { kind: 'quadrant_xor', quadrants: [1, 2, 3], corners: [2, 3] },
+      { kind: 'quadrant_xor', quadrants: [1, 2, 3], corners: [0, 1, 2, 3] },
+      { kind: 'quadrant_xor', quadrants: [0], corners: [2, 3] },
+      { kind: 'quadrant_xor', quadrants: [0, 1, 2, 3], corners: [2, 3] },
+      { kind: 'quadrant_xor', quadrants: [1, 2, 3], corners: [0, 1] },
+      { kind: 'quadrant_xor', quadrants: [2, 3], corners: [2, 3] },
+    ],
+    options: [
+      '3 Wedges (TR, BR, BL) + 2 Bottom Corner Dots (BR, BL)',
+      '3 Wedges (TR, BR, BL) + All 4 Corner Dots',
+      '1 Wedge (TL) + 2 Bottom Corner Dots (BR, BL)',
+      'All 4 Wedges + 2 Bottom Corner Dots (BR, BL)',
+      '3 Wedges (TR, BR, BL) + 2 Top Corner Dots (TL, TR)',
+      '2 Bottom Wedges (BR, BL) + 2 Bottom Corner Dots (BR, BL)',
+    ],
+    correctIndex: 0,
+    explanation:
+      'Two independent rules operate simultaneously across each row: (1) Inner circle sectors combine via XOR ({TL, BR, BL} ⊕ {TL, TR} = {TR, BR, BL}), cancelling TL; (2) Outer corner dots combine via intersection/AND ({TL, BR, BL} ∩ {TR, BR, BL} = {BR, BL}).',
+  },
+
+  // ============================================================================
+  // MOD-03 · MENSA NORWAY & DENMARK — TOPOLOGICAL SCALING & REFLECTION MATRICES (4 ITEMS)
+  // ============================================================================
+  {
+    id: 'mensa_s09_concentric_cycle',
     moduleCode: 'MOD-03',
-    moduleTitle: 'Frame-Dragging Chrono-Sequence Deduction',
-    domain: 'Chrono-Sequence Logic',
+    moduleTitle: 'Mensa Spatial Topology & Dihedral Transformations',
+    batteryOrigin: 'Mensa Norway',
+    domain: 'Concentric Nesting Permutation',
     difficulty: 'Advanced',
     points: 20,
     question:
-      'A telemetry probe hovers at r = 1.0417 R_s outside a Schwarzschild black hole where √(1 - R_s / r) = 0.20. If 10 minutes elapse on the probe’s onboard clock, how much coordinate time elapses for an observer at infinity?',
-    formulaHint: 'dτ = dt √(1 - R_s / r)   ⇒   dt = dτ / 0.20',
-    options: [
-      '50 minutes (distant clock runs 5.0× faster than the deep-well probe)',
-      '2 minutes (distant clock runs 5.0× slower than the deep-well probe)',
-      '250 minutes (scales with the inverse square of the metric factor)',
-      '10 minutes (proper time and coordinate time are invariant)',
+      'Mensa Matrix N-19: Three nested geometric boundaries permute radially across each step while the core parity alternates. Select the missing figure.',
+    formulaHint: 'Radial Shift: [Outer, Mid, Inner] → [Mid, Inner, Outer]  |  Center Parity: Alternating ● / ○',
+    matrixCells: [
+      { kind: 'concentric_cycle', layers: ['square', 'circle', 'diamond'], centerSolid: true },
+      { kind: 'concentric_cycle', layers: ['circle', 'diamond', 'square'], centerSolid: false },
+      { kind: 'concentric_cycle', layers: ['diamond', 'square', 'circle'], centerSolid: true },
+      { kind: 'concentric_cycle', layers: ['circle', 'diamond', 'square'], centerSolid: false },
+      { kind: 'concentric_cycle', layers: ['diamond', 'square', 'circle'], centerSolid: true },
+      { kind: 'concentric_cycle', layers: ['square', 'circle', 'diamond'], centerSolid: false },
+      { kind: 'concentric_cycle', layers: ['diamond', 'square', 'circle'], centerSolid: true },
+      { kind: 'concentric_cycle', layers: ['square', 'circle', 'diamond'], centerSolid: false },
     ],
-    correctIndex: 0,
+    optionCells: [
+      { kind: 'concentric_cycle', layers: ['diamond', 'circle', 'square'], centerSolid: true },
+      { kind: 'concentric_cycle', layers: ['circle', 'diamond', 'square'], centerSolid: false },
+      { kind: 'concentric_cycle', layers: ['circle', 'diamond', 'square'], centerSolid: true },
+      { kind: 'concentric_cycle', layers: ['square', 'diamond', 'circle'], centerSolid: true },
+      { kind: 'concentric_cycle', layers: ['diamond', 'square', 'circle'], centerSolid: true },
+      { kind: 'concentric_cycle', layers: ['circle', 'square', 'diamond'], centerSolid: true },
+    ],
+    options: [
+      'Outer Diamond · Middle Circle · Inner Square · Solid Center',
+      'Outer Circle · Middle Diamond · Inner Square · Hollow Center',
+      'Outer Circle · Middle Diamond · Inner Square · Solid Center',
+      'Outer Square · Middle Diamond · Inner Circle · Solid Center',
+      'Outer Diamond · Middle Square · Inner Circle · Solid Center',
+      'Outer Circle · Middle Square · Inner Diamond · Solid Center',
+    ],
+    correctIndex: 2,
     explanation:
-      'Gravitational time dilation relates proper time dτ of a stationary clock at radius r to coordinate time dt at infinity by dt = dτ / √(1 - R_s/r). With √(1 - R_s/r) = 0.20, 10 minutes of proper time corresponds to 10 / 0.20 = 50 minutes at infinity.',
+      'Moving right or down, the middle shape expands to the outside, the inner shape moves to the middle, and the outer shape wraps to the inside: [Square, Circle, Diamond] → [Circle, Diamond, Square]. The central dot alternates ● / ○ in a checkerboard parity pattern, making (R3, C3) Solid (●).',
   },
   {
-    id: 'q_accretion_efficiency',
+    id: 'mensa_s10_dihedral_group',
     moduleCode: 'MOD-03',
-    moduleTitle: 'Frame-Dragging Chrono-Sequence Deduction',
-    domain: 'Energetics & Thermodynamics',
+    moduleTitle: 'Mensa Spatial Topology & Dihedral Transformations',
+    batteryOrigin: 'Mensa Denmark',
+    domain: 'Dihedral Reflection & Rotation Group D₄',
     difficulty: 'Advanced',
     points: 20,
     question:
-      'What is the maximum theoretical mass-to-energy radiative efficiency (η = 1 - E_ISCO) of thin-disk accretion onto a maximally spinning Kerr black hole (a* → 1) compared to stellar hydrogen fusion (η ≈ 0.7%)?',
-    formulaHint: 'E_ISCO(a* → 1) = 1 / √3 ≈ 0.577   ⇒   η = 1 - 1/√3',
-    options: [
-      '≈ 42.3% of rest-mass energy — roughly 60× more efficient than nuclear fusion',
-      '≈ 5.72% of rest-mass energy — identical to a non-rotating Schwarzschild black hole',
-      '100% of rest-mass energy is radiated before crossing the event horizon',
-      '≈ 0.07% of rest-mass energy due to photon capture inside the ergosphere',
+      'Mensa Matrix D-24: Across each row, a non-commutative sequence of reflection and rotation is applied to an asymmetric L-pennant. Identify (R3, C3).',
+    formulaHint: 'Step 1 (C1 → C2): Horizontal Mirror Flip (σ_x)  |  Step 2 (C2 → C3): +90° Clockwise Rotation + Dot Parity Flip',
+    matrixCells: [
+      { kind: 'mirror_rotate', rotDeg: 0, flipX: false, dotPos: 'top' },
+      { kind: 'mirror_rotate', rotDeg: 0, flipX: true, dotPos: 'top' },
+      { kind: 'mirror_rotate', rotDeg: 90, flipX: true, dotPos: 'bottom' },
+      { kind: 'mirror_rotate', rotDeg: 90, flipX: false, dotPos: 'bottom' },
+      { kind: 'mirror_rotate', rotDeg: 90, flipX: true, dotPos: 'bottom' },
+      { kind: 'mirror_rotate', rotDeg: 180, flipX: true, dotPos: 'top' },
+      { kind: 'mirror_rotate', rotDeg: 180, flipX: false, dotPos: 'top' },
+      { kind: 'mirror_rotate', rotDeg: 180, flipX: true, dotPos: 'top' },
     ],
-    correctIndex: 0,
+    optionCells: [
+      { kind: 'mirror_rotate', rotDeg: 270, flipX: false, dotPos: 'bottom' },
+      { kind: 'mirror_rotate', rotDeg: 270, flipX: true, dotPos: 'bottom' },
+      { kind: 'mirror_rotate', rotDeg: 270, flipX: true, dotPos: 'top' },
+      { kind: 'mirror_rotate', rotDeg: 90, flipX: true, dotPos: 'bottom' },
+      { kind: 'mirror_rotate', rotDeg: 0, flipX: true, dotPos: 'bottom' },
+      { kind: 'mirror_rotate', rotDeg: 180, flipX: false, dotPos: 'bottom' },
+    ],
+    options: [
+      'Unmirrored L-pennant rotated 270° · Satellite dot at opposite end',
+      'Mirrored L-pennant rotated 270° · Satellite dot shifted to base',
+      'Mirrored L-pennant rotated 270° · Satellite dot unshifted',
+      'Mirrored L-pennant rotated 90° · Satellite dot shifted to base',
+      'Mirrored L-pennant at 0° · Satellite dot shifted to base',
+      'Unmirrored L-pennant at 180° · Satellite dot shifted to base',
+    ],
+    correctIndex: 1,
     explanation:
-      'At R_ISCO = 1 R_g for an extremal Kerr black hole, specific binding energy reaches 1 - 1/√3 ≈ 42.26% of rest mass energy, powering the extraordinary luminosity of quasars like TON 618.',
+      'From Column 1 to Column 2, the glyph undergoes a horizontal mirror reflection (flipX = true). From Column 2 to Column 3, the mirrored glyph rotates +90° clockwise (from 180° to 270°) and its satellite dot toggles position from top to bottom.',
   },
   {
-    id: 'q_photon_sphere',
-    moduleCode: 'MOD-04',
-    moduleTitle: 'Photon Ring Symmetry & Invariant Synthesis',
-    domain: 'Null Geodesic Caustics',
+    id: 'mensa_s11_counter_rotating_orbits',
+    moduleCode: 'MOD-03',
+    moduleTitle: 'Mensa Spatial Topology & Dihedral Transformations',
+    batteryOrigin: 'Mensa Norway',
+    domain: 'Counter-Rotating Dual-Ring Kinematics',
     difficulty: 'Advanced',
-    points: 20,
+    points: 22,
     question:
-      'For a light ray approaching a Schwarzschild black hole from infinity with impact parameter b, what happens at the critical impact parameter b_crit = (3√3 / 2) R_s ≈ 2.60 R_s?',
-    formulaHint: 'V_eff(r_ph) = (1 - R_s/r) / r²   maximized at   r_ph = 1.5 R_s',
+      'Mensa Matrix N-27: An outer satellite and an inner satellite orbit a central polygon at different angular velocities and directions. Solve for (R3, C3).',
+    formulaHint: 'Outer Satellite: +90° CW per col, +45° CW per row  |  Inner Satellite: -90° CCW per col, +90° CW per row',
+    matrixCells: [
+      // Row 1 (coreSides=3): Outer=(0, 90, 180), Inner=(0, 270, 180)
+      { kind: 'orbital_phase', outerDeg: 0, innerDeg: 0, coreSides: 3 },
+      { kind: 'orbital_phase', outerDeg: 90, innerDeg: 270, coreSides: 4 },
+      { kind: 'orbital_phase', outerDeg: 180, innerDeg: 180, coreSides: 6 },
+      // Row 2: Outer=(45, 135, 225), Inner=(90, 0, 270)
+      { kind: 'orbital_phase', outerDeg: 45, innerDeg: 90, coreSides: 4 },
+      { kind: 'orbital_phase', outerDeg: 135, innerDeg: 0, coreSides: 6 },
+      { kind: 'orbital_phase', outerDeg: 225, innerDeg: 270, coreSides: 3 },
+      // Row 3: Outer=(90, 180, ? -> 270), Inner=(180, 90, ? -> 0), coreSides=(6, 3, ? -> 4)
+      { kind: 'orbital_phase', outerDeg: 90, innerDeg: 180, coreSides: 6 },
+      { kind: 'orbital_phase', outerDeg: 180, innerDeg: 90, coreSides: 3 },
+    ],
+    optionCells: [
+      { kind: 'orbital_phase', outerDeg: 270, innerDeg: 0, coreSides: 4 },
+      { kind: 'orbital_phase', outerDeg: 270, innerDeg: 180, coreSides: 4 },
+      { kind: 'orbital_phase', outerDeg: 90, innerDeg: 0, coreSides: 4 },
+      { kind: 'orbital_phase', outerDeg: 270, innerDeg: 0, coreSides: 6 },
+      { kind: 'orbital_phase', outerDeg: 0, innerDeg: 270, coreSides: 4 },
+      { kind: 'orbital_phase', outerDeg: 270, innerDeg: 90, coreSides: 3 },
+    ],
     options: [
-      'The photon asymptotically spirals into an unstable circular orbit at the photon sphere (r = 1.5 R_s), forming the bright photon ring',
-      'The photon passes through the spacetime manifold with zero net deflection angle',
-      'The photon enters a stable bound elliptical orbit between 3 R_s and 6 R_s',
-      'The photon is immediately reflected 180° at the outer ergosphere boundary',
+      'Outer at 270° (W) · Inner at 0° (N) · Square core (4 sides)',
+      'Outer at 270° (W) · Inner at 180° (S) · Square core (4 sides)',
+      'Outer at 90° (E) · Inner at 0° (N) · Square core (4 sides)',
+      'Outer at 270° (W) · Inner at 0° (N) · Hexagon core (6 sides)',
+      'Outer at 0° (N) · Inner at 270° (W) · Square core (4 sides)',
+      'Outer at 270° (W) · Inner at 90° (E) · Triangle core (3 sides)',
     ],
     correctIndex: 0,
     explanation:
-      'At b = b_crit = (3√3/2) R_s, the photon’s energy matches the peak of the null effective potential at r_ph = 1.5 R_s (3 R_g), causing it to orbit the black hole multiple times and produce the lensed relativistic photon ring.',
+      'Across Row 3: (1) The outer cyan satellite steps +90° clockwise per column (90° → 180° → 270° West); (2) The inner gold satellite steps -90° counter-clockwise per column (180° → 90° → 0° North); (3) The central polygon completes the Latin-square permutation {Hexagon, Triangle, Square} → Square.',
   },
   {
-    id: 'q_penrose_process',
+    id: 'rpm_ii12_vector_cancellation',
+    moduleCode: 'MOD-03',
+    moduleTitle: 'Mensa Spatial Topology & Dihedral Transformations',
+    batteryOrigin: 'Raven’s Set II Apex',
+    domain: 'Signed Vector Addition & Opposing Cancellation',
+    difficulty: 'Advanced',
+    points: 22,
+    question:
+      'Raven’s APM Set II-18: Radial spikes pointing in opposite directions along the same axis cancel one-for-one, while spikes in the same direction add. Find (R3, C3).',
+    formulaHint: 'Vector Sum: (Δx₃, Δy₃) = (Δx₁ + Δx₂,  Δy₁ + Δy₂)  |  Core Shape: Square if |Δx|+|Δy| is even, Circle if odd',
+    matrixCells: [
+      { kind: 'vector_balance', dx: 1, dy: 0, coreShape: 'circle' },
+      { kind: 'vector_balance', dx: 1, dy: 1, coreShape: 'square' },
+      { kind: 'vector_balance', dx: 2, dy: 1, coreShape: 'circle' },
+      { kind: 'vector_balance', dx: -1, dy: 2, coreShape: 'circle' },
+      { kind: 'vector_balance', dx: 2, dy: -1, coreShape: 'circle' },
+      { kind: 'vector_balance', dx: 1, dy: 1, coreShape: 'square' },
+      { kind: 'vector_balance', dx: 2, dy: -2, coreShape: 'square' },
+      { kind: 'vector_balance', dx: -1, dy: 1, coreShape: 'square' },
+    ],
+    optionCells: [
+      { kind: 'vector_balance', dx: 1, dy: -1, coreShape: 'square' },
+      { kind: 'vector_balance', dx: 1, dy: -1, coreShape: 'circle' },
+      { kind: 'vector_balance', dx: -1, dy: 1, coreShape: 'square' },
+      { kind: 'vector_balance', dx: 1, dy: 1, coreShape: 'square' },
+      { kind: 'vector_balance', dx: 2, dy: -1, coreShape: 'circle' },
+      { kind: 'vector_balance', dx: -1, dy: -1, coreShape: 'square' },
+    ],
+    options: [
+      '1 East spike + 1 South spike (+1, -1) · Square core (even total = 2)',
+      '1 East spike + 1 South spike (+1, -1) · Circle core',
+      '1 West spike + 1 North spike (-1, +1) · Square core',
+      '1 East spike + 1 North spike (+1, +1) · Square core',
+      '2 East spikes + 1 South spike (+2, -1) · Circle core',
+      '1 West spike + 1 South spike (-1, -1) · Square core',
+    ],
+    correctIndex: 0,
+    explanation:
+      'In Row 3, Cell 1 has 2 East (+2) and 2 South (-2) spikes; Cell 2 has 1 West (-1) and 1 North (+1) spike. Adding vector components yields (+2 - 1, -2 + 1) = (+1 East, -1 South). Since the total remaining spike count is 2 (even), the central core is a Square.',
+  },
+
+  // ============================================================================
+  // MOD-04 · RAVEN'S ADVANCED SET II / MENSA APEX — MULTI-INVARIANT CEILING ITEMS (4 ITEMS)
+  // ============================================================================
+  {
+    id: 'rpm_ii13_subgrid_kinematics',
     moduleCode: 'MOD-04',
-    moduleTitle: 'Photon Ring Symmetry & Invariant Synthesis',
-    domain: 'Apex Black Hole Mechanics',
+    moduleTitle: 'Raven’s Set II High-Ceiling Multi-Variable Synthesis',
+    batteryOrigin: 'Raven’s Set II Apex',
+    domain: '3×3 Sub-Grid Multi-Particle Kinematics',
     difficulty: 'Apex',
     points: 25,
     question:
-      'In the Penrose process and Blandford-Znajek jet mechanism, what energy reservoir is tapped, and which geometric property is guaranteed never to decrease by Hawking’s Area Theorem?',
-    formulaHint: 'M² = M_irred² + J² / (4 M_irred²),   dA_horizon = 32π d(M_irred²) ≥ 0',
+      'Raven’s APM Set II-26: Three independent tokens (● Solid Node, ◇ Open Diamond, × Cross) traverse the 3×3 sub-lattice at constant velocity vectors. Predict (R3, C3).',
+    formulaHint: '● moves +1 right per col (+1 down per row)  |  ◇ moves diagonally  |  × steps -1 left per col',
+    matrixCells: [
+      { kind: 'subgrid_automaton', dotIdx: 0, diamondIdx: 0, crossIdx: 2 },
+      { kind: 'subgrid_automaton', dotIdx: 1, diamondIdx: 4, crossIdx: 1 },
+      { kind: 'subgrid_automaton', dotIdx: 2, diamondIdx: 8, crossIdx: 0 },
+      { kind: 'subgrid_automaton', dotIdx: 3, diamondIdx: 3, crossIdx: 5 },
+      { kind: 'subgrid_automaton', dotIdx: 4, diamondIdx: 7, crossIdx: 4 },
+      { kind: 'subgrid_automaton', dotIdx: 5, diamondIdx: 2, crossIdx: 3 },
+      { kind: 'subgrid_automaton', dotIdx: 6, diamondIdx: 6, crossIdx: 8 },
+      { kind: 'subgrid_automaton', dotIdx: 7, diamondIdx: 1, crossIdx: 7 },
+    ],
+    optionCells: [
+      { kind: 'subgrid_automaton', dotIdx: 8, diamondIdx: 5, crossIdx: 6 },
+      { kind: 'subgrid_automaton', dotIdx: 8, diamondIdx: 4, crossIdx: 6 },
+      { kind: 'subgrid_automaton', dotIdx: 6, diamondIdx: 5, crossIdx: 8 },
+      { kind: 'subgrid_automaton', dotIdx: 8, diamondIdx: 5, crossIdx: 0 },
+      { kind: 'subgrid_automaton', dotIdx: 7, diamondIdx: 5, crossIdx: 6 },
+      { kind: 'subgrid_automaton', dotIdx: 8, diamondIdx: 2, crossIdx: 6 },
+    ],
     options: [
-      'Rotational kinetic energy of the spinning black hole (reducing spin J), while the event horizon surface area A_horizon (and irreducible mass M_irred) never decreases',
-      'Irreducible rest mass of the singularity, causing the event horizon area to shrink toward zero',
-      'Thermal Hawking radiation from inside the inner Cauchy horizon r₋',
-      'Gravitational wave energy from distant background stars without altering black hole angular momentum',
+      '● at Bottom-Right (8) · ◇ at Mid-Right (5) · × at Bottom-Left (6)',
+      '● at Bottom-Right (8) · ◇ at Center (4) · × at Bottom-Left (6)',
+      '● at Bottom-Left (6) · ◇ at Mid-Right (5) · × at Bottom-Right (8)',
+      '● at Bottom-Right (8) · ◇ at Mid-Right (5) · × at Top-Left (0)',
+      '● at Bottom-Center (7) · ◇ at Mid-Right (5) · × at Bottom-Left (6)',
+      '● at Bottom-Right (8) · ◇ at Top-Right (2) · × at Bottom-Left (6)',
     ],
     correctIndex: 0,
     explanation:
-      'Up to 29% of a maximally spinning Kerr black hole’s total mass-energy is rotational energy stored in the ergosphere. Extracting it spins down the black hole (reducing J and total mass M) while Hawking’s second law of black hole mechanics ensures dA_horizon ≥ 0.',
+      'In Row 3: (1) The solid circle ● moves left-to-right across the bottom row (6 → 7 → 8, Bottom-Right); (2) The cross × moves right-to-left across the bottom row (8 → 7 → 6, Bottom-Left); (3) The diamond ◇ steps (+1 col, +1 row mod 3) each column: (R3,C1)=6 → (R1,C2)=1 → (R2,C3)=5 (Mid-Right).',
+  },
+  {
+    id: 'mensa_a14_invariant_conservation',
+    moduleCode: 'MOD-04',
+    moduleTitle: 'Raven’s Set II High-Ceiling Multi-Variable Synthesis',
+    batteryOrigin: 'Mensa Norway',
+    domain: 'Topological Vertex-Node Conservation Law',
+    difficulty: 'Apex',
+    points: 25,
+    question:
+      'Mensa High-Range Item N-33: Across each row, polygon vertices convert into interior nodes under a strict conservation invariant (V + N = const). Solve for (R3, C3).',
+    formulaHint: 'Row Invariant: Vertices(V) + Interior Dots(N) = Constant K_row  (ΔV = +1, ΔN = -1 per col)',
+    matrixCells: [
+      { kind: 'vertex_dot_conservation', sides: 3, dots: 4, invertedRing: false },
+      { kind: 'vertex_dot_conservation', sides: 4, dots: 3, invertedRing: true },
+      { kind: 'vertex_dot_conservation', sides: 5, dots: 2, invertedRing: false },
+      { kind: 'vertex_dot_conservation', sides: 4, dots: 4, invertedRing: true },
+      { kind: 'vertex_dot_conservation', sides: 5, dots: 3, invertedRing: false },
+      { kind: 'vertex_dot_conservation', sides: 6, dots: 2, invertedRing: true },
+      { kind: 'vertex_dot_conservation', sides: 4, dots: 5, invertedRing: false },
+      { kind: 'vertex_dot_conservation', sides: 5, dots: 4, invertedRing: true },
+    ],
+    optionCells: [
+      { kind: 'vertex_dot_conservation', sides: 6, dots: 2, invertedRing: false },
+      { kind: 'vertex_dot_conservation', sides: 6, dots: 3, invertedRing: true },
+      { kind: 'vertex_dot_conservation', sides: 5, dots: 3, invertedRing: false },
+      { kind: 'vertex_dot_conservation', sides: 6, dots: 3, invertedRing: false },
+      { kind: 'vertex_dot_conservation', sides: 7, dots: 2, invertedRing: false },
+      { kind: 'vertex_dot_conservation', sides: 6, dots: 4, invertedRing: false },
+    ],
+    options: [
+      'Hexagon (6 sides) + 2 interior dots · Standard single frame',
+      'Hexagon (6 sides) + 3 interior dots · Dashed outer halo',
+      'Pentagon (5 sides) + 3 interior dots · Standard single frame',
+      'Hexagon (6 sides) + 3 interior dots · Standard single frame',
+      'Heptagon (7 sides) + 2 interior dots · Standard single frame',
+      'Hexagon (6 sides) + 4 interior dots · Standard single frame',
+    ],
+    correctIndex: 3,
+    explanation:
+      'In Row 3, the sum of polygon vertices V and interior dots N is conserved at V + N = 9: (4 + 5 = 9) → (5 + 4 = 9) → (6 + 3 = 9). Each step right increments polygon sides by +1 (4 → 5 → 6, Hexagon) and decrements interior dots by -1 (5 → 4 → 3). The dashed outer halo alternates checkerboard-style, so (R3, C3) has a standard single frame.',
+  },
+  {
+    id: 'mensa_a15_cyclic_bitmask_shift',
+    moduleCode: 'MOD-04',
+    moduleTitle: 'Raven’s Set II High-Ceiling Multi-Variable Synthesis',
+    batteryOrigin: 'Mensa Denmark',
+    domain: 'Modulo-9 Affine Bitmask Permutation',
+    difficulty: 'Apex',
+    points: 28,
+    question:
+      'Mensa High-Range Item D-34: Each 3×3 bitmask undergoes a 90° clockwise rotation of the entire 3×3 matrix per column and a bitwise inversion of corners per row. Find (R3, C3).',
+    formulaHint: 'Col Step: 90° Clockwise 3×3 Grid Rotation  |  Row 3: Corner L-Triad Rotated Twice (180°)',
+    matrixCells: [
+      // Row 1: L-triad rotated 90° CW each column: {0,1,3} -> {1,2,5} -> {5,7,8}
+      { kind: 'grid_bitmask', cells: [0, 1, 3], mode: 'amber' },
+      { kind: 'grid_bitmask', cells: [1, 2, 5], mode: 'amber' },
+      { kind: 'grid_bitmask', cells: [5, 7, 8], mode: 'amber' },
+      // Row 2: T-tetrad rotated 90° CW each column: {0,1,2,4} -> {2,4,5,8} -> {4,6,7,8}
+      { kind: 'grid_bitmask', cells: [0, 1, 2, 4], mode: 'amber' },
+      { kind: 'grid_bitmask', cells: [2, 4, 5, 8], mode: 'amber' },
+      { kind: 'grid_bitmask', cells: [4, 6, 7, 8], mode: 'amber' },
+      // Row 3: Arrowhead {0,1,3,4,8} rotated 90° CW each column:
+      // Col 1: {0,1,3,4,8}
+      // Col 2 (90° CW): 0->2, 1->5, 3->1, 4->4, 8->6 => {1,2,4,5,6}
+      // Col 3 (90° CW again): 1->5, 2->8, 4->4, 5->7, 6->0 => {0,4,5,7,8}
+      { kind: 'grid_bitmask', cells: [0, 1, 3, 4, 8], mode: 'amber' },
+      { kind: 'grid_bitmask', cells: [1, 2, 4, 5, 6], mode: 'amber' },
+    ],
+    optionCells: [
+      { kind: 'grid_bitmask', cells: [0, 3, 4, 6, 7], mode: 'amber' },
+      { kind: 'grid_bitmask', cells: [0, 4, 5, 7, 8], mode: 'amber' },
+      { kind: 'grid_bitmask', cells: [2, 4, 5, 7, 8], mode: 'amber' },
+      { kind: 'grid_bitmask', cells: [0, 1, 4, 7, 8], mode: 'amber' },
+      { kind: 'grid_bitmask', cells: [0, 4, 6, 7, 8], mode: 'amber' },
+      { kind: 'grid_bitmask', cells: [1, 3, 4, 5, 7], mode: 'amber' },
+    ],
+    options: [
+      'Bottom-Left arrowhead {0,3,4,6,7}',
+      'Bottom-Right arrowhead + Top-Left tail {0,4,5,7,8} (180° rotation of R3C1)',
+      'Right-heavy pentomino {2,4,5,7,8}',
+      'Vertical hourglass {0,1,4,7,8}',
+      'L-frame + center {0,4,6,7,8}',
+      'Symmetric central plus {1,3,4,5,7}',
+    ],
+    correctIndex: 1,
+    explanation:
+      'Across every row, the entire 3×3 bitmask rotates 90° clockwise per column. Rotating Row 3 Column 1 ({0,1,3,4,8}, top-left arrowhead with bottom-right tail) by 90° CW gives Column 2 ({1,2,4,5,6}, top-right arrowhead with bottom-left tail), and rotating 90° CW once more yields {0,4,5,7,8} (bottom-right arrowhead with top-left tail).',
+  },
+  {
+    id: 'rpm_ii16_triple_synthesis',
+    moduleCode: 'MOD-04',
+    moduleTitle: 'Raven’s Set II High-Ceiling Multi-Variable Synthesis',
+    batteryOrigin: 'Raven’s Set II Apex',
+    domain: 'Triple-Invariant Angular Aperture & XOR Synthesis',
+    difficulty: 'Apex',
+    points: 30,
+    question:
+      'Raven’s APM Set II-36 (Ceiling Item): Synthesize three simultaneous rules — Latin-square outer manifold, angular sector spread, and corner arc XOR — to determine (R3, C3).',
+    formulaHint: '1. Outer Latin Square  |  2. Base Angle +90°/row, Spread +45°/col  |  3. Corner Arcs: C3 = C1 ⊕ C2',
+    matrixCells: [
+      { kind: 'phase_aperture', outerShape: 'circle', baseAngleDeg: 0, spreadAngleDeg: 45, cornerArcs: ['TL', 'BR'] },
+      { kind: 'phase_aperture', outerShape: 'square', baseAngleDeg: 0, spreadAngleDeg: 90, cornerArcs: ['TR', 'BR'] },
+      { kind: 'phase_aperture', outerShape: 'hexagon', baseAngleDeg: 0, spreadAngleDeg: 135, cornerArcs: ['TL', 'TR'] },
+      { kind: 'phase_aperture', outerShape: 'square', baseAngleDeg: 90, spreadAngleDeg: 45, cornerArcs: ['TL', 'BL'] },
+      { kind: 'phase_aperture', outerShape: 'hexagon', baseAngleDeg: 90, spreadAngleDeg: 90, cornerArcs: ['TL', 'TR', 'BL'] },
+      { kind: 'phase_aperture', outerShape: 'circle', baseAngleDeg: 90, spreadAngleDeg: 135, cornerArcs: ['TR'] },
+      { kind: 'phase_aperture', outerShape: 'hexagon', baseAngleDeg: 180, spreadAngleDeg: 45, cornerArcs: ['TR', 'BR', 'BL'] },
+      { kind: 'phase_aperture', outerShape: 'circle', baseAngleDeg: 180, spreadAngleDeg: 90, cornerArcs: ['TR', 'BL'] },
+    ],
+    optionCells: [
+      { kind: 'phase_aperture', outerShape: 'square', baseAngleDeg: 180, spreadAngleDeg: 135, cornerArcs: ['BR'] },
+      { kind: 'phase_aperture', outerShape: 'square', baseAngleDeg: 180, spreadAngleDeg: 90, cornerArcs: ['BR'] },
+      { kind: 'phase_aperture', outerShape: 'hexagon', baseAngleDeg: 180, spreadAngleDeg: 135, cornerArcs: ['BR'] },
+      { kind: 'phase_aperture', outerShape: 'square', baseAngleDeg: 180, spreadAngleDeg: 135, cornerArcs: ['TR', 'BL'] },
+      { kind: 'phase_aperture', outerShape: 'square', baseAngleDeg: 90, spreadAngleDeg: 135, cornerArcs: ['BR'] },
+      { kind: 'phase_aperture', outerShape: 'circle', baseAngleDeg: 180, spreadAngleDeg: 135, cornerArcs: ['BR'] },
+    ],
+    options: [
+      'Square manifold · 180° base with 135° obtuse aperture · Single BR corner marker',
+      'Square manifold · 180° base with 90° right-angle aperture · Single BR corner marker',
+      'Hexagon manifold · 180° base with 135° obtuse aperture · Single BR corner marker',
+      'Square manifold · 180° base with 135° obtuse aperture · Dual TR + BL corner markers',
+      'Square manifold · 90° base with 135° obtuse aperture · Single BR corner marker',
+      'Circle manifold · 180° base with 135° obtuse aperture · Single BR corner marker',
+    ],
+    correctIndex: 0,
+    explanation:
+      'Three orthogonal rules converge at (R3, C3): (1) Outer shape completes the Latin square {Hexagon, Circle, Square} → Square; (2) Dual clock hands start at 180° (Row 3) with an angular spread of 135° (Col 3: 45° → 90° → 135°); (3) Corner markers follow XOR across Row 3: {TR, BR, BL} ⊕ {TR, BL} = {BR}.',
   },
 ];
+
+/**
+ * Helper to generate regular polygon SVG points centered at (cx, cy).
+ */
+function getPolygonPoints(cx: number, cy: number, r: number, sides: number, rotOffsetDeg = -90): string {
+  const pts: string[] = [];
+  for (let i = 0; i < sides; i++) {
+    const rad = ((rotOffsetDeg + (i * 360) / sides) * Math.PI) / 180;
+    const x = cx + r * Math.cos(rad);
+    const y = cy + r * Math.sin(rad);
+    pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+  }
+  return pts.join(' ');
+}
+
+/**
+ * Renders any Raven's / Mensa MatrixCellDescriptor as a high-precision geometric SVG diagram.
+ */
+export const MatrixCellSvg: React.FC<{
+  cell: MatrixCellDescriptor;
+  sizeClass?: string;
+}> = ({ cell, sizeClass = 'w-full h-full' }) => {
+  const strokeMain = '#f4f4f5';
+  const strokeAccent = '#22d3ee';
+  const strokeGold = '#fbbf24';
+  const strokeMuted = '#52525b';
+
+  const renderShapeFrame = (
+    shape: 'circle' | 'square' | 'diamond' | 'triangle' | 'hexagon',
+    radius: number,
+    fillUrl = 'none',
+    strokeColor = strokeMain,
+    strokeW = 2.6
+  ) => {
+    if (shape === 'circle') {
+      return (
+        <circle
+          cx={50}
+          cy={50}
+          r={radius}
+          fill={fillUrl}
+          stroke={strokeColor}
+          strokeWidth={strokeW}
+        />
+      );
+    }
+    if (shape === 'square') {
+      const half = radius * 0.88;
+      return (
+        <rect
+          x={50 - half}
+          y={50 - half}
+          width={half * 2}
+          height={half * 2}
+          rx={2}
+          fill={fillUrl}
+          stroke={strokeColor}
+          strokeWidth={strokeW}
+        />
+      );
+    }
+    if (shape === 'diamond') {
+      return (
+        <polygon
+          points={getPolygonPoints(50, 50, radius * 1.04, 4, -90)}
+          fill={fillUrl}
+          stroke={strokeColor}
+          strokeWidth={strokeW}
+          strokeLinejoin="round"
+        />
+      );
+    }
+    if (shape === 'triangle') {
+      return (
+        <polygon
+          points={getPolygonPoints(50, 54, radius * 1.08, 3, -90)}
+          fill={fillUrl}
+          stroke={strokeColor}
+          strokeWidth={strokeW}
+          strokeLinejoin="round"
+        />
+      );
+    }
+    return (
+      <polygon
+        points={getPolygonPoints(50, 50, radius, 6, -90)}
+        fill={fillUrl}
+        stroke={strokeColor}
+        strokeWidth={strokeW}
+        strokeLinejoin="round"
+      />
+    );
+  };
+
+  const renderDots = (count: number, radiusSpread = 14) => {
+    const coords: Array<[number, number]> = [];
+    if (count === 1) {
+      coords.push([50, 50]);
+    } else if (count === 2) {
+      coords.push([50 - radiusSpread * 0.8, 50], [50 + radiusSpread * 0.8, 50]);
+    } else if (count === 3) {
+      coords.push(
+        [50, 50 - radiusSpread * 0.85],
+        [50 - radiusSpread * 0.85, 50 + radiusSpread * 0.65],
+        [50 + radiusSpread * 0.85, 50 + radiusSpread * 0.65]
+      );
+    } else if (count === 4) {
+      const d = radiusSpread * 0.78;
+      coords.push([50 - d, 50 - d], [50 + d, 50 - d], [50 - d, 50 + d], [50 + d, 50 + d]);
+    } else if (count === 5) {
+      const d = radiusSpread * 0.82;
+      coords.push(
+        [50, 50],
+        [50 - d, 50 - d],
+        [50 + d, 50 - d],
+        [50 - d, 50 + d],
+        [50 + d, 50 + d]
+      );
+    } else if (count >= 6) {
+      const d = radiusSpread * 0.82;
+      coords.push(
+        [50 - d, 50 - d],
+        [50 + d, 50 - d],
+        [50 - d, 50],
+        [50 + d, 50],
+        [50 - d, 50 + d],
+        [50 + d, 50 + d]
+      );
+    }
+    return coords.map(([x, y], i) => (
+      <circle
+        key={i}
+        cx={x}
+        cy={y}
+        r={4.2}
+        fill={strokeAccent}
+        stroke="#090d16"
+        strokeWidth={1.2}
+      />
+    ));
+  };
+
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      className={`${sizeClass} select-none`}
+      aria-hidden="true"
+    >
+      <defs>
+        <pattern
+          id="mensa-diagonal-hatch"
+          width="7"
+          height="7"
+          patternTransform="rotate(45 0 0)"
+          patternUnits="userSpaceOnUse"
+        >
+          <line x1="0" y1="0" x2="0" y2="7" stroke="#38bdf8" strokeWidth="2.2" strokeOpacity="0.65" />
+        </pattern>
+      </defs>
+
+      {/* Subtle registration crosshairs in background */}
+      <line x1="50" y1="6" x2="50" y2="94" stroke="#1e293b" strokeWidth="0.75" strokeDasharray="2 3" />
+      <line x1="6" y1="50" x2="94" y2="50" stroke="#1e293b" strokeWidth="0.75" strokeDasharray="2 3" />
+
+      {cell.kind === 'quant_dots' && (
+        <g>
+          {renderShapeFrame(cell.frame, 34, 'rgba(15, 23, 42, 0.55)', strokeMain, 2.8)}
+          {renderDots(cell.dots, 14)}
+        </g>
+      )}
+
+      {cell.kind === 'vector_dial' && (() => {
+        const rad = ((cell.angleDeg - 90) * Math.PI) / 180;
+        const tipX = 50 + 34 * Math.cos(rad);
+        const tipY = 50 + 34 * Math.sin(rad);
+        const tailX = 50 - 14 * Math.cos(rad);
+        const tailY = 50 - 14 * Math.sin(rad);
+        const perpX = -Math.sin(rad) * 5.5;
+        const perpY = Math.cos(rad) * 5.5;
+
+        return (
+          <g>
+            <circle cx={50} cy={50} r={37} fill="none" stroke={strokeMuted} strokeWidth={1.5} />
+            {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
+              const rTick = ((deg - 90) * Math.PI) / 180;
+              return (
+                <line
+                  key={deg}
+                  x1={50 + 33 * Math.cos(rTick)}
+                  y1={50 + 33 * Math.sin(rTick)}
+                  x2={50 + 37 * Math.cos(rTick)}
+                  y2={50 + 37 * Math.sin(rTick)}
+                  stroke="#64748b"
+                  strokeWidth={1.4}
+                />
+              );
+            })}
+            <line
+              x1={tailX}
+              y1={tailY}
+              x2={tipX}
+              y2={tipY}
+              stroke={strokeAccent}
+              strokeWidth={3.2}
+              strokeLinecap="round"
+            />
+            {cell.tailTick && (
+              <line
+                x1={tailX - perpX}
+                y1={tailY - perpY}
+                x2={tailX + perpX}
+                y2={tailY + perpY}
+                stroke={strokeGold}
+                strokeWidth={2.4}
+                strokeLinecap="round"
+              />
+            )}
+            <circle cx={tipX} cy={tipY} r={4.2} fill={strokeAccent} />
+            {cell.hubFill === 'hollow' && (
+              <circle cx={50} cy={50} r={9.5} fill="#090d16" stroke={strokeMain} strokeWidth={2.6} />
+            )}
+            {cell.hubFill === 'ring' && (
+              <g>
+                <circle cx={50} cy={50} r={10} fill="#090d16" stroke={strokeMain} strokeWidth={2.4} />
+                <circle cx={50} cy={50} r={4.2} fill={strokeGold} />
+              </g>
+            )}
+            {cell.hubFill === 'solid' && (
+              <circle cx={50} cy={50} r={10} fill={strokeGold} stroke={strokeMain} strokeWidth={2} />
+            )}
+          </g>
+        );
+      })()}
+
+      {cell.kind === 'bar_stack' && (() => {
+        const getCoords = (n: number): number[] => {
+          if (n === 1) return [50];
+          if (n === 2) return [36, 64];
+          return [26, 50, 74];
+        };
+        const hCoords = getCoords(cell.horizBars);
+        const vCoords = getCoords(cell.vertBars);
+
+        return (
+          <g>
+            <rect x={16} y={16} width={68} height={68} rx={4} fill="rgba(15, 23, 42, 0.45)" stroke="#334155" strokeWidth={1.5} />
+            {hCoords.map((y, i) => (
+              <line key={`h-${i}`} x1={18} y1={y} x2={82} y2={y} stroke={strokeAccent} strokeWidth={3.2} strokeLinecap="round" />
+            ))}
+            {vCoords.map((x, i) => (
+              <line key={`v-${i}`} x1={x} y1={18} x2={x} y2={82} stroke={strokeMain} strokeWidth={3.2} strokeLinecap="round" />
+            ))}
+            {cell.centerNode !== 'none' && (
+              <circle
+                cx={50}
+                cy={50}
+                r={6.5}
+                fill={cell.centerNode === 'solid' ? strokeGold : '#090d16'}
+                stroke={strokeGold}
+                strokeWidth={2.4}
+              />
+            )}
+          </g>
+        );
+      })()}
+
+      {cell.kind === 'latin_perm' && (() => {
+        const fillStyle =
+          cell.fill === 'solid'
+            ? 'rgba(245, 158, 11, 0.36)'
+            : cell.fill === 'striped'
+            ? 'url(#mensa-diagonal-hatch)'
+            : 'rgba(9, 13, 22, 0.75)';
+
+        return (
+          <g>
+            {renderShapeFrame(cell.shape, 34, fillStyle, strokeMain, 2.8)}
+            {(cell.axis === 'horiz' || cell.axis === 'plus') && (
+              <line x1={18} y1={50} x2={82} y2={50} stroke={strokeGold} strokeWidth={3.2} strokeLinecap="round" />
+            )}
+            {(cell.axis === 'vert' || cell.axis === 'plus') && (
+              <line x1={50} y1={18} x2={50} y2={82} stroke={strokeGold} strokeWidth={3.2} strokeLinecap="round" />
+            )}
+          </g>
+        );
+      })()}
+
+      {cell.kind === 'line_boolean' && (() => {
+        const cMin = 20;
+        const cMax = 80;
+        const has = (s: 'T' | 'B' | 'L' | 'R' | 'D1' | 'D2' | 'VM' | 'HM') =>
+          cell.segments.includes(s);
+
+        return (
+          <g>
+            <rect
+              x={cMin}
+              y={cMin}
+              width={60}
+              height={60}
+              fill="none"
+              stroke="#1e293b"
+              strokeWidth={1}
+              strokeDasharray="2 2"
+            />
+            {has('T') && <line x1={cMin} y1={cMin} x2={cMax} y2={cMin} stroke={strokeMain} strokeWidth={3.6} strokeLinecap="round" />}
+            {has('B') && <line x1={cMin} y1={cMax} x2={cMax} y2={cMax} stroke={strokeMain} strokeWidth={3.6} strokeLinecap="round" />}
+            {has('L') && <line x1={cMin} y1={cMin} x2={cMin} y2={cMax} stroke={strokeMain} strokeWidth={3.6} strokeLinecap="round" />}
+            {has('R') && <line x1={cMax} y1={cMin} x2={cMax} y2={cMax} stroke={strokeMain} strokeWidth={3.6} strokeLinecap="round" />}
+            {has('D1') && <line x1={cMin} y1={cMin} x2={cMax} y2={cMax} stroke={strokeAccent} strokeWidth={3.2} strokeLinecap="round" />}
+            {has('D2') && <line x1={cMax} y1={cMin} x2={cMin} y2={cMax} stroke={strokeAccent} strokeWidth={3.2} strokeLinecap="round" />}
+            {has('VM') && <line x1={50} y1={cMin} x2={50} y2={cMax} stroke={strokeGold} strokeWidth={3.2} strokeLinecap="round" />}
+            {has('HM') && <line x1={cMin} y1={50} x2={cMax} y2={50} stroke={strokeGold} strokeWidth={3.2} strokeLinecap="round" />}
+            {[
+              [cMin, cMin],
+              [cMax, cMin],
+              [cMin, cMax],
+              [cMax, cMax],
+            ].map(([x, y], i) => (
+              <circle key={i} cx={x} cy={y} r={2.4} fill="#94a3b8" />
+            ))}
+          </g>
+        );
+      })()}
+
+      {cell.kind === 'grid_bitmask' && (() => {
+        const coords = [20, 42, 64];
+        const fillCol =
+          cell.mode === 'amber'
+            ? 'rgba(251, 191, 36, 0.85)'
+            : 'rgba(34, 211, 238, 0.82)';
+        const borderCol = cell.mode === 'amber' ? '#fde68a' : '#a5f3fc';
+
+        return (
+          <g>
+            <rect x={16} y={16} width={68} height={68} rx={4} fill="#090d16" stroke="#475569" strokeWidth={1.8} />
+            {Array.from({ length: 9 }).map((_, idx) => {
+              const r = Math.floor(idx / 3);
+              const c = idx % 3;
+              const active = cell.cells.includes(idx);
+              return (
+                <rect
+                  key={idx}
+                  x={coords[c]}
+                  y={coords[r]}
+                  width={16}
+                  height={16}
+                  rx={2.5}
+                  fill={active ? fillCol : 'rgba(30, 41, 59, 0.35)'}
+                  stroke={active ? borderCol : '#334155'}
+                  strokeWidth={active ? 1.5 : 1}
+                />
+              );
+            })}
+          </g>
+        );
+      })()}
+
+      {cell.kind === 'quadrant_xor' && (() => {
+        const r = 30;
+        const wedgePaths = [
+          `M 50 50 L ${50 - r} 50 A ${r} ${r} 0 0 1 50 ${50 - r} Z`,
+          `M 50 50 L 50 ${50 - r} A ${r} ${r} 0 0 1 ${50 + r} 50 Z`,
+          `M 50 50 L ${50 + r} 50 A ${r} ${r} 0 0 1 50 ${50 + r} Z`,
+          `M 50 50 L 50 ${50 + r} A ${r} ${r} 0 0 1 ${50 - r} 50 Z`,
+        ];
+        const cornerCoords: Array<[number, number]> = [
+          [16, 16],
+          [84, 16],
+          [84, 84],
+          [16, 84],
+        ];
+
+        return (
+          <g>
+            {wedgePaths.map((d, idx) => (
+              <path
+                key={idx}
+                d={d}
+                fill={cell.quadrants.includes(idx) ? 'rgba(34, 211, 238, 0.75)' : 'rgba(15, 23, 42, 0.5)'}
+                stroke={strokeMain}
+                strokeWidth={2}
+              />
+            ))}
+            {cornerCoords.map(([cx, cy], idx) =>
+              cell.corners.includes(idx) ? (
+                <circle
+                  key={idx}
+                  cx={cx}
+                  cy={cy}
+                  r={5.2}
+                  fill={strokeGold}
+                  stroke="#090d16"
+                  strokeWidth={1.2}
+                />
+              ) : (
+                <circle
+                  key={idx}
+                  cx={cx}
+                  cy={cy}
+                  r={3.5}
+                  fill="none"
+                  stroke="#334155"
+                  strokeWidth={1.2}
+                />
+              )
+            )}
+          </g>
+        );
+      })()}
+
+      {cell.kind === 'concentric_cycle' && (
+        <g>
+          {renderShapeFrame(cell.layers[0], 38, 'none', strokeMain, 2.6)}
+          {renderShapeFrame(cell.layers[1], 25, 'none', strokeAccent, 2.4)}
+          {renderShapeFrame(cell.layers[2], 13, 'none', strokeGold, 2.2)}
+          <circle
+            cx={50}
+            cy={50}
+            r={4.5}
+            fill={cell.centerSolid ? strokeGold : '#090d16'}
+            stroke={strokeMain}
+            strokeWidth={1.8}
+          />
+        </g>
+      )}
+
+      {cell.kind === 'mirror_rotate' && (() => {
+        const transform = `translate(50, 50) rotate(${cell.rotDeg}) scale(${cell.flipX ? -1 : 1}, 1) translate(-50, -50)`;
+        return (
+          <g transform={transform}>
+            <path
+              d="M 32 22 L 32 76 L 70 76"
+              fill="none"
+              stroke={strokeMain}
+              strokeWidth={4}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <polygon
+              points="32,22 64,34 32,46"
+              fill="rgba(34, 211, 238, 0.65)"
+              stroke={strokeAccent}
+              strokeWidth={2.2}
+              strokeLinejoin="round"
+            />
+            <circle
+              cx={68}
+              cy={cell.dotPos === 'top' ? 24 : 62}
+              r={5.2}
+              fill={strokeGold}
+              stroke="#090d16"
+              strokeWidth={1.4}
+            />
+          </g>
+        );
+      })()}
+
+      {cell.kind === 'orbital_phase' && (() => {
+        const rOuter = 38;
+        const rInner = 24;
+        const oRad = ((cell.outerDeg - 90) * Math.PI) / 180;
+        const iRad = ((cell.innerDeg - 90) * Math.PI) / 180;
+        const ox = 50 + rOuter * Math.cos(oRad);
+        const oy = 50 + rOuter * Math.sin(oRad);
+        const ix = 50 + rInner * Math.cos(iRad);
+        const iy = 50 + rInner * Math.sin(iRad);
+
+        return (
+          <g>
+            <circle cx={50} cy={50} r={rOuter} fill="none" stroke="#334155" strokeWidth={1.5} strokeDasharray="3 3" />
+            <circle cx={50} cy={50} r={rInner} fill="none" stroke="#475569" strokeWidth={1.5} />
+            <polygon
+              points={getPolygonPoints(50, 50, 12, cell.coreSides, -90)}
+              fill="rgba(15, 23, 42, 0.9)"
+              stroke={strokeMain}
+              strokeWidth={2.4}
+              strokeLinejoin="round"
+            />
+            {/* Outer Cyan Satellite */}
+            <circle cx={ox} cy={oy} r={5.5} fill={strokeAccent} stroke="#090d16" strokeWidth={1.5} />
+            {/* Inner Gold Diamond Satellite */}
+            <polygon
+              points={`${ix},${iy - 5.5} ${ix + 5.5},${iy} ${ix},${iy + 5.5} ${ix - 5.5},${iy}`}
+              fill={strokeGold}
+              stroke="#090d16"
+              strokeWidth={1.2}
+            />
+          </g>
+        );
+      })()}
+
+      {cell.kind === 'vector_balance' && (() => {
+        const renderSpikes = (count: number, dir: 'E' | 'W' | 'N' | 'S') => {
+          const items: React.ReactNode[] = [];
+          const abs = Math.abs(count);
+          for (let i = 0; i < abs; i++) {
+            const offset = abs === 2 ? (i === 0 ? -6.5 : 6.5) : 0;
+            if (dir === 'E') {
+              items.push(
+                <g key={`E-${i}`}>
+                  <line x1={62} y1={50 + offset} x2={86} y2={50 + offset} stroke={strokeAccent} strokeWidth={3} strokeLinecap="round" />
+                  <circle cx={86} cy={50 + offset} r={3.2} fill={strokeAccent} />
+                </g>
+              );
+            } else if (dir === 'W') {
+              items.push(
+                <g key={`W-${i}`}>
+                  <line x1={38} y1={50 + offset} x2={14} y2={50 + offset} stroke={strokeAccent} strokeWidth={3} strokeLinecap="round" />
+                  <circle cx={14} cy={50 + offset} r={3.2} fill={strokeAccent} />
+                </g>
+              );
+            } else if (dir === 'N') {
+              items.push(
+                <g key={`N-${i}`}>
+                  <line x1={50 + offset} y1={38} x2={50 + offset} y2={14} stroke={strokeGold} strokeWidth={3} strokeLinecap="round" />
+                  <circle cx={50 + offset} cy={14} r={3.2} fill={strokeGold} />
+                </g>
+              );
+            } else {
+              items.push(
+                <g key={`S-${i}`}>
+                  <line x1={50 + offset} y1={62} x2={50 + offset} y2={86} stroke={strokeGold} strokeWidth={3} strokeLinecap="round" />
+                  <circle cx={50 + offset} cy={86} r={3.2} fill={strokeGold} />
+                </g>
+              );
+            }
+          }
+          return items;
+        };
+
+        return (
+          <g>
+            {cell.dx > 0 && renderSpikes(cell.dx, 'E')}
+            {cell.dx < 0 && renderSpikes(cell.dx, 'W')}
+            {cell.dy > 0 && renderSpikes(cell.dy, 'N')}
+            {cell.dy < 0 && renderSpikes(cell.dy, 'S')}
+            {cell.coreShape === 'square' ? (
+              <rect
+                x={38}
+                y={38}
+                width={24}
+                height={24}
+                rx={3}
+                fill="rgba(15, 23, 42, 0.9)"
+                stroke={strokeMain}
+                strokeWidth={2.8}
+              />
+            ) : (
+              <circle
+                cx={50}
+                cy={50}
+                r={12.5}
+                fill="rgba(15, 23, 42, 0.9)"
+                stroke={strokeMain}
+                strokeWidth={2.8}
+              />
+            )}
+          </g>
+        );
+      })()}
+
+      {cell.kind === 'subgrid_automaton' && (() => {
+        const centers = [25, 50, 75];
+        const getXY = (idx: number): [number, number] => [
+          centers[idx % 3],
+          centers[Math.floor(idx / 3)],
+        ];
+        const [dotX, dotY] = getXY(cell.dotIdx);
+        const [diaX, diaY] = getXY(cell.diamondIdx);
+        const [crsX, crsY] = getXY(cell.crossIdx);
+
+        return (
+          <g>
+            <rect x={13} y={13} width={74} height={74} rx={4} fill="rgba(9, 13, 22, 0.75)" stroke="#475569" strokeWidth={1.8} />
+            <line x1={37.6} y1={13} x2={37.6} y2={87} stroke="#334155" strokeWidth={1.4} />
+            <line x1={62.3} y1={13} x2={62.3} y2={87} stroke="#334155" strokeWidth={1.4} />
+            <line x1={13} y1={37.6} x2={87} y2={37.6} stroke="#334155" strokeWidth={1.4} />
+            <line x1={13} y1={62.3} x2={87} y2={62.3} stroke="#334155" strokeWidth={1.4} />
+
+            <circle cx={dotX} cy={dotY} r={7.2} fill={strokeAccent} stroke="#090d16" strokeWidth={1.4} />
+
+            <polygon
+              points={`${diaX},${diaY - 8.5} ${diaX + 8.5},${diaY} ${diaX},${diaY + 8.5} ${diaX - 8.5},${diaY}`}
+              fill="none"
+              stroke={strokeGold}
+              strokeWidth={2.6}
+            />
+
+            <g stroke={strokeMain} strokeWidth={2.6} strokeLinecap="round">
+              <line x1={crsX - 6} y1={crsY - 6} x2={crsX + 6} y2={crsY + 6} />
+              <line x1={crsX + 6} y1={crsY - 6} x2={crsX - 6} y2={crsY + 6} />
+            </g>
+          </g>
+        );
+      })()}
+
+      {cell.kind === 'vertex_dot_conservation' && (
+        <g>
+          {cell.invertedRing && (
+            <circle
+              cx={50}
+              cy={50}
+              r={42}
+              fill="none"
+              stroke={strokeGold}
+              strokeWidth={1.6}
+              strokeDasharray="4 3"
+            />
+          )}
+          <polygon
+            points={getPolygonPoints(50, 50, 34, cell.sides, -90)}
+            fill="rgba(15, 23, 42, 0.72)"
+            stroke={strokeMain}
+            strokeWidth={2.8}
+            strokeLinejoin="round"
+          />
+          {renderDots(cell.dots, 12.5)}
+        </g>
+      )}
+
+      {cell.kind === 'phase_aperture' && (() => {
+        const rad1 = ((cell.baseAngleDeg - 90) * Math.PI) / 180;
+        const rad2 = ((cell.baseAngleDeg + cell.spreadAngleDeg - 90) * Math.PI) / 180;
+        const rHand = 26;
+        const x1 = 50 + rHand * Math.cos(rad1);
+        const y1 = 50 + rHand * Math.sin(rad1);
+        const x2 = 50 + rHand * Math.cos(rad2);
+        const y2 = 50 + rHand * Math.sin(rad2);
+        const rArc = 14;
+        const ax1 = 50 + rArc * Math.cos(rad1);
+        const ay1 = 50 + rArc * Math.sin(rad1);
+        const ax2 = 50 + rArc * Math.cos(rad2);
+        const ay2 = 50 + rArc * Math.sin(rad2);
+
+        const cornerMap: Record<'TL' | 'TR' | 'BR' | 'BL', [number, number]> = {
+          TL: [14, 14],
+          TR: [86, 14],
+          BR: [86, 86],
+          BL: [14, 86],
+        };
+
+        return (
+          <g>
+            {renderShapeFrame(cell.outerShape, 36, 'rgba(9, 13, 22, 0.7)', strokeMain, 2.6)}
+            <path
+              d={`M 50 50 L ${ax1.toFixed(1)} ${ay1.toFixed(1)} A ${rArc} ${rArc} 0 0 1 ${ax2.toFixed(1)} ${ay2.toFixed(1)} Z`}
+              fill="rgba(251, 191, 36, 0.35)"
+              stroke={strokeGold}
+              strokeWidth={1.6}
+            />
+            <line x1={50} y1={50} x2={x1} y2={y1} stroke={strokeAccent} strokeWidth={3} strokeLinecap="round" />
+            <line x1={50} y1={50} x2={x2} y2={y2} stroke={strokeGold} strokeWidth={3} strokeLinecap="round" />
+            <circle cx={50} cy={50} r={3.8} fill={strokeMain} />
+            {cell.cornerArcs.map((cornerKey) => {
+              const [cx, cy] = cornerMap[cornerKey];
+              return (
+                <rect
+                  key={cornerKey}
+                  x={cx - 4.5}
+                  y={cy - 4.5}
+                  width={9}
+                  height={9}
+                  rx={2}
+                  fill={strokeAccent}
+                  stroke="#090d16"
+                  strokeWidth={1.2}
+                />
+              );
+            })}
+          </g>
+        );
+      })()}
+    </svg>
+  );
+};
+
+/**
+ * Renders a normative Wechsler / Mensa Gaussian Bell Curve (Mean = 100, SD = 15)
+ * with an optional score marker pin.
+ */
+const NormativeBellCurveSvg: React.FC<{ userIq?: number }> = ({ userIq }) => {
+  // IQ range 55 to 160 mapped to x in [20, 380]
+  const iqToX = (iq: number) => 20 + ((Math.max(55, Math.min(160, iq)) - 55) / 105) * 360;
+  const iqToY = (iq: number) => {
+    const z = (iq - 100) / 15;
+    return 88 - 70 * Math.exp(-0.5 * z * z);
+  };
+
+  const pts: string[] = [];
+  for (let iq = 55; iq <= 160; iq += 1.5) {
+    pts.push(`${iqToX(iq).toFixed(1)},${iqToY(iq).toFixed(1)}`);
+  }
+  const areaPath = `M 20,88 L ${pts.join(' L ')} L 380,88 Z`;
+  const curvePath = `M ${pts.join(' L ')}`;
+
+  // Mensa 130+ shaded tail
+  const mensaPts: string[] = [];
+  for (let iq = 130; iq <= 160; iq += 1.5) {
+    mensaPts.push(`${iqToX(iq).toFixed(1)},${iqToY(iq).toFixed(1)}`);
+  }
+  const mensaAreaPath = `M ${iqToX(130).toFixed(1)},88 L ${mensaPts.join(' L ')} L 380,88 Z`;
+
+  return (
+    <svg viewBox="0 0 400 110" className="w-full h-24 select-none">
+      <defs>
+        <linearGradient id="bell-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.32" />
+          <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.02" />
+        </linearGradient>
+        <linearGradient id="mensa-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#fbbf24" stopOpacity="0.08" />
+        </linearGradient>
+      </defs>
+
+      <path d={areaPath} fill="url(#bell-grad)" />
+      <path d={mensaAreaPath} fill="url(#mensa-grad)" />
+      <path d={curvePath} fill="none" stroke="#22d3ee" strokeWidth="2" />
+
+      {/* Baseline */}
+      <line x1="15" y1="88" x2="385" y2="88" stroke="#334155" strokeWidth="1.2" />
+
+      {/* Standard Deviation Ticks */}
+      {[70, 85, 100, 115, 130, 145, 160].map((iqTick) => {
+        const x = iqToX(iqTick);
+        const y = iqToY(iqTick);
+        const isMensa = iqTick === 130;
+        return (
+          <g key={iqTick}>
+            <line
+              x1={x}
+              y1={y}
+              x2={x}
+              y2={88}
+              stroke={isMensa ? '#fbbf24' : '#475569'}
+              strokeWidth={isMensa ? 1.5 : 1}
+              strokeDasharray={isMensa ? '2 2' : '2 3'}
+            />
+            <text
+              x={x}
+              y={101}
+              textAnchor="middle"
+              fill={isMensa ? '#fbbf24' : '#94a3b8'}
+              fontSize="8.5"
+              fontFamily="JetBrains Mono, monospace"
+              fontWeight={isMensa || iqTick === 100 ? 'bold' : 'normal'}
+            >
+              {iqTick}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Mensa 98th Percentile Label */}
+      <text
+        x={iqToX(138)}
+        y={42}
+        fill="#fbbf24"
+        fontSize="8"
+        fontFamily="JetBrains Mono, monospace"
+        fontWeight="bold"
+      >
+        Mensa ≥130 (Top 2%)
+      </text>
+
+      {/* Active User Score Marker */}
+      {typeof userIq === 'number' && (
+        <g>
+          <line
+            x1={iqToX(userIq)}
+            y1={12}
+            x2={iqToX(userIq)}
+            y2={88}
+            stroke="#10b981"
+            strokeWidth="2.2"
+          />
+          <circle
+            cx={iqToX(userIq)}
+            cy={iqToY(userIq)}
+            r="4.5"
+            fill="#10b981"
+            stroke="#05070d"
+            strokeWidth="1.5"
+          />
+          <rect
+            x={Math.min(340, Math.max(18, iqToX(userIq) - 26))}
+            y={3}
+            width={52}
+            height={14}
+            rx={3}
+            fill="#064e3b"
+            stroke="#10b981"
+            strokeWidth="1"
+          />
+          <text
+            x={Math.min(366, Math.max(44, iqToX(userIq)))}
+            y={12.5}
+            textAnchor="middle"
+            fill="#ecfdf5"
+            fontSize="8.5"
+            fontFamily="JetBrains Mono, monospace"
+            fontWeight="bold"
+          >
+            IQ {userIq}
+          </text>
+        </g>
+      )}
+    </svg>
+  );
+};
 
 export interface IQTestModuleProps {
   uiTheme?: UiThemeId;
@@ -206,25 +1660,17 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
   onHapticSuccess,
 }) => {
   const [isTestStarted, setIsTestStarted] = useState<boolean>(false);
-  const [sessionCount, setSessionCount] = useState<number>(0);
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState<number>(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>({});
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
-  const [activeModuleFilter, setActiveModuleFilter] = useState<
-    'ALL' | 'MOD-01' | 'MOD-02' | 'MOD-03' | 'MOD-04'
-  >('ALL');
-
-  const filteredQuestions =
-    activeModuleFilter === 'ALL'
-      ? RELATIVITY_IQ_QUESTIONS
-      : RELATIVITY_IQ_QUESTIONS.filter((q) => q.moduleCode === activeModuleFilter);
 
   const safeQuestionIdx = Math.min(
     currentQuestionIdx,
-    Math.max(0, filteredQuestions.length - 1)
+    Math.max(0, RELATIVITY_IQ_QUESTIONS.length - 1)
   );
-  const currentQuestion = filteredQuestions[safeQuestionIdx] || RELATIVITY_IQ_QUESTIONS[0];
+  const currentQuestion = RELATIVITY_IQ_QUESTIONS[safeQuestionIdx] || RELATIVITY_IQ_QUESTIONS[0];
 
   useEffect(() => {
     if (!isTestStarted || isCompleted) return;
@@ -234,7 +1680,6 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
     return () => window.clearInterval(timer);
   }, [isTestStarted, isCompleted]);
 
-  // Calculate score & estimated Relativistic IQ
   const totalPossiblePoints = RELATIVITY_IQ_QUESTIONS.reduce((sum, q) => sum + q.points, 0);
   const earnedPoints = RELATIVITY_IQ_QUESTIONS.reduce((sum, q) => {
     const chosen = selectedAnswers[q.id];
@@ -245,36 +1690,43 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
     (q) => selectedAnswers[q.id] === q.correctIndex
   ).length;
 
-  // Calibrated IQ scale: 85 base + up to 80 points from weighted accuracy & speed bonus
   const accuracyRatio = totalPossiblePoints > 0 ? earnedPoints / totalPossiblePoints : 0;
   const speedBonus =
-    answeredCount >= RELATIVITY_IQ_QUESTIONS.length && elapsedSeconds < 120
-      ? Math.round(Math.max(0, (120 - elapsedSeconds) / 15) * accuracyRatio)
+    answeredCount >= RELATIVITY_IQ_QUESTIONS.length && elapsedSeconds < 360
+      ? Math.round(Math.max(0, (360 - elapsedSeconds) / 45) * accuracyRatio)
       : 0;
   const estimatedIq =
-    answeredCount === 0 ? 100 : Math.min(168, Math.round(88 + accuracyRatio * 74 + speedBonus));
+    answeredCount === 0
+      ? 100
+      : Math.min(162, Math.round(84 + accuracyRatio * 72 + speedBonus));
 
-  const getCognitiveClassification = (iq: number): { title: string; badgeColor: string } => {
-    if (iq >= 152) {
+  const getCognitiveClassification = (
+    iq: number
+  ): { title: string; percentile: string; badgeColor: string } => {
+    if (iq >= 145) {
       return {
-        title: 'Kerr-Penrose Singularity Fellow (Top 0.1%)',
+        title: '99.9th Percentile',
+        percentile: 'Top 0.1%',
         badgeColor: 'text-amber-300 border-amber-400/60 bg-amber-500/20',
       };
     }
-    if (iq >= 135) {
+    if (iq >= 130) {
       return {
-        title: 'Relativistic Tensor Architect (Top 1%)',
+        title: 'Mensa Level',
+        percentile: 'Top 2%',
         badgeColor: 'text-cyan-300 border-cyan-400/60 bg-cyan-500/20',
       };
     }
-    if (iq >= 118) {
+    if (iq >= 115) {
       return {
-        title: 'Astrophysical Geodesic Analyst',
+        title: 'High Fluid IQ',
+        percentile: 'Top 16%',
         badgeColor: 'text-emerald-300 border-emerald-400/60 bg-emerald-500/20',
       };
     }
     return {
-      title: 'Orbital Cadet Observer',
+      title: 'Standard Range',
+      percentile: 'SD 15',
       badgeColor: 'text-neutral-300 border-neutral-600 bg-neutral-800',
     };
   };
@@ -284,9 +1736,9 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
     setIsTestStarted(true);
     setIsCompleted(false);
     setSelectedAnswers({});
+    setFlaggedQuestions({});
     setCurrentQuestionIdx(0);
     setElapsedSeconds(0);
-    setSessionCount((c) => c + 1);
   };
 
   const handleResetTest = () => {
@@ -294,26 +1746,31 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
     setIsTestStarted(false);
     setIsCompleted(false);
     setSelectedAnswers({});
+    setFlaggedQuestions({});
     setCurrentQuestionIdx(0);
     setElapsedSeconds(0);
   };
 
   const handleSelectOption = (optionIdx: number) => {
-    if (!isTestStarted) {
-      setIsTestStarted(true);
-      setSessionCount((c) => (c === 0 ? 1 : c));
-    }
+    if (!isTestStarted) return;
     const isCorrect = optionIdx === currentQuestion.correctIndex;
     if (isCorrect) {
       onHapticSuccess?.();
     } else {
       onHapticLight?.();
     }
-    const nextAnswers = {
-      ...selectedAnswers,
+    setSelectedAnswers((prev) => ({
+      ...prev,
       [currentQuestion.id]: optionIdx,
-    };
-    setSelectedAnswers(nextAnswers);
+    }));
+  };
+
+  const handleToggleFlag = (questionId: string) => {
+    onHapticLight?.();
+    setFlaggedQuestions((prev) => ({
+      ...prev,
+      [questionId]: !prev[questionId],
+    }));
   };
 
   const isObsidian = uiTheme === 'kerr_claude';
@@ -321,164 +1778,141 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
   const currentSelectedOption = selectedAnswers[currentQuestion.id];
   const hasAnsweredCurrent = typeof currentSelectedOption === 'number';
   const classification = getCognitiveClassification(estimatedIq);
+  const formattedTime = `${Math.floor(elapsedSeconds / 60)}:${(elapsedSeconds % 60)
+    .toString()
+    .padStart(2, '0')}`;
 
   return (
     <div
       data-testid="settings-tab-panel-iq-test"
-      className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs"
+      className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto space-y-3 text-xs"
     >
-      {/* Top Control Header Card with 'Start Test' Button & Live IQ Telemetry */}
+      {/* Clean Compact Header */}
       <div
-        className={`p-4 rounded-xl border space-y-3 transition-colors ${
+        className={`px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-3 flex-wrap transition-colors ${
           isObsidian
-            ? 'bg-gradient-to-br from-[#16110e] via-[#0d0a09] to-black border-[#D97757]/50 shadow-[0_0_24px_rgba(217,119,87,0.1)]'
+            ? 'bg-[#120e0c] border-[#D97757]/40'
             : isPlanck
-            ? 'bg-gradient-to-br from-[#07110d] via-[#040605] to-black border-emerald-500/45 shadow-[0_0_24px_rgba(16,185,129,0.1)]'
-            : 'bg-gradient-to-br from-[#0e0e11] via-[#050506] to-black border-zinc-500/40 shadow-[0_0_24px_rgba(244,244,245,0.08)]'
+            ? 'bg-[#060f0b] border-emerald-500/40'
+            : 'bg-neutral-950 border-neutral-800'
         }`}
       >
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Brain className="w-4 h-4 text-cyan-400 shrink-0" />
-              <span className="font-display text-xs sm:text-sm font-bold uppercase tracking-wider text-white">
-                General Relativity &amp; Astrophysics IQ Assessment
-              </span>
-              <span
-                className={`px-2 py-0.5 rounded text-[9.5px] font-mono font-bold border ${
-                  isTestStarted
-                    ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-300'
-                    : 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
-                }`}
-              >
-                {isTestStarted
-                  ? isCompleted
-                    ? `COMPLETED · IQ ${estimatedIq}`
-                    : `SESSION #${sessionCount} ACTIVE`
-                  : 'READY · 8 QUESTIONS'}
-              </span>
-            </div>
-            <p className="text-[11px] text-neutral-400 leading-relaxed max-w-md">
-              Evaluates quantitative reasoning across Kerr metric geodesics, relativistic Doppler radiative transfer, gravitational time dilation, and black hole thermodynamics.
-            </p>
-          </div>
+        <div className="flex items-center gap-2.5">
+          <Brain className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span className="font-display text-xs sm:text-sm font-bold uppercase tracking-wider text-white">
+            Mensa &amp; Raven’s Matrices
+          </span>
+          <span
+            data-testid="iq-test-score-readout"
+            className="px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 font-mono text-[10px] text-cyan-300"
+          >
+            {isCompleted ? `IQ ${estimatedIq}` : `${RELATIVITY_IQ_QUESTIONS.length} Matrices`}
+          </span>
+        </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {(isTestStarted || answeredCount > 0) && (
+        <div className="flex items-center gap-2">
+          {isTestStarted && (
+            <>
+              <span className="px-2 py-1 rounded-lg bg-neutral-900 border border-neutral-800 font-mono text-[10px] text-neutral-300">
+                {answeredCount}/{RELATIVITY_IQ_QUESTIONS.length}
+              </span>
+              <span className="px-2 py-1 rounded-lg bg-neutral-900 border border-neutral-800 font-mono text-[10px] text-amber-300 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {formattedTime}
+              </span>
               <button
                 type="button"
                 data-testid="iq-test-reset-btn"
                 onClick={handleResetTest}
-                className="flex items-center gap-1 px-2.5 py-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 font-mono text-xs cursor-pointer transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 font-mono text-[11px] cursor-pointer transition-colors"
               >
                 <RotateCcw className="w-3 h-3" />
                 <span>Reset</span>
               </button>
-            )}
+            </>
+          )}
 
-            <button
-              type="button"
-              data-testid="iq-test-start-btn"
-              onClick={handleStartTest}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-cyan-500/25 hover:bg-cyan-500/35 border border-cyan-400 text-cyan-100 font-mono text-xs font-bold shadow-[0_0_16px_rgba(6,182,212,0.25)] transition-all cursor-pointer"
-            >
-              <Play className="w-3.5 h-3.5 fill-current text-cyan-300" />
-              <span>Start Test</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Live Telemetry Strip: Answered Progress, Score, Timer & Estimated Relativistic IQ */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-neutral-800/80 font-mono text-[10px]">
-          <div className="p-2 rounded-lg bg-neutral-950/90 border border-neutral-800">
-            <span className="text-neutral-400 block text-[9px]">PROGRESS</span>
-            <strong className="text-white text-xs">
-              {answeredCount} / {RELATIVITY_IQ_QUESTIONS.length} Answered
-            </strong>
-          </div>
-          <div className="p-2 rounded-lg bg-neutral-950/90 border border-neutral-800">
-            <span className="text-neutral-400 block text-[9px]">ACCURACY</span>
-            <strong className="text-emerald-300 text-xs">
-              {correctCount} Correct ({earnedPoints}/{totalPossiblePoints} pts)
-            </strong>
-          </div>
-          <div className="p-2 rounded-lg bg-neutral-950/90 border border-neutral-800">
-            <span className="text-neutral-400 block text-[9px]">ELAPSED TIME</span>
-            <strong className="text-amber-300 text-xs flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {Math.floor(elapsedSeconds / 60)}:
-              {(elapsedSeconds % 60).toString().padStart(2, '0')}
-            </strong>
-          </div>
-          <div className="p-2 rounded-lg bg-neutral-950/90 border border-neutral-800">
-            <span className="text-neutral-400 block text-[9px]">RELATIVISTIC IQ</span>
-            <strong data-testid="iq-test-score-readout" className="text-cyan-300 text-xs">
-              {answeredCount > 0 ? `${estimatedIq} IQ` : '100 (Baseline)'}
-            </strong>
-          </div>
+          <button
+            type="button"
+            data-testid="iq-test-start-btn"
+            onClick={handleStartTest}
+            className="flex items-center gap-1.5 px-3.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400 text-cyan-100 font-mono text-[11px] font-bold transition-all cursor-pointer"
+          >
+            <Play className="w-3 h-3 fill-current text-cyan-300" />
+            <span>{isTestStarted ? 'Restart' : 'Begin Test'}</span>
+          </button>
         </div>
       </div>
 
-      {/* Logic Modules & Interactive Assessment Container */}
+      {/* Main Container */}
       <div
         data-testid="iq-test-logic-modules-container"
         role="region"
-        aria-label="Relativistic Logic Modules and Assessment Container"
-        className="p-4 rounded-xl bg-neutral-950/95 border border-cyan-500/40 space-y-3.5"
+        aria-label="Mensa and Raven's Progressive Matrices Assessment Container"
+        className="p-4 rounded-xl bg-neutral-950/95 border border-neutral-800"
       >
-        {/* Module Domain Filter Bar */}
-        <div className="flex items-center justify-between gap-2 border-b border-neutral-800/90 pb-2.5 flex-wrap">
-          <div className="flex items-center gap-2 text-cyan-300 font-mono text-[11px] uppercase tracking-wider font-semibold">
-            <Layers className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Astrophysics &amp; General Relativity Logic Modules</span>
-          </div>
+        {!isTestStarted ? (
+          /* Minimal Pre-Test Screen — Questions Hidden Until User Begins */
+          <div
+            data-testid="iq-pretest-briefing"
+            className="py-6 px-3 flex flex-col items-center text-center max-w-md mx-auto space-y-5"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
+              <Grid className="w-5 h-5 text-cyan-400" />
+            </div>
 
-          <div className="flex items-center gap-1 flex-wrap font-mono text-[9.5px]">
-            {(
-              [
-                { id: 'ALL', label: `All (${RELATIVITY_IQ_QUESTIONS.length})` },
-                { id: 'MOD-01', label: 'MOD-01 · Geodesics' },
-                { id: 'MOD-02', label: 'MOD-02 · Tensors' },
-                { id: 'MOD-03', label: 'MOD-03 · Chrono' },
-                { id: 'MOD-04', label: 'MOD-04 · Horizon' },
-              ] as const
-            ).map((modTab) => (
-              <button
-                key={modTab.id}
-                type="button"
-                data-testid={`iq-module-filter-${modTab.id}`}
-                onClick={() => {
-                  onHapticLight?.();
-                  setActiveModuleFilter(modTab.id);
-                  setCurrentQuestionIdx(0);
-                }}
-                className={`px-2 py-0.5 rounded border transition-colors cursor-pointer ${
-                  activeModuleFilter === modTab.id
-                    ? 'bg-cyan-500/25 border-cyan-400 text-cyan-100 font-bold'
-                    : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
-                }`}
-              >
-                {modTab.label}
-              </button>
-            ))}
-          </div>
-        </div>
+            <div className="space-y-1.5">
+              <h3 className="font-display text-sm sm:text-base font-bold text-white uppercase tracking-wider">
+                Non-Verbal Matrix IQ Test
+              </h3>
+              <p className="text-xs text-neutral-400">
+                16 progressive 3×3 visual matrices. Questions unlock when you begin.
+              </p>
+            </div>
 
-        {/* Final Diagnostic Results Summary Banner (when all questions answered or View Results clicked) */}
-        {isCompleted ? (
+            <div className="flex items-center justify-center gap-2 flex-wrap font-mono text-[10px]">
+              <span className="px-2.5 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-neutral-300">
+                16 Items
+              </span>
+              <span className="px-2.5 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-neutral-300">
+                3×3 Matrices
+              </span>
+              <span className="px-2.5 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-cyan-300">
+                SD 15 Scale
+              </span>
+            </div>
+
+            <div className="w-full p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800/80">
+              <NormativeBellCurveSvg />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleStartTest}
+              className="w-full py-2.5 px-5 rounded-xl bg-cyan-500/25 hover:bg-cyan-500/35 border border-cyan-400 text-white font-mono text-xs font-bold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.2)] cursor-pointer transition-all"
+            >
+              <Play className="w-3.5 h-3.5 fill-current text-cyan-300" />
+              <span>Begin IQ Test</span>
+            </button>
+          </div>
+        ) : isCompleted ? (
+          /* Minimal Results Screen */
           <div
             data-testid="iq-test-results-summary"
-            className="p-4 rounded-xl bg-gradient-to-br from-[#071926] via-neutral-950 to-neutral-950 border border-cyan-400/60 space-y-3 shadow-[0_0_24px_rgba(6,182,212,0.18)]"
+            className="p-4 rounded-xl bg-neutral-900/60 border border-cyan-500/40 space-y-4 max-w-xl mx-auto"
           >
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Award className="w-5 h-5 text-amber-400" />
+              <div className="flex items-center gap-2.5">
+                <Award className="w-6 h-6 text-amber-400 shrink-0" />
                 <div>
-                  <div className="text-xs font-mono uppercase tracking-wider text-cyan-300 font-bold">
-                    Assessment Complete · Cognitive Telemetry Profile
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">
+                    Estimated Fluid IQ
                   </div>
-                  <div className="text-sm sm:text-base font-display font-bold text-white">
-                    Estimated Relativistic IQ: <span className="text-amber-300">{estimatedIq}</span>
+                  <div className="text-xl font-display font-bold text-white">
+                    {estimatedIq}{' '}
+                    <span className="text-xs font-mono text-cyan-300 font-normal">
+                      ({classification.percentile})
+                    </span>
                   </div>
                 </div>
               </div>
@@ -489,20 +1923,30 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
               </span>
             </div>
 
-            <p className="text-[11px] text-neutral-300 leading-relaxed">
-              You answered <strong className="text-emerald-300">{correctCount}</strong> of{' '}
-              <strong>{RELATIVITY_IQ_QUESTIONS.length}</strong> relativistic physics questions correctly (
-              <strong className="text-amber-300">
-                {Math.round((earnedPoints / totalPossiblePoints) * 100)}%
-              </strong>{' '}
-              weighted score) in{' '}
-              <span className="font-mono text-cyan-300">
-                {Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60}s
-              </span>
-              .
-            </p>
+            <div className="grid grid-cols-3 gap-2 font-mono text-[11px] text-center">
+              <div className="p-2.5 rounded-lg bg-neutral-950 border border-neutral-800">
+                <span className="text-[9px] text-neutral-500 block">CORRECT</span>
+                <strong className="text-emerald-300">
+                  {correctCount} / {RELATIVITY_IQ_QUESTIONS.length}
+                </strong>
+              </div>
+              <div className="p-2.5 rounded-lg bg-neutral-950 border border-neutral-800">
+                <span className="text-[9px] text-neutral-500 block">SCORE</span>
+                <strong className="text-amber-300">
+                  {Math.round((earnedPoints / totalPossiblePoints) * 100)}%
+                </strong>
+              </div>
+              <div className="p-2.5 rounded-lg bg-neutral-950 border border-neutral-800">
+                <span className="text-[9px] text-neutral-500 block">TIME</span>
+                <strong className="text-cyan-300">{formattedTime}</strong>
+              </div>
+            </div>
 
-            <div className="flex items-center justify-between gap-2 pt-2 border-t border-neutral-800">
+            <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800">
+              <NormativeBellCurveSvg userIq={estimatedIq} />
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => {
@@ -511,129 +1955,145 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                 }}
                 className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-200 font-mono text-xs cursor-pointer"
               >
-                Review Questions
+                Review Matrices
               </button>
 
               <button
                 type="button"
                 onClick={handleStartTest}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-cyan-500/25 hover:bg-cyan-500/35 border border-cyan-400 text-cyan-100 font-mono text-xs font-bold cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-cyan-500/25 hover:bg-cyan-500/35 border border-cyan-400 text-cyan-100 font-mono text-xs font-bold cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Retake Assessment</span>
+                <span>Retake</span>
               </button>
             </div>
           </div>
         ) : (
-          /* Active Question Stage */
+          /* Clean Active 3x3 Matrix View */
           <div
             data-testid="iq-test-active-question-card"
-            className="p-4 rounded-xl bg-neutral-900/75 border border-neutral-800 space-y-3"
+            className="space-y-3"
           >
-            {/* Question Header: Index, Module Badge, Difficulty & Formula Hint */}
-            <div className="flex items-center justify-between gap-2 flex-wrap font-mono text-[10px]">
-              <div className="flex items-center gap-1.5">
+            {/* Minimal Question Bar */}
+            <div className="flex items-center justify-between gap-2 font-mono text-[11px]">
+              <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 font-bold">
-                  Question {safeQuestionIdx + 1} of {filteredQuestions.length}
+                  {safeQuestionIdx + 1} / {RELATIVITY_IQ_QUESTIONS.length}
                 </span>
-                <span className="px-2 py-0.5 rounded bg-neutral-950 border border-neutral-800 text-amber-300">
-                  {currentQuestion.moduleCode} · {currentQuestion.domain}
+                <span className="text-neutral-400 text-[10px]">
+                  {currentQuestion.batteryOrigin}
                 </span>
               </div>
-              <span className="px-2 py-0.5 rounded bg-neutral-950 border border-neutral-800 text-emerald-300 font-semibold">
-                {currentQuestion.difficulty} · {currentQuestion.points} pts
-              </span>
-            </div>
 
-            {/* Question Text */}
-            <div
-              data-testid="iq-question-prompt"
-              className="text-xs sm:text-sm font-bold text-white leading-snug"
-            >
-              {currentQuestion.question}
-            </div>
-
-            {/* Relativistic Formula Reference Strip */}
-            <div className="px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800/90 font-mono text-[10.5px] text-cyan-300 flex items-center gap-2">
-              <HelpCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span className="truncate">{currentQuestion.formulaHint}</span>
-            </div>
-
-            {/* Multiple Choice Options */}
-            <div
-              className="space-y-2 pt-1"
-              role="radiogroup"
-              aria-label={currentQuestion.question}
-            >
-              {currentQuestion.options.map((optionText, idx) => {
-                const isSelected = currentSelectedOption === idx;
-                const isCorrectOption = idx === currentQuestion.correctIndex;
-
-                let optionStyle =
-                  'bg-neutral-950/90 border-neutral-800 text-neutral-200 hover:border-neutral-700 hover:text-white';
-                if (hasAnsweredCurrent) {
-                  if (isCorrectOption) {
-                    optionStyle =
-                      'bg-emerald-500/20 border-emerald-400 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.2)]';
-                  } else if (isSelected && !isCorrectOption) {
-                    optionStyle =
-                      'bg-rose-500/20 border-rose-400 text-rose-100';
-                  } else {
-                    optionStyle = 'bg-neutral-950/50 border-neutral-800/60 text-neutral-500';
-                  }
-                }
-
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    data-testid={`iq-option-${idx}`}
-                    onClick={() => handleSelectOption(idx)}
-                    className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer flex items-start justify-between gap-3 ${optionStyle}`}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <span className="w-5 h-5 rounded-md bg-neutral-900 border border-neutral-700 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 text-amber-300">
-                        {String.fromCharCode(65 + idx)}
-                      </span>
-                      <span className="text-xs leading-relaxed">{optionText}</span>
-                    </div>
-
-                    {hasAnsweredCurrent && isCorrectOption && (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    )}
-                    {hasAnsweredCurrent && isSelected && !isCorrectOption && (
-                      <XCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Relativistic Physics Explanation Box (Revealed upon selecting an option) */}
-            {hasAnsweredCurrent && (
               <div
-                data-testid="iq-answer-explanation"
-                className={`p-3 rounded-xl border text-[11px] leading-relaxed ${
-                  currentSelectedOption === currentQuestion.correctIndex
-                    ? 'bg-emerald-950/35 border-emerald-500/40 text-emerald-100'
-                    : 'bg-amber-950/35 border-amber-500/40 text-amber-100'
+                data-testid="iq-question-prompt"
+                className="text-[11px] font-mono text-neutral-300"
+              >
+                Complete cell (3,3)
+                <span className="sr-only"> — {currentQuestion.question}</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleToggleFlag(currentQuestion.id)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[10px] cursor-pointer transition-colors ${
+                  flaggedQuestions[currentQuestion.id]
+                    ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-bold'
+                    : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
                 }`}
               >
-                <div className="font-mono text-[10px] font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>
-                    {currentSelectedOption === currentQuestion.correctIndex
-                      ? `Correct (+${currentQuestion.points} pts) — Relativistic Derivation`
-                      : 'Incorrect — Relativistic Derivation'}
-                  </span>
-                </div>
-                <p className="text-neutral-200">{currentQuestion.explanation}</p>
-              </div>
-            )}
+                <Flag className="w-2.5 h-2.5" />
+                <span>{flaggedQuestions[currentQuestion.id] ? 'Flagged' : 'Flag'}</span>
+              </button>
+            </div>
 
-            {/* Question Navigation Footer: Prev | Question Dots | Next / Finish */}
+            {/* 3x3 Matrix + 6 Option Tiles */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+              {/* LEFT: 3x3 Matrix Grid */}
+              <div className="md:col-span-6 flex justify-center">
+                <div className="w-full max-w-[290px] p-2.5 rounded-xl bg-[#070a12] border border-slate-800">
+                  <div className="grid grid-cols-3 gap-2 aspect-square">
+                    {currentQuestion.matrixCells.map((cellDesc, cellIdx) => (
+                      <div
+                        key={cellIdx}
+                        className="relative aspect-square rounded-lg bg-[#0c1220] border border-slate-800 p-1.5 flex items-center justify-center overflow-hidden"
+                      >
+                        <MatrixCellSvg cell={cellDesc} />
+                      </div>
+                    ))}
+
+                    {/* Missing Cell (3,3) */}
+                    <div
+                      className={`relative aspect-square rounded-lg border-2 border-dashed p-1.5 flex items-center justify-center transition-all ${
+                        hasAnsweredCurrent
+                          ? 'bg-cyan-950/30 border-cyan-400'
+                          : 'bg-cyan-950/15 border-cyan-500/70'
+                      }`}
+                    >
+                      {hasAnsweredCurrent &&
+                      currentQuestion.optionCells[currentSelectedOption] ? (
+                        <MatrixCellSvg
+                          cell={currentQuestion.optionCells[currentSelectedOption]}
+                        />
+                      ) : (
+                        <span className="font-display text-2xl font-bold text-cyan-400">
+                          ?
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT: 6 Visual Choice Tiles (A–F) */}
+              <div className="md:col-span-6">
+                <div
+                  className="grid grid-cols-3 gap-2"
+                  role="radiogroup"
+                  aria-label={currentQuestion.question}
+                >
+                  {currentQuestion.options.map((optionText, idx) => {
+                    const isSelected = currentSelectedOption === idx;
+                    const optionCell = currentQuestion.optionCells[idx];
+
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        aria-label={`Option ${String.fromCharCode(65 + idx)}: ${optionText}`}
+                        data-testid={`iq-option-${idx}`}
+                        onClick={() => handleSelectOption(idx)}
+                        className={`relative p-2 rounded-xl border transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                          isSelected
+                            ? 'bg-cyan-500/20 border-cyan-400 text-white ring-1 ring-cyan-400/50'
+                            : 'bg-[#0a0f1c] border-slate-800 text-neutral-300 hover:border-cyan-400/60 hover:bg-[#0f172a]'
+                        }`}
+                      >
+                        <span
+                          className={`self-start px-1.5 py-0.2 rounded font-mono text-[9px] font-bold ${
+                            isSelected
+                              ? 'bg-cyan-400 text-neutral-950'
+                              : 'bg-neutral-900 text-neutral-400'
+                          }`}
+                        >
+                          {String.fromCharCode(65 + idx)}
+                        </span>
+
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">
+                          {optionCell && <MatrixCellSvg cell={optionCell} />}
+                        </div>
+
+                        <span className="sr-only">{optionText}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation Footer */}
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-neutral-800/80">
               <button
                 type="button"
@@ -653,12 +2113,11 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                 <span>Prev</span>
               </button>
 
-              {/* Question Number Jump Pills */}
               <div className="flex items-center gap-1 flex-wrap justify-center">
-                {filteredQuestions.map((q, idx) => {
+                {RELATIVITY_IQ_QUESTIONS.map((q, idx) => {
                   const isAnswered = typeof selectedAnswers[q.id] === 'number';
-                  const isCorrect = selectedAnswers[q.id] === q.correctIndex;
                   const isCurrent = idx === safeQuestionIdx;
+                  const isFlagged = Boolean(flaggedQuestions[q.id]);
 
                   return (
                     <button
@@ -669,31 +2128,31 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                         onHapticLight?.();
                         setCurrentQuestionIdx(idx);
                       }}
-                      className={`w-6 h-6 rounded-md font-mono text-[10px] font-bold border transition-all cursor-pointer ${
+                      className={`relative w-6 h-6 rounded-md font-mono text-[10px] font-bold border transition-all cursor-pointer ${
                         isCurrent
-                          ? 'bg-cyan-500/30 border-cyan-300 text-white scale-105'
+                          ? 'bg-cyan-500/30 border-cyan-300 text-white'
                           : isAnswered
-                          ? isCorrect
-                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
-                            : 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                          ? 'bg-cyan-950/70 border-cyan-500/50 text-cyan-200'
                           : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
                       }`}
-                      title={`Question ${idx + 1}: ${q.domain}`}
                     >
                       {idx + 1}
+                      {isFlagged && (
+                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      )}
                     </button>
                   );
                 })}
               </div>
 
-              {safeQuestionIdx < filteredQuestions.length - 1 ? (
+              {safeQuestionIdx < RELATIVITY_IQ_QUESTIONS.length - 1 ? (
                 <button
                   type="button"
                   data-testid="iq-next-question-btn"
                   onClick={() => {
                     onHapticLight?.();
                     setCurrentQuestionIdx((i) =>
-                      Math.min(filteredQuestions.length - 1, i + 1)
+                      Math.min(RELATIVITY_IQ_QUESTIONS.length - 1, i + 1)
                     );
                   }}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/60 text-cyan-100 font-mono text-xs font-bold cursor-pointer transition-colors"
@@ -709,10 +2168,10 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                     onHapticSuccess?.();
                     setIsCompleted(true);
                   }}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-500/25 hover:bg-amber-500/35 border border-amber-400 text-amber-100 font-mono text-xs font-bold cursor-pointer transition-colors"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500/25 hover:bg-emerald-500/35 border border-emerald-400 text-emerald-100 font-mono text-xs font-bold cursor-pointer transition-colors"
                 >
                   <Award className="w-3.5 h-3.5" />
-                  <span>Complete Test</span>
+                  <span>Finish</span>
                 </button>
               )}
             </div>
