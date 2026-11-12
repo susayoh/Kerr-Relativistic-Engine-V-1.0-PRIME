@@ -102,7 +102,7 @@ export const DEFAULT_VISUALIZER_SETTINGS: VisualizerSettings = {
   showEventLog: false,
   showMetricTelemetry: false,
   showPerformanceMonitor: false,
-  focusMode: false,
+  focusMode: true,
   kerrEngineEnabled: true,
   kerrEngineTier: 'ultra',
   phoneMode: isMobileDevice,

@@ -40,6 +40,7 @@ import {
   Layers,
   Palette,
   Activity,
+  ExternalLink,
 } from 'lucide-react';
 import {
   VisualizerSettings,
@@ -72,6 +73,9 @@ import {
 } from './KerrRelativityEngineModal';
 import { IQTestModule } from './IQTestModule';
 import { ChessModule } from './ChessModule';
+import { CodebaseDetailsView } from './CodebaseDetailsView';
+import { DiagnosticSuiteView } from './DiagnosticSuiteView';
+import { IMPORTED_PLAYLIST_TRACKS } from '../audio/importedTracks';
 
 export const SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
   {
@@ -234,6 +238,7 @@ export const SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
     audioQualityBadge: '48kHz Hi-Res',
     genreTag: 'Hip-Hop / Trap',
   },
+  ...IMPORTED_PLAYLIST_TRACKS,
 ];
 
 export interface UiThemeOption {
@@ -447,14 +452,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     intensity: settings.hapticsIntensity ?? 1.0,
   });
   const [activeTab, setActiveTab] = useState<
-    'settings' | 'songs' | 'iq_test' | 'chess' | 'diagnostic'
+    'settings' | 'songs' | 'iq_test' | 'chess' | 'diagnostic' | 'code'
   >('settings');
 
-  useEffect(() => {
-    if (!isDevMode && activeTab === 'songs') {
-      setActiveTab('settings');
-    }
-  }, [isDevMode, activeTab]);
   const [secretPasswordInput, setSecretPasswordInput] = useState<string>('');
   const [secretAuthError, setSecretAuthError] = useState<boolean>(false);
   const [isInlineKerrLogOpen, setIsInlineKerrLogOpen] = useState<boolean>(false);
@@ -463,7 +463,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     trapQueenPlayer.getState()
   );
   const [songCategoryFilter, setSongCategoryFilter] = useState<
-    'all' | 'Hip-Hop / Trap' | 'Nightcore' | 'Electronic / Alt'
+    'all' | 'Melancholy' | 'Hip-Hop / Trap' | 'Nightcore' | 'Electronic / Alt'
   >('all');
   const [songSearchQuery, setSongSearchQuery] = useState<string>('');
   const [isShuffleEnabled, setIsShuffleEnabled] = useState<boolean>(false);
@@ -745,9 +745,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div
           role="tablist"
           aria-label="Settings Modal Tabs"
-          className={`grid ${
-            isDevMode ? 'grid-cols-5' : 'grid-cols-4'
-          } gap-1.5 px-3.5 sm:px-5 py-1.5 border-b font-mono text-[11px] shrink-0 ${modalHeaderThemeClass}`}
+          className={`grid grid-cols-3 sm:grid-cols-6 gap-1.5 px-3.5 sm:px-5 py-1.5 border-b font-mono text-[11px] shrink-0 ${modalHeaderThemeClass}`}
         >
           <button
             type="button"
@@ -767,30 +765,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <span>Settings</span>
           </button>
 
-          {isDevMode && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'songs'}
-              data-testid="settings-tab-songs"
-              onClick={() => {
-                haptics.light();
-                setActiveTab('songs');
-              }}
-              className={`flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'songs'
-                  ? 'bg-zinc-800 border-zinc-400 text-white'
-                  : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
-              }`}
-            >
-              <span>Songs</span>
-              {playerState.isPlaying && (
-                <span className="hidden sm:inline text-[9px] text-[#1DB954] font-bold">
-                  • {playerState.playbackRate.toFixed(2).replace(/\.00$/, '.0')}x
-                </span>
-              )}
-            </button>
-          )}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'songs'}
+            data-testid="settings-tab-songs"
+            onClick={() => {
+              haptics.light();
+              setActiveTab('songs');
+            }}
+            className={`flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'songs'
+                ? 'bg-zinc-800 border-zinc-400 text-white'
+                : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+            }`}
+          >
+            <span>Songs</span>
+            {playerState.isPlaying && (
+              <span className="hidden sm:inline text-[9px] text-[#1DB954] font-bold">
+                • {playerState.playbackRate.toFixed(2).replace(/\.00$/, '.0')}x
+              </span>
+            )}
+          </button>
 
           <button
             type="button"
@@ -849,6 +845,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 • {Object.keys(diagnosticCompletedRuns).length}/{SPACETIME_CURVATURE_STRESS_TESTS.length}
               </span>
             )}
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'code'}
+            data-testid="settings-tab-code"
+            onClick={() => {
+              haptics.light();
+              setActiveTab('code');
+            }}
+            className={`flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'code'
+                ? 'bg-zinc-800 border-zinc-400 text-white'
+                : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+            }`}
+          >
+            <span>Code</span>
+            <span className="hidden sm:inline text-[9px] text-zinc-400 font-bold">
+              • 35k
+            </span>
           </button>
         </div>
 
@@ -2838,8 +2855,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
         )}
 
-        {/* TAB 2: Spotify-Style Songs Player & Audio Mastering (Dev Mode Only) */}
-        {isDevMode && activeTab === 'songs' && (() => {
+        {/* TAB 2: Spotify-Style Songs Player & Audio Mastering */}
+        {activeTab === 'songs' && (() => {
           const visibleSongs = SETTINGS_SONGS_LIST.filter((tr) => {
             const matchesCategory =
               songCategoryFilter === 'all' || tr.genreTag === songCategoryFilter;
@@ -2877,9 +2894,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               data-testid="settings-tab-panel-songs"
               className="flex-1 min-h-0 flex flex-col bg-[#121212] text-xs overflow-hidden"
             >
-              {/* Scrollable Upper Spotify Workspace (Playlist Header + Action Bar + Tracklist Table + Audio Controls) */}
+              {/* Scrollable Upper Songs Workspace (Header + Action Bar + Tracklist Table + Audio Controls) */}
               <div className="flex-1 min-h-0 overflow-y-auto px-3.5 sm:px-5 py-3.5 space-y-4">
-                {/* Spotify Playlist Header Banner */}
+                {/* Songs Library Header Banner */}
                 <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 p-4 rounded-xl bg-gradient-to-b from-zinc-800/75 to-[#161616] border border-zinc-800/80">
                   <div className="flex items-center gap-4 min-w-0">
                     <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-zinc-900 shadow-2xl shrink-0 flex items-center justify-center border border-white/10">
@@ -2977,9 +2994,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <Shuffle className="w-4 h-4" />
                     </button>
 
-                    {/* Spotify Category Filter Pills */}
+                    {/* Category Filter Pills */}
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {(['all', 'Hip-Hop / Trap', 'Nightcore', 'Electronic / Alt'] as const).map(
+                      {(['all', 'Melancholy', 'Hip-Hop / Trap', 'Nightcore', 'Electronic / Alt'] as const).map(
                         (cat) => (
                           <button
                             key={cat}
@@ -3001,15 +3018,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Spotify Track Search Input */}
+                  {/* Track Search Input */}
                   <div className="relative w-full sm:w-52">
                     <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
                       value={songSearchQuery}
                       onChange={(e) => setSongSearchQuery(e.target.value)}
-                      placeholder="Search in playlist"
-                      aria-label="Search songs in playlist"
+                      placeholder="Search songs in library"
+                      aria-label="Search songs in library"
                       className="w-full pl-8 pr-3 py-1.5 rounded-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#242424] border border-transparent focus:border-zinc-600 text-white placeholder-zinc-400 text-xs outline-none transition-colors"
                     />
                   </div>
@@ -3096,12 +3113,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             </div>
                             <div className="min-w-0">
                               <div
-                                className={`text-xs font-semibold truncate ${
+                                className={`text-xs font-semibold truncate flex items-center gap-1.5 ${
                                   isSelected ? 'text-[#1DB954]' : 'text-white'
                                 }`}
                               >
-                                {track.title}{' '}
-                                <span className="font-normal text-zinc-400">
+                                <span className="truncate">{track.title}</span>
+                                <span className="font-normal text-zinc-400 shrink-0">
                                   ({track.subtitle})
                                 </span>
                               </div>
@@ -3467,289 +3484,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
 
         {/* TAB 4: Automated Spacetime Curvature Stress-Test Diagnostic Suite */}
-        {activeTab === 'diagnostic' && (() => {
-          const completedCount = Object.keys(diagnosticCompletedRuns).length;
-          const totalTests = SPACETIME_CURVATURE_STRESS_TESTS.length;
-          const isSuiteComplete = completedCount === totalTests && diagnosticRunningIdx === null;
-          const activeScenario =
-            SPACETIME_CURVATURE_STRESS_TESTS.find((s) => s.id === selectedDiagnosticLogId) ||
-            SPACETIME_CURVATURE_STRESS_TESTS[0];
-          const activeRunLog = diagnosticCompletedRuns[activeScenario.id];
+        {activeTab === 'diagnostic' && (
+          <DiagnosticSuiteView
+            scenarios={SPACETIME_CURVATURE_STRESS_TESTS}
+            completedRuns={diagnosticCompletedRuns}
+            runningIdx={diagnosticRunningIdx}
+            selectedScenarioId={selectedDiagnosticLogId}
+            onSelectScenario={setSelectedDiagnosticLogId}
+            onRerunSuite={() => setDiagnosticSuiteNonce((n) => n + 1)}
+            onOpenKerrLogModal={onOpenKerrLogModal}
+            onRecordDiagnosticStressTest={onRecordDiagnosticStressTest}
+            syncSceneOnDiagnosticRun={syncSceneOnDiagnosticRun}
+            onToggleSyncScene={setSyncSceneOnDiagnosticRun}
+            kerrEngineLogsCount={kerrEngineLogs.length}
+            activeTier={settings.kerrEngineTier || 'ultra'}
+            uiTheme={activeUiThemeId}
+            onHapticLight={() => haptics.light()}
+            onHapticMedium={() => haptics.medium()}
+            onHapticSuccess={() => haptics.success()}
+          />
+        )}
 
-          const bannerThemeClass =
-            activeUiThemeId === 'kerr_claude'
-              ? 'bg-gradient-to-br from-[#15100d] via-[#0c0a09] to-black border-[#D97757]/50'
-              : activeUiThemeId === 'cryo_quantum'
-              ? 'bg-gradient-to-br from-[#07120d] via-[#040605] to-black border-emerald-500/45'
-              : 'bg-gradient-to-br from-[#111114] via-[#050506] to-black border-zinc-500/40';
-
-          return (
-            <div
-              data-testid="settings-diagnostic-tab-panel"
-              className="flex-1 min-h-0 p-3.5 sm:p-5 overflow-y-auto space-y-4 text-xs"
-            >
-              {/* Automated Stress-Test Telemetry Header */}
-              <div className={`rounded-xl border p-4 space-y-3 ${bannerThemeClass}`}>
-                <div className="flex flex-wrap items-start justify-between gap-2.5">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider font-bold text-[#F7F4EE]">
-                      <Activity className="w-4 h-4 text-emerald-400" />
-                      <span>Spacetime Curvature Stress-Test Suite</span>
-                      <span
-                        data-testid="diagnostic-suite-status-badge"
-                        className={`px-2 py-0.5 rounded text-[9.5px] font-mono font-bold border ${
-                          isSuiteComplete
-                            ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200'
-                            : 'bg-amber-500/20 border-amber-400/60 text-amber-200'
-                        }`}
-                      >
-                        {isSuiteComplete
-                          ? `VERIFIED (${completedCount}/${totalTests} LOGGED)`
-                          : `RUNNING (${completedCount}/${totalTests})`}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-neutral-300 leading-relaxed">
-                      Automatically sweeps Boyer-Lindquist metric tensors, Bardeen-Press-Teukolsky ISCO roots, ergosphere static limits, and Kretschmann invariants across {totalTests} extreme curvature regimes, persisting all runs directly to{' '}
-                      <span className="font-mono text-emerald-300 font-semibold">
-                        KerrEngineLogViewer
-                      </span>
-                      .
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      data-testid="diagnostic-rerun-suite-btn"
-                      onClick={() => {
-                        haptics.medium();
-                        setDiagnosticSuiteNonce((n) => n + 1);
-                      }}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/60 text-emerald-200 font-mono text-[10.5px] font-bold transition-colors cursor-pointer"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      <span>Re-Run Stress Suite</span>
-                    </button>
-
-                    {onOpenKerrLogModal && (
-                      <button
-                        type="button"
-                        data-testid="diagnostic-open-log-viewer-btn"
-                        onClick={() => {
-                          haptics.light();
-                          onOpenKerrLogModal();
-                        }}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/60 text-amber-200 font-mono text-[10.5px] font-bold transition-colors cursor-pointer"
-                      >
-                        <Terminal className="w-3 h-3" />
-                        <span>Open KerrEngineLogViewer ({kerrEngineLogs.length})</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Progress Bar & Viewport Sync Toggle */}
-                <div className="space-y-2 pt-1">
-                  <div className="h-1.5 w-full rounded-full bg-neutral-900 overflow-hidden border border-neutral-800">
-                    <div
-                      className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-amber-400 transition-all duration-200"
-                      style={{
-                        width: `${Math.round((completedCount / totalTests) * 100)}%`,
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-neutral-400">
-                    <span>
-                      Solver Tier:{' '}
-                      <strong className="text-amber-300 uppercase">
-                        {settings.kerrEngineTier || 'ultra'}
-                      </strong>{' '}
-                      · Saved in KerrEngineLogViewer:{' '}
-                      <strong className="text-emerald-300">{kerrEngineLogs.length} runs</strong>
-                    </span>
-
-                    <label className="flex items-center gap-1.5 cursor-pointer select-none text-neutral-300 hover:text-white">
-                      <input
-                        type="checkbox"
-                        checked={syncSceneOnDiagnosticRun}
-                        onChange={(e) => {
-                          haptics.light();
-                          setSyncSceneOnDiagnosticRun(e.target.checked);
-                        }}
-                        className="rounded border-neutral-700 bg-neutral-900 text-emerald-500"
-                      />
-                      <span>Sync 3D Viewport on Re-Run</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* 5 Spacetime Curvature Stress Test Scenario Cards */}
-              <div className="space-y-2" data-testid="diagnostic-stress-test-list">
-                {SPACETIME_CURVATURE_STRESS_TESTS.map((scenario, idx) => {
-                  const runLog = diagnosticCompletedRuns[scenario.id];
-                  const isRunningThis = diagnosticRunningIdx === idx;
-                  const isSelected = activeScenario.id === scenario.id;
-
-                  return (
-                    <div
-                      key={scenario.id}
-                      data-testid={`diagnostic-stress-card-${scenario.code.toLowerCase()}`}
-                      onClick={() => {
-                        haptics.light();
-                        setSelectedDiagnosticLogId(scenario.id);
-                      }}
-                      className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-emerald-950/25 border-emerald-400/70 shadow-[0_0_16px_rgba(16,185,129,0.14)]'
-                          : 'bg-neutral-950/90 border-neutral-800/90 hover:border-neutral-700'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-700 font-mono text-[10px] font-bold text-cyan-300">
-                            {scenario.code}
-                          </span>
-                          <span className="font-bold text-white text-xs">
-                            {scenario.title}
-                          </span>
-                          <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 font-mono text-[9.5px] text-amber-200">
-                            {scenario.regimeBadge}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {runLog && onRecordDiagnosticStressTest && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                haptics.medium();
-                                onRecordDiagnosticStressTest(runLog, scenario.params);
-                              }}
-                              className="px-2 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 font-mono text-[9.5px] cursor-pointer"
-                              title="Apply these curvature parameters to the 3D Black Hole scene"
-                            >
-                              Apply to 3D Scene
-                            </button>
-                          )}
-
-                          <span
-                            className={`px-2 py-0.5 rounded font-mono text-[9.5px] font-bold border ${
-                              runLog
-                                ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
-                                : isRunningThis
-                                ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 animate-pulse'
-                                : 'bg-neutral-900 border-neutral-800 text-neutral-500'
-                            }`}
-                          >
-                            {runLog ? 'PASS · LOGGED' : isRunningThis ? 'SOLVING...' : 'QUEUED'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <p className="text-[11px] text-neutral-400 mt-1.5 leading-snug">
-                        {scenario.description}
-                      </p>
-
-                      {runLog && (
-                        <div className="mt-2.5 pt-2 border-t border-neutral-800/80 grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono text-[10px]">
-                          <div>
-                            <span className="text-neutral-500 block text-[9px] uppercase">
-                              Metric g_tt / g_rr
-                            </span>
-                            <span className="text-emerald-300 font-semibold">
-                              {runLog.summaryMetrics.g_tt.toFixed(4)}
-                            </span>{' '}
-                            <span className="text-neutral-400">
-                              / +{runLog.summaryMetrics.g_rr.toFixed(2)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-neutral-500 block text-[9px] uppercase">
-                              Frame-Drag g_tφ
-                            </span>
-                            <span className="text-cyan-300 font-semibold">
-                              {runLog.summaryMetrics.g_tphi.toFixed(4)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-neutral-500 block text-[9px] uppercase">
-                              Horizon / ISCO
-                            </span>
-                            <span className="text-purple-300 font-semibold">
-                              {runLog.summaryMetrics.rPlusRg.toFixed(3)} R_g
-                            </span>{' '}
-                            <span className="text-neutral-400">
-                              / {runLog.summaryMetrics.iscoRg.toFixed(3)} R_g
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-neutral-500 block text-[9px] uppercase">
-                              Kretschmann K
-                            </span>
-                            <span className="text-amber-300 font-semibold">
-                              {runLog.summaryMetrics.kretschmann.toExponential(2)} M⁻⁴
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-neutral-500 block text-[9px] uppercase">
-                              ADM Lapse α
-                            </span>
-                            <span className="text-sky-300 font-semibold">
-                              {runLog.summaryMetrics.admLapse.toFixed(4)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Embedded KerrEngineLogViewer Inspector for Selected Diagnostic Run */}
-              {activeRunLog && (
-                <div
-                  data-testid="diagnostic-embedded-kerr-log-viewer"
-                  className="rounded-xl bg-[#04070e] border border-slate-800 p-3.5 space-y-2.5 font-mono"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
-                    <div className="flex items-center gap-2 text-[10.5px]">
-                      <Terminal className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="text-amber-200 font-bold">
-                        KerrEngineLogViewer Trace · {activeRunLog.targetName}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-emerald-400">
-                      {activeRunLog.modelCode} · {activeRunLog.totalDurationMs} ms · CONVERGED
-                    </span>
-                  </div>
-
-                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                    {activeRunLog.steps.map((step) => (
-                      <div
-                        key={step.id}
-                        className="p-2 rounded-lg bg-neutral-950/90 border border-slate-800/80 space-y-1 text-[10px]"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-cyan-300 font-semibold">
-                            STEP {step.stepNumber} [{step.phase}] $ {step.command}
-                          </span>
-                          <span className="text-emerald-400 shrink-0">{step.residual}</span>
-                        </div>
-                        <div className="text-amber-200/95 text-[10px] overflow-x-auto">
-                          {step.equation}
-                        </div>
-                        <div className="text-slate-400 text-[9.5px]">{step.logicDecision}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        {/* TAB 5: Codebase Telemetry & Architecture Details */}
+        {activeTab === 'code' && (
+          <CodebaseDetailsView
+            uiTheme={activeUiThemeId}
+            onHapticLight={() => haptics.light()}
+            onHapticMedium={() => haptics.medium()}
+            onHapticSuccess={() => haptics.success()}
+          />
+        )}
 
         {/* Compact Modal Footer */}
         <div className="flex items-center justify-between gap-1.5 px-3.5 sm:px-5 py-1.5 border-t border-neutral-800/90 bg-neutral-950 shrink-0">

@@ -47,6 +47,8 @@ interface ControlDockProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onToggleCleanMode?: () => void;
+  isFocusMode?: boolean;
+  onToggleFocusMode?: () => void;
   onChangeParams: (updater: (prev: BlackHoleParams) => BlackHoleParams) => void;
   onSelectPreset: (presetId: string) => void;
   onResetParams: () => void;
@@ -78,6 +80,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   isCollapsed,
   onToggleCollapse,
   onToggleCleanMode,
+  isFocusMode = false,
+  onToggleFocusMode,
   onChangeParams,
   onSelectPreset,
   onResetParams,
@@ -195,6 +199,22 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               <Waves className="w-3 h-3 text-amber-400" />
               <span>Pulse</span>
             </button>
+
+            {/* Quick Focus Mode Toggle */}
+            {onToggleFocusMode && (
+              <button
+                type="button"
+                onClick={() => {
+                  haptics.light();
+                  onToggleFocusMode();
+                }}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-neutral-900 hover:bg-neutral-850 text-amber-300 border border-neutral-800 cursor-pointer"
+                title="Enter Focus Mode (Shortcut: F)"
+              >
+                <Eye className="w-3 h-3 text-amber-400" />
+                <span>Focus</span>
+              </button>
+            )}
 
             {/* Expand Controls Drawer */}
             <button
@@ -373,6 +393,25 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   title="Open Physics Quick-Guide (Simple Analogies)"
                 >
                   <BookOpen className="w-3 h-3" />
+                </button>
+              )}
+
+              {onToggleFocusMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.medium();
+                    onToggleFocusMode();
+                  }}
+                  className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-mono rounded border cursor-pointer ${
+                    isFocusMode
+                      ? 'bg-amber-500/25 text-amber-200 border-amber-400'
+                      : 'text-amber-300 bg-neutral-900 border-neutral-800 hover:border-amber-500/40'
+                  }`}
+                  title="Focus Mode (Shortcut: F)"
+                >
+                  <Eye className="w-3 h-3 text-amber-400" />
+                  <span>Focus</span>
                 </button>
               )}
 
@@ -989,6 +1028,26 @@ export const ControlDock: React.FC<ControlDockProps> = ({
           )}
         </button>
 
+        {onToggleFocusMode && (
+          <button
+            type="button"
+            data-testid="control-dock-focus-mode-btn"
+            onClick={() => {
+              haptics.medium();
+              onToggleFocusMode();
+            }}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-mono bg-neutral-950 border border-b-0 rounded-t-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer shadow-lg ${
+              isFocusMode
+                ? 'text-amber-200 border-amber-400/70 bg-amber-500/15'
+                : 'text-neutral-200 border-neutral-800 hover:text-amber-300 hover:bg-neutral-900 hover:border-amber-500/40'
+            } ${isPhoneMode ? 'text-[11px] py-1 px-2.5' : ''}`}
+            title="Toggle Focus Mode: Hide non-essential HUD and show compact bottom status bar (Shortcut: F)"
+          >
+            <Eye className="w-3 h-3 text-amber-400" />
+            <span>Focus Mode</span>
+          </button>
+        )}
+
         {onToggleCleanMode && (
           <button
             type="button"
@@ -1461,6 +1520,25 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   title="Open Physics Quick-Guide (Plain-English Analogies for Spin, Accretion Rate & Well Depth)"
                 >
                   <BookOpen className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {onToggleFocusMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.medium();
+                    onToggleFocusMode();
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all whitespace-nowrap cursor-pointer ${
+                    isFocusMode
+                      ? 'bg-amber-500/25 text-amber-200 border-amber-400'
+                      : 'text-neutral-200 bg-neutral-900 hover:bg-neutral-800 border-neutral-700/80 hover:border-amber-400 hover:text-white'
+                  }`}
+                  title="Toggle Focus Mode (Shortcut: F)"
+                >
+                  <Eye className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Focus</span>
                 </button>
               )}
 

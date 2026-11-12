@@ -5,7 +5,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, X, Zap, Maximize2, Eye, Download, Video, Square, Settings } from 'lucide-react';
+import { Sparkles, X, Zap, Maximize2, Eye, Download, Video, Square, Settings, Sliders } from 'lucide-react';
 import {
   ARCHETYPE_DEFINITIONS,
   ASTROPHYSICAL_PRESETS,
@@ -103,6 +103,7 @@ export default function App() {
     const isInitialMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
     return {
       ...DEFAULT_VISUALIZER_SETTINGS,
+      focusMode: true,
       showOverheadMap: !isInitialMobile,
       showPerformanceMonitor: false,
       showEventLog: !isInitialMobile,
@@ -2282,7 +2283,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Clean Kerr Engine Initialization Overlay (Centered during initial boot sequence, consistent with Watermark Logo & Color) */}
+        {/* Clean Kerr Engine Initialization Overlay (Centered during initial boot sequence, with Watermark Logo Icon) */}
         {showBootOverlay && (
           <div
             data-testid="cinematic-boot-overlay"
@@ -2290,16 +2291,15 @@ export default function App() {
               isBootOverlayFading ? 'opacity-0' : 'opacity-100'
             }`}
           >
-            <div className="pointer-events-none px-6 py-4 rounded-xl bg-[#080605]/95 border border-[#D97757]/40 backdrop-blur-md shadow-[0_24px_70px_rgba(0,0,0,0.98)] font-mono text-xs text-left space-y-2.5 max-w-sm w-full">
-              <div className="flex items-center justify-between gap-3 pb-2 border-b border-[#D97757]/25">
+            <div className="pointer-events-none px-6 py-4 rounded-xl bg-[#050507]/95 border border-zinc-800/90 backdrop-blur-md shadow-[0_24px_70px_rgba(0,0,0,0.98)] font-mono text-xs text-left space-y-2.5 max-w-sm w-full">
+              <div className="flex items-center justify-between gap-3 pb-2 border-b border-zinc-800/80">
                 <div className="flex items-center gap-2">
-                  {/* 12-Ray Starburst Singularity Emblem (Consistent with Watermark Logo) */}
+                  {/* 12-Ray Starburst Singularity Emblem (Same as Watermark Logo) */}
                   <svg
-                    width="20"
-                    height="20"
+                    width="18"
+                    height="18"
                     viewBox="-24 -24 48 48"
-                    className="shrink-0 overflow-visible animate-spin"
-                    style={{ animationDuration: '8s' }}
+                    className="shrink-0 overflow-visible"
                     aria-hidden="true"
                   >
                     {[0, 1, 2, 3, 4, 5].map((i) => {
@@ -2331,17 +2331,17 @@ export default function App() {
                       strokeWidth="2.1"
                     />
                   </svg>
-                  <span className="font-display text-[11px] font-bold text-[#F7F4EE] uppercase tracking-widest">
+                  <span className="font-display text-[11px] font-bold text-zinc-100 uppercase tracking-widest">
                     Kerr Engine
                   </span>
                 </div>
-                <span className="px-1.5 py-0.5 rounded bg-[#201815] border border-[#D97757]/65 text-[9.5px] text-[#F4A688] font-bold">
+                <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-700/80 text-[9.5px] text-zinc-300 font-bold">
                   v1.4
                 </span>
               </div>
 
-              <div className="flex items-center gap-2.5 text-[#F7F4EE] font-semibold tracking-wider text-[11px]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#E88B6B] animate-pulse shrink-0" />
+              <div className="flex items-center gap-2.5 text-zinc-100 font-semibold tracking-wider text-[11px]">
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-200 animate-pulse shrink-0" />
                 <span>INITIALIZING KERR ENGINE...</span>
               </div>
 
@@ -2349,8 +2349,8 @@ export default function App() {
                 Loading Apex Metric Core &amp; Geodesic Solver
               </div>
 
-              <div className="w-full h-1 bg-[#14100e] rounded-full overflow-hidden border border-[#D97757]/30">
-                <div className="h-full w-full bg-[#E88B6B] animate-pulse rounded-full" />
+              <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                <div className="h-full w-full bg-zinc-200 animate-pulse rounded-full" />
               </div>
             </div>
           </div>
@@ -2543,6 +2543,10 @@ export default function App() {
               isCollapsed={isDockCollapsed}
               onToggleCollapse={() => setIsDockCollapsed((prev) => !prev)}
               onToggleCleanMode={handleToggleCleanMode}
+              isFocusMode={isFocusMode}
+              onToggleFocusMode={() =>
+                setSettings((prev) => ({ ...prev, focusMode: !prev.focusMode }))
+              }
               onChangeParams={setParams}
               onSelectPreset={handleSelectPreset}
               onResetParams={handleResetParams}
@@ -2637,6 +2641,20 @@ export default function App() {
               r₊ = {(metrics.eventHorizonRg * 0.5).toFixed(2)} Rₛ · ISCO = {(metrics.iscoProgradeRg * 0.5).toFixed(2)} Rₛ
             </span>
             <div className="h-3 w-px bg-zinc-800 mx-0.5" />
+            <button
+              type="button"
+              data-testid="focus-mode-open-controls-btn"
+              onClick={() => {
+                haptics.light();
+                setSettings((prev) => ({ ...prev, focusMode: false }));
+                setIsDockCollapsed(false);
+              }}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-zinc-700/70 transition-colors cursor-pointer"
+              title="Open Controls Dock"
+            >
+              <Sliders className="w-3 h-3 text-amber-400" />
+              <span>Controls</span>
+            </button>
             <button
               type="button"
               onClick={() => {

@@ -3,16 +3,7 @@
 // 3-band parametric mastering EQ, studio dynamics compressor, live 16-band spectrum analyzer,
 // and continuous playback speed control (0.50x to 2.00x).
 
-export type SongTrackId =
-  | 'trap_queen'
-  | 'again'
-  | 'mazeltron'
-  | 'clarity_nightcore'
-  | 'end_it_nightcore'
-  | 'no_friends_female'
-  | 'duvet_x_linger'
-  | 'stronger_than_you_frisk'
-  | 'world_execute_me';
+export type SongTrackId = string;
 
 export type AudioQualityPresetId =
   | 'hires_studio'
@@ -87,7 +78,8 @@ export interface SongTrackDefinition {
   sources: string[];
   bpm: number;
   audioQualityBadge?: string;
-  genreTag?: 'Hip-Hop / Trap' | 'Nightcore' | 'Electronic / Alt';
+  genreTag?: 'Melancholy' | 'Hip-Hop / Trap' | 'Nightcore' | 'Electronic / Alt' | string;
+  spotifyUrl?: string;
 }
 
 export const SONG_TRACKS: SongTrackDefinition[] = [
@@ -559,10 +551,13 @@ class SongPlayerController {
     this.sourceIndex = 0;
 
     if (this.audio) {
-      this.audio.src = nextDef.sources[0];
-      this.audio.currentTime = 0;
-      this.audio.load();
-      this.applyRateToAudio(this.audio);
+      const firstSrc = nextDef.sources && nextDef.sources.length > 0 ? nextDef.sources[0] : '';
+      if (firstSrc) {
+        this.audio.src = firstSrc;
+        this.audio.currentTime = 0;
+        this.audio.load();
+        this.applyRateToAudio(this.audio);
+      }
     }
 
     this.updateState({
@@ -612,7 +607,13 @@ class SongPlayerController {
     if (this.audio) {
       try {
         if (!this.audio.src) {
-          this.audio.src = trackDef.sources[this.sourceIndex];
+          const src = trackDef.sources?.[this.sourceIndex] || trackDef.sources?.[0];
+          if (src) this.audio.src = src;
+        }
+        if (!this.audio.src) {
+          // If no local audio source, enable playing state for UI visualization
+          this.updateState({ isPlaying: true, error: null });
+          return;
         }
         this.audio.volume = this.state.volume;
         this.applyRateToAudio(this.audio);
