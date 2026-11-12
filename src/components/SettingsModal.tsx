@@ -75,11 +75,14 @@ import {
   KerrEngineRunLog,
   generateKerrEngineCalculationRun,
 } from './KerrRelativityEngineModal';
-import { IQTestModule } from './IQTestModule';
-import { ChessModule } from './ChessModule';
+const LazyIQTestModule = React.lazy(() =>
+  import('./IQTestModule').then((m) => ({ default: m.IQTestModule }))
+);
+const LazyChessModule = React.lazy(() =>
+  import('./ChessModule').then((m) => ({ default: m.ChessModule }))
+);
 import { CodebaseDetailsView } from './CodebaseDetailsView';
 import { DiagnosticSuiteView } from './DiagnosticSuiteView';
-import { IMPORTED_PLAYLIST_TRACKS } from '../audio/importedTracks';
 
 const RAW_SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
   {
@@ -239,7 +242,6 @@ const RAW_SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
     audioQualityBadge: '48kHz Hi-Res',
     genreTag: 'Hip-Hop / Trap',
   },
-  ...IMPORTED_PLAYLIST_TRACKS,
 ];
 
 export const SETTINGS_SONGS_LIST: SongTrackDefinition[] =
@@ -768,11 +770,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   >({});
   const [selectedDiagnosticLogId, setSelectedDiagnosticLogId] = useState<string | null>(null);
   const [syncSceneOnDiagnosticRun, setSyncSceneOnDiagnosticRun] = useState<boolean>(false);
+  const [songsCatalog, setSongsCatalog] = useState<SongTrackDefinition[]>(SETTINGS_SONGS_LIST);
+  const [isImportedTracksLoaded, setIsImportedTracksLoaded] = useState<boolean>(false);
+  const [isLoadingImportedTracks, setIsLoadingImportedTracks] = useState<boolean>(false);
 
   useEffect(() => {
-    trapQueenPlayer.setCatalog(SETTINGS_SONGS_LIST);
+    if (!isImportedTracksLoaded) {
+      trapQueenPlayer.setCatalog(SETTINGS_SONGS_LIST);
+    }
     return trapQueenPlayer.subscribe(setPlayerState);
-  }, []);
+  }, [isImportedTracksLoaded]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'songs' || isImportedTracksLoaded) return;
+    let cancelled = false;
+    setIsLoadingImportedTracks(true);
+    import('../audio/importedTracks')
+      .then((mod) => {
+        if (cancelled) return;
+        const merged = filterAndValidatePlaybackQueue([
+          ...RAW_SETTINGS_SONGS_LIST,
+          ...mod.IMPORTED_PLAYLIST_TRACKS,
+        ]).acceptedTracks;
+        trapQueenPlayer.setCatalog(merged);
+        setSongsCatalog(merged);
+        setIsImportedTracksLoaded(true);
+      })
+      .catch((err) => {
+        console.warn('Failed to dynamically load extended audio catalog:', err);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingImportedTracks(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeTab, isImportedTracksLoaded]);
 
   // Automatically trigger and log the spacetime curvature stress-test suite when the Diagnostic tab is opened
   useEffect(() => {
@@ -946,7 +981,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const activeTrackDef =
-    SETTINGS_SONGS_LIST.find((tr) => tr.id === playerState.trackId) || SETTINGS_SONGS_LIST[0];
+    songsCatalog.find((tr) => tr.id === playerState.trackId) || songsCatalog[0];
 
   const activeUiThemeId: UiThemeId = settings.uiTheme || 'observatory_gold';
   const activeUiThemeOption =
@@ -3379,7 +3414,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <span>·</span>
                         <span>{activeTrackDef.subtitle}</span>
                         <span>·</span>
-                        <span>{validatedCatalog.length} full songs</span>
+                        <span>
+                          {isLoadingImportedTracks
+                            ? `${validatedCatalog.length} songs (loading full catalog...)`
+                            : `${validatedCatalog.length} full songs`}
+                        </span>
                         <span>·</span>
                         <span className="font-mono tabular-nums">
                           {Math.round(activeTrackDef.bpm * playerState.playbackRate)} BPM
@@ -3904,24 +3943,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           );
         })()}
 
-        {/* TAB 3: IQ Test Module (Public) */}
+        {/* TAB 3: IQ Test Module (Public, Lazy-Loaded) */}
         {activeTab === 'iq_test' && (
-          <IQTestModule
-            uiTheme={activeUiThemeId}
-            onHapticLight={() => haptics.light()}
-            onHapticMedium={() => haptics.medium()}
-            onHapticSuccess={() => haptics.success()}
-          />
+          <React.Suspense
+            fallback={
+              <div className="flex-1 min-h-0 flex items-center justify-center p-8 text-xs font-mono text-zinc-400">
+                Loading Quantitative IQ Assessment Module...
+              </div>
+            }
+          >
+            <LazyIQTestModule
+              uiTheme={activeUiThemeId}
+              onHapticLight={() => haptics.light()}
+              onHapticMedium={() => haptics.medium()}
+              onHapticSuccess={() => haptics.success()}
+            />
+          </React.Suspense>
         )}
 
-        {/* TAB 3b: Chess Sandbox Module (Public) */}
+        {/* TAB 3b: Chess Sandbox Module (Public, Lazy-Loaded) */}
         {activeTab === 'chess' && (
-          <ChessModule
-            uiTheme={activeUiThemeId}
-            onHapticLight={() => haptics.light()}
-            onHapticMedium={() => haptics.medium()}
-            onHapticSuccess={() => haptics.success()}
-          />
+          <React.Suspense
+            fallback={
+              <div className="flex-1 min-h-0 flex items-center justify-center p-8 text-xs font-mono text-zinc-400">
+                Loading Relativistic Chess Engine Module...
+              </div>
+            }
+          >
+            <LazyChessModule
+              uiTheme={activeUiThemeId}
+              onHapticLight={() => haptics.light()}
+              onHapticMedium={() => haptics.medium()}
+              onHapticSuccess={() => haptics.success()}
+            />
+          </React.Suspense>
         )}
 
         {/* TAB 4: Automated Spacetime Curvature Stress-Test Diagnostic Suite */}

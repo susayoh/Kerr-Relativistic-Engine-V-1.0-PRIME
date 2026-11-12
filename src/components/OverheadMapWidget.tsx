@@ -20,7 +20,7 @@ interface OverheadMapWidgetProps {
   onSetProbeRadius?: (radiusRs: number) => void;
 }
 
-export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
+export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = React.memo(({
   sceneController,
   cameraCoordsRef,
   highPerformanceMode = false,
@@ -50,7 +50,7 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
 
   // Imperative 2D canvas + DOM ref update loop throttled via requestAnimationFrame (never setInterval)
   useEffect(() => {
-    const FRAME_INTERVAL_MS = highPerformanceMode ? 260 : 140;
+    const FRAME_INTERVAL_MS = Math.max(100, highPerformanceMode ? 260 : 140);
     let rafId = 0;
     let isCancelled = false;
     let lastRenderMs = 0;
@@ -565,5 +565,5 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
       )}
     </div>
   );
-};
+});
 

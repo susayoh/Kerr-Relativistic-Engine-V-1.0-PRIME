@@ -13,7 +13,7 @@ interface TimeDilationDisplayProps {
   initialCollapsed?: boolean;
 }
 
-export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
+export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = React.memo(({
   probeRadiusRs,
   spin,
   timeScale,
@@ -26,51 +26,12 @@ export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
   // Live calculated metrics
   const dilation: DetailedTimeDilationMetrics = computeDetailedTimeDilation(probeRadiusRs, spin);
 
-  // Synchronized animated clocks
-  const [clockState, setClockState] = useState<{
-    tSeconds: number;
-    tauSeconds: number;
-  }>({
-    tSeconds: 0,
-    tauSeconds: 0,
-  });
-
+  // Direct DOM refs for animated clocks so tick updates never trigger React re-renders
+  const earthClockRef = useRef<HTMLSpanElement | null>(null);
+  const s2ClockRef = useRef<HTMLSpanElement | null>(null);
   const lastAnimTimeRef = useRef<number>(performance.now());
   const tSecRef = useRef<number>(0);
   const tauSecRef = useRef<number>(0);
-
-  useEffect(() => {
-    let animId = 0;
-    const TARGET_FPS = 30;
-    const FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
-    let lastFrameTime = 0;
-    let lastRenderUpdate = 0;
-
-    const tick = (now: number) => {
-      animId = requestAnimationFrame(tick);
-      if (now - lastFrameTime < FRAME_INTERVAL_MS) {
-        return;
-      }
-      lastFrameTime = now;
-      const deltaMs = Math.min(100, now - lastAnimTimeRef.current);
-      lastAnimTimeRef.current = now;
-
-      const deltaSec = (deltaMs / 1000) * timeScale;
-      tSecRef.current += deltaSec;
-      tauSecRef.current += deltaSec * dilation.dtau_dt;
-
-      if (now - lastRenderUpdate >= 150) {
-        lastRenderUpdate = now;
-        setClockState({
-          tSeconds: tSecRef.current,
-          tauSeconds: tauSecRef.current,
-        });
-      }
-    };
-
-    animId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animId);
-  }, [timeScale, dilation.dtau_dt]);
 
   // Format seconds to simple MM:SS
   const formatClock = (totalSec: number) => {
@@ -79,6 +40,48 @@ export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
     const secs = s % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  useEffect(() => {
+    let animId = 0;
+    const FRAME_INTERVAL_MS = 100; // <= 10Hz DOM clock updates
+    let lastFrameTime = 0;
+
+    // Immediately sync DOM text when uncollapsing or parameters change
+    if (!isCollapsed) {
+      if (earthClockRef.current) {
+        earthClockRef.current.textContent = formatClock(tSecRef.current);
+      }
+      if (s2ClockRef.current) {
+        s2ClockRef.current.textContent = formatClock(tauSecRef.current);
+      }
+    }
+
+    const tick = (now: number) => {
+      animId = requestAnimationFrame(tick);
+      if (now - lastFrameTime < FRAME_INTERVAL_MS) {
+        return;
+      }
+      lastFrameTime = now;
+      const deltaMs = Math.min(250, Math.max(0, now - lastAnimTimeRef.current));
+      lastAnimTimeRef.current = now;
+
+      const deltaSec = (deltaMs / 1000) * timeScale;
+      tSecRef.current += deltaSec;
+      tauSecRef.current += deltaSec * dilation.dtau_dt;
+
+      if (!isCollapsed) {
+        if (earthClockRef.current) {
+          earthClockRef.current.textContent = formatClock(tSecRef.current);
+        }
+        if (s2ClockRef.current) {
+          s2ClockRef.current.textContent = formatClock(tauSecRef.current);
+        }
+      }
+    };
+
+    animId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animId);
+  }, [timeScale, dilation.dtau_dt, isCollapsed]);
 
   // If collapsed, show a tiny non-intrusive pill
   if (isCollapsed) {
@@ -146,11 +149,11 @@ export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
         <div className="p-2 bg-neutral-950 border border-neutral-800/80 rounded-lg space-y-1.5 font-mono text-xs">
           <div className="flex items-center justify-between py-0.5 border-b border-neutral-800/60">
             <span className="text-neutral-400 text-[11px]">Distant Earth:</span>
-            <span className="font-bold text-neutral-100">{formatClock(clockState.tSeconds)}</span>
+            <span ref={earthClockRef} className="font-bold text-neutral-100">00:00</span>
           </div>
           <div className="flex items-center justify-between py-0.5">
             <span className="text-amber-400/90 text-[11px]">Orbiting Star S2:</span>
-            <span className="font-bold text-amber-300">{formatClock(clockState.tauSeconds)}</span>
+            <span ref={s2ClockRef} className="font-bold text-amber-300">00:00</span>
           </div>
         </div>
 
@@ -179,4 +182,4 @@ export const TimeDilationDisplay: React.FC<TimeDilationDisplayProps> = ({
       </div>
     </div>
   );
-};
+});

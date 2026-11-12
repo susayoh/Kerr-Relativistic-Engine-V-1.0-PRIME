@@ -66,7 +66,7 @@ function computeRadiativeEfficiencyPct(iscoRg: number, spin: number): number {
   return eta * 100;
 }
 
-export const CompareModeOverlay: React.FC<CompareModeOverlayProps> = ({
+export const CompareModeOverlay: React.FC<CompareModeOverlayProps> = React.memo(({
   presetAId,
   presetBId,
   paramsA,
@@ -904,4 +904,4 @@ export const CompareModeOverlay: React.FC<CompareModeOverlayProps> = ({
       )}
     </div>
   );
-};
+});

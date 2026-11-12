@@ -172,12 +172,9 @@ input[type="range"].sci-slider::-webkit-slider-thumb:hover {
   background: transparent;
 }
 
-/* GPU compositor layer isolation & premium terminal typography for floating HUD panels */
+/* CSS containment & premium terminal typography for floating HUD panels */
 .hud-panel {
   contain: layout style paint;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  will-change: transform;
   letter-spacing: 0.025em;
   -webkit-font-smoothing: antialiased;
 }

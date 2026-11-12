@@ -19,6 +19,21 @@ import {
   PulsarBeamSystem,
   updateCompactStarPrecession,
 } from './CompactStarMaterial';
+import {
+  classifyFrameBottleneck,
+  clearKerrPerfMarksAndMeasures,
+  computeBaseDesktopPixelRatio,
+  computeRollingAverageFps,
+  DYNAMIC_RES_MIN_DPR,
+  DYNAMIC_RES_ROLLING_WINDOW,
+  DYNAMIC_RES_STEP_DPR,
+  KERR_PERF_MARKS,
+  KERR_PERF_MEASURES,
+  safePerfMark,
+  safePerfMeasureMs,
+  ShaderPassTimingSnapshot,
+  stepDynamicResolutionScale,
+} from './renderScaleUtils';
 
 export interface AnatomyCalloutAnchor {
   id: string;
@@ -232,6 +247,7 @@ export interface ScenePerformanceTelemetry {
   lowResolutionRender?: boolean;
   renderResolutionScale?: number;
   telemetryThrottleHz?: number;
+  passTimings?: ShaderPassTimingSnapshot;
   layerDiagnostics: ShaderLayerDiagnosticItem[];
   gpuCache: GPUResourceCacheMetrics;
 }
@@ -868,6 +884,7 @@ const LENSING_FRAGMENT_SHADER = `
   uniform vec3 uCompanionStarPos;
   uniform float uCompanionStarRadius;
   uniform float uDepthPeeling;
+  uniform float u_isOrbiting;
 
   varying vec2 vUv;
   varying vec3 vWorldPos;
@@ -1422,14 +1439,22 @@ const LENSING_FRAGMENT_SHADER = `
 
           // 5-Step Front-to-Back Beer-Lambert Volumetric Geodesic Raymarcher through the lensed 3D plasma torus
           // When WebGL Depth-Peeling (uDepthPeeling > 0.5) is active, peels the front-most 3 strata with early optical-depth termination
+          // Orbit Step-Size Relaxation: multiplies integration step size dt by mix(1.0, 1.45, u_isOrbiting) during active drags/zooms
           float transmittance = 1.0;
           const int VOL_RAYMARCH_STEPS = 5;
+          float orbitStepMult = mix(1.0, 1.45, clamp(u_isOrbiting, 0.0, 1.0));
+          float tSpanHalf = tHalfSpan * 0.72;
+          float tStart = tCenter - tSpanHalf;
+          float tEnd = tCenter + tSpanHalf;
+          float baseDt = (2.0 * tSpanHalf) / float(VOL_RAYMARCH_STEPS);
+          float dt = baseDt * orbitStepMult;
+          float tCurr = tStart + 0.5 * dt;
           for (int i = 0; i < VOL_RAYMARCH_STEPS; i++) {
-            if (uDepthPeeling > 0.5 && i >= 3) {
+            if ((uDepthPeeling > 0.5 && i >= 3) || tCurr > tEnd + 0.001) {
               break;
             }
-            float sNorm = ((float(i) + 0.5) / float(VOL_RAYMARCH_STEPS)) * 2.0 - 1.0;
-            float tSample = max(0.02, tCenter + sNorm * tHalfSpan * 0.72);
+            float sNorm = clamp((tCurr - tCenter) / max(0.001, tSpanHalf), -1.0, 1.0);
+            float tSample = max(0.02, tCurr);
             vec3 samplePos = pLocal + bentDir * tSample;
             float rHit = length(samplePos.xz);
             rHit = mix(rHit, b, limbBlend * mix(0.52, 0.68, uAccretionState));
@@ -1452,7 +1477,7 @@ const LENSING_FRAGMENT_SHADER = `
 
             if (stepAlpha > 0.001) {
               float vertDensity = exp(-pow(abs(sNorm), 1.60) * 2.10);
-              float stepOpticalDepth = stepAlpha * vertDensity * (0.28 + 0.08 * uAccretionState);
+              float stepOpticalDepth = stepAlpha * vertDensity * (0.28 + 0.08 * uAccretionState) * orbitStepMult;
               float stepAbsorb = 1.0 - exp(-stepOpticalDepth * 1.65);
               accumColor += transmittance * stepCol * stepAbsorb;
               transmittance *= (1.0 - stepAbsorb * 0.90);
@@ -1460,6 +1485,7 @@ const LENSING_FRAGMENT_SHADER = `
                 break;
               }
             }
+            tCurr += dt;
           }
 
           accumAlpha = clamp(1.0 - transmittance, 0.0, 0.98);
@@ -2460,16 +2486,31 @@ export class BlackHoleSceneController {
   private resizeObserver: ResizeObserver | null = null;
 
   private params: BlackHoleParams;
+  private cachedMetrics: ReturnType<typeof computeRelativisticMetrics>;
   private settings: VisualizerSettings = { ...DEFAULT_VISUALIZER_SETTINGS };
   private showSingularityInAnatomy = false;
 
   // Performance Monitor & GPU Telemetry state
   private frameTimeSamples: number[] = [];
+  private rolling30FrameTimesMs: number[] = [];
+  private lastTickStartMs = 0;
+  private framesSinceResolutionCheck = 0;
+  private basePixelRatioCap = 1.0;
+  private dynamicPixelRatio = 1.0;
   private lastFramePerfMs = 0;
   private currentFrameTimeMs = 16.67;
   private lastRenderPasses = 1;
   private gpuRendererName = 'WebGL Hardware';
   private isWebGL2Context = true;
+
+  // User Timing API (performance.mark / performance.measure) & WebGL2 GPU Timer Query profiler state
+  private passTimingHistory: ShaderPassTimingSnapshot[] = [];
+  private latestPassTiming: ShaderPassTimingSnapshot | null = null;
+  private lastPerfConsoleLogMs = 0;
+  private perfConsoleLoggingEnabled = true;
+  private gpuTimerExt: { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null = null;
+  private activeGpuTimerQuery: WebGLQuery | null = null;
+  private lastGpuTimerQueryMs: number | null = null;
 
   constructor(
     container: HTMLElement,
@@ -2502,6 +2543,7 @@ export class BlackHoleSceneController {
   ) {
     this.container = container;
     this.params = initialParams;
+    this.cachedMetrics = computeRelativisticMetrics(initialParams);
     this.onFeatureSelect = callbacks?.onFeatureSelect;
     this.onTrajectoryCreated = callbacks?.onTrajectoryCreated;
     this.onHoverCoordsChange = callbacks?.onHoverCoordsChange;
@@ -2702,9 +2744,38 @@ export class BlackHoleSceneController {
           if (rawGpu) {
             this.gpuRendererName = rawGpu;
           }
+          if (this.isWebGL2Context) {
+            this.gpuTimerExt = gl.getExtension('EXT_disjoint_timer_query_webgl2') as {
+              TIME_ELAPSED_EXT: number;
+              GPU_DISJOINT_EXT: number;
+            } | null;
+          }
         }
       } catch {
         this.gpuRendererName = isSoftwareGl ? 'Software WebGL Rasterizer' : 'WebGL GPU';
+      }
+
+      if (typeof window !== 'undefined') {
+        (
+          window as Window & {
+            __kerrPerfProfiler?: {
+              dumpNow: () => ShaderPassTimingSnapshot | null;
+              setAutoConsoleLog: (enabled: boolean) => void;
+              getLatest: () => ShaderPassTimingSnapshot | null;
+              getHistory: () => ShaderPassTimingSnapshot[];
+            };
+          }
+        ).__kerrPerfProfiler = {
+          dumpNow: () => {
+            this.logShaderPassTelemetryToConsole(true);
+            return this.latestPassTiming;
+          },
+          setAutoConsoleLog: (enabled: boolean) => {
+            this.perfConsoleLoggingEnabled = Boolean(enabled);
+          },
+          getLatest: () => this.latestPassTiming,
+          getHistory: () => [...this.passTimingHistory],
+        };
       }
 
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -2778,6 +2849,9 @@ export class BlackHoleSceneController {
         return;
       }
       this.isUserInteracting = true;
+      if (this.gravitationalLensMat) {
+        this.gravitationalLensMat.uniforms.u_isOrbiting.value = 1.0;
+      }
       if (this.cinematicTourActive) {
         this.stopCinematicTour();
       }
@@ -2797,6 +2871,9 @@ export class BlackHoleSceneController {
 
     this.controls.addEventListener('end', () => {
       this.isUserInteracting = false;
+      if (this.gravitationalLensMat) {
+        this.gravitationalLensMat.uniforms.u_isOrbiting.value = 0.0;
+      }
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
       this.lastOrbitEndMs = now;
       this.lastObserverReadoutEmitMs = now;
@@ -4223,6 +4300,7 @@ export class BlackHoleSceneController {
             ? 1.0
             : 0.0,
         },
+        u_isOrbiting: { value: 0.0 },
       },
       vertexShader: LENSING_VERTEX_SHADER,
       fragmentShader: LENSING_FRAGMENT_SHADER,
@@ -5296,6 +5374,7 @@ export class BlackHoleSceneController {
 
     const prevScale = this.targetScale;
     this.params = nextParams;
+    this.cachedMetrics = computeRelativisticMetrics(nextParams);
 
     // Proportional Astrophysical Cosmic Scaling:
     // Replicates the colossal physical disparity of cosmic objects:
@@ -5639,26 +5718,55 @@ export class BlackHoleSceneController {
 
   /**
    * High-DPI WebGL pixel ratio controller:
-   * - Balances crisp desktop/mobile anti-aliased rendering with bounded fill-rate so ultramassive
-   *   presets (TON 618) never trigger GPU driver stalls on large desktop viewports.
+   * - Caps desktop viewports (> 1024px) to 1.25 (or 1.0 when > 1920px wide) to bound GPU fill-rate.
+   * - Supports dynamic resolution stepping down to 0.75 when rolling 30-frame FPS drops below 48 FPS.
    */
-  private configureDevicePixelRatioAndUpscaling(width: number, height: number): number {
+  private computeTargetBasePixelRatio(): number {
     const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1.0 : 1.0;
-    const isLargeDesktop = width >= 1024;
-    const isHighPerf = Boolean(this.settings?.highPerformanceMode);
-    const isLowRes = Boolean(this.settings?.lowResolutionRender);
-    const maxDesktopDpr = isLargeDesktop
-      ? isHighPerf || width * height > 1800000
-        ? 0.85
-        : 1.0
-      : 1.35;
-    const targetPixelRatio = isLowRes
-      ? 0.5
-      : isSoftwareGl
-      ? isLargeDesktop
-        ? 0.65
-        : 0.85
-      : Math.min(rawDpr, maxDesktopDpr);
+    const viewportWidth =
+      typeof window !== 'undefined'
+        ? window.innerWidth
+        : this.container?.clientWidth || 1280;
+    return computeBaseDesktopPixelRatio(viewportWidth, rawDpr, {
+      lowResolutionRender: Boolean(this.settings?.lowResolutionRender),
+      highPerformanceMode: Boolean(this.settings?.highPerformanceMode),
+      isSoftwareGl,
+    });
+  }
+
+  private applyDynamicPixelRatio(targetPixelRatio: number, width: number, height: number) {
+    if (!this.renderer) return;
+    if (this.renderer.getPixelRatio() !== targetPixelRatio) {
+      this.renderer.setPixelRatio(targetPixelRatio);
+    }
+    this.renderer.setSize(width, height, false);
+    this.lastAppliedPixelRatio = targetPixelRatio;
+
+    const rtWidth = Math.max(1, Math.round(width * targetPixelRatio));
+    const rtHeight = Math.max(1, Math.round(height * targetPixelRatio));
+    if (this.settings.timeLapseEnabled) {
+      this.motionBlurRenderTarget?.setSize(rtWidth, rtHeight);
+      this.timeLapseTargetA?.setSize(rtWidth, rtHeight);
+      this.timeLapseTargetB?.setSize(rtWidth, rtHeight);
+    } else if (this.settings.motionBlurEnabled && !this.settings.highPerformanceMode && !this.isUserInteracting) {
+      this.motionBlurRenderTarget?.setSize(rtWidth, rtHeight);
+    }
+    if (this.postMaterial) {
+      this.postMaterial.uniforms.uResolution.value.set(rtWidth, rtHeight);
+    }
+    if (this.cameraLensFlareMat) {
+      this.cameraLensFlareMat.uniforms.uResolution.value.set(rtWidth, rtHeight);
+    }
+  }
+
+  private configureDevicePixelRatioAndUpscaling(width: number, height: number): number {
+    const baseCap = this.computeTargetBasePixelRatio();
+    this.basePixelRatioCap = baseCap;
+    const targetPixelRatio =
+      this.settings?.lowResolutionRender || isSoftwareGl
+        ? baseCap
+        : Math.max(Math.min(DYNAMIC_RES_MIN_DPR, baseCap), Math.min(baseCap, this.dynamicPixelRatio || baseCap));
+    this.dynamicPixelRatio = targetPixelRatio;
 
     // Maintain GPU-composited layer promotion and touch-action: none on the canvas DOM element
     if (this.domElement) {
@@ -5748,22 +5856,11 @@ export class BlackHoleSceneController {
     }
     const width = Math.max(1, this.container.clientWidth || window.innerWidth);
     const height = Math.max(1, this.container.clientHeight || window.innerHeight);
-    const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1.0 : 1.0;
-    const isLargeDesktop = width >= 1024;
-    const isHighPerf = Boolean(this.settings?.highPerformanceMode);
-    const isLowRes = Boolean(this.settings?.lowResolutionRender);
-    const maxDesktopDpr = isLargeDesktop
-      ? isHighPerf || width * height > 1800000
-        ? 0.85
-        : 1.0
-      : 1.35;
-    const expectedDpr = isLowRes
-      ? 0.5
-      : isSoftwareGl
-      ? isLargeDesktop
-        ? 0.65
-        : 0.85
-      : Math.min(rawDpr, maxDesktopDpr);
+    const baseCap = this.computeTargetBasePixelRatio();
+    const expectedDpr =
+      this.settings?.lowResolutionRender || isSoftwareGl
+        ? baseCap
+        : Math.max(Math.min(DYNAMIC_RES_MIN_DPR, baseCap), Math.min(baseCap, this.dynamicPixelRatio || baseCap));
     if (
       width === this.lastResizeWidth &&
       height === this.lastResizeHeight &&
@@ -5788,10 +5885,12 @@ export class BlackHoleSceneController {
       this.domElement.style.width = `${width}px`;
       this.domElement.style.height = `${height}px`;
     }
-    if (this.settings.motionBlurEnabled || this.settings.timeLapseEnabled) {
+    if (this.settings.timeLapseEnabled) {
       this.motionBlurRenderTarget?.setSize(rtWidth, rtHeight);
       this.timeLapseTargetA?.setSize(rtWidth, rtHeight);
       this.timeLapseTargetB?.setSize(rtWidth, rtHeight);
+    } else if (this.settings.motionBlurEnabled && !this.settings.highPerformanceMode) {
+      this.motionBlurRenderTarget?.setSize(rtWidth, rtHeight);
     }
     this.timeLapseInitialized = false;
     if (this.postMaterial) {
@@ -5952,8 +6051,30 @@ export class BlackHoleSceneController {
   private tick = () => {
     if (this.isDisposed) return;
 
+    // Stop hidden render passes when tab is backgrounded or mount container has zero area
+    const isContainerHidden =
+      (typeof document !== 'undefined' && document.hidden) ||
+      !this.container ||
+      this.container.clientWidth <= 0 ||
+      this.container.clientHeight <= 0;
+    if (isContainerHidden) {
+      this.lastTickStartMs = 0;
+      if (!this.renderer) {
+        this.frameId = window.setTimeout(this.tick, 100);
+      } else {
+        this.frameId = requestAnimationFrame(this.tick);
+      }
+      return;
+    }
+
     const tickStartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const interFrameMs =
+      this.lastTickStartMs > 0 ? tickStartMs - this.lastTickStartMs : 16.67;
+    this.lastTickStartMs = tickStartMs;
     this.lastFramePerfMs = tickStartMs;
+
+    safePerfMark(KERR_PERF_MARKS.rafStart);
+    safePerfMark(KERR_PERF_MARKS.cpuSimStart);
 
     const clockDelta = this.clock.getDelta();
     const wallDelta = Math.min(2.5, Math.max(0.001, clockDelta));
@@ -6235,7 +6356,7 @@ export class BlackHoleSceneController {
     }
 
     // 3. Lense-Thirring Frame-Dragging Rotation
-    const metrics = computeRelativisticMetrics(this.params);
+    const metrics = this.cachedMetrics;
     this.ergosphereGroup.rotation.y += simDelta * (0.4 + metrics.frameDraggingOmega * 4.5);
     this.ergosphereGroup.scale.set(
       effectiveScale * (1.0 + 0.22 * this.params.spin),
@@ -6477,7 +6598,7 @@ export class BlackHoleSceneController {
         }
       }
 
-      if (hasActiveRipples) {
+      if (hasActiveRipples && !this.settings.highPerformanceMode) {
         this.needsWellDeform = true;
       }
     }
@@ -6530,7 +6651,7 @@ export class BlackHoleSceneController {
     }
 
     if (this.needsWellDeform && this.spacetimeWellMesh?.visible) {
-      const wellThrottleMs = this.settings.highPerformanceMode ? 42 : 28;
+      const wellThrottleMs = this.settings.highPerformanceMode ? 64 : 36;
       if (tickStartMs - this.lastWellDeformMs >= wellThrottleMs || this.expansionProgress >= 0.999) {
         this.lastWellDeformMs = tickStartMs;
         this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
@@ -6545,27 +6666,32 @@ export class BlackHoleSceneController {
     // 5b. Distant Background Star Gravitational Microlensing Simulation
     this.updateBackgroundStarMicrolensing(simDelta);
 
-    // 6. Advance Orbiting Star S2 along Relativistic Orbit
-    const orbitSceneRadius = this.params.probeRadiusRs * 1.75 * this.currentScale;
-    const angularSpeed = (1.65 * metrics.probeOrbitalBeta) / Math.max(1.5, this.params.probeRadiusRs * 0.45);
-    this.starOrbitAngle += simDelta * angularSpeed;
+    // 6. Advance Orbiting Star S2 along Relativistic Orbit (only when orbital stars or follow-star camera is active)
+    let starX = 0;
+    let starY = 0;
+    let starZ = 0;
+    if (this.params.layers.orbitalStars || this.followStarMode) {
+      const orbitSceneRadius = this.params.probeRadiusRs * 1.75 * this.currentScale;
+      const angularSpeed = (1.65 * metrics.probeOrbitalBeta) / Math.max(1.5, this.params.probeRadiusRs * 0.45);
+      this.starOrbitAngle += simDelta * angularSpeed;
 
-    const starX = Math.cos(this.starOrbitAngle) * orbitSceneRadius;
-    const starZ = -Math.sin(this.starOrbitAngle) * orbitSceneRadius;
-    const starY = Math.sin(this.starOrbitAngle * 2.0) * 0.22 * this.params.spin;
-    this.starS2Mesh.position.set(starX, starY, starZ);
+      starX = Math.cos(this.starOrbitAngle) * orbitSceneRadius;
+      starZ = -Math.sin(this.starOrbitAngle) * orbitSceneRadius;
+      starY = Math.sin(this.starOrbitAngle * 2.0) * 0.22 * this.params.spin;
+      this.starS2Mesh.position.set(starX, starY, starZ);
 
-    const starPulse = 1.0 + Math.sin(elapsed * 4.0) * 0.12;
-    this.starS2GlowMesh.scale.setScalar(starPulse);
+      const starPulse = 1.0 + Math.sin(elapsed * 4.0) * 0.12;
+      this.starS2GlowMesh.scale.setScalar(starPulse);
 
-    // 7. Advance Companion S-Stars in Nuclear Cluster
-    for (const comp of this.companionStars) {
-      comp.phase += simDelta * (0.45 * comp.speed);
-      const rComp = comp.semiMajor * 1.75 * this.currentScale;
-      const cx = Math.cos(comp.phase) * rComp;
-      const cz = Math.sin(comp.phase) * rComp;
-      const cy = Math.sin(comp.phase) * Math.sin(comp.inclination) * rComp * 0.45;
-      comp.mesh.position.set(cx, cy, cz);
+      // 7. Advance Companion S-Stars in Nuclear Cluster
+      for (const comp of this.companionStars) {
+        comp.phase += simDelta * (0.45 * comp.speed);
+        const rComp = comp.semiMajor * 1.75 * this.currentScale;
+        const cx = Math.cos(comp.phase) * rComp;
+        const cz = Math.sin(comp.phase) * rComp;
+        const cy = Math.sin(comp.phase) * Math.sin(comp.inclination) * rComp * 0.45;
+        comp.mesh.position.set(cx, cy, cz);
+      }
     }
 
     // 8. Advance Geodesic Photon Pulses (Single-pass decay without infinite looping; pauses when simDelta === 0)
@@ -6589,6 +6715,9 @@ export class BlackHoleSceneController {
       const p1 = item.points[Math.min(item.points.length - 1, idx + 1)];
       item.mesh.position.lerpVectors(p0, p1, frac);
     }
+
+    safePerfMark(KERR_PERF_MARKS.cpuSimEnd);
+    safePerfMark(KERR_PERF_MARKS.cpuCameraUniformsStart);
 
     // 9. Camera Controls, Movie-Grade Helical Boot Fly-In (6s), Post-Boot Sequence (+1.5s Watermark for 2.4s -> +4.45s Singularity Seed -> +6.4s Expand) & Cinematic Tour
     if (this.bootAutoExpandPending) {
@@ -6912,6 +7041,9 @@ export class BlackHoleSceneController {
       this.gravitationalLensMat.uniforms.uBlackHolePos.value.copy(this.blackHoleGroup.position);
       this.gravitationalLensMat.uniforms.uScale.value = effectiveScale;
       this.gravitationalLensMat.uniforms.uTime.value = elapsed;
+      this.gravitationalLensMat.uniforms.u_isOrbiting.value = this.isUserInteracting
+        ? 1.0
+        : Math.min(1.0, this.camMotionBlurStrength * 2.2);
       this.gravitationalLensMat.uniforms.uPulseRadius.value = this.pulseRadius / Math.max(0.05, effectiveScale);
       this.gravitationalLensMat.uniforms.uPulseStrength.value = this.pulseStrength;
       this.gravitationalLensMat.uniforms.uExpansionProgress.value = isStar ? 1.0 : this.expansionProgress;
@@ -7085,10 +7217,22 @@ export class BlackHoleSceneController {
       }
     }
 
+    safePerfMark(KERR_PERF_MARKS.cpuCameraUniformsEnd);
+
     if (this.renderer) {
       this.renderer.info.reset();
+      const gl = this.isWebGL2Context
+        ? (this.renderer.getContext() as WebGL2RenderingContext | null)
+        : null;
+      this.pollGpuTimerQuery(gl);
+      const startedGpuQuery = this.beginGpuTimerQuery(gl);
+
       const useMotionBlur =
-        !isSoftwareGl && this.settings.motionBlurEnabled && this.camMotionBlurStrength > 0.035;
+        !isSoftwareGl &&
+        !this.settings.highPerformanceMode &&
+        !this.isUserInteracting &&
+        this.settings.motionBlurEnabled &&
+        this.camMotionBlurStrength > 0.035;
       const useTimeLapse = Boolean(this.settings.timeLapseEnabled);
 
       if (
@@ -7105,8 +7249,10 @@ export class BlackHoleSceneController {
           this.motionBlurRenderTarget.height !== targetRtH
         ) {
           this.motionBlurRenderTarget.setSize(targetRtW, targetRtH);
-          this.timeLapseTargetA.setSize(targetRtW, targetRtH);
-          this.timeLapseTargetB.setSize(targetRtW, targetRtH);
+          if (useTimeLapse) {
+            this.timeLapseTargetA.setSize(targetRtW, targetRtH);
+            this.timeLapseTargetB.setSize(targetRtW, targetRtH);
+          }
           this.postMaterial.uniforms.uResolution.value.set(targetRtW, targetRtH);
         }
         this.postMaterial.uniforms.uStrength.value = useMotionBlur
@@ -7114,9 +7260,12 @@ export class BlackHoleSceneController {
           : 0.0;
         this.postMaterial.uniforms.uVelocity.value.copy(this.camMotionVelocity);
 
+        safePerfMark(KERR_PERF_MARKS.gpuScenePassStart);
         this.renderer.setRenderTarget(this.motionBlurRenderTarget);
         this.renderer.render(this.scene, this.camera);
+        safePerfMark(KERR_PERF_MARKS.gpuScenePassEnd);
 
+        safePerfMark(KERR_PERF_MARKS.gpuPostPassStart);
         if (useTimeLapse) {
           const readTarget = this.timeLapseReadFirst
             ? this.timeLapseTargetA
@@ -7152,13 +7301,26 @@ export class BlackHoleSceneController {
           this.renderer.render(this.postScene, this.postCamera);
           this.lastRenderPasses = 2;
         }
+        safePerfMark(KERR_PERF_MARKS.gpuPostPassEnd);
       } else {
+        safePerfMark(KERR_PERF_MARKS.gpuScenePassStart);
         this.renderer.setRenderTarget(null);
         this.renderer.render(this.scene, this.camera);
+        safePerfMark(KERR_PERF_MARKS.gpuScenePassEnd);
+        safePerfMark(KERR_PERF_MARKS.gpuPostPassStart);
+        safePerfMark(KERR_PERF_MARKS.gpuPostPassEnd);
         this.lastRenderPasses = 1;
       }
+
+      if (startedGpuQuery) {
+        this.endGpuTimerQuery(gl);
+      }
     } else if (this.fallbackCtx2D) {
+      safePerfMark(KERR_PERF_MARKS.gpuScenePassStart);
       this.renderFallback2D(elapsed, effectiveScale);
+      safePerfMark(KERR_PERF_MARKS.gpuScenePassEnd);
+      safePerfMark(KERR_PERF_MARKS.gpuPostPassStart);
+      safePerfMark(KERR_PERF_MARKS.gpuPostPassEnd);
       this.lastRenderPasses = 1;
     }
 
@@ -7170,13 +7332,110 @@ export class BlackHoleSceneController {
       this.camera.updateMatrixWorld();
     }
 
+    safePerfMark(KERR_PERF_MARKS.rafEnd);
+
+    const cpuSimPhysicsMs = safePerfMeasureMs(
+      KERR_PERF_MEASURES.cpuSimPhysics,
+      KERR_PERF_MARKS.cpuSimStart,
+      KERR_PERF_MARKS.cpuSimEnd
+    );
+    const cpuCameraUniformsMs = safePerfMeasureMs(
+      KERR_PERF_MEASURES.cpuCameraUniforms,
+      KERR_PERF_MARKS.cpuCameraUniformsStart,
+      KERR_PERF_MARKS.cpuCameraUniformsEnd
+    );
+    const gpuScenePassMs = safePerfMeasureMs(
+      KERR_PERF_MEASURES.gpuScenePass,
+      KERR_PERF_MARKS.gpuScenePassStart,
+      KERR_PERF_MARKS.gpuScenePassEnd
+    );
+    const gpuPostPassMs = safePerfMeasureMs(
+      KERR_PERF_MEASURES.gpuPostPass,
+      KERR_PERF_MARKS.gpuPostPassStart,
+      KERR_PERF_MARKS.gpuPostPassEnd
+    );
+    const rafTotalMs = safePerfMeasureMs(
+      KERR_PERF_MEASURES.rafTotal,
+      KERR_PERF_MARKS.rafStart,
+      KERR_PERF_MARKS.rafEnd
+    );
+    clearKerrPerfMarksAndMeasures();
+
     const tickEndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    const frameCpuGpuMs = Math.max(1.2, tickEndMs - tickStartMs);
-    const effectiveFrameMs = Math.min(24.0, Math.max(16.67, frameCpuGpuMs));
-    this.currentFrameTimeMs = effectiveFrameMs;
-    this.frameTimeSamples.push(effectiveFrameMs);
+    const frameCpuMs = Math.max(1.0, rafTotalMs > 0 ? rafTotalMs : tickEndMs - tickStartMs);
+    const measuredFrameMs =
+      interFrameMs > 0 && interFrameMs < 250
+        ? Math.max(4.0, Math.min(120.0, Math.max(interFrameMs, frameCpuMs)))
+        : Math.max(16.67, Math.min(120.0, frameCpuMs));
+
+    const passSnapshot = classifyFrameBottleneck({
+      interFrameMs: Number(measuredFrameMs.toFixed(2)),
+      rafTotalMs: Number((rafTotalMs > 0 ? rafTotalMs : tickEndMs - tickStartMs).toFixed(2)),
+      cpuSimPhysicsMs: Number(cpuSimPhysicsMs.toFixed(2)),
+      cpuCameraUniformsMs: Number(cpuCameraUniformsMs.toFixed(2)),
+      gpuScenePassMs: Number(gpuScenePassMs.toFixed(2)),
+      gpuPostPassMs: Number(gpuPostPassMs.toFixed(2)),
+      gpuTimerQueryMs:
+        this.lastGpuTimerQueryMs !== null ? Number(this.lastGpuTimerQueryMs.toFixed(2)) : null,
+      renderPasses: this.lastRenderPasses,
+      isOrbiting: this.isUserInteracting,
+      pixelRatio: this.lastAppliedPixelRatio || this.basePixelRatioCap || 1.0,
+    });
+    this.latestPassTiming = passSnapshot;
+    this.passTimingHistory.push(passSnapshot);
+    if (this.passTimingHistory.length > 60) {
+      this.passTimingHistory.shift();
+    }
+
+    if (
+      this.perfConsoleLoggingEnabled &&
+      this.passTimingHistory.length >= 30 &&
+      tickEndMs - this.lastPerfConsoleLogMs >= 2500
+    ) {
+      this.lastPerfConsoleLogMs = tickEndMs;
+      this.logShaderPassTelemetryToConsole(false);
+    }
+
+    this.currentFrameTimeMs = measuredFrameMs;
+    this.frameTimeSamples.push(measuredFrameMs);
     if (this.frameTimeSamples.length > 60) {
       this.frameTimeSamples.shift();
+    }
+
+    // Rolling 30-frame dynamic resolution scaler:
+    // Step down internal pixel ratio by 0.15 (min 0.75) when rolling 30-frame avg FPS < 48,
+    // and recover upward toward basePixelRatioCap once rolling FPS exceeds 55 FPS.
+    if (interFrameMs > 0 && interFrameMs < 250) {
+      this.rolling30FrameTimesMs.push(measuredFrameMs);
+      if (this.rolling30FrameTimesMs.length > DYNAMIC_RES_ROLLING_WINDOW) {
+        this.rolling30FrameTimesMs.shift();
+      }
+      this.framesSinceResolutionCheck++;
+
+      if (
+        this.rolling30FrameTimesMs.length >= DYNAMIC_RES_ROLLING_WINDOW &&
+        this.framesSinceResolutionCheck >= DYNAMIC_RES_ROLLING_WINDOW &&
+        this.renderer &&
+        !this.settings.lowResolutionRender &&
+        !isSoftwareGl
+      ) {
+        this.framesSinceResolutionCheck = 0;
+        const avgFps = computeRollingAverageFps(this.rolling30FrameTimesMs);
+        const currentDpr = this.lastAppliedPixelRatio || this.basePixelRatioCap || 1.0;
+        const nextDpr = stepDynamicResolutionScale(
+          currentDpr,
+          avgFps,
+          this.basePixelRatioCap || 1.0,
+          DYNAMIC_RES_MIN_DPR,
+          DYNAMIC_RES_STEP_DPR
+        );
+        if (Math.abs(nextDpr - currentDpr) >= 0.01) {
+          this.dynamicPixelRatio = nextDpr;
+          const width = Math.max(1, this.container.clientWidth || window.innerWidth);
+          const height = Math.max(1, this.container.clientHeight || window.innerHeight);
+          this.applyDynamicPixelRatio(nextDpr, width, height);
+        }
+      }
     }
 
     if (!this.renderer) {
@@ -8594,10 +8853,134 @@ export class BlackHoleSceneController {
       ),
       lowResolutionRender: Boolean(this.settings.lowResolutionRender),
       renderResolutionScale: this.settings.lowResolutionRender ? 0.5 : pixelRatio,
-      telemetryThrottleHz: this.settings.highPerformanceMode ? 4 : 12,
+      telemetryThrottleHz: this.settings.highPerformanceMode ? 4 : 10,
+      passTimings: this.getAveragedPassTimingsSnapshot(),
       layerDiagnostics,
       gpuCache: gpuResourceCache.getMetrics(programsCount),
     };
+  }
+
+  /**
+   * Non-blocking WebGL2 EXT_disjoint_timer_query_webgl2 poll & begin/end helpers.
+   * Captures true asynchronous GPU fragment execution duration without stalling the pipeline.
+   */
+  private pollGpuTimerQuery(gl: WebGL2RenderingContext | null): void {
+    if (!gl || !this.gpuTimerExt || !this.activeGpuTimerQuery) return;
+    try {
+      const available = gl.getQueryParameter(
+        this.activeGpuTimerQuery,
+        gl.QUERY_RESULT_AVAILABLE
+      );
+      const disjoint = gl.getParameter(this.gpuTimerExt.GPU_DISJOINT_EXT);
+      if (available && !disjoint) {
+        const timeElapsedNs = Number(
+          gl.getQueryParameter(this.activeGpuTimerQuery, gl.QUERY_RESULT)
+        );
+        if (Number.isFinite(timeElapsedNs) && timeElapsedNs >= 0) {
+          this.lastGpuTimerQueryMs = timeElapsedNs / 1e6;
+        }
+      }
+      if (available || disjoint) {
+        gl.deleteQuery(this.activeGpuTimerQuery);
+        this.activeGpuTimerQuery = null;
+      }
+    } catch {
+      this.activeGpuTimerQuery = null;
+    }
+  }
+
+  private beginGpuTimerQuery(gl: WebGL2RenderingContext | null): boolean {
+    if (!gl || !this.gpuTimerExt || this.activeGpuTimerQuery) return false;
+    try {
+      const query = gl.createQuery();
+      if (!query) return false;
+      gl.beginQuery(this.gpuTimerExt.TIME_ELAPSED_EXT, query);
+      this.activeGpuTimerQuery = query;
+      return true;
+    } catch {
+      this.activeGpuTimerQuery = null;
+      return false;
+    }
+  }
+
+  private endGpuTimerQuery(gl: WebGL2RenderingContext | null): void {
+    if (!gl || !this.gpuTimerExt || !this.activeGpuTimerQuery) return;
+    try {
+      gl.endQuery(this.gpuTimerExt.TIME_ELAPSED_EXT);
+    } catch {
+      // Ignore
+    }
+  }
+
+  public getAveragedPassTimingsSnapshot(): ShaderPassTimingSnapshot | undefined {
+    if (this.passTimingHistory.length === 0) {
+      return this.latestPassTiming ?? undefined;
+    }
+    const n = this.passTimingHistory.length;
+    let sumInter = 0;
+    let sumRaf = 0;
+    let sumSim = 0;
+    let sumCam = 0;
+    let sumScene = 0;
+    let sumPost = 0;
+    let sumGpuQuery = 0;
+    let gpuQueryCount = 0;
+
+    for (let i = 0; i < n; i++) {
+      const s = this.passTimingHistory[i];
+      sumInter += s.interFrameMs;
+      sumRaf += s.rafTotalMs;
+      sumSim += s.cpuSimPhysicsMs;
+      sumCam += s.cpuCameraUniformsMs;
+      sumScene += s.gpuScenePassMs;
+      sumPost += s.gpuPostPassMs;
+      if (s.gpuTimerQueryMs !== null && Number.isFinite(s.gpuTimerQueryMs)) {
+        sumGpuQuery += s.gpuTimerQueryMs;
+        gpuQueryCount++;
+      }
+    }
+
+    const latest = this.passTimingHistory[n - 1];
+    return classifyFrameBottleneck({
+      interFrameMs: Number((sumInter / n).toFixed(2)),
+      rafTotalMs: Number((sumRaf / n).toFixed(2)),
+      cpuSimPhysicsMs: Number((sumSim / n).toFixed(2)),
+      cpuCameraUniformsMs: Number((sumCam / n).toFixed(2)),
+      gpuScenePassMs: Number((sumScene / n).toFixed(2)),
+      gpuPostPassMs: Number((sumPost / n).toFixed(2)),
+      gpuTimerQueryMs: gpuQueryCount > 0 ? Number((sumGpuQuery / gpuQueryCount).toFixed(2)) : null,
+      renderPasses: latest.renderPasses,
+      isOrbiting: latest.isOrbiting,
+      pixelRatio: latest.pixelRatio,
+    });
+  }
+
+  /**
+   * Logs a structured User Timing API (performance.mark / performance.measure) breakdown
+   * of shader pass durations vs. CPU requestAnimationFrame stages to the browser console.
+   */
+  public logShaderPassTelemetryToConsole(forceImmediate = false): void {
+    const avg = this.getAveragedPassTimingsSnapshot();
+    if (!avg) return;
+    const fps = Math.min(240, Math.round(1000 / Math.max(1.0, avg.interFrameMs)));
+    const gpuTimerStr =
+      avg.gpuTimerQueryMs !== null ? `${avg.gpuTimerQueryMs.toFixed(2)}ms` : 'N/A (CPU submit)';
+
+    console.info(
+      `[Kerr Perf Profiler${forceImmediate ? ' · MANUAL DUMP' : ''}] ${fps} FPS (${avg.interFrameMs.toFixed(
+        2
+      )}ms/frame @ ${avg.pixelRatio.toFixed(2)}x DPR · ${avg.renderPasses} pass${
+        avg.renderPasses === 1 ? '' : 'es'
+      }${avg.isOrbiting ? ' · ORBITING' : ''}) | ` +
+        `rAF Total: ${avg.rafTotalMs.toFixed(2)}ms ` +
+        `[CPU Sim/Well: ${avg.cpuSimPhysicsMs.toFixed(2)}ms | ` +
+        `CPU Cam/Uniforms: ${avg.cpuCameraUniformsMs.toFixed(2)}ms | ` +
+        `GPU Scene Raymarch Pass: ${avg.gpuScenePassMs.toFixed(2)}ms | ` +
+        `GPU Post Pass: ${avg.gpuPostPassMs.toFixed(2)}ms | ` +
+        `HW GPU Timer: ${gpuTimerStr} | ` +
+        `Iframe/VSync Gap: ${avg.unaccountedFrameGapMs.toFixed(2)}ms] -> ` +
+        `Verdict: ${avg.classification} (${avg.diagnosisSummary})`
+    );
   }
 
   public getCanvas(): HTMLCanvasElement {

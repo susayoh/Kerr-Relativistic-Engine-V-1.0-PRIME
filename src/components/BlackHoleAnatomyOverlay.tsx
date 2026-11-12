@@ -128,7 +128,7 @@ const CALLOUT_LAYOUTS: Record<string, CalloutLayoutSpec> = {
   },
 };
 
-export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = ({
+export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = React.memo(({
   sceneController,
   isVisible,
   onToggleVisible,
@@ -170,7 +170,23 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
         lastUpdate = now;
         try {
           const projected = sceneController.getAnatomyCalloutAnchors();
-          setAnchors(projected);
+          setAnchors((prev) => {
+            if (
+              prev.length === projected.length &&
+              prev.every((p, idx) => {
+                const n = projected[idx];
+                return (
+                  p.id === n.id &&
+                  p.isVisible === n.isVisible &&
+                  Math.abs(p.screenX - n.screenX) < 0.5 &&
+                  Math.abs(p.screenY - n.screenY) < 0.5
+                );
+              })
+            ) {
+              return prev;
+            }
+            return projected;
+          });
         } catch {
           // Ignore transient resize errors
         }
@@ -359,4 +375,4 @@ export const BlackHoleAnatomyOverlay: React.FC<BlackHoleAnatomyOverlayProps> = (
       </div>
     </div>
   );
-};
+});

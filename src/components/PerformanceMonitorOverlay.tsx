@@ -77,7 +77,7 @@ const FALLBACK_TELEMETRY: ScenePerformanceTelemetry = {
   },
 };
 
-export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps> = ({
+export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps> = React.memo(({
   sceneController,
   params,
   settings,
@@ -94,13 +94,13 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
   const [showLayerDiagnostics, setShowLayerDiagnostics] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!sceneController) return;
+    if (!sceneController || isCollapsed) return;
     setTelemetry(sceneController.getPerformanceTelemetry());
     let lastPerfUpdateMs = performance.now();
     let rafId = 0;
     let isCancelled = false;
 
-    const FRAME_INTERVAL_MS = settings.highPerformanceMode ? 350 : 150;
+    const FRAME_INTERVAL_MS = Math.max(100, settings.highPerformanceMode ? 350 : 150);
     const tickPerf = (now: number) => {
       if (isCancelled) return;
       rafId = window.requestAnimationFrame(tickPerf);
@@ -115,7 +115,7 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
       isCancelled = true;
       window.cancelAnimationFrame(rafId);
     };
-  }, [sceneController, settings.highPerformanceMode, settings.lowResolutionRender]);
+  }, [sceneController, settings.highPerformanceMode, settings.lowResolutionRender, isCollapsed]);
 
   const isStar = isStellarCategory(params.objectCategory);
 
@@ -473,6 +473,78 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
             </div>
           </div>
 
+          {/* 2b. User Timing API (performance.mark / performance.measure) Pass Breakdown */}
+          {telemetry.passTimings && (
+            <div
+              data-testid="perf-user-timing-breakdown"
+              className="p-2 rounded-lg bg-[#080d1a] border border-slate-800/90 space-y-1.5 font-mono text-[9px] tabular-nums"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-cyan-300 uppercase tracking-wider">
+                  User Timing Pass Profiler (60f Avg)
+                </span>
+                <button
+                  type="button"
+                  data-testid="perf-console-dump-btn"
+                  onClick={() => sceneController?.logShaderPassTelemetryToConsole(true)}
+                  className="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 cursor-pointer transition-colors"
+                  title="Log current performance.measure pass breakdown to browser DevTools console"
+                >
+                  Log to Console
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-slate-300">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">CPU Sim/Well:</span>
+                  <strong>{telemetry.passTimings.cpuSimPhysicsMs.toFixed(2)}ms</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">CPU Cam/Uniforms:</span>
+                  <strong>{telemetry.passTimings.cpuCameraUniformsMs.toFixed(2)}ms</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">GPU Scene Pass:</span>
+                  <strong className="text-amber-300">
+                    {telemetry.passTimings.gpuScenePassMs.toFixed(2)}ms
+                  </strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">GPU Post Pass:</span>
+                  <strong>{telemetry.passTimings.gpuPostPassMs.toFixed(2)}ms</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">rAF JS Total:</span>
+                  <strong className="text-emerald-300">
+                    {telemetry.passTimings.rafTotalMs.toFixed(2)}ms
+                  </strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Compositor Gap:</span>
+                  <strong className="text-cyan-300">
+                    {telemetry.passTimings.unaccountedFrameGapMs.toFixed(2)}ms
+                  </strong>
+                </div>
+              </div>
+
+              <div className="pt-1 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                <span className="text-slate-400">Bottleneck Verdict:</span>
+                <span
+                  data-testid="perf-bottleneck-verdict"
+                  className={`px-1.5 py-0.2 rounded font-bold border ${
+                    telemetry.passTimings.classification === 'OPTIMAL_60FPS'
+                      ? 'border-emerald-500/50 bg-emerald-950/60 text-emerald-300'
+                      : telemetry.passTimings.classification === 'GPU_FRAGMENT_BOUND'
+                      ? 'border-rose-500/50 bg-rose-950/60 text-rose-300'
+                      : 'border-amber-500/50 bg-amber-950/60 text-amber-300'
+                  }`}
+                >
+                  {telemetry.passTimings.classification}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* 3. Low-Resolution Render (0.5x) Toggle Control */}
           <div className="px-2.5 py-2 rounded-lg bg-[#080d1a] border border-slate-800/90 flex items-center justify-between gap-2.5">
             <div className="min-w-0">
@@ -663,4 +735,4 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
       )}
     </aside>
   );
-};
+});

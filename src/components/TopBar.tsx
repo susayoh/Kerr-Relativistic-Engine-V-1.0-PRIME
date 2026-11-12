@@ -65,7 +65,7 @@ interface TopBarProps {
 
 const HOLD_DURATION_MS = 4000;
 
-export const TopBar: React.FC<TopBarProps> = ({
+export const TopBar: React.FC<TopBarProps> = React.memo(({
   onSelectPreset,
   systemCategory = 'isolated',
   onChangeSystemCategory,
@@ -769,4 +769,4 @@ export const TopBar: React.FC<TopBarProps> = ({
       )}
     </>
   );
-};
+});

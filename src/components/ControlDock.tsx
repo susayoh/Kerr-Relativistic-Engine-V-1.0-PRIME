@@ -73,7 +73,7 @@ interface ControlDockProps {
 
 type DockTab = 'spacetime' | 'spectral' | 'camera' | 'geodesics';
 
-export const ControlDock: React.FC<ControlDockProps> = ({
+export const ControlDock: React.FC<ControlDockProps> = React.memo(({
   params,
   metrics,
   activePresetId,
@@ -2681,4 +2681,4 @@ export const ControlDock: React.FC<ControlDockProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -100,7 +100,7 @@ export function evaluateKerrMetricTensor(
   };
 }
 
-export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
+export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = React.memo(({
   params,
   metrics,
   sceneController,
@@ -133,7 +133,7 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
     let animId = 0;
     const TARGET_FPS = highPerformanceMode ? 12 : 30;
     const FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
-    const REACT_UPDATE_INTERVAL_MS = highPerformanceMode ? 320 : 160;
+    const REACT_UPDATE_INTERVAL_MS = Math.max(100, highPerformanceMode ? 320 : 160);
     let lastFrameTime = 0;
     let lastSamplePush = 0;
     let lastReactStateUpdate = 0;
@@ -201,8 +201,8 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
         }
       }
 
-      // Throttle React state update for numeric telemetry readout
-      if (now - lastReactStateUpdate >= REACT_UPDATE_INTERVAL_MS) {
+      // Throttle React state update for numeric telemetry readout (<= 10Hz, skipped when minimized)
+      if (!isMinimized && now - lastReactStateUpdate >= REACT_UPDATE_INTERVAL_MS) {
         lastReactStateUpdate = now;
         setLiveSample(sample);
       }
@@ -698,4 +698,4 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
       </div>
     </div>
   );
-};
+});

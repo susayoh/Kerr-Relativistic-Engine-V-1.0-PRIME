@@ -36,7 +36,9 @@ import { BackgroundSelectorModal } from './components/BackgroundSelectorModal';
 import { BlackHoleAnatomyOverlay } from './components/BlackHoleAnatomyOverlay';
 import { OverheadMapWidget } from './components/OverheadMapWidget';
 import { TimeDilationDisplay } from './components/TimeDilationDisplay';
-import { SettingsModal } from './components/SettingsModal';
+const LazySettingsModal = React.lazy(() =>
+  import('./components/SettingsModal').then((m) => ({ default: m.SettingsModal }))
+);
 import {
   EventLogOverlay,
   AstrophysicalLogEvent,
@@ -134,6 +136,7 @@ export default function App() {
   const [isCosmicScaleModalOpen, setIsCosmicScaleModalOpen] = useState<boolean>(false);
   const [isBackgroundModalOpen, setIsBackgroundModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [hasOpenedSettingsModal, setHasOpenedSettingsModal] = useState<boolean>(false);
   const [isKerrLogModalOpen, setIsKerrLogModalOpen] = useState<boolean>(false);
   const [isChangelogModalOpen, setIsChangelogModalOpen] = useState<boolean>(false);
   const [activeKerrTerminalRun, setActiveKerrTerminalRun] = useState<KerrEngineRunLog | null>(null);
@@ -1796,6 +1799,143 @@ export default function App() {
     document.documentElement.setAttribute('data-ui-theme', activeUiTheme);
   }, [settings.uiTheme]);
 
+  useEffect(() => {
+    if (isSettingsModalOpen && !hasOpenedSettingsModal) {
+      setHasOpenedSettingsModal(true);
+    }
+  }, [isSettingsModalOpen, hasOpenedSettingsModal]);
+
+  const handleOpenTheoryModal = useCallback(() => setIsTheoryModalOpen(true), []);
+  const handleOpenQuickGuideModal = useCallback(() => setIsQuickGuideModalOpen(true), []);
+  const handleOpenArchetypeModal = useCallback(() => setIsArchetypeModalOpen(true), []);
+  const handleOpenCosmicScaleModal = useCallback(() => setIsCosmicScaleModalOpen(true), []);
+  const handleOpenBackgroundModal = useCallback(() => setIsBackgroundModalOpen(true), []);
+  const handleOpenSettingsModal = useCallback(() => {
+    setHasOpenedSettingsModal(true);
+    setIsSettingsModalOpen(true);
+  }, []);
+  const handleCloseSettingsModal = useCallback(() => setIsSettingsModalOpen(false), []);
+  const handleOpenChangelogModal = useCallback(() => setIsChangelogModalOpen(true), []);
+  const handleOpenKerrLogModal = useCallback(() => setIsKerrLogModalOpen(true), []);
+
+  const handleTogglePerfMonitor = useCallback(() => {
+    setSettings((prev) => ({
+      ...prev,
+      showPerformanceMonitor: !prev.showPerformanceMonitor,
+    }));
+  }, []);
+
+  const handleClosePerfMonitor = useCallback(() => {
+    setSettings((prev) => ({ ...prev, showPerformanceMonitor: false }));
+  }, []);
+
+  const handleCloseMetricTelemetry = useCallback(() => {
+    setSettings((prev) => ({ ...prev, showMetricTelemetry: false }));
+  }, []);
+
+  const handleUnlockDevMode = useCallback(() => {
+    setIsDevMode(true);
+    setHasOpenedSettingsModal(true);
+    setIsSettingsModalOpen(true);
+  }, []);
+
+  const handleLockDevSession = useCallback(() => {
+    setIsDevMode(false);
+  }, []);
+
+  const handleToggleDockCollapse = useCallback(() => {
+    setIsDockCollapsed((prev) => !prev);
+  }, []);
+
+  const handleToggleFocusMode = useCallback(() => {
+    setSettings((prev) => ({ ...prev, focusMode: !prev.focusMode }));
+  }, []);
+
+  const handleSetProbeRadius = useCallback((newRadius: number) => {
+    setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }));
+  }, []);
+
+  const handleChangeAccretionState = useCallback(
+    (nextState: NonNullable<BlackHoleParams['accretionState']>) => {
+      setParams((prev) => ({ ...prev, accretionState: nextState }));
+    },
+    []
+  );
+
+  const handleExportGeodesicCsvClick = useCallback(() => {
+    handleExportGeodesicCsv();
+  }, [handleExportGeodesicCsv]);
+
+  const handleToggleCompareMode = useCallback(() => {
+    setIsCompareMode((prev) => {
+      const next = !prev;
+      appendLogEvent(
+        'system',
+        next ? 'Side-by-Side Compare Mode engaged' : 'Single-viewport visualization restored',
+        next
+          ? `Synchronizing physics parameters between ${activePreset.name} and ${comparePreset.name}`
+          : activePreset.name
+      );
+      return next;
+    });
+  }, [activePreset.name, appendLogEvent, comparePreset.name]);
+
+  const handleToggleSyncSpin = useCallback(() => {
+    setSyncSpinInCompare((prev) => !prev);
+  }, []);
+
+  const handleChangeSpinA = useCallback((nextSpin: number) => {
+    setParams((p) => ({ ...p, spin: nextSpin }));
+  }, []);
+
+  const handleChangeSpinB = useCallback((nextSpin: number) => {
+    setSyncSpinInCompare(false);
+    setCompareSpinOverride(nextSpin);
+  }, []);
+
+  const handleApplySpinContrastPreset = useCallback(
+    (spinA: number, spinB: number) => {
+      setSyncSpinInCompare(false);
+      setParams((p) => ({ ...p, spin: spinA }));
+      setCompareSpinOverride(spinB);
+      appendLogEvent(
+        'metric',
+        'Kerr Spin Contrast Preset applied',
+        `Viewport A: a* = ${spinA.toFixed(3)} vs Viewport B: a* = ${spinB.toFixed(3)}`
+      );
+    },
+    [appendLogEvent]
+  );
+
+  const handleSwapComparePresets = useCallback(() => {
+    const prevA = activePresetId;
+    const prevSpinA = params.spin;
+    const prevSpinB = compareParams.spin;
+    setActivePresetId(comparePresetId);
+    setComparePresetId(prevA);
+    setParams((p) => ({ ...p, spin: prevSpinB }));
+    setCompareSpinOverride(prevSpinA);
+  }, [activePresetId, compareParams.spin, comparePresetId, params.spin]);
+
+  const handleCloseCompare = useCallback(() => {
+    setIsCompareMode(false);
+  }, []);
+
+  const handleTriggerPulse = useCallback(() => {
+    haptics.pulseBoom();
+    if (params.objectCategory === 'black_hole') {
+      sceneControllerRef.current?.replaySingularityExpansion();
+    } else {
+      sceneControllerRef.current?.triggerEventHorizonPulse(params.objectCategory);
+    }
+    relativisticAudio.triggerAccretionShockPulse(isStellarCategory(params.objectCategory));
+    appendLogEvent(
+      'accretion',
+      'Relativistic accretion shockwave emitted',
+      'Magnetosonic pressure wave propagating across horizon'
+    );
+  }, [appendLogEvent, haptics, params.objectCategory]);
+
   const isStar = isStellarCategory(params.objectCategory);
   const isFocusMode = Boolean(settings.focusMode);
   const isBootOrSeedStage =
@@ -1826,12 +1966,12 @@ export default function App() {
             onSelectPreset={handleSelectPreset}
             systemCategory={params.systemCategory || 'isolated'}
             onChangeSystemCategory={handleChangeSystemCategory}
-            onOpenTheoryModal={() => setIsTheoryModalOpen(true)}
-            onOpenQuickGuideModal={() => setIsQuickGuideModalOpen(true)}
-            onOpenArchetypeModal={() => setIsArchetypeModalOpen(true)}
-            onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
-            onOpenBackgroundModal={() => setIsBackgroundModalOpen(true)}
-            onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+            onOpenTheoryModal={handleOpenTheoryModal}
+            onOpenQuickGuideModal={handleOpenQuickGuideModal}
+            onOpenArchetypeModal={handleOpenArchetypeModal}
+            onOpenCosmicScaleModal={handleOpenCosmicScaleModal}
+            onOpenBackgroundModal={handleOpenBackgroundModal}
+            onOpenSettingsModal={handleOpenSettingsModal}
             activeBackgroundTheme={params.backgroundTheme || 'galactic_core'}
             isAnatomyVisible={isAnatomyVisible}
             onToggleAnatomyVisible={handleToggleAnatomyVisible}
@@ -1842,38 +1982,16 @@ export default function App() {
             isCleanMode={isCleanMode}
             onToggleCleanMode={handleToggleCleanMode}
             isCompareMode={isCompareMode}
-            onToggleCompareMode={() => {
-              setIsCompareMode((prev) => {
-                const next = !prev;
-                appendLogEvent(
-                  'system',
-                  next
-                    ? 'Side-by-Side Compare Mode engaged'
-                    : 'Single-viewport visualization restored',
-                  next
-                    ? `Synchronizing physics parameters between ${activePreset.name} and ${comparePreset.name}`
-                    : activePreset.name
-                );
-                return next;
-              });
-            }}
+            onToggleCompareMode={handleToggleCompareMode}
             isPerfMonitorVisible={Boolean(settings.showPerformanceMonitor)}
-            onTogglePerfMonitor={() =>
-              setSettings((prev) => ({
-                ...prev,
-                showPerformanceMonitor: !prev.showPerformanceMonitor,
-              }))
-            }
+            onTogglePerfMonitor={handleTogglePerfMonitor}
             isPhoneMode={isPhone}
             hapticsEnabled={settings.hapticsEnabled !== false}
             language={settings.language || 'en'}
             uiTheme={settings.uiTheme || 'observatory_gold'}
-            onOpenChangelogModal={() => setIsChangelogModalOpen(true)}
+            onOpenChangelogModal={handleOpenChangelogModal}
             isDevMode={isDevMode}
-            onUnlockDevMode={() => {
-              setIsDevMode(true);
-              setIsSettingsModalOpen(true);
-            }}
+            onUnlockDevMode={handleUnlockDevMode}
           />
         </div>
       )}
@@ -2039,34 +2157,14 @@ export default function App() {
             metricsA={metrics}
             metricsB={compareMetrics}
             syncSpinInCompare={syncSpinInCompare}
-            onToggleSyncSpin={() => setSyncSpinInCompare((prev) => !prev)}
+            onToggleSyncSpin={handleToggleSyncSpin}
             onSelectPresetA={handleSelectPreset}
             onSelectPresetB={handleSelectComparePreset}
-            onChangeSpinA={(nextSpin) => setParams((p) => ({ ...p, spin: nextSpin }))}
-            onChangeSpinB={(nextSpin) => {
-              setSyncSpinInCompare(false);
-              setCompareSpinOverride(nextSpin);
-            }}
-            onApplySpinContrastPreset={(spinA, spinB) => {
-              setSyncSpinInCompare(false);
-              setParams((p) => ({ ...p, spin: spinA }));
-              setCompareSpinOverride(spinB);
-              appendLogEvent(
-                'metric',
-                'Kerr Spin Contrast Preset applied',
-                `Viewport A: a* = ${spinA.toFixed(3)} vs Viewport B: a* = ${spinB.toFixed(3)}`
-              );
-            }}
-            onSwapPresets={() => {
-              const prevA = activePresetId;
-              const prevSpinA = params.spin;
-              const prevSpinB = compareParams.spin;
-              setActivePresetId(comparePresetId);
-              setComparePresetId(prevA);
-              setParams((p) => ({ ...p, spin: prevSpinB }));
-              setCompareSpinOverride(prevSpinA);
-            }}
-            onCloseCompare={() => setIsCompareMode(false)}
+            onChangeSpinA={handleChangeSpinA}
+            onChangeSpinB={handleChangeSpinB}
+            onApplySpinContrastPreset={handleApplySpinContrastPreset}
+            onSwapPresets={handleSwapComparePresets}
+            onCloseCompare={handleCloseCompare}
             isPhoneMode={isPhone}
             uiTheme={settings.uiTheme || 'observatory_gold'}
           />
@@ -2215,9 +2313,7 @@ export default function App() {
                   sceneController={controllerInstance || sceneControllerRef.current}
                   cameraCoordsRef={cameraCoordsRef}
                   highPerformanceMode={Boolean(settings.highPerformanceMode)}
-                  onSetProbeRadius={(newRadius) =>
-                    setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
-                  }
+                  onSetProbeRadius={handleSetProbeRadius}
                 />
               </motion.div>
             )}
@@ -2235,9 +2331,7 @@ export default function App() {
                   spin={params.spin}
                   timeScale={params.timeScale}
                   initialCollapsed={false}
-                  onSetProbeRadius={(newRadius) =>
-                    setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
-                  }
+                  onSetProbeRadius={handleSetProbeRadius}
                 />
               </motion.div>
             )}
@@ -2532,12 +2626,8 @@ export default function App() {
             sceneController={controllerInstance || sceneControllerRef.current}
             hoverCoordsRef={hoverCoordsRef}
             highPerformanceMode={Boolean(settings.highPerformanceMode)}
-            onChangeProbeRadius={(newRadius) =>
-              setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
-            }
-            onClose={() =>
-              setSettings((prev) => ({ ...prev, showMetricTelemetry: false }))
-            }
+            onChangeProbeRadius={handleSetProbeRadius}
+            onClose={handleCloseMetricTelemetry}
             isPhoneMode={isPhone}
             language={settings.language || 'en'}
           />
@@ -2551,9 +2641,7 @@ export default function App() {
             settings={settings}
             onChangeParams={setParams}
             onUpdateSettings={setSettings}
-            onClose={() =>
-              setSettings((prev) => ({ ...prev, showPerformanceMonitor: false }))
-            }
+            onClose={handleClosePerfMonitor}
             isPhoneMode={isPhone}
             offsetTopForMetricOverlay={Boolean(settings.showMetricTelemetry)}
           />
@@ -2574,12 +2662,10 @@ export default function App() {
               metrics={metrics}
               activePresetId={activePresetId}
               isCollapsed={isDockCollapsed}
-              onToggleCollapse={() => setIsDockCollapsed((prev) => !prev)}
+              onToggleCollapse={handleToggleDockCollapse}
               onToggleCleanMode={handleToggleCleanMode}
               isFocusMode={isFocusMode}
-              onToggleFocusMode={() =>
-                setSettings((prev) => ({ ...prev, focusMode: !prev.focusMode }))
-              }
+              onToggleFocusMode={handleToggleFocusMode}
               onChangeParams={setParams}
               onSelectPreset={handleSelectPreset}
               onResetParams={handleResetParams}
@@ -2594,25 +2680,12 @@ export default function App() {
               lastTrajectory={lastTrajectory}
               audioEnabled={audioEnabled}
               onToggleAudio={handleToggleAudio}
-              onOpenCosmicScaleModal={() => setIsCosmicScaleModalOpen(true)}
-              onOpenQuickGuideModal={() => setIsQuickGuideModalOpen(true)}
+              onOpenCosmicScaleModal={handleOpenCosmicScaleModal}
+              onOpenQuickGuideModal={handleOpenQuickGuideModal}
               onChangeSystemCategory={handleChangeSystemCategory}
               isPhoneMode={isPhone}
               hapticsEnabled={settings.hapticsEnabled !== false}
-              onTriggerPulse={() => {
-                haptics.pulseBoom();
-                if (params.objectCategory === 'black_hole') {
-                  sceneControllerRef.current?.replaySingularityExpansion();
-                } else {
-                  sceneControllerRef.current?.triggerEventHorizonPulse(params.objectCategory);
-                }
-                relativisticAudio.triggerAccretionShockPulse(isStellarCategory(params.objectCategory));
-                appendLogEvent(
-                  'accretion',
-                  'Relativistic accretion shockwave emitted',
-                  'Magnetosonic pressure wave propagating across horizon'
-                );
-              }}
+              onTriggerPulse={handleTriggerPulse}
             />
           </div>
         )}
@@ -2760,33 +2833,35 @@ export default function App() {
         }
       />
 
-      {/* Visualizer Settings & Preferences Modal */}
-      <SettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        settings={settings}
-        onUpdateSettings={setSettings}
-        accretionState={params.accretionState || 'quiescent'}
-        onChangeAccretionState={(nextState) =>
-          setParams((prev) => ({ ...prev, accretionState: nextState }))
-        }
-        onResetPhysics={handleResetParams}
-        currentSpin={params.spin}
-        onSelectPhysicsPreset={handleSelectPhysicsPreset}
-        isRecording={isRecording}
-        recordingSeconds={recordingSeconds}
-        onToggleRecording={handleToggleRecording}
-        kerrEngineLogs={kerrEngineLogs}
-        onOpenKerrLogModal={() => setIsKerrLogModalOpen(true)}
-        onTriggerKerrCalculation={handleTriggerManualKerrSolve}
-        onExportGeodesicCsv={() => handleExportGeodesicCsv()}
-        onExportEventLogJson={handleExportEventLogJson}
-        eventLogCount={eventLogs.length}
-        activeParams={params}
-        onRecordDiagnosticStressTest={handleRecordDiagnosticStressTest}
-        isDevMode={isDevMode}
-        onLockDevSession={() => setIsDevMode(false)}
-      />
+      {/* Visualizer Settings & Preferences Modal (Lazy-loaded on first open) */}
+      <React.Suspense fallback={null}>
+        {hasOpenedSettingsModal && (
+          <LazySettingsModal
+            isOpen={isSettingsModalOpen}
+            onClose={handleCloseSettingsModal}
+            settings={settings}
+            onUpdateSettings={setSettings}
+            accretionState={params.accretionState || 'quiescent'}
+            onChangeAccretionState={handleChangeAccretionState}
+            onResetPhysics={handleResetParams}
+            currentSpin={params.spin}
+            onSelectPhysicsPreset={handleSelectPhysicsPreset}
+            isRecording={isRecording}
+            recordingSeconds={recordingSeconds}
+            onToggleRecording={handleToggleRecording}
+            kerrEngineLogs={kerrEngineLogs}
+            onOpenKerrLogModal={handleOpenKerrLogModal}
+            onTriggerKerrCalculation={handleTriggerManualKerrSolve}
+            onExportGeodesicCsv={handleExportGeodesicCsvClick}
+            onExportEventLogJson={handleExportEventLogJson}
+            eventLogCount={eventLogs.length}
+            activeParams={params}
+            onRecordDiagnosticStressTest={handleRecordDiagnosticStressTest}
+            isDevMode={isDevMode}
+            onLockDevSession={handleLockDevSession}
+          />
+        )}
+      </React.Suspense>
 
       {/* Real-Time Kerr Relativity Engine Pre-Load Terminal Modal */}
       <KerrRelativityEngineModal
