@@ -350,20 +350,151 @@ class RelativisticAudioEngine {
     osc.stop(now + 0.4);
   }
 
-  public triggerAccretionShockPulse(isStar = false, isCinematicBoom = true) {
+  private lastEventHorizonBoomTime = 0;
+
+  /**
+   * High-amplitude, low-frequency atmospheric 'Event Horizon' boom with exponential decay,
+   * triggered specifically at the end of the initial boot sequence just before the singularity expands.
+   */
+  public triggerEventHorizonBoom(isStar = false) {
     if (!this.ctx || this.isMuted || !this.masterGain) return;
     const now = this.ctx.currentTime;
-    const durScale = isCinematicBoom ? 1.55 : 1.0;
+    // Prevent duplicate overlapping triggers if invoked both on boot completion and singularity expansion
+    if (now - this.lastEventHorizonBoomTime < 0.18) return;
+    this.lastEventHorizonBoomTime = now;
 
-    // 1. Deep IMAX N-Wave Sub-Bass Sonic Boom Detonation (Dual detuned sub-oscillators)
+    const duration = 2.65;
+
+    // 1. Primary High-Amplitude Low-Frequency 'Event Horizon' Sub-Bass Core (88 Hz -> 15 Hz exponential decay)
+    const horizonSubOsc = this.ctx.createOscillator();
+    const infrasonicOsc = this.ctx.createOscillator();
+    const harmonicBodyOsc = this.ctx.createOscillator();
+    const boomGain = this.ctx.createGain();
+    const subFilter = this.ctx.createBiquadFilter();
+
+    horizonSubOsc.type = 'sine';
+    infrasonicOsc.type = 'triangle';
+    harmonicBodyOsc.type = isStar ? 'triangle' : 'sine';
+
+    const startFundamental = isStar ? 112 : 88;
+    const endFundamental = isStar ? 22 : 15;
+
+    horizonSubOsc.frequency.setValueAtTime(startFundamental, now);
+    horizonSubOsc.frequency.exponentialRampToValueAtTime(34, now + 0.32);
+    horizonSubOsc.frequency.exponentialRampToValueAtTime(endFundamental, now + duration);
+
+    // Sub-octave seismic pressure wave (44 Hz -> 11 Hz)
+    infrasonicOsc.frequency.setValueAtTime(startFundamental * 0.5, now);
+    infrasonicOsc.frequency.exponentialRampToValueAtTime(Math.max(11, endFundamental * 0.72), now + duration);
+
+    // Warm low-mid relativistic gravity-well resonance (132 Hz -> 28 Hz)
+    harmonicBodyOsc.frequency.setValueAtTime(startFundamental * 1.5, now);
+    harmonicBodyOsc.frequency.exponentialRampToValueAtTime(endFundamental * 1.8, now + duration * 0.85);
+
+    subFilter.type = 'lowpass';
+    subFilter.frequency.setValueAtTime(260, now);
+    subFilter.frequency.exponentialRampToValueAtTime(42, now + duration * 0.9);
+    subFilter.Q.value = 2.8;
+
+    // High-amplitude impact transient followed by smooth exponential decay
+    boomGain.gain.setValueAtTime(0.001, now);
+    boomGain.gain.linearRampToValueAtTime(0.78, now + 0.018);
+    boomGain.gain.exponentialRampToValueAtTime(0.36, now + 0.28);
+    boomGain.gain.exponentialRampToValueAtTime(0.0008, now + duration);
+
+    horizonSubOsc.connect(subFilter);
+    infrasonicOsc.connect(subFilter);
+    harmonicBodyOsc.connect(subFilter);
+    subFilter.connect(boomGain);
+    boomGain.connect(this.ctx.destination);
+
+    horizonSubOsc.start(now);
+    infrasonicOsc.start(now);
+    harmonicBodyOsc.start(now);
+    horizonSubOsc.stop(now + duration + 0.05);
+    infrasonicOsc.stop(now + duration + 0.05);
+    harmonicBodyOsc.stop(now + duration + 0.05);
+
+    // 2. Atmospheric Event Horizon N-Wave Pressure Shock & Cavernous Sub-Rumble
+    const atmoDuration = 2.25;
+    const bufferSize = Math.floor(this.ctx.sampleRate * atmoDuration);
+    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    let brownState = 0.0;
+    for (let i = 0; i < bufferSize; i++) {
+      const t = i / bufferSize;
+      const white = Math.random() * 2.0 - 1.0;
+      // Integrate white noise into deep atmospheric brownian rumble
+      brownState = (brownState + 0.045 * white) / 1.045;
+      const leadShock = Math.exp(-t * 14.0);
+      const secondaryWave = 0.78 * Math.exp(-Math.pow((t - 0.11) / 0.045, 2.0));
+      const exponentialTail = 0.55 * Math.exp(-t * 2.8);
+      data[i] = (brownState * 2.8 + white * 0.22) * (leadShock + secondaryWave + exponentialTail);
+    }
+
+    const noiseSource = this.ctx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+
+    const atmoFilter = this.ctx.createBiquadFilter();
+    atmoFilter.type = 'lowpass';
+    atmoFilter.frequency.setValueAtTime(isStar ? 520 : 420, now);
+    atmoFilter.frequency.exponentialRampToValueAtTime(32, now + atmoDuration * 0.92);
+    atmoFilter.Q.value = 3.1;
+
+    const atmoGain = this.ctx.createGain();
+    atmoGain.gain.setValueAtTime(0.001, now);
+    atmoGain.gain.linearRampToValueAtTime(0.62, now + 0.015);
+    atmoGain.gain.exponentialRampToValueAtTime(0.0008, now + atmoDuration);
+
+    noiseSource.connect(atmoFilter);
+    atmoFilter.connect(atmoGain);
+    atmoGain.connect(this.ctx.destination);
+    noiseSource.start(now);
+
+    // 3. Quasinormal Kerr Spacetime Ringdown Afterglow (Exponentially damped harmonic)
+    const qnmOsc = this.ctx.createOscillator();
+    const qnmFilter = this.ctx.createBiquadFilter();
+    const qnmGain = this.ctx.createGain();
+
+    qnmOsc.type = 'sawtooth';
+    qnmOsc.frequency.setValueAtTime(isStar ? 148 : 98, now + 0.015);
+    qnmOsc.frequency.exponentialRampToValueAtTime(isStar ? 64 : 36, now + 1.95);
+
+    qnmFilter.type = 'bandpass';
+    qnmFilter.frequency.setValueAtTime(155, now);
+    qnmFilter.frequency.exponentialRampToValueAtTime(48, now + 1.95);
+    qnmFilter.Q.value = 3.4;
+
+    qnmGain.gain.setValueAtTime(0.001, now);
+    qnmGain.gain.linearRampToValueAtTime(0.24, now + 0.05);
+    qnmGain.gain.exponentialRampToValueAtTime(0.0006, now + 2.0);
+
+    qnmOsc.connect(qnmFilter);
+    qnmFilter.connect(qnmGain);
+    qnmGain.connect(this.ctx.destination);
+    qnmOsc.start(now);
+    qnmOsc.stop(now + 2.05);
+  }
+
+  public triggerAccretionShockPulse(isStar = false, isCinematicBoom = true) {
+    if (!this.ctx || this.isMuted || !this.masterGain) return;
+    if (isCinematicBoom) {
+      this.triggerEventHorizonBoom(isStar);
+      return;
+    }
+
+    const now = this.ctx.currentTime;
+    const durScale = 1.0;
+
+    // 1. Deep N-Wave Sub-Bass Sonic Boom Detonation (Dual detuned sub-oscillators)
     const osc = this.ctx.createOscillator();
     const subOsc2 = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
 
     osc.type = isStar ? 'triangle' : 'sine';
     subOsc2.type = 'triangle';
-    const startFreq = isStar ? 148 : isCinematicBoom ? 118 : 96;
-    const endFreq = isStar ? 24 : isCinematicBoom ? 16 : 20;
+    const startFreq = isStar ? 148 : 96;
+    const endFreq = isStar ? 24 : 20;
 
     osc.frequency.setValueAtTime(startFreq, now);
     osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.85 * durScale);
@@ -372,7 +503,7 @@ class RelativisticAudioEngine {
     subOsc2.frequency.exponentialRampToValueAtTime(Math.max(12, endFreq * 0.75), now + 0.95 * durScale);
 
     subGain.gain.setValueAtTime(0.001, now);
-    subGain.gain.linearRampToValueAtTime(isCinematicBoom ? 0.54 : 0.40, now + 0.014);
+    subGain.gain.linearRampToValueAtTime(0.44, now + 0.014);
     subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.98 * durScale);
 
     osc.connect(subGain);
@@ -403,43 +534,18 @@ class RelativisticAudioEngine {
 
     const shockFilter = this.ctx.createBiquadFilter();
     shockFilter.type = 'lowpass';
-    shockFilter.frequency.setValueAtTime(isStar ? 620 : isCinematicBoom ? 540 : 360, now);
+    shockFilter.frequency.setValueAtTime(isStar ? 620 : 380, now);
     shockFilter.frequency.exponentialRampToValueAtTime(38, now + noiseDur * 0.92);
-    shockFilter.Q.value = isCinematicBoom ? 2.6 : 1.9;
+    shockFilter.Q.value = 2.1;
 
     const noiseGain = this.ctx.createGain();
-    noiseGain.gain.setValueAtTime(isCinematicBoom ? 0.44 : 0.32, now);
+    noiseGain.gain.setValueAtTime(0.34, now);
     noiseGain.gain.exponentialRampToValueAtTime(0.001, now + noiseDur);
 
     noiseSource.connect(shockFilter);
     shockFilter.connect(noiseGain);
     noiseGain.connect(this.ctx.destination);
     noiseSource.start(now);
-
-    // 3. Relativistic Quasinormal Ringdown Harmonic Afterglow (for cinematic boot expansion)
-    if (isCinematicBoom) {
-      const ringOsc = this.ctx.createOscillator();
-      const ringGain = this.ctx.createGain();
-      ringOsc.type = 'sawtooth';
-      ringOsc.frequency.setValueAtTime(isStar ? 165 : 110, now + 0.02);
-      ringOsc.frequency.exponentialRampToValueAtTime(isStar ? 82.5 : 44, now + 1.45);
-
-      const ringFilter = this.ctx.createBiquadFilter();
-      ringFilter.type = 'bandpass';
-      ringFilter.frequency.setValueAtTime(180, now);
-      ringFilter.frequency.exponentialRampToValueAtTime(62, now + 1.45);
-      ringFilter.Q.value = 3.2;
-
-      ringGain.gain.setValueAtTime(0.001, now);
-      ringGain.gain.linearRampToValueAtTime(0.16, now + 0.06);
-      ringGain.gain.exponentialRampToValueAtTime(0.0008, now + 1.5);
-
-      ringOsc.connect(ringFilter);
-      ringFilter.connect(ringGain);
-      ringGain.connect(this.ctx.destination);
-      ringOsc.start(now);
-      ringOsc.stop(now + 1.55);
-    }
   }
 
   public dispose() {

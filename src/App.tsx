@@ -51,6 +51,7 @@ import {
   KerrEngineTierId,
   generateKerrEngineCalculationRun,
 } from './components/KerrRelativityEngineModal';
+import { computeLiveCodebaseTelemetry } from './components/CodebaseDetailsView';
 import { CompareModeOverlay } from './components/CompareModeOverlay';
 import { PerformanceMonitorOverlay } from './components/PerformanceMonitorOverlay';
 import { ChangelogModal } from './components/ChangelogModal';
@@ -145,6 +146,12 @@ export default function App() {
       DEFAULT_VISUALIZER_SETTINGS.kerrEngineTier
     ),
   ]);
+  const [codebaseTelemetry, setCodebaseTelemetry] = useState(() => computeLiveCodebaseTelemetry());
+  const [codebaseRefreshToken, setCodebaseRefreshToken] = useState<number>(0);
+  const refreshCodebaseTelemetry = useCallback(() => {
+    setCodebaseTelemetry(computeLiveCodebaseTelemetry());
+    setCodebaseRefreshToken((prev) => prev + 1);
+  }, []);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
   const [isSingularityCollapsed, setIsSingularityCollapsed] = useState<boolean>(true);
   const [hasCompletedStartupSequence, setHasCompletedStartupSequence] = useState<boolean>(false);
@@ -188,11 +195,21 @@ export default function App() {
     }, 550);
   }, []);
 
+  const paramsRef = useRef<BlackHoleParams>(params);
+  useEffect(() => {
+    paramsRef.current = params;
+  }, [params]);
+
   const handleFinishWatermarkPause = useCallback(() => {
     if (watermarkFadeTimerRef.current !== null) {
       window.clearTimeout(watermarkFadeTimerRef.current);
       watermarkFadeTimerRef.current = null;
     }
+    // Trigger the high-amplitude, low-frequency atmospheric 'Event Horizon' boom
+    // specifically at the end of the initial boot sequence just before the singularity expands
+    relativisticAudio.triggerEventHorizonBoom(
+      isStellarCategory(paramsRef.current.objectCategory)
+    );
     setIsPostBootSequenceActive(false);
     setIsWatermarkOverlayFading(true);
     window.setTimeout(() => {
@@ -1038,9 +1055,23 @@ export default function App() {
     haptics,
   ]);
 
+  // Refresh live codebase line/character count telemetry whenever calculation runs or module parameters change
+  useEffect(() => {
+    refreshCodebaseTelemetry();
+  }, [
+    params.objectCategory,
+    params.systemCategory,
+    params.spectralMode,
+    params.accretionState,
+    settings.kerrEngineTier,
+    kerrEngineLogs.length,
+    refreshCodebaseTelemetry,
+  ]);
+
   const handleCompleteKerrDeploy = useCallback(
     (run: KerrEngineRunLog) => {
       setActiveKerrTerminalRun(null);
+      refreshCodebaseTelemetry();
       const found =
         ASTROPHYSICAL_PRESETS.find((p) => p.id === run.presetId) || ASTROPHYSICAL_PRESETS[0];
 
@@ -1054,14 +1085,15 @@ export default function App() {
       appendLogEvent(
         'metric',
         `Kerr Engine [v1.4] Apex Metric Core (${run.tierName.toUpperCase()}) converged (${run.totalDurationMs} ms)`,
-        `${run.modelCode} · Cost: $${run.costUsd.toFixed(3)} · g_tt = ${run.summaryMetrics.g_tt.toFixed(3)}`
+        `${run.modelCode} · Cost: $${run.costUsd.toFixed(3)} · g_tt = ${run.summaryMetrics.g_tt.toFixed(3)} · ${run.codebaseLinesLabel || codebaseTelemetry.formattedLinesLabel}`
       );
     },
-    [appendLogEvent]
+    [appendLogEvent, refreshCodebaseTelemetry, codebaseTelemetry.formattedLinesLabel]
   );
 
   const handleTriggerManualKerrSolve = useCallback(
     (tierOverride?: KerrEngineTierId) => {
+      refreshCodebaseTelemetry();
       const currentPreset =
         ASTROPHYSICAL_PRESETS.find((p) => p.id === activePresetId) || ASTROPHYSICAL_PRESETS[0];
       const tierToUse = tierOverride || settings.kerrEngineTier || 'ultra';
@@ -1069,11 +1101,12 @@ export default function App() {
       setKerrEngineLogs((prev) => [run, ...prev.slice(0, 49)]);
       setActiveKerrTerminalRun(run);
     },
-    [activePresetId, params, settings.kerrEngineTier]
+    [activePresetId, params, settings.kerrEngineTier, refreshCodebaseTelemetry]
   );
 
   const handleRecordDiagnosticStressTest = useCallback(
     (run: KerrEngineRunLog, applyParamsToScene?: Partial<BlackHoleParams>) => {
+      refreshCodebaseTelemetry();
       setKerrEngineLogs((prev) => {
         if (prev.some((existing) => existing.id === run.id)) return prev;
         return [run, ...prev.slice(0, 49)];
@@ -1090,7 +1123,7 @@ export default function App() {
         `a* = ${run.spin.toFixed(3)} · g_tt = ${run.summaryMetrics.g_tt.toFixed(4)} · K = ${run.summaryMetrics.kretschmann.toExponential(2)} M⁻⁴`
       );
     },
-    [appendLogEvent]
+    [appendLogEvent, refreshCodebaseTelemetry]
   );
 
   // Kerr Relativity Engine is ALWAYS active on Standard, Linear, and Advanced tiers,
@@ -1103,6 +1136,7 @@ export default function App() {
       const found = ASTROPHYSICAL_PRESETS.find((p) => p.id === presetId);
       if (!found) return;
       setActivePresetId(found.id);
+      refreshCodebaseTelemetry();
 
       const nextParams: BlackHoleParams = {
         ...params,
@@ -1150,7 +1184,7 @@ export default function App() {
         relativisticAudio.triggerAccretionShockPulse(isStellarCategory(found.category));
       }
     },
-    [appendLogEvent, params, isKerrEngineActive, settings.kerrEngineTier]
+    [appendLogEvent, params, isKerrEngineActive, settings.kerrEngineTier, refreshCodebaseTelemetry]
   );
 
   const handleSelectComparePreset = useCallback(
@@ -2857,6 +2891,10 @@ export default function App() {
         onRecordDiagnosticStressTest={handleRecordDiagnosticStressTest}
         isDevMode={isDevMode}
         onLockDevSession={handleLockDevSession}
+        codebaseLinesLabel={codebaseTelemetry.formattedLinesLabel}
+        codebaseTotalLines={codebaseTelemetry.totalLines}
+        codebaseTotalChars={codebaseTelemetry.totalChars}
+        codebaseRefreshToken={codebaseRefreshToken}
       />
 
       {/* Real-Time Kerr Relativity Engine Pre-Load Terminal Modal */}
@@ -2868,6 +2906,9 @@ export default function App() {
           setIsKerrLogModalOpen(true);
         }}
         uiTheme={settings.uiTheme || 'observatory_gold'}
+        codebaseLinesLabel={codebaseTelemetry.formattedLinesLabel}
+        codebaseTotalLines={codebaseTelemetry.totalLines}
+        codebaseTotalChars={codebaseTelemetry.totalChars}
       />
 
       {/* Full-Screen Kerr Relativity Engine Calculation & Billing Log Modal */}
@@ -2884,6 +2925,9 @@ export default function App() {
           }))
         }
         onRerunCalculation={() => handleTriggerManualKerrSolve()}
+        codebaseLinesLabel={codebaseTelemetry.formattedLinesLabel}
+        codebaseTotalLines={codebaseTelemetry.totalLines}
+        codebaseTotalChars={codebaseTelemetry.totalChars}
       />
 
       {/* Minimalist Terminal-Style Release Changelog Modal (Triggered via TopBar v1.4 Badge) */}

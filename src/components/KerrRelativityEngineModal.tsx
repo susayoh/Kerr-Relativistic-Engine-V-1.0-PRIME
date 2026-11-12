@@ -8,6 +8,9 @@ import {
   DollarSign,
   ShieldCheck,
   Lock,
+  Code2,
+  Download,
+  Check,
   X,
 } from 'lucide-react';
 import {
@@ -18,6 +21,12 @@ import {
 } from '../physics/gravitationalPhysics';
 import { UiThemeId } from '../scene/BlackHoleScene';
 import { evaluateKerrMetricTensor } from './MetricTelemetryOverlay';
+import {
+  computeLiveCodebaseTelemetry,
+  FORMAT_CODEBASE_LINES_BADGE,
+  TOTAL_CODEBASE_LINES,
+  TOTAL_CODEBASE_CHARS,
+} from './CodebaseDetailsView';
 
 export type KerrEngineTierId = 'standard' | 'linear' | 'advanced' | 'ultra';
 
@@ -190,6 +199,9 @@ export interface KerrEngineRunLog {
     kretschmann: number;
     peakTempK: number;
   };
+  codebaseLinesLabel?: string;
+  codebaseTotalLines?: number;
+  codebaseTotalChars?: number;
   steps: KerrCalculationStep[];
 }
 
@@ -254,6 +266,8 @@ export function generateKerrEngineCalculationRun(
       : tierId === 'linear'
       ? '10⁻⁷'
       : '10⁻⁴';
+
+  const codebaseTelemetry = computeLiveCodebaseTelemetry();
 
   const steps: KerrCalculationStep[] = [
     {
@@ -352,7 +366,7 @@ export function generateKerrEngineCalculationRun(
       phase: 'VERIFY',
       command: `commit_spacetime_manifold --tier="${tier.id.toUpperCase()}" --deploy-webgl`,
       equation: `∇_μ G^μν = 0 ✓ · ∂_t g_μν = 0 ✓ · ∂_φ g_μν = 0 ✓ · Carter Constant Q Invariant ✓`,
-      telemetry: `Fidelity: ${tier.fidelityPercent} | Total Compute: ${(stepMs * 8).toFixed(0)} ms | Allocation: ${tier.monthlyPriceDisplay}`,
+      telemetry: `Fidelity: ${tier.fidelityPercent} | Total Compute: ${(stepMs * 8).toFixed(0)} ms | Codebase: ${codebaseTelemetry.formattedLinesLabel} (${codebaseTelemetry.totalChars.toLocaleString()} chars)`,
       logicDecision: `All Bianchi identities and boundary conditions satisfied. Expanding ${preset.name} into active 3D viewport.`,
       residual: `CONVERGED (0 Errors)`,
       durationMs: stepMs,
@@ -395,6 +409,9 @@ export function generateKerrEngineCalculationRun(
       kretschmann: tensor.kretschmann,
       peakTempK: metrics.peakDiskTempK,
     },
+    codebaseLinesLabel: codebaseTelemetry.formattedLinesLabel,
+    codebaseTotalLines: codebaseTelemetry.totalLines,
+    codebaseTotalChars: codebaseTelemetry.totalChars,
     steps,
   };
 }
@@ -404,6 +421,9 @@ interface KerrRelativityEngineModalProps {
   onCompleteDeploy: (run: KerrEngineRunLog) => void;
   onOpenSettingsLog?: () => void;
   uiTheme?: UiThemeId;
+  codebaseLinesLabel?: string;
+  codebaseTotalLines?: number;
+  codebaseTotalChars?: number;
 }
 
 export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps> = ({
@@ -411,6 +431,9 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
   onCompleteDeploy,
   onOpenSettingsLog,
   uiTheme = 'observatory_gold',
+  codebaseLinesLabel,
+  codebaseTotalLines,
+  codebaseTotalChars,
 }) => {
   const [visibleStepCount, setVisibleStepCount] = useState<number>(0);
   const [isPaused, setIsPaused] = useState<boolean>(false);
@@ -559,6 +582,14 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
           </div>
 
           <div className="flex items-center gap-2 shrink-0 font-mono text-[10px]">
+            <div
+              data-testid="kerr-engine-code-lines"
+              title={`Total project codebase: ${(activeRun.codebaseTotalLines ?? codebaseTotalLines ?? TOTAL_CODEBASE_LINES).toLocaleString()} lines · ${(activeRun.codebaseTotalChars ?? codebaseTotalChars ?? TOTAL_CODEBASE_CHARS).toLocaleString()} characters`}
+              className="px-2 py-1 rounded bg-[#120e0c] border border-[#D97757]/35 text-zinc-200 flex items-center gap-1 tabular-nums"
+            >
+              <Code2 className="w-3 h-3 text-[#E88B6B]" />
+              <span>{activeRun.codebaseLinesLabel || codebaseLinesLabel || FORMAT_CODEBASE_LINES_BADGE}</span>
+            </div>
             <div className="px-2 py-1 rounded bg-[#120e0c] border border-[#D97757]/35 text-zinc-200 flex items-center gap-1">
               <Zap className="w-3 h-3 text-[#E88B6B]" />
               <span>{tier.tflopsDisplay}</span>
@@ -755,6 +786,70 @@ export const KerrRelativityEngineModal: React.FC<KerrRelativityEngineModalProps>
   );
 };
 
+export interface KerrEngineLogsExportMetadata {
+  activeTierId?: KerrEngineTierId;
+  codebaseLinesLabel?: string;
+  codebaseTotalLines?: number;
+  codebaseTotalChars?: number;
+}
+
+export function buildKerrEngineLogsJsonPayload(
+  logs: KerrEngineRunLog[],
+  metadata?: KerrEngineLogsExportMetadata
+): string {
+  const totalCostUsd = logs.reduce((acc, item) => acc + item.costUsd, 0);
+  const totalDurationMs = logs.reduce((acc, item) => acc + item.totalDurationMs, 0);
+  return JSON.stringify(
+    {
+      exportedAt: new Date().toISOString(),
+      engine: 'Kerr Relativity Engine v1.4 — Apex Metric Core',
+      activeTierId: metadata?.activeTierId ?? logs[0]?.tierId ?? 'ultra',
+      totalCalculations: logs.length,
+      totalCostUsd: Number(totalCostUsd.toFixed(4)),
+      totalDurationMs,
+      codebaseTelemetry: {
+        linesLabel:
+          metadata?.codebaseLinesLabel ??
+          logs[0]?.codebaseLinesLabel ??
+          FORMAT_CODEBASE_LINES_BADGE,
+        totalLines:
+          metadata?.codebaseTotalLines ??
+          logs[0]?.codebaseTotalLines ??
+          TOTAL_CODEBASE_LINES,
+        totalChars:
+          metadata?.codebaseTotalChars ??
+          logs[0]?.codebaseTotalChars ??
+          TOTAL_CODEBASE_CHARS,
+      },
+      calculationHistory: logs,
+    },
+    null,
+    2
+  );
+}
+
+export function triggerKerrEngineLogsJsonDownload(
+  logs: KerrEngineRunLog[],
+  metadata?: KerrEngineLogsExportMetadata,
+  customFilename?: string
+): string {
+  const jsonContent = buildKerrEngineLogsJsonPayload(logs, metadata);
+  if (typeof document !== 'undefined' && typeof URL !== 'undefined') {
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = customFilename || `kerr-engine-calculation-logs-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+  }
+  return jsonContent;
+}
+
 interface KerrEngineLogViewerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -762,6 +857,9 @@ interface KerrEngineLogViewerModalProps {
   activeTierId: KerrEngineTierId;
   onSelectTier: (tier: KerrEngineTierId) => void;
   onRerunCalculation: () => void;
+  codebaseLinesLabel?: string;
+  codebaseTotalLines?: number;
+  codebaseTotalChars?: number;
 }
 
 export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> = ({
@@ -771,17 +869,36 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
   activeTierId,
   onSelectTier,
   onRerunCalculation,
+  codebaseLinesLabel,
+  codebaseTotalLines,
+  codebaseTotalChars,
 }) => {
   const [selectedLogIndex, setSelectedLogIndex] = useState<number>(0);
+  const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
 
   useEffect(() => {
     setSelectedLogIndex(0);
+    setDownloadSuccess(false);
   }, [logs.length, isOpen]);
 
   if (!isOpen) return null;
 
   const currentLog = logs[selectedLogIndex] || logs[0] || null;
   const totalSpend = logs.reduce((acc, item) => acc + item.costUsd, 0);
+
+  const handleDownloadAllLogs = () => {
+    triggerKerrEngineLogsJsonDownload(logs, {
+      activeTierId,
+      codebaseLinesLabel:
+        currentLog?.codebaseLinesLabel || codebaseLinesLabel || FORMAT_CODEBASE_LINES_BADGE,
+      codebaseTotalLines:
+        currentLog?.codebaseTotalLines ?? codebaseTotalLines ?? TOTAL_CODEBASE_LINES,
+      codebaseTotalChars:
+        currentLog?.codebaseTotalChars ?? codebaseTotalChars ?? TOTAL_CODEBASE_CHARS,
+    });
+    setDownloadSuccess(true);
+    window.setTimeout(() => setDownloadSuccess(false), 2200);
+  };
 
   return (
     <div
@@ -845,6 +962,12 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#201815] text-[#F4A688] border border-[#D97757]/45">
                   {logs.length} {logs.length === 1 ? 'SOLVE' : 'SOLVES'}
                 </span>
+                <span
+                  data-testid="kerr-log-viewer-code-lines"
+                  className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-neutral-900 text-cyan-300 border border-neutral-800 tabular-nums"
+                >
+                  Code Tab: {currentLog?.codebaseLinesLabel || codebaseLinesLabel || FORMAT_CODEBASE_LINES_BADGE} · {(currentLog?.codebaseTotalChars ?? codebaseTotalChars ?? TOTAL_CODEBASE_CHARS).toLocaleString()} chars
+                </span>
               </div>
               <p className="text-[11px] font-mono text-zinc-400">
                 Calculation & Telemetry Log — Pre-load Boyer-Lindquist tensors, Christoffel symbols & geodesic roots
@@ -852,7 +975,34 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <button
+              type="button"
+              data-testid="download-all-kerr-logs-btn"
+              onClick={handleDownloadAllLogs}
+              disabled={logs.length === 0}
+              title="Export the entire Kerr Engine calculation history as a formatted JSON file"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs font-bold transition-colors border ${
+                logs.length === 0
+                  ? 'bg-neutral-900/50 border-neutral-800 text-neutral-600 cursor-not-allowed'
+                  : downloadSuccess
+                  ? 'bg-emerald-950/60 border-emerald-500/60 text-emerald-300 cursor-pointer'
+                  : 'bg-neutral-900 hover:bg-neutral-800 border-cyan-500/45 text-cyan-300 cursor-pointer'
+              }`}
+            >
+              {downloadSuccess ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Download All Logs (Exported)</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download All Logs</span>
+                </>
+              )}
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -1028,17 +1178,33 @@ export const KerrEngineLogViewerModal: React.FC<KerrEngineLogViewerModalProps> =
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between">
+        <div className="px-5 py-3 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between gap-3 flex-wrap">
           <span className="font-mono text-[11px] text-zinc-400">
-            Kerr Engine [v1.4] · Apex Metric Core · Exact Boyer-Lindquist & BPT Tensor Verification
+            Kerr Engine [v1.4] · Apex Metric Core · Exact Boyer-Lindquist & BPT Tensor Verification ({logs.length} {logs.length === 1 ? 'run' : 'runs'} · ${totalSpend.toFixed(2)})
           </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-zinc-100 font-mono text-xs font-semibold cursor-pointer transition-colors"
-          >
-            Close Log
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              data-testid="download-all-kerr-logs-footer-btn"
+              onClick={handleDownloadAllLogs}
+              disabled={logs.length === 0}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border font-mono text-xs font-semibold transition-colors ${
+                logs.length === 0
+                  ? 'bg-neutral-900/50 border-neutral-800 text-neutral-600 cursor-not-allowed'
+                  : 'bg-neutral-900 hover:bg-neutral-800 border-cyan-500/45 text-cyan-300 cursor-pointer'
+              }`}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download All Logs (.JSON)</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-zinc-100 font-mono text-xs font-semibold cursor-pointer transition-colors"
+            >
+              Close Log
+            </button>
+          </div>
         </div>
       </div>
     </div>

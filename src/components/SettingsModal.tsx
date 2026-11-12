@@ -85,6 +85,8 @@ import {
   CodebaseDetailsView,
   FORMAT_CODEBASE_LINES_BADGE,
   TOTAL_CODEBASE_LINES,
+  TOTAL_CODEBASE_CHARS,
+  computeLiveCodebaseTelemetry,
 } from './CodebaseDetailsView';
 import { DiagnosticSuiteView } from './DiagnosticSuiteView';
 
@@ -431,6 +433,10 @@ interface SettingsModalProps {
   ) => void;
   isDevMode?: boolean;
   onLockDevSession?: () => void;
+  codebaseLinesLabel?: string;
+  codebaseTotalLines?: number;
+  codebaseTotalChars?: number;
+  codebaseRefreshToken?: number;
 }
 
 interface CustomScrollWorkspaceProps {
@@ -746,6 +752,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onRecordDiagnosticStressTest,
   isDevMode = false,
   onLockDevSession,
+  codebaseLinesLabel,
+  codebaseTotalLines,
+  codebaseTotalChars,
+  codebaseRefreshToken = 0,
 }) => {
   const haptics = useHaptics({
     enabled: settings.hapticsEnabled !== false,
@@ -1185,10 +1195,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <span>{t.tabCode}</span>
             <span
               data-testid="settings-tab-code-lines"
-              title={`${TOTAL_CODEBASE_LINES.toLocaleString()} live lines of code`}
-              className="hidden sm:inline text-[9px] text-amber-300/90 font-mono font-bold"
+              title={`${(codebaseTotalLines ?? TOTAL_CODEBASE_LINES).toLocaleString()} lines · ${(codebaseTotalChars ?? TOTAL_CODEBASE_CHARS).toLocaleString()} characters`}
+              className="inline text-[9px] text-amber-300/90 font-mono font-bold"
             >
-              • {FORMAT_CODEBASE_LINES_BADGE}
+              • {codebaseLinesLabel ?? FORMAT_CODEBASE_LINES_BADGE}
             </span>
           </button>
         </div>
@@ -1679,6 +1689,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {onOpenKerrLogModal && (
                   <button
                     type="button"
+                    data-testid="open-kerr-log-viewer-btn"
                     onClick={() => {
                       haptics.light();
                       onOpenKerrLogModal();
@@ -3443,42 +3454,69 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                 </div>
 
-                {/* Spotify Action Bar: Big Green Play Button + Filter Pills + Search Input */}
+                {/* Spotify Action Bar: Shuffle + Big Green Play Button + Repeat Track + Filter Pills + Search Input */}
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        haptics.medium();
-                        void trapQueenPlayer.togglePlay();
-                      }}
-                      className="w-10 h-10 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black flex items-center justify-center shadow-lg transition-transform hover:scale-105 cursor-pointer shrink-0"
-                      title={playerState.isPlaying ? 'Pause' : 'Play'}
-                      aria-label={playerState.isPlaying ? 'Pause' : 'Play'}
+                    <div
+                      data-testid="songs-top-transport-controls"
+                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-[#1a1a1a] border border-zinc-800/90"
                     >
-                      {playerState.isPlaying ? (
-                        <Pause className="w-4 h-4 fill-current" />
-                      ) : (
-                        <Play className="w-4 h-4 fill-current ml-0.5" />
-                      )}
-                    </button>
+                      <button
+                        type="button"
+                        data-testid="songs-top-shuffle-btn"
+                        onClick={() => {
+                          haptics.light();
+                          setIsShuffleEnabled((s) => !s);
+                        }}
+                        aria-pressed={isShuffleEnabled}
+                        className={`p-2 rounded-full transition-colors cursor-pointer relative ${
+                          isShuffleEnabled
+                            ? 'text-[#1DB954] bg-[#1DB954]/15'
+                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                        }`}
+                        title={isShuffleEnabled ? 'Shuffle: ON' : 'Shuffle: OFF'}
+                        aria-label="Toggle Shuffle"
+                      >
+                        <Shuffle className="w-4 h-4" />
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        haptics.light();
-                        setIsShuffleEnabled((s) => !s);
-                      }}
-                      className={`p-2 rounded-full transition-colors cursor-pointer ${
-                        isShuffleEnabled
-                          ? 'text-[#1DB954] bg-white/5'
-                          : 'text-zinc-400 hover:text-white'
-                      }`}
-                      title="Toggle Shuffle"
-                      aria-label="Toggle Shuffle"
-                    >
-                      <Shuffle className="w-4 h-4" />
-                    </button>
+                      <button
+                        type="button"
+                        data-testid="songs-top-play-pause-btn"
+                        onClick={() => {
+                          haptics.medium();
+                          void trapQueenPlayer.togglePlay();
+                        }}
+                        className="w-10 h-10 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black flex items-center justify-center shadow-lg transition-transform hover:scale-105 cursor-pointer shrink-0"
+                        title={playerState.isPlaying ? 'Pause Song' : 'Play Song'}
+                        aria-label={playerState.isPlaying ? 'Pause Song' : 'Play Song'}
+                      >
+                        {playerState.isPlaying ? (
+                          <Pause className="w-4 h-4 fill-current" />
+                        ) : (
+                          <Play className="w-4 h-4 fill-current ml-0.5" />
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        data-testid="songs-top-repeat-btn"
+                        onClick={() => {
+                          haptics.light();
+                          trapQueenPlayer.setLoopTrack(!playerState.loopTrack);
+                        }}
+                        aria-pressed={playerState.loopTrack}
+                        className={`p-2 rounded-full transition-colors cursor-pointer relative ${
+                          playerState.loopTrack
+                            ? 'text-[#1DB954] bg-[#1DB954]/15'
+                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                        }`}
+                        title={playerState.loopTrack ? 'Repeat Track: ON' : 'Repeat Track: OFF'}
+                        aria-label="Repeat Track"
+                      >
+                        <Repeat className="w-4 h-4" />
+                      </button>
+                    </div>
 
                     {/* Category Filter Pills */}
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -3837,7 +3875,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 {/* Center: Spotify Transport Controls + Timeline Scrubber */}
                 <div className="flex-1 max-w-md flex flex-col items-center gap-1.5">
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <button
                       type="button"
                       data-testid="jukebox-prev-btn"
@@ -3850,6 +3888,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       aria-label="Previous Track"
                     >
                       <SkipBack className="w-4 h-4 fill-current" />
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid="jukebox-shuffle-btn"
+                      onClick={() => {
+                        haptics.light();
+                        setIsShuffleEnabled((s) => !s);
+                      }}
+                      aria-pressed={isShuffleEnabled}
+                      className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                        isShuffleEnabled
+                          ? 'text-[#1DB954] bg-[#1DB954]/15'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                      title={isShuffleEnabled ? 'Shuffle: ON' : 'Shuffle: OFF'}
+                      aria-label="Shuffle Songs"
+                    >
+                      <Shuffle className="w-3.5 h-3.5" />
                     </button>
 
                     <button
@@ -3877,6 +3934,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                     <button
                       type="button"
+                      data-testid="jukebox-loop-btn"
+                      onClick={() => {
+                        haptics.light();
+                        trapQueenPlayer.setLoopTrack(!playerState.loopTrack);
+                      }}
+                      aria-pressed={playerState.loopTrack}
+                      className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                        playerState.loopTrack
+                          ? 'text-[#1DB954] bg-[#1DB954]/15'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                      title={playerState.loopTrack ? 'Repeat Track: ON' : 'Repeat Track: OFF'}
+                      aria-label="Toggle Loop Track"
+                    >
+                      <Repeat className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
                       data-testid="jukebox-next-btn"
                       onClick={handleNextSong}
                       className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
@@ -3884,24 +3960,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       aria-label="Next Track"
                     >
                       <SkipForward className="w-4 h-4 fill-current" />
-                    </button>
-
-                    <button
-                      type="button"
-                      data-testid="jukebox-loop-btn"
-                      onClick={() => {
-                        haptics.light();
-                        trapQueenPlayer.setLoopTrack(!playerState.loopTrack);
-                      }}
-                      className={`transition-colors cursor-pointer ${
-                        playerState.loopTrack
-                          ? 'text-[#1DB954]'
-                          : 'text-zinc-400 hover:text-white'
-                      }`}
-                      title={playerState.loopTrack ? 'Repeat Track: ON' : 'Repeat Track: OFF'}
-                      aria-label="Toggle Loop Track"
-                    >
-                      <Repeat className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
@@ -4013,6 +4071,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {activeTab === 'code' && (
           <CodebaseDetailsView
             uiTheme={activeUiThemeId}
+            refreshToken={codebaseRefreshToken + kerrEngineLogs.length + Object.keys(diagnosticCompletedRuns).length}
             onHapticLight={() => haptics.light()}
             onHapticMedium={() => haptics.medium()}
             onHapticSuccess={() => haptics.success()}

@@ -63,13 +63,57 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/scene/BlackHoleScene.ts',
     name: 'BlackHoleScene.ts',
-    lines: 9636,
+    lines: 7452,
     subsystem: 'shaders',
     subsystemName: '3D Graphics & Shaders',
     description:
-      'Three.js WebGL rendering pipeline, custom GLSL spacetime raymarching shaders (gravitational lensing, accretion disk with relativistic Doppler beaming & breathing pulsations, frame-dragging ergosphere cage, camera lens flare, spacetime grid), Hardware WebGL Shader Pre-Warming Cache (geodesic, accretion disk, ergosphere), IMAX Multi-Stage Supersonic Boom shockwave, Dynamic Quality Tier shader swapping, and Thermal Throttling (u_stepCount).',
+      'Three.js WebGL rendering pipeline, modular GLSL spacetime raymarching shader orchestration, Hardware WebGL Shader Pre-Warming Cache (geodesic, accretion disk, ergosphere), High-Definition Multi-Stage Supersonic Boom shockwave, Dynamic Quality Tier shader swapping, and Thermal Throttling (u_stepCount).',
     role: 'Primary 3D WebGL Engine, Shader Pre-Warmer & Core',
     techTags: ['Three.js', 'Custom GLSL', 'Shader Pre-Warming', 'Supersonic Mach Boom', 'Thermal Throttling', 'WebGL2'],
+  },
+  {
+    path: 'src/scene/shaders/kerrRaymarch.glsl.ts',
+    name: 'kerrRaymarch.glsl.ts',
+    lines: 1206,
+    subsystem: 'shaders',
+    subsystemName: '3D Graphics & Shaders',
+    description:
+      'Primary general relativistic raymarching, Kerr event horizon shadow, volumetric 3D accretion disk with Doppler beaming & Novikov-Thorne thermal spectra, and gravitational lensing vertex/fragment GLSL shader modules.',
+    role: 'General Relativistic Raymarching & Lensing GLSL Shaders',
+    techTags: ['Kerr Metric GLSL', 'Geodesic Raymarching', 'Doppler Beaming', 'Novikov-Thorne'],
+  },
+  {
+    path: 'src/scene/shaders/postProcess.glsl.ts',
+    name: 'postProcess.glsl.ts',
+    lines: 990,
+    subsystem: 'shaders',
+    subsystemName: '3D Graphics & Shaders',
+    description:
+      'Post-processing, relativistic motion blur, long-exposure time-lapse accumulation, anamorphic & hexagonal aperture lens flare, high-definition Prandtl-Glauert supersonic Mach shockwave, Roche-lobe companion star, and lensed starfield GLSL shaders.',
+    role: 'Post-Processing, Anamorphic Flare & Shockwave GLSL Shaders',
+    techTags: ['Anamorphic Flare', 'Supersonic Shockwave', 'Motion Blur', 'Roche Lobe GLSL'],
+  },
+  {
+    path: 'src/scene/kerrUniforms.ts',
+    name: 'kerrUniforms.ts',
+    lines: 371,
+    subsystem: 'shaders',
+    subsystemName: '3D Graphics & Shaders',
+    description:
+      'Stateless uniform dictionary initializers (createInitialKerrUniforms, createInitialAccretionDiskUniforms, createInitialSingularityUniforms, createInitialCameraLensFlareUniforms, createInitialStarfieldUniforms) and astrophysical preset-to-uniform mapping tables and functions.',
+    role: 'Kerr Shader Uniform Initializers & Preset Mappers',
+    techTags: ['Kerr Uniforms', 'Preset Mappers', 'Spectral LUT', 'Three.js IUniform'],
+  },
+  {
+    path: 'src/scene/cameraMath.ts',
+    name: 'cameraMath.ts',
+    lines: 326,
+    subsystem: 'shaders',
+    subsystemName: '3D Graphics & Shaders',
+    description:
+      'Stateless coordinate conversions (Boyer-Lindquist oblate spheroidal / spherical / Three.js Y-up Cartesian), equatorial accretion plane ray intersection helpers, and 3D-to-2D NDC/screen projection utilities.',
+    role: 'Boyer-Lindquist Coordinate & 3D Screen Projection Math',
+    techTags: ['Boyer-Lindquist Math', 'Cartesian Projection', 'NDC Screen Space', 'Camera Presets'],
   },
   {
     path: 'src/scene/renderScaleUtils.ts',
@@ -537,11 +581,39 @@ function buildLiveCodebaseFiles(): CodeFileInfo[] {
   return updatedBase;
 }
 
+export interface LiveCodebaseTelemetry {
+  files: CodeFileInfo[];
+  totalLines: number;
+  totalChars: number;
+  formattedLinesLabel: string;
+  formattedCharsLabel: string;
+  refreshedAt: number;
+}
+
+export function computeLiveCodebaseTelemetry(): LiveCodebaseTelemetry {
+  const files = buildLiveCodebaseFiles();
+  const totalLines = files.reduce((sum, f) => sum + f.lines, 0);
+  const totalChars = files.reduce((sum, f) => sum + (f.bytes ?? f.lines * 42), 0);
+  return {
+    files,
+    totalLines,
+    totalChars,
+    formattedLinesLabel: `${totalLines.toLocaleString()} lines`,
+    formattedCharsLabel: `${totalChars.toLocaleString()} chars`,
+    refreshedAt: Date.now(),
+  };
+}
+
 export const CODEBASE_FILES: CodeFileInfo[] = buildLiveCodebaseFiles();
 
 export const TOTAL_CODEBASE_LINES: number = CODEBASE_FILES.reduce((sum, f) => sum + f.lines, 0);
 
-export const FORMAT_CODEBASE_LINES_BADGE: string = `${(TOTAL_CODEBASE_LINES / 1000).toFixed(1)}k`;
+export const TOTAL_CODEBASE_CHARS: number = CODEBASE_FILES.reduce(
+  (sum, f) => sum + (f.bytes ?? f.lines * 42),
+  0
+);
+
+export const FORMAT_CODEBASE_LINES_BADGE: string = `${TOTAL_CODEBASE_LINES.toLocaleString()} lines`;
 
 const SUBSYSTEM_METRICS = [
   {
@@ -596,6 +668,7 @@ const SUBSYSTEM_METRICS = [
 
 interface CodebaseDetailsViewProps {
   uiTheme?: 'observatory_gold' | 'cryo_quantum' | 'kerr_claude';
+  refreshToken?: number;
   onHapticLight?: () => void;
   onHapticMedium?: () => void;
   onHapticSuccess?: () => void;
@@ -603,6 +676,7 @@ interface CodebaseDetailsViewProps {
 
 export const CodebaseDetailsView: React.FC<CodebaseDetailsViewProps> = ({
   uiTheme = 'observatory_gold',
+  refreshToken = 0,
   onHapticLight,
   onHapticMedium,
   onHapticSuccess,
@@ -614,25 +688,29 @@ export const CodebaseDetailsView: React.FC<CodebaseDetailsViewProps> = ({
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [hasCopied, setHasCopied] = useState<boolean>(false);
 
-  // Compute total lines
-  const totalLines = useMemo(() => {
-    return CODEBASE_FILES.reduce((sum, f) => sum + f.lines, 0);
-  }, []);
+  // Dynamically recompute live codebase files, total lines, and total characters whenever refreshToken updates
+  const liveTelemetry = useMemo(() => {
+    void refreshToken;
+    return computeLiveCodebaseTelemetry();
+  }, [refreshToken]);
 
-  const totalFiles = CODEBASE_FILES.length;
+  const liveFiles = liveTelemetry.files;
+  const totalLines = liveTelemetry.totalLines;
+  const totalChars = liveTelemetry.totalChars;
+  const totalFiles = liveFiles.length;
 
   const subsystemLineTotals = useMemo(() => {
     const map: Record<string, number> = {};
-    CODEBASE_FILES.forEach((f) => {
+    liveFiles.forEach((f) => {
       map[f.subsystem] = (map[f.subsystem] || 0) + f.lines;
     });
     return map;
-  }, []);
+  }, [liveFiles]);
 
   // Filter and sort files
   const filteredFiles = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return CODEBASE_FILES.filter((f) => {
+    return liveFiles.filter((f) => {
       if (selectedSubsystem !== 'all' && f.subsystem !== selectedSubsystem) {
         return false;
       }
@@ -650,7 +728,7 @@ export const CodebaseDetailsView: React.FC<CodebaseDetailsViewProps> = ({
       if (sortBy === 'name_asc') return a.name.localeCompare(b.name);
       return 0;
     });
-  }, [searchQuery, selectedSubsystem, sortBy]);
+  }, [liveFiles, searchQuery, selectedSubsystem, sortBy]);
 
   const handleCopySummary = () => {
     onHapticSuccess?.();
@@ -719,7 +797,7 @@ ${rows}
               data-testid="codebase-live-lines-badge"
               className="px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 font-mono text-xs font-semibold"
             >
-              {totalLines.toLocaleString()} Lines · LIVE SYNC
+              {totalLines.toLocaleString()} lines · {totalChars.toLocaleString()} chars · LIVE SYNC
             </span>
           </div>
           <p className="text-xs text-zinc-400">
@@ -767,9 +845,11 @@ ${rows}
             <Code className="w-4 h-4 text-amber-400" />
           </div>
           <div className="mt-1 text-2xl font-bold font-mono text-white tracking-tight">
-            {totalLines.toLocaleString()}
+            {totalLines.toLocaleString()} lines
           </div>
-          <div className="text-xs text-zinc-500 mt-0.5">Lines of code</div>
+          <div className="text-xs text-zinc-500 mt-0.5 font-mono">
+            {totalChars.toLocaleString()} chars total
+          </div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-zinc-800/90">

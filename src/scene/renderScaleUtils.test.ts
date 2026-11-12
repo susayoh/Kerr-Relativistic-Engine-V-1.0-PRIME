@@ -287,6 +287,161 @@ test('buildShaderPrewarmCacheReport verifies geodesic, accretion disk, and ergos
   assert.equal(partialReport.isComplete, false);
 });
 
+import {
+  computePresetTargetScale,
+  createInitialAccretionDiskUniforms,
+  createInitialKerrUniforms,
+  mapParamsToKerrUniformValues,
+  mapPresetStarAppearance,
+  mapSpectralModeToIndex,
+} from './kerrUniforms';
+import {
+  boyerLindquistToCartesian,
+  cartesianToBoyerLindquist,
+  cartesianToObserverSpherical,
+  clientPointerToNdc,
+  computeCameraPresetPose,
+  intersectEquatorialPlanePolar,
+  ndcToScreenCoords,
+  sphericalToCartesian,
+} from './cameraMath';
+import {
+  buildKerrEngineLogsJsonPayload,
+  generateKerrEngineCalculationRun,
+} from '../components/KerrRelativityEngineModal';
+import { ASTROPHYSICAL_PRESETS, BlackHoleParams } from '../physics/gravitationalPhysics';
+
+const TEST_BLACK_HOLE_PARAMS: BlackHoleParams = {
+  objectCategory: 'black_hole',
+  systemCategory: 'isolated',
+  backgroundTheme: 'galactic_core',
+  presetId: 'ton618',
+  trueMassSolar: 6.6e10,
+  massSolar: 100,
+  spin: 0.98,
+  accretionRate: 1.95,
+  inclinationDeg: 78,
+  dopplerStrength: 0.65,
+  probeRadiusRs: 3.6,
+  explodedSeparation: 0.0,
+  timeScale: 1.0,
+  wellDepthMultiplier: 2.2,
+  gravitationalLensing: true,
+  trueCosmicScale: false,
+  spectralMode: 'xray',
+  accretionState: 'active',
+  layers: {
+    accretionDisk: true,
+    ergosphereCage: false,
+    spacetimeGrid: true,
+    orbitalStars: false,
+    geodesicRays: false,
+    pulsarBeams: true,
+    magneticField: true,
+    anatomyLines: false,
+    microlensingStar: false,
+  },
+};
+
+test('createInitialKerrUniforms and mapParamsToKerrUniformValues initialize and map Kerr uniforms accurately', () => {
+  const uniforms = createInitialKerrUniforms({
+    params: TEST_BLACK_HOLE_PARAMS,
+    settings: { accretionDiskStyle: 'raymarched', bloomIntensity: 1.35, webglDepthPeeling: true },
+    currentScale: 4.85,
+    expansionProgress: 1.0,
+    initialStepCount: 5.0,
+  });
+
+  assert.equal(uniforms.uScale.value, 4.85);
+  assert.equal(uniforms.uSpin.value, 0.98);
+  assert.equal(uniforms.uAccretionRate.value, 1.95);
+  assert.equal(uniforms.uSpectralMode.value, mapSpectralModeToIndex('xray'));
+  assert.equal(uniforms.uDiskStyle.value, 1.0);
+  assert.equal(uniforms.uAccretionState.value, 1.0);
+  assert.equal(uniforms.uDepthPeeling.value, 1.0);
+  assert.equal(uniforms.u_stepCount.value, 5.0);
+
+  const diskUniforms = createInitialAccretionDiskUniforms({
+    params: TEST_BLACK_HOLE_PARAMS,
+    settings: { accretionDiskStyle: 'classic', bloomIntensity: 1.0 },
+  });
+  assert.equal(diskUniforms.uDiskStyle.value, 0.0);
+  assert.equal(diskUniforms.uDopplerCoeffs.value.x, 0.65);
+
+  const targetScale = computePresetTargetScale(TEST_BLACK_HOLE_PARAMS);
+  assert.ok(targetScale > 4.5 && targetScale <= 6.5);
+
+  const starAppearance = mapPresetStarAppearance({
+    ...TEST_BLACK_HOLE_PARAMS,
+    objectCategory: 'luminous_star',
+    presetId: 'crab_pulsar',
+  });
+  assert.ok(starAppearance.surfaceHexColor > 0);
+  assert.ok(starAppearance.compactnessRatio > 0.1 && starAppearance.compactnessRatio < 0.7);
+});
+
+test('cameraMath round-trips Boyer-Lindquist/Cartesian coordinates and projects screen coordinates', () => {
+  const cart = sphericalToCartesian(35.0, 60, 120);
+  const obs = cartesianToObserverSpherical(cart, { x: 0, y: 0, z: 0 }, 1.75);
+  assert.ok(Math.abs(obs.rRs - 20.0) < 1e-6);
+  assert.ok(Math.abs(obs.thetaDeg - 60.0) < 1e-6);
+  assert.ok(Math.abs(obs.phiDeg - 120.0) < 1e-6);
+
+  const blCart = boyerLindquistToCartesian(4.5, Math.PI / 3, Math.PI / 4, 0.92);
+  const blBack = cartesianToBoyerLindquist(blCart.x, blCart.y, blCart.z, 0.92);
+  assert.ok(Math.abs(blBack.rRg - 4.5) < 1e-5);
+  assert.ok(Math.abs(blBack.thetaRad - Math.PI / 3) < 1e-5);
+  assert.ok(Math.abs(blBack.phiRad - Math.PI / 4) < 1e-5);
+
+  const ndc = clientPointerToNdc(640, 360, { left: 0, top: 0, width: 1280, height: 720 });
+  assert.ok(Math.abs(ndc.x) < 1e-6);
+  assert.ok(Math.abs(ndc.y) < 1e-6);
+
+  const screenPt = ndcToScreenCoords(0.0, 0.0, 0.5, 1280, 720, 15);
+  assert.equal(screenPt.screenX, 640);
+  assert.equal(screenPt.screenY, 360);
+  assert.equal(screenPt.isVisible, true);
+
+  const eqHit = intersectEquatorialPlanePolar(
+    { x: 0, y: 10, z: 0 },
+    { x: 0.35, y: -1, z: 0 },
+    1.0,
+    1.75
+  );
+  assert.ok(eqHit !== null);
+  assert.ok(Math.abs(eqHit.rRs - 2.0) < 1e-6);
+
+  const eqPose = computeCameraPresetPose('equatorial', 1.0, 78, false);
+  assert.ok(eqPose !== null);
+  assert.equal(eqPose.position.x, 0);
+});
+
+test('buildKerrEngineLogsJsonPayload formats the entire calculation history as valid JSON', () => {
+  const preset1 = ASTROPHYSICAL_PRESETS[0];
+  const preset2 = ASTROPHYSICAL_PRESETS[1] || ASTROPHYSICAL_PRESETS[0];
+  const run1 = generateKerrEngineCalculationRun(preset1, TEST_BLACK_HOLE_PARAMS, 'ultra');
+  const run2 = generateKerrEngineCalculationRun(
+    preset2,
+    { ...TEST_BLACK_HOLE_PARAMS, presetId: 'sgra', spin: 0.9 },
+    'advanced'
+  );
+  const jsonStr = buildKerrEngineLogsJsonPayload([run2, run1], {
+    activeTierId: 'ultra',
+    codebaseLinesLabel: '35,120 lines',
+    codebaseTotalLines: 35120,
+    codebaseTotalChars: 1420000,
+  });
+
+  const parsed = JSON.parse(jsonStr);
+  assert.equal(parsed.totalCalculations, 2);
+  assert.equal(parsed.activeTierId, 'ultra');
+  assert.equal(parsed.codebaseTelemetry.linesLabel, '35,120 lines');
+  assert.equal(parsed.calculationHistory.length, 2);
+  assert.equal(parsed.calculationHistory[0].id, run2.id);
+  assert.equal(parsed.calculationHistory[1].id, run1.id);
+});
+
+
 
 
 
