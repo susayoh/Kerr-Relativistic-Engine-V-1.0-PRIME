@@ -16,12 +16,14 @@ import {
 interface OverheadMapWidgetProps {
   sceneController: BlackHoleSceneController | null;
   cameraCoordsRef?: React.RefObject<{ r: number; theta: number; phi: number }>;
+  highPerformanceMode?: boolean;
   onSetProbeRadius?: (radiusRs: number) => void;
 }
 
 export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
   sceneController,
   cameraCoordsRef,
+  highPerformanceMode = false,
   onSetProbeRadius,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -46,12 +48,15 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
   // Pulse animation phase for real-time radar sweep / beacon effect
   const radarSweepAngleRef = useRef<number>(0);
 
-  // Imperative 2D canvas + DOM ref update loop throttled to at most once every 150ms
+  // Imperative 2D canvas + DOM ref update loop throttled via requestAnimationFrame (never setInterval)
   useEffect(() => {
-    const FRAME_INTERVAL_MS = 150;
+    const FRAME_INTERVAL_MS = highPerformanceMode ? 260 : 140;
+    let rafId = 0;
+    let isCancelled = false;
+    let lastRenderMs = 0;
 
-    const render = () => {
-      const time = performance.now();
+    const render = (nowMs?: number) => {
+      const time = typeof nowMs === 'number' ? nowMs : performance.now();
       radarSweepAngleRef.current += 0.07;
 
       const canvas = canvasRef.current;
@@ -382,9 +387,20 @@ export const OverheadMapWidget: React.FC<OverheadMapWidgetProps> = ({
     };
 
     render();
-    const timerId = window.setInterval(render, FRAME_INTERVAL_MS);
-    return () => window.clearInterval(timerId);
-  }, [sceneController, cameraCoordsRef, isMinimized, zoomLevel, hoverRadius]);
+    const tickRaf = (nowMs: number) => {
+      if (isCancelled) return;
+      rafId = window.requestAnimationFrame(tickRaf);
+      if (nowMs - lastRenderMs < FRAME_INTERVAL_MS) return;
+      if (sceneController?.isOrbitingCamera()) return;
+      lastRenderMs = nowMs;
+      render(nowMs);
+    };
+    rafId = window.requestAnimationFrame(tickRaf);
+    return () => {
+      isCancelled = true;
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [sceneController, cameraCoordsRef, isMinimized, zoomLevel, hoverRadius, highPerformanceMode]);
 
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {

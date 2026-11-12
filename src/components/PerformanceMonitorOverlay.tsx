@@ -97,17 +97,25 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
     if (!sceneController) return;
     setTelemetry(sceneController.getPerformanceTelemetry());
     let lastPerfUpdateMs = performance.now();
+    let rafId = 0;
+    let isCancelled = false;
 
-    const FRAME_INTERVAL_MS = 150;
-    const timerId = window.setInterval(() => {
-      const now = performance.now();
-      if (now - lastPerfUpdateMs < 150) return;
+    const FRAME_INTERVAL_MS = settings.highPerformanceMode ? 350 : 150;
+    const tickPerf = (now: number) => {
+      if (isCancelled) return;
+      rafId = window.requestAnimationFrame(tickPerf);
+      if (now - lastPerfUpdateMs < FRAME_INTERVAL_MS) return;
+      if (sceneController.isOrbitingCamera()) return;
       lastPerfUpdateMs = now;
       setTelemetry(sceneController.getPerformanceTelemetry());
-    }, FRAME_INTERVAL_MS);
+    };
+    rafId = window.requestAnimationFrame(tickPerf);
 
-    return () => window.clearInterval(timerId);
-  }, [sceneController]);
+    return () => {
+      isCancelled = true;
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [sceneController, settings.highPerformanceMode, settings.lowResolutionRender]);
 
   const isStar = isStellarCategory(params.objectCategory);
 
@@ -296,6 +304,16 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
               >
                 {telemetry.fps} FPS
               </span>
+              {Boolean(settings.highPerformanceMode || settings.webglDepthPeeling) && (
+                <span className="px-1.5 py-0.2 rounded text-[8.5px] font-mono font-bold border border-emerald-500/50 bg-emerald-950/70 text-emerald-300">
+                  DEPTH-PEEL
+                </span>
+              )}
+              {Boolean(settings.lowResolutionRender) && (
+                <span className="px-1.5 py-0.2 rounded text-[8.5px] font-mono font-bold border border-cyan-500/50 bg-cyan-950/70 text-cyan-300">
+                  0.5x RES
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -455,7 +473,57 @@ export const PerformanceMonitorOverlay: React.FC<PerformanceMonitorOverlayProps>
             </div>
           </div>
 
-          {/* 3. White-Screen GLSL Guard & Primary Bottleneck Status Banner */}
+          {/* 3. Low-Resolution Render (0.5x) Toggle Control */}
+          <div className="px-2.5 py-2 rounded-lg bg-[#080d1a] border border-slate-800/90 flex items-center justify-between gap-2.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-[10px] font-bold text-slate-100">
+                  Low-Resolution Render
+                </span>
+                <span
+                  className={`px-1.5 py-0.2 rounded text-[8.5px] font-mono font-bold border ${
+                    settings.lowResolutionRender
+                      ? 'border-cyan-500/50 bg-cyan-950/70 text-cyan-300'
+                      : 'border-slate-700 bg-slate-900 text-slate-400'
+                  }`}
+                >
+                  {settings.lowResolutionRender ? '0.5x ACTIVE' : '0.5x SCALE'}
+                </span>
+              </div>
+              <div className="font-mono text-[9px] text-slate-400 truncate mt-0.5">
+                Scales WebGL render resolution to 0.5x (25% pixel fill)
+              </div>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(settings.lowResolutionRender)}
+              aria-label="Toggle Low-Resolution Render (0.5x)"
+              data-testid="toggle-low-resolution-render"
+              onClick={() =>
+                onUpdateSettings((prev) => ({
+                  ...prev,
+                  lowResolutionRender: !prev.lowResolutionRender,
+                }))
+              }
+              className={`px-2.5 py-1 rounded text-[9px] font-mono font-bold border transition-colors shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                settings.lowResolutionRender
+                  ? 'border-cyan-400/70 bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/30'
+                  : 'border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white'
+              }`}
+              title="Scale WebGL canvas render resolution to 0.5x to boost frame rates on high-DPI or low-performance devices"
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  settings.lowResolutionRender ? 'bg-cyan-400' : 'bg-slate-500'
+                }`}
+              />
+              <span>{settings.lowResolutionRender ? '0.5x ON' : '0.5x OFF'}</span>
+            </button>
+          </div>
+
+          {/* 3a. White-Screen GLSL Guard & Primary Bottleneck Status Banner */}
           <div className="px-2.5 py-1.5 rounded-lg bg-[#090f1d] border border-slate-800/90 flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />

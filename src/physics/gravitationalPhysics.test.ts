@@ -91,10 +91,104 @@ test('buildGeodesicTrajectoryCsv formats header and rows with valid columns', ()
   assert.ok(ASTROPHYSICAL_PRESETS.length >= 5);
 });
 
-test('DEFAULT_VISUALIZER_SETTINGS defaults to classic 3D disk and ULTRA Kerr engine', async () => {
+test('DEFAULT_VISUALIZER_SETTINGS defaults to classic 3D disk, ULTRA Kerr engine, and initializes High-Performance Mode & WebGL Depth-Peeling flags', async () => {
   const { DEFAULT_VISUALIZER_SETTINGS } = await import('../scene/BlackHoleScene');
   assert.equal(DEFAULT_VISUALIZER_SETTINGS.accretionDiskStyle, 'classic');
   assert.equal(DEFAULT_VISUALIZER_SETTINGS.kerrEngineTier, 'ultra');
   assert.equal(DEFAULT_VISUALIZER_SETTINGS.dynamicResolutionScaling, false);
+  assert.equal(DEFAULT_VISUALIZER_SETTINGS.highPerformanceMode, false);
+  assert.equal(DEFAULT_VISUALIZER_SETTINGS.webglDepthPeeling, false);
 });
+
+test('client-side audio completeness validation rejects truncated previews and verifies full songs', async () => {
+  const {
+    MIN_FULL_SONG_DURATION_SEC,
+    isTruncatedPreviewUrl,
+    validateMp3HeaderBytes,
+    validateTrackForQueue,
+    filterAndValidatePlaybackQueue,
+    SONG_TRACKS,
+  } = await import('../audio/trapQueenPlayer');
+  const { IMPORTED_PLAYLIST_TRACKS } = await import('../audio/importedTracks');
+
+  // 1. Verify preview URL detection
+  assert.equal(
+    isTruncatedPreviewUrl('https://p.scdn.co/mp3-preview/5489d8c3ef917017b7ecef79f95cde20d092f752'),
+    true
+  );
+  assert.equal(
+    isTruncatedPreviewUrl('https://podz-content.spotifycdn.com/audio/clips/0kqO3p/clip_288_60288.mp3'),
+    true
+  );
+  assert.equal(isTruncatedPreviewUrl('/audio/again-full.mp3'), false);
+
+  // 2. Verify MP3 binary header check (ID3v2 vs HTML 404 fallback)
+  assert.equal(validateMp3HeaderBytes(new Uint8Array([0x49, 0x44, 0x33, 0x04, 0x00])), true);
+  assert.equal(validateMp3HeaderBytes(new Uint8Array([0xff, 0xfb, 0x90, 0x64])), true);
+  assert.equal(validateMp3HeaderBytes(new Uint8Array([0x3c, 0x21, 0x44, 0x4f])), false);
+
+  // 3. Reject track that only has a 30s preview or truncated duration
+  const truncatedTrackReport = validateTrackForQueue({
+    id: 'truncated_test',
+    title: 'Truncated Clip',
+    subtitle: '30s Preview',
+    artistName: 'Test Artist',
+    badge: 'Test',
+    durationSec: 29,
+    durationLabel: '0:29',
+    artworkUrl: '',
+    accentColor: 'cyan',
+    sources: ['https://p.scdn.co/mp3-preview/deadbeef'],
+    bpm: 120,
+  });
+  assert.equal(truncatedTrackReport.valid, false);
+  assert.equal(truncatedTrackReport.status, 'rejected_truncated');
+
+  // 4. Repair track that has a 30s preview + a full-length local master
+  const mixedTrackReport = validateTrackForQueue({
+    id: 'mixed_test',
+    title: 'Repaired Song',
+    subtitle: 'Full Master',
+    artistName: 'Test Artist',
+    badge: 'Test',
+    durationSec: 30,
+    durationLabel: '0:30',
+    artworkUrl: '',
+    accentColor: 'amber',
+    sources: ['https://p.scdn.co/mp3-preview/deadbeef', '/audio/again-full.mp3'],
+    bpm: 148,
+  });
+  assert.equal(mixedTrackReport.valid, true);
+  assert.equal(mixedTrackReport.status, 'repaired_sources');
+  assert.deepEqual(mixedTrackReport.sanitizedTrack.sources, ['/audio/again-full.mp3']);
+  assert.equal(mixedTrackReport.sanitizedTrack.durationSec, 313);
+
+  // 5. Verify every track in SONG_TRACKS and IMPORTED_PLAYLIST_TRACKS is a complete full song
+  const allTracks = [...SONG_TRACKS, ...IMPORTED_PLAYLIST_TRACKS];
+  const queueResult = filterAndValidatePlaybackQueue(allTracks);
+  assert.equal(queueResult.acceptedTracks.length, allTracks.length);
+  assert.equal(queueResult.summary.rejectedTruncatedCount, 0);
+  for (const track of queueResult.acceptedTracks) {
+    assert.ok(
+      track.durationSec >= MIN_FULL_SONG_DURATION_SEC,
+      `Track ${track.id} duration (${track.durationSec}s) must be >= ${MIN_FULL_SONG_DURATION_SEC}s`
+    );
+    assert.ok(track.sources.length >= 1, `Track ${track.id} must have at least 1 valid source`);
+    for (const src of track.sources) {
+      assert.equal(
+        isTruncatedPreviewUrl(src),
+        false,
+        `Track ${track.id} contains truncated preview source ${src}`
+      );
+    }
+  }
+});
+
+test('DEFAULT_VISUALIZER_SETTINGS includes lowResolutionRender disabled by default', async () => {
+  const { DEFAULT_VISUALIZER_SETTINGS } = await import('../scene/BlackHoleScene');
+  assert.equal(DEFAULT_VISUALIZER_SETTINGS.lowResolutionRender, false);
+  assert.equal(DEFAULT_VISUALIZER_SETTINGS.highPerformanceMode, false);
+});
+
+
 

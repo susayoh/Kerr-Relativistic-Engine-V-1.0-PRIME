@@ -7,12 +7,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "68+1",
     "artistName": "68+1",
     "badge": "Melancholy",
-    "durationSec": 147,
-    "durationLabel": "2:27",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273e449e0a23d2be606f241c83a",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/5489d8c3ef917017b7ecef79f95cde20d092f752",
+      "/api/audio/stream/your_eyes_2?title=your%20eyes&artist=68%2B1&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 123,
@@ -25,13 +25,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "The Weeknd, Playboi Carti",
     "artistName": "The Weeknd, Playboi Carti",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 256,
-    "durationLabel": "4:16",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27358cd6595ed970f6862906ab8",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/c27493ac0bcb3deb72a8e814ab6c7e8686cd2324",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/timeless_feat_playboi_carti_3?title=Timeless%20(feat.%20Playboi%20Carti)&artist=The%20Weeknd%2C%20Playboi%20Carti&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 134,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -43,12 +43,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "nextcry, k1ttyflwrs., rainluv ✮",
     "artistName": "nextcry, k1ttyflwrs., rainluv ✮",
     "badge": "Melancholy",
-    "durationSec": 243,
-    "durationLabel": "4:03",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273ff3e4ae8de3c30e2b230a367",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/caecf773c0455f5ca25e1d7386c7e9b638183c99",
+      "/api/audio/stream/i_want_it_all_5?title=I%20Want%20It%20All&artist=nextcry%2C%20k1ttyflwrs.%2C%20rainluv%20%E2%9C%AE&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 156,
@@ -61,13 +61,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "fam0uz",
     "artistName": "fam0uz",
     "badge": "Nightcore",
-    "durationSec": 201,
-    "durationLabel": "3:21",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27393fcbefc51292d789c03d7a3",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/5cf2d2ba1f2011fe7d1c3af290cdd4c1e17c26e9",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/starboy_sped_up_6?title=Starboy%20-%20Sped%20Up&artist=fam0uz&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 167,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -79,11 +79,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Votabias",
     "artistName": "Votabias",
     "badge": "Melancholy",
-    "durationSec": 175,
-    "durationLabel": "2:55",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2736e8d6d30f2917f4f3c69b278",
     "accentColor": "cyan",
     "sources": [
+      "/api/audio/stream/molly_7?title=Molly&artist=Votabias&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 120,
@@ -96,13 +97,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Yeat",
     "artistName": "Yeat",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 173,
-    "durationLabel": "2:53",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27350332d1d23d28482b2a72cdd",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f357cced63088c1d27fb9dd7cce4f1e0439d85dc",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/orchestrat_8?title=ORCHESTRAT%C3%8B&artist=Yeat&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 131,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -114,12 +115,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "ODECORE, Odetari",
     "artistName": "ODECORE, Odetari",
     "badge": "Nightcore",
-    "durationSec": 114,
-    "durationLabel": "1:54",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2735c5e68d6c6bc4107747556a8",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/0000e942c6b324ea81f8b2099cadf0db58f7831b",
+      "/api/audio/stream/keep_up_sped_up_9?title=KEEP%20UP%20-%20Sped%20Up&artist=ODECORE%2C%20Odetari&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 142,
@@ -132,12 +133,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lowx, TTM",
     "artistName": "Lowx, TTM",
     "badge": "Melancholy",
-    "durationSec": 177,
-    "durationLabel": "2:57",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2733a0017ee408256dbfbe532c2",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/7fafab2b94e72a0237208e66897eb8ad88f3df4f",
+      "/api/audio/stream/losted_10?title=Losted&artist=Lowx%2C%20TTM&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 153,
@@ -150,13 +151,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "¥$, Kanye West, Ty Dolla $ign",
     "artistName": "¥$, Kanye West, Ty Dolla $ign",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 264,
-    "durationLabel": "4:24",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273b2e4a1ea8a6708fc23f26e4a",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/3b149eafaed15dced610335678c858d5af9dd780",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/carnival_11?title=CARNIVAL&artist=%C2%A5%24%2C%20Kanye%20West%2C%20Ty%20Dolla%20%24ign&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 164,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -168,12 +169,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "rshcxn, ScuitsGT",
     "artistName": "rshcxn, ScuitsGT",
     "badge": "Nightcore",
-    "durationSec": 180,
-    "durationLabel": "3:00",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2731ca51f78fe72632c03d6dcf0",
     "accentColor": "fuchsia",
     "sources": [
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/wasted_nightcore_bass_booste_13?title=Wasted%20(Nightcore)%20%5BBass%20Boosted%5D&artist=rshcxn%2C%20ScuitsGT&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 128,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -185,12 +187,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lady Gaga, Bruno Mars",
     "artistName": "Lady Gaga, Bruno Mars",
     "badge": "Melancholy",
-    "durationSec": 252,
-    "durationLabel": "4:12",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27382ea2e9e1858aa012c57cd45",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/07cebc34d49ff7a0f1ce21e4902ebbf3238f6788",
+      "/api/audio/stream/die_with_a_smile_14?title=Die%20With%20A%20Smile&artist=Lady%20Gaga%2C%20Bruno%20Mars&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 139,
@@ -203,13 +205,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Sinnon Nightcore",
     "artistName": "Sinnon Nightcore",
     "badge": "Nightcore",
-    "durationSec": 138,
-    "durationLabel": "2:18",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27333763ef667da9fe813174099",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/48be78977f4a350588460fb0100363f02d128627",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/little_do_you_know_sped_up_r_15?title=Little%20Do%20You%20Know%20-%20Sped%20Up%20%2B%20Reverb&artist=Sinnon%20Nightcore&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 150,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -221,12 +223,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "The Weeknd",
     "artistName": "The Weeknd",
     "badge": "Melancholy",
-    "durationSec": 198,
-    "durationLabel": "3:18",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2738863bc11d2aa12b54f5aeb36",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ffe5646cbee66e2a1bf7e0472cfed0ad777232b4",
+      "/api/audio/stream/heartless_16?title=Heartless&artist=The%20Weeknd&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 161,
@@ -239,13 +241,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "The Neighbourhood",
     "artistName": "The Neighbourhood",
     "badge": "Nightcore",
-    "durationSec": 219,
-    "durationLabel": "3:39",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273b46be90f276243fdd995cf83",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a5506b46d7c04204ce8dd5d2e91fd8ae503a967d",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/sweater_weather_sped_up_17?title=Sweater%20Weather%20-%20Sped%20Up&artist=The%20Neighbourhood&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 114,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -257,12 +259,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Ellie Goulding, Speed Radio",
     "artistName": "Ellie Goulding, Speed Radio",
     "badge": "Nightcore",
-    "durationSec": 190,
-    "durationLabel": "3:10",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273bb4cc06a0334303c3684b776",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/b7cbe1e43ee324e6542cd2d76303fa56c13c2094",
+      "/api/audio/stream/lights_sped_up_version_18?title=Lights%20-%20Sped%20Up%20Version&artist=Ellie%20Goulding%2C%20Speed%20Radio&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 125,
@@ -275,12 +277,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "¥$, Kanye West, Ty Dolla $ign",
     "artistName": "¥$, Kanye West, Ty Dolla $ign",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 159,
-    "durationLabel": "2:39",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273fb9cedd86a3d08dc053a550d",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/039d105ba454ad2f5d31230a9c9feb5ce5e94721",
+      "/api/audio/stream/promotion_19?title=PROMOTION&artist=%C2%A5%24%2C%20Kanye%20West%2C%20Ty%20Dolla%20%24ign&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 136,
@@ -293,13 +295,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Future, The Weeknd",
     "artistName": "Future, The Weeknd",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 314,
-    "durationLabel": "5:14",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2732f62a05cc754995b544ec1f6",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a6c9f83f366b72e2dea1639b108fe9076fad207e",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/low_life_feat_the_weeknd_20?title=Low%20Life%20(feat.%20The%20Weeknd)&artist=Future%2C%20The%20Weeknd&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 147,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -311,13 +313,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Sohodolls",
     "artistName": "Sohodolls",
     "badge": "Nightcore",
-    "durationSec": 164,
-    "durationLabel": "2:44",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27394180fa573d232e5f5e8a23d",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/5d8c595c19ac4ac1f54b799cda9777ee9496f43c",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/bang_bang_bang_bang_sped_up__21?title=Bang%20Bang%20Bang%20Bang%20-%20Sped%20up%20-%20Nightcore%20Version&artist=Sohodolls&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 158,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -329,12 +331,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "dracodraco",
     "artistName": "dracodraco",
     "badge": "Melancholy",
-    "durationSec": 115,
-    "durationLabel": "1:55",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2737dc75c0a1965e005f92d8a86",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/4d09422ea5eb2e01c84f81b7b3b74ecd24b6408f",
+      "/api/audio/stream/freefall_22?title=freefall&artist=dracodraco&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 169,
@@ -347,13 +349,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem, Rihanna",
     "artistName": "Eminem, Rihanna",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 263,
-    "durationLabel": "4:23",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273c08d5fa5c0f1a834acef5100",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/3824afd426e7ebbba4e107f811f7506ea3416db0",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/love_the_way_you_lie_23?title=Love%20The%20Way%20You%20Lie&artist=Eminem%2C%20Rihanna&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 122,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -365,12 +367,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Rihanna, JAŸ-Z",
     "artistName": "Rihanna, JAŸ-Z",
     "badge": "Melancholy",
-    "durationSec": 276,
-    "durationLabel": "4:36",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273b9ff0a5f40d3406aed5e5e3b",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e58475d2391025fe032cba6b5282c71a6141223e",
+      "/api/audio/stream/umbrella_24?title=Umbrella&artist=Rihanna%2C%20JA%C5%B8-Z&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 133,
@@ -383,12 +385,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Billie Eilish, Khalid",
     "artistName": "Billie Eilish, Khalid",
     "badge": "Melancholy",
-    "durationSec": 200,
-    "durationLabel": "3:20",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27314dcfb7581bf14f6ce8e6d67",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/1493c0cd1595c14b5747a4f9b140c4c4a9bb2b53",
+      "/api/audio/stream/lovely_26?title=lovely&artist=Billie%20Eilish%2C%20Khalid&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 155,
@@ -401,12 +403,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "bôa",
     "artistName": "bôa",
     "badge": "Nightcore",
-    "durationSec": 183,
-    "durationLabel": "3:03",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273bddce74674b82af03c0d5365",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/85e6786c4bf95d5c519eba2d0ed6e353c935410d",
+      "/api/audio/stream/duvet_sped_up_version_27?title=Duvet%20-%20Sped%20Up%20Version&artist=b%C3%B4a&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 166,
@@ -419,13 +421,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Travis Scott",
     "artistName": "Travis Scott",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 176,
-    "durationLabel": "2:56",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273cc7bfe087a97a09f54c92b28",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ae94a5026c2bb8673e34f96395ccb1385fa95399",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/highest_in_the_room_28?title=HIGHEST%20IN%20THE%20ROOM&artist=Travis%20Scott&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 119,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -437,12 +439,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Teya Dora",
     "artistName": "Teya Dora",
     "badge": "Nightcore",
-    "durationSec": 138,
-    "durationLabel": "2:18",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2737132554da6332e2080b3f420",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/c2cdae50003966632224672ad04dbec0ecf5577a",
+      "/api/audio/stream/d_anum_sped_up_29?title=D%C5%BEanum%20-%20Sped%20Up&artist=Teya%20Dora&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 130,
@@ -455,13 +457,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Corners Groove, Starrysky",
     "artistName": "Corners Groove, Starrysky",
     "badge": "Electronic / Alt",
-    "durationSec": 190,
-    "durationLabel": "3:10",
+    "durationSec": 237,
+    "durationLabel": "3:57",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2736781075e0a94a822482570b5",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/8c076efcfba708f3e9eb44f4f50b114645658ba3",
-      "/audio/no-friends-female.mp3"
+      "/api/audio/stream/camellia_feat_starrysky_30?title=Camellia%20(Feat.%20STARRYSKY)&artist=Corners%20Groove%2C%20Starrysky&fallback=%2Faudio%2Fstronger-than-you-frisk.mp3",
+      "/audio/stronger-than-you-frisk.mp3"
     ],
     "bpm": 141,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -473,12 +475,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "sanny, Sphere",
     "artistName": "sanny, Sphere",
     "badge": "Nightcore",
-    "durationSec": 167,
-    "durationLabel": "2:47",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c6b9f982404273f23d5b393f",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/22f79992efac8b80c866ef28063e2f56cdde4664",
+      "/api/audio/stream/after_hours_best_part_tiktok_31?title=After%20Hours%20(Best%20Part)%20-%20TikTok%20Remix&artist=sanny%2C%20Sphere&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 152,
@@ -491,12 +493,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Yeat",
     "artistName": "Yeat",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 173,
-    "durationLabel": "2:53",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27303e3ce4b238512cfb42dbc95",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a875f5d36c0ac4181e62db527f06ba91ac342a7f",
+      "/api/audio/stream/if_we_being_r_al_32?title=If%20We%20Being%20R%C3%ABal&artist=Yeat&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 163,
@@ -509,12 +511,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Melly Mike",
     "artistName": "Melly Mike",
     "badge": "Melancholy",
-    "durationSec": 191,
-    "durationLabel": "3:11",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27384cb40920fc702a28ab4b361",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/3c2e0b4dc19adf859cdf65a43d3317437e4e9b14",
+      "/api/audio/stream/young_black_rich_slowed_33?title=Young%20Black%20%26%20Rich%20-%20Slowed&artist=Melly%20Mike&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 116,
@@ -527,11 +529,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "junesforever",
     "artistName": "junesforever",
     "badge": "Melancholy",
-    "durationSec": 193,
-    "durationLabel": "3:13",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273a2292b178fa6d83ac3ac44d3",
     "accentColor": "cyan",
     "sources": [
+      "/api/audio/stream/breathe_34?title=breathe&artist=junesforever&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 127,
@@ -544,12 +547,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lindsey Stirling",
     "artistName": "Lindsey Stirling",
     "badge": "Electronic / Alt",
-    "durationSec": 232,
-    "durationLabel": "3:52",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273af2acf076c7856bfe6ef580e",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ce7736a6a14af55ab252a07e385cc055a7905bf7",
+      "/api/audio/stream/the_arena_35?title=The%20Arena&artist=Lindsey%20Stirling&fallback=%2Faudio%2Fno-friends-female.mp3",
       "/audio/no-friends-female.mp3"
     ],
     "bpm": 138,
@@ -562,13 +565,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lindsey Stirling",
     "artistName": "Lindsey Stirling",
     "badge": "Electronic / Alt",
-    "durationSec": 262,
-    "durationLabel": "4:22",
+    "durationSec": 237,
+    "durationLabel": "3:57",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2738d02794110783d0f415176ec",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/0720b96745c7264202bff04534898c34e823d564",
-      "/audio/no-friends-female.mp3"
+      "/api/audio/stream/underground_36?title=Underground&artist=Lindsey%20Stirling&fallback=%2Faudio%2Fstronger-than-you-frisk.mp3",
+      "/audio/stronger-than-you-frisk.mp3"
     ],
     "bpm": 149,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -580,13 +583,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lindsey Stirling, Lzzy Hale",
     "artistName": "Lindsey Stirling, Lzzy Hale",
     "badge": "Electronic / Alt",
-    "durationSec": 281,
-    "durationLabel": "4:41",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273acf731f1fad6dea3f361ec39",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/d0c53389ecb2835e9897efb835b64bed7e523421",
-      "/audio/no-friends-female.mp3"
+      "/api/audio/stream/shatter_me_featuring_lzzy_ha_37?title=Shatter%20Me%20Featuring%20Lzzy%20Hale&artist=Lindsey%20Stirling%2C%20Lzzy%20Hale&fallback=%2Faudio%2Fworld-execute-me.mp3",
+      "/audio/world-execute-me.mp3"
     ],
     "bpm": 160,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -598,12 +601,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lindsey Stirling",
     "artistName": "Lindsey Stirling",
     "badge": "Electronic / Alt",
-    "durationSec": 234,
-    "durationLabel": "3:54",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2738d02794110783d0f415176ec",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/d7a2dc9258c2a148ee4317a237cd34210c2e8e48",
+      "/api/audio/stream/artemis_38?title=Artemis&artist=Lindsey%20Stirling&fallback=%2Faudio%2Fno-friends-female.mp3",
       "/audio/no-friends-female.mp3"
     ],
     "bpm": 113,
@@ -616,13 +619,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lindsey Stirling",
     "artistName": "Lindsey Stirling",
     "badge": "Electronic / Alt",
-    "durationSec": 238,
-    "durationLabel": "3:58",
+    "durationSec": 237,
+    "durationLabel": "3:57",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2738d02794110783d0f415176ec",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/b6a7fc1252176a09ce60a076aafc3083043f3049",
-      "/audio/no-friends-female.mp3"
+      "/api/audio/stream/foreverglow_39?title=Foreverglow&artist=Lindsey%20Stirling&fallback=%2Faudio%2Fstronger-than-you-frisk.mp3",
+      "/audio/stronger-than-you-frisk.mp3"
     ],
     "bpm": 124,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -634,13 +637,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lindsey Stirling",
     "artistName": "Lindsey Stirling",
     "badge": "Electronic / Alt",
-    "durationSec": 245,
-    "durationLabel": "4:05",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273af2acf076c7856bfe6ef580e",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ad832b2f8d20e42380694f8b26bfe3cc7139bb85",
-      "/audio/no-friends-female.mp3"
+      "/api/audio/stream/the_phoenix_40?title=The%20Phoenix&artist=Lindsey%20Stirling&fallback=%2Faudio%2Fworld-execute-me.mp3",
+      "/audio/world-execute-me.mp3"
     ],
     "bpm": 135,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -652,12 +655,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "¥$, Kanye West, Ty Dolla $ign",
     "artistName": "¥$, Kanye West, Ty Dolla $ign",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 277,
-    "durationLabel": "4:37",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2739c654f315df05ae7c6ec8980",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/7c9a41eeecf698fa13e1564e252b26406d8cb770",
+      "/api/audio/stream/vultures_41?title=VULTURES&artist=%C2%A5%24%2C%20Kanye%20West%2C%20Ty%20Dolla%20%24ign&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 146,
@@ -670,13 +673,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lana Del Rey, Speed Radio",
     "artistName": "Lana Del Rey, Speed Radio",
     "badge": "Nightcore",
-    "durationSec": 197,
-    "durationLabel": "3:17",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273a8b0e2778ba0735358d45223",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/335e2393ea34f22e2a9ec6f19db0253d50c9506d",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/summertime_sadness_sped_up_42?title=Summertime%20Sadness%20-%20Sped%20Up&artist=Lana%20Del%20Rey%2C%20Speed%20Radio&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 157,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -688,12 +691,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lana Del Rey",
     "artistName": "Lana Del Rey",
     "badge": "Melancholy",
-    "durationSec": 236,
-    "durationLabel": "3:56",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273d7fb3e4c63020039d1cff6b2",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/6da9d2d9c70066c8052a8b4b0b66d3c447cdf33c",
+      "/api/audio/stream/young_and_beautiful_43?title=Young%20And%20Beautiful&artist=Lana%20Del%20Rey&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 168,
@@ -706,12 +709,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem, Rihanna",
     "artistName": "Eminem, Rihanna",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 250,
-    "durationLabel": "4:10",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2733c65085a58aae2cccd892cbe",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/dd22524a409b15fab0702e1c4306609b3c79a6c4",
+      "/api/audio/stream/the_monster_44?title=The%20Monster&artist=Eminem%2C%20Rihanna&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 121,
@@ -724,12 +727,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "AURORA",
     "artistName": "AURORA",
     "badge": "Melancholy",
-    "durationSec": 249,
-    "durationLabel": "4:09",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c379325088c2845fe85cd70a",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/761baec96b603cf7cb74fc8646b26c296dc4495a",
+      "/api/audio/stream/runaway_45?title=Runaway&artist=AURORA&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 132,
@@ -742,13 +745,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Playboi Carti, Young Thug, Ty Dolla $ign",
     "artistName": "Playboi Carti, Young Thug, Ty Dolla $ign",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 182,
-    "durationLabel": "3:02",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2736b219c8d8462bfe254a20469",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/7ecd3f49681b19289376d96db6762c037f3f9236",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/we_need_all_da_vibes_with_yo_46?title=WE%20NEED%20ALL%20DA%20VIBES%20(with%20Young%20Thug%20%26%20Ty%20Dolla%20%24ign)&artist=Playboi%20Carti%2C%20Young%20Thug%2C%20Ty%20Dolla%20%24ign&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 143,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -760,12 +763,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lindsey Stirling",
     "artistName": "Lindsey Stirling",
     "badge": "Electronic / Alt",
-    "durationSec": 262,
-    "durationLabel": "4:22",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273acf731f1fad6dea3f361ec39",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/011e1663f3ba2492039830462eb4aa1fb2f40579",
+      "/api/audio/stream/master_of_tides_47?title=Master%20of%20Tides&artist=Lindsey%20Stirling&fallback=%2Faudio%2Fno-friends-female.mp3",
       "/audio/no-friends-female.mp3"
     ],
     "bpm": 154,
@@ -778,13 +781,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Playboi Carti, Travis Scott",
     "artistName": "Playboi Carti, Travis Scott",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 169,
-    "durationLabel": "2:49",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2736b219c8d8462bfe254a20469",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/1651f8c412170336a30276c68ab393c266a13f21",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/wake_up_f1lthy_with_travis_s_48?title=WAKE%20UP%20F1LTHY%20(with%20Travis%20Scott)&artist=Playboi%20Carti%2C%20Travis%20Scott&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 165,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -796,13 +799,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "The Weeknd, Playboi Carti, Madonna",
     "artistName": "The Weeknd, Playboi Carti, Madonna",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 215,
-    "durationLabel": "3:35",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2734c8f092adc59b4bf4212389d",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/3bb12d1f2bdfd7eaf80d8502fe28806a422d8e5c",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/popular_with_playboi_carti_m_49?title=Popular%20(with%20Playboi%20Carti%20%26%20Madonna)%20-%20From%20The%20Idol%20Vol.%201%20(Music%20from%20the%20HBO%20Original%20Series)&artist=The%20Weeknd%2C%20Playboi%20Carti%2C%20Madonna&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 118,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -814,12 +817,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "XXXTENTACION",
     "artistName": "XXXTENTACION",
     "badge": "Melancholy",
-    "durationSec": 94,
-    "durationLabel": "1:34",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273da9e59639a9759d8952890c6",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/6222426fd0a3b19cf6667fb55d302a43684b6623",
+      "/api/audio/stream/bad_50?title=BAD!&artist=XXXTENTACION&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 129,
@@ -832,12 +835,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Mitski",
     "artistName": "Mitski",
     "badge": "Melancholy",
-    "durationSec": 128,
-    "durationLabel": "2:08",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c428f67b4a9b7e1114dfc117",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/041fac0989109cef6031195122ff846cc133691b",
+      "/api/audio/stream/washing_machine_heart_52?title=Washing%20Machine%20Heart&artist=Mitski&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 151,
@@ -850,12 +853,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "XXXTENTACION, Trippie Redd",
     "artistName": "XXXTENTACION, Trippie Redd",
     "badge": "Melancholy",
-    "durationSec": 147,
-    "durationLabel": "2:27",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273203c89bd4391468eea4cc3f5",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ad4d23afd3b92325c442f036322a05f5f35385dc",
+      "/api/audio/stream/fuck_love_53?title=Fuck%20Love&artist=XXXTENTACION%2C%20Trippie%20Redd&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 162,
@@ -868,12 +871,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Yeat, Lil Uzi Vert",
     "artistName": "Yeat, Lil Uzi Vert",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 176,
-    "durationLabel": "2:56",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2738373f87eba4f2880e92fb962",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/063267277b7a71dc500bc181b043be92c858343c",
+      "/api/audio/stream/flawl_ss_feat_lil_uzi_vert_54?title=Flawl%C3%ABss%20(feat.%20Lil%20Uzi%20Vert)&artist=Yeat%2C%20Lil%20Uzi%20Vert&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 115,
@@ -886,13 +889,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Juice WRLD, YoungBoy Never Broke Again",
     "artistName": "Juice WRLD, YoungBoy Never Broke Again",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 189,
-    "durationLabel": "3:09",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2735b4bee4c0dfe7f1ec4b2cc6d",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/d8df6cec6e9d17dde96677a3f3ea4ada14cbb366",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/bandit_with_youngboy_never_b_55?title=Bandit%20(with%20YoungBoy%20Never%20Broke%20Again)&artist=Juice%20WRLD%2C%20YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 126,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -904,13 +907,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Metro Boomin, The Weeknd, 21 Savage",
     "artistName": "Metro Boomin, The Weeknd, 21 Savage",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 222,
-    "durationLabel": "3:42",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273c4fee55d7b51479627c31f89",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/adc5d059e4ccc40bbad75f3844eb03546d9ab05a",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/creepin_with_the_weeknd_21_s_56?title=Creepin'%20(with%20The%20Weeknd%20%26%2021%20Savage)&artist=Metro%20Boomin%2C%20The%20Weeknd%2C%2021%20Savage&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 137,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -922,12 +925,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "The Weeknd",
     "artistName": "The Weeknd",
     "badge": "Melancholy",
-    "durationSec": 249,
-    "durationLabel": "4:09",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2737fcead687e99583072cc217b",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/9481c4e92ab239a4c2c36b35bd98a4bdeeb47ba7",
+      "/api/audio/stream/often_57?title=Often&artist=The%20Weeknd&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 148,
@@ -940,13 +943,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Playboi Carti, The Weeknd",
     "artistName": "Playboi Carti, The Weeknd",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 210,
-    "durationLabel": "3:30",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2736b219c8d8462bfe254a20469",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/1b432933057dcac2c9acc53ec52bdee8b37a8b6f",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/rather_lie_with_the_weeknd_58?title=RATHER%20LIE%20(with%20The%20Weeknd)&artist=Playboi%20Carti%2C%20The%20Weeknd&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 159,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -963,8 +966,7 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273de2f0ff77da06e2bb0fda6d2",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/eadc1ceef50185d16213ad199015da99da95e250",
-      "/audio/duvet-x-linger.mp3"
+      "/audio/world-execute-me.mp3"
     ],
     "bpm": 112,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -976,12 +978,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Feint, Veela",
     "artistName": "Feint, Veela",
     "badge": "Melancholy",
-    "durationSec": 269,
-    "durationLabel": "4:29",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273cb5e9973c66bfd141e144f0e",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/6f493d530cd1886db27939dc53a57067f7812f97",
+      "/api/audio/stream/vagrant_60?title=Vagrant&artist=Feint%2C%20Veela&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 123,
@@ -994,13 +996,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Playboi Carti",
     "artistName": "Playboi Carti",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 184,
-    "durationLabel": "3:04",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2736b219c8d8462bfe254a20469",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/793379cd675c6f47be2bcad2334aa9d2c98f99e8",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/evil_j0rdan_61?title=EVIL%20J0RDAN&artist=Playboi%20Carti&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 134,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1012,12 +1014,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Mili, KIHOW",
     "artistName": "Mili, KIHOW",
     "badge": "Melancholy",
-    "durationSec": 224,
-    "durationLabel": "3:44",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734c2f6035f731193cf3841283",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/1728f6c252d2f4540bee8721fa0fbbd4666537e6",
+      "/api/audio/stream/in_hell_we_live_lament_feat__62?title=In%20Hell%20We%20Live%2C%20Lament%20(feat.%20KIHOW)&artist=Mili%2C%20KIHOW&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 145,
@@ -1030,12 +1032,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Metro Boomin, Travis Scott, Young Thug",
     "artistName": "Metro Boomin, Travis Scott, Young Thug",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 195,
-    "durationLabel": "3:15",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273c4fee55d7b51479627c31f89",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/21a37a02779c9edc02d1b690d70779024f540793",
+      "/api/audio/stream/trance_with_travis_scott_you_63?title=Trance%20(with%20Travis%20Scott%20%26%20Young%20Thug)&artist=Metro%20Boomin%2C%20Travis%20Scott%2C%20Young%20Thug&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 156,
@@ -1048,12 +1050,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "marina, VISUAL ARTS / Key",
     "artistName": "marina, VISUAL ARTS / Key",
     "badge": "Melancholy",
-    "durationSec": 232,
-    "durationLabel": "3:52",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c0d076684686e84b92be4a1d",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/fcced6ec817771b4e69c679a5cb422769f9dcc69",
+      "/api/audio/stream/trigger_64?title=Trigger&artist=marina%2C%20VISUAL%20ARTS%20%2F%20Key&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 167,
@@ -1066,12 +1068,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "marina, VISUAL ARTS / Key",
     "artistName": "marina, VISUAL ARTS / Key",
     "badge": "Melancholy",
-    "durationSec": 311,
-    "durationLabel": "5:11",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c0d076684686e84b92be4a1d",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/da8d3d967270356b7e776bc5ab1ae651750543b4",
+      "/api/audio/stream/fallin_65?title=Fallin'&artist=marina%2C%20VISUAL%20ARTS%20%2F%20Key&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 120,
@@ -1089,7 +1091,7 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734e284a106820b99e32349bbd",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/c393eaa5d1e972e950e5834a9d79034d08a04179",
+      "/api/audio/stream/monster_66?title=MONSTER&artist=Reol&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 131,
@@ -1102,13 +1104,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Travis Scott, Don Toliver",
     "artistName": "Travis Scott, Don Toliver",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 185,
-    "durationLabel": "3:05",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2735d0f8a4c3623e02a79928288",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/3c0c38d5514b1b3d4b8d8ce367a6b8cbf13ff8bb",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/champain_vacay_67?title=CHAMPAIN%20%26%20VACAY&artist=Travis%20Scott%2C%20Don%20Toliver&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 142,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1120,13 +1122,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Travis Scott",
     "artistName": "Travis Scott",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 238,
-    "durationLabel": "3:58",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2735d0f8a4c3623e02a79928288",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/cc6eac468354c3303d04abc202a542ba4ee2b8ca",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/dumbo_68?title=DUMBO&artist=Travis%20Scott&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 153,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1138,12 +1140,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Reol",
     "artistName": "Reol",
     "badge": "Melancholy",
-    "durationSec": 244,
-    "durationLabel": "4:04",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27348cbdef454b5636ee5ebeb34",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/2c6d23fba6fa6509fcb9140a4423c5bd2f22d5b3",
+      "/api/audio/stream/no_title_69?title=No%20title&artist=Reol&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 164,
@@ -1156,12 +1158,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "The Neighbourhood",
     "artistName": "The Neighbourhood",
     "badge": "Melancholy",
-    "durationSec": 206,
-    "durationLabel": "3:26",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2739b6ac98a52f62d5cb473da40",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/dd4996bcd5ea34f70d66213a698a4e9879f69907",
+      "/api/audio/stream/softcore_70?title=Softcore&artist=The%20Neighbourhood&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 117,
@@ -1174,12 +1176,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Aunker",
     "artistName": "Aunker",
     "badge": "Melancholy",
-    "durationSec": 192,
-    "durationLabel": "3:12",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2737504166fe538f3f58e013195",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/cb2f2934b202999e9f71c4cf79e941d07493bc6a",
+      "/api/audio/stream/instrumental_71?title=%D0%9A%D0%B0%D0%BC%D0%B8%D0%BD%20-%20Instrumental&artist=Aunker&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 128,
@@ -1192,11 +1194,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Akash Das",
     "artistName": "Akash Das",
     "badge": "Nightcore",
-    "durationSec": 177,
-    "durationLabel": "2:57",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2736aa58c3dac1161405ed35712",
     "accentColor": "fuchsia",
     "sources": [
+      "/api/audio/stream/kamin_speed_up_72?title=Kamin%20-%20Speed%20Up&artist=Akash%20Das&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 139,
@@ -1209,12 +1212,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "EMIN, JONY",
     "artistName": "EMIN, JONY",
     "badge": "Melancholy",
-    "durationSec": 188,
-    "durationLabel": "3:08",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273870c1c64b1d77eb4456e4283",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/264beb697298c0b87dff22932a9e4e66d2856cd0",
+      "/api/audio/stream/feat_jony_73?title=%D0%9A%D0%B0%D0%BC%D0%B8%D0%BD%20(feat.%20JONY)&artist=EMIN%2C%20JONY&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 150,
@@ -1227,13 +1230,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Juice WRLD",
     "artistName": "Juice WRLD",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 240,
-    "durationLabel": "4:00",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273f7db43292a6a99b21b51d5b4",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/85ba40ef782e993bac9ee1c945f90c123b11ffec",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/lucid_dreams_74?title=Lucid%20Dreams&artist=Juice%20WRLD&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 161,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1245,12 +1248,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Yasuha Kominami",
     "artistName": "Yasuha Kominami",
     "badge": "Electronic / Alt",
-    "durationSec": 219,
-    "durationLabel": "3:39",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273bf04a22ed85882df13fc1605",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/79fdaffd7a3841dbd8856d3ee29f58e49305668b",
+      "/api/audio/stream/3355411_75?title=3355411&artist=Yasuha%20Kominami&fallback=%2Faudio%2Fno-friends-female.mp3",
       "/audio/no-friends-female.mp3"
     ],
     "bpm": 114,
@@ -1263,13 +1266,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Chase Atlantic, GOON DES GARCONS*",
     "artistName": "Chase Atlantic, GOON DES GARCONS*",
     "badge": "Electronic / Alt",
-    "durationSec": 268,
-    "durationLabel": "4:28",
+    "durationSec": 237,
+    "durationLabel": "3:57",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2735a0c2870f4f309e382d1fad6",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/943da532a4cca7c27091031c85d85a0d22360fc4",
-      "/audio/no-friends-female.mp3"
+      "/api/audio/stream/consume_feat_goon_des_garcon_76?title=Consume%20(feat.%20Goon%20Des%20Garcons)&artist=Chase%20Atlantic%2C%20GOON%20DES%20GARCONS*&fallback=%2Faudio%2Fstronger-than-you-frisk.mp3",
+      "/audio/stronger-than-you-frisk.mp3"
     ],
     "bpm": 125,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1281,13 +1284,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Chase Atlantic",
     "artistName": "Chase Atlantic",
     "badge": "Electronic / Alt",
-    "durationSec": 229,
-    "durationLabel": "3:49",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2735a0c2870f4f309e382d1fad6",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e201f50b9d4426569bcc1a46acee0c4d5fa2e91c",
-      "/audio/no-friends-female.mp3"
+      "/api/audio/stream/swim_77?title=Swim&artist=Chase%20Atlantic&fallback=%2Faudio%2Fworld-execute-me.mp3",
+      "/audio/world-execute-me.mp3"
     ],
     "bpm": 136,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1299,12 +1302,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YOASOBI",
     "artistName": "YOASOBI",
     "badge": "Electronic / Alt",
-    "durationSec": 206,
-    "durationLabel": "3:26",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273b2efc5e5f5922ca1f1b88928",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/8541c5adae3a4cbf7032d4e49bc6b26cb4ec9118",
+      "/api/audio/stream/track_78?title=%E6%80%AA%E7%89%A9&artist=YOASOBI&fallback=%2Faudio%2Fno-friends-female.mp3",
       "/audio/no-friends-female.mp3"
     ],
     "bpm": 147,
@@ -1317,13 +1320,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YOASOBI",
     "artistName": "YOASOBI",
     "badge": "Electronic / Alt",
-    "durationSec": 194,
-    "durationLabel": "3:14",
+    "durationSec": 237,
+    "durationLabel": "3:57",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273a9f9b6f07b43009f5b0216dc",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a826b8afa08d7aefe2fa33936591936e507e248e",
-      "/audio/no-friends-female.mp3"
+      "/api/audio/stream/track_79?title=%E5%8B%87%E8%80%85&artist=YOASOBI&fallback=%2Faudio%2Fstronger-than-you-frisk.mp3",
+      "/audio/stronger-than-you-frisk.mp3"
     ],
     "bpm": 158,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1335,13 +1338,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kendrick Lamar, Zacari",
     "artistName": "Kendrick Lamar, Zacari",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 213,
-    "durationLabel": "3:33",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2738b52c6b9bc4e43d873869699",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/70e57d78cc283866f5d5f2a42deeaffad474309b",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/love_feat_zacari_80?title=LOVE.%20FEAT.%20ZACARI.&artist=Kendrick%20Lamar%2C%20Zacari&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 169,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1353,12 +1356,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kendrick Lamar",
     "artistName": "Kendrick Lamar",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 255,
-    "durationLabel": "4:15",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2732e02117d76426a08ac7c174f",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/08ce7a7c54f8f2473d06827284425343936416e1",
+      "/api/audio/stream/united_in_grief_81?title=United%20In%20Grief&artist=Kendrick%20Lamar&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 122,
@@ -1371,13 +1374,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kendrick Lamar, Blxst, Amanda Reifer",
     "artistName": "Kendrick Lamar, Blxst, Amanda Reifer",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 239,
-    "durationLabel": "3:59",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2732e02117d76426a08ac7c174f",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/663a18fd8558cddcf150a621b65b991052a3995d",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/die_hard_82?title=Die%20Hard&artist=Kendrick%20Lamar%2C%20Blxst%2C%20Amanda%20Reifer&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 133,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1389,13 +1392,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kendrick Lamar",
     "artistName": "Kendrick Lamar",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 724,
-    "durationLabel": "12:04",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273d28d2ebdedb220e479743797",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/322625037b34c613108388f61dfd0fd57340abb5",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/sing_about_me_i_m_dying_of_t_83?title=Sing%20About%20Me%2C%20I'm%20Dying%20Of%20Thirst&artist=Kendrick%20Lamar&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 144,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1407,12 +1410,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kendrick Lamar",
     "artistName": "Kendrick Lamar",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 209,
-    "durationLabel": "3:29",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273add9eb25744782c3717c9368",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/41142ca36be9d859178e2b73906dd80f53d17dd6",
+      "/api/audio/stream/element_84?title=ELEMENT.&artist=Kendrick%20Lamar&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 155,
@@ -1425,13 +1428,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kendrick Lamar",
     "artistName": "Kendrick Lamar",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 186,
-    "durationLabel": "3:06",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273add9eb25744782c3717c9368",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/107655a6c41a8d0f62a53b5573e1d9288a498e68",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/dna_85?title=DNA.&artist=Kendrick%20Lamar&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 166,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1443,13 +1446,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Baby Keem, Kendrick Lamar",
     "artistName": "Baby Keem, Kendrick Lamar",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 252,
-    "durationLabel": "4:12",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273e16c637ae3d6ab7ea2278bbd",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/19e90a289b2a4c9e07a29f1230779d8c4c7425c8",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/family_ties_with_kendrick_la_86?title=family%20ties%20(with%20Kendrick%20Lamar)&artist=Baby%20Keem%2C%20Kendrick%20Lamar&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 119,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1461,12 +1464,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kendrick Lamar",
     "artistName": "Kendrick Lamar",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 384,
-    "durationLabel": "6:24",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273bdc727cfc07ddbabf925bb2f",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/387a45e913fe7fe533d5a41f52b73c1299781676",
+      "/api/audio/stream/euphoria_87?title=euphoria&artist=Kendrick%20Lamar&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 130,
@@ -1479,13 +1482,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kendrick Lamar, Lefty Gunplay",
     "artistName": "Kendrick Lamar, Lefty Gunplay",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 221,
-    "durationLabel": "3:41",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273e2a0a166493a2bde5480a420",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/9acdae8080763bac996474ee7583487360a62f28",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/tv_off_feat_lefty_gunplay_88?title=tv%20off%20(feat.%20lefty%20gunplay)&artist=Kendrick%20Lamar%2C%20Lefty%20Gunplay&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 141,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1497,13 +1500,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "美波",
     "artistName": "美波",
     "badge": "Electronic / Alt",
-    "durationSec": 294,
-    "durationLabel": "4:54",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273656d17184f33544caeae3511",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/3057049490f94cb404258af8f3a3c472c86b4110",
-      "/audio/no-friends-female.mp3"
+      "/api/audio/stream/track_89?title=%E3%82%A2%E3%83%A1%E3%83%B2%E3%83%9E%E3%83%84%E3%80%81&artist=%E7%BE%8E%E6%B3%A2&fallback=%2Faudio%2Fworld-execute-me.mp3",
+      "/audio/world-execute-me.mp3"
     ],
     "bpm": 152,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1515,12 +1518,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "美波",
     "artistName": "美波",
     "badge": "Electronic / Alt",
-    "durationSec": 252,
-    "durationLabel": "4:12",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2732281f3aa39da2848f25175dd",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/8d3cc6f130654730d1056781c7811d97062d2df0",
+      "/api/audio/stream/track_90?title=%E3%82%AB%E3%83%AF%E3%82%AD%E3%83%B2%E3%82%A2%E3%83%A1%E3%82%AF&artist=%E7%BE%8E%E6%B3%A2&fallback=%2Faudio%2Fno-friends-female.mp3",
       "/audio/no-friends-female.mp3"
     ],
     "bpm": 163,
@@ -1533,13 +1536,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "美波",
     "artistName": "美波",
     "badge": "Electronic / Alt",
-    "durationSec": 331,
-    "durationLabel": "5:31",
+    "durationSec": 237,
+    "durationLabel": "3:57",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273e192db03c0db78e0eead6114",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f4ec8c4acdafbd29197fa1e1859b071793c47159",
-      "/audio/no-friends-female.mp3"
+      "/api/audio/stream/main_actor_91?title=main%20actor&artist=%E7%BE%8E%E6%B3%A2&fallback=%2Faudio%2Fstronger-than-you-frisk.mp3",
+      "/audio/stronger-than-you-frisk.mp3"
     ],
     "bpm": 116,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1551,13 +1554,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Linkin Park",
     "artistName": "Linkin Park",
     "badge": "Electronic / Alt",
-    "durationSec": 190,
-    "durationLabel": "3:10",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273263d80522efd7277ab2bb822",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/00a48ce1e2faa3b23719d1e3bea39d01168490b2",
-      "/audio/no-friends-female.mp3"
+      "/api/audio/stream/the_emptiness_machine_92?title=The%20Emptiness%20Machine&artist=Linkin%20Park&fallback=%2Faudio%2Fworld-execute-me.mp3",
+      "/audio/world-execute-me.mp3"
     ],
     "bpm": 127,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1569,12 +1572,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "LiSA",
     "artistName": "LiSA",
     "badge": "Electronic / Alt",
-    "durationSec": 297,
-    "durationLabel": "4:57",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27364c8cf7bc530a05dd10e8efe",
     "accentColor": "emerald",
     "sources": [
-      "https://p.scdn.co/mp3-preview/13aecfb2bdc215e7ede22dc728ce32a9b8fa4914",
+      "/api/audio/stream/unlasting_93?title=unlasting&artist=LiSA&fallback=%2Faudio%2Fno-friends-female.mp3",
       "/audio/no-friends-female.mp3"
     ],
     "bpm": 138,
@@ -1587,12 +1590,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Childish Gambino",
     "artistName": "Childish Gambino",
     "badge": "Melancholy",
-    "durationSec": 270,
-    "durationLabel": "4:30",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2736182cfe2e2a090d125c81dc0",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/7f326a2dc7b5616df6d193f6995b31f593511a54",
+      "/api/audio/stream/heartbeat_94?title=Heartbeat&artist=Childish%20Gambino&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 149,
@@ -1605,13 +1608,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Offset, Travis Scott",
     "artistName": "Offset, Travis Scott",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 173,
-    "durationLabel": "2:53",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2738473cdc72d9c6f9a2787e070",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/93409412893ac8a2fdc33b389ff1aabc436a4347",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/say_my_grace_feat_travis_sco_95?title=SAY%20MY%20GRACE%20(feat.%20Travis%20Scott)&artist=Offset%2C%20Travis%20Scott&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 160,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1623,12 +1626,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "¥$, Kanye West, Ty Dolla $ign",
     "artistName": "¥$, Kanye West, Ty Dolla $ign",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 111,
-    "durationLabel": "1:51",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2739c654f315df05ae7c6ec8980",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/92e7fcd962055df74ebe7a6ba465f4f07d41798a",
+      "/api/audio/stream/burn_96?title=BURN&artist=%C2%A5%24%2C%20Kanye%20West%2C%20Ty%20Dolla%20%24ign&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 113,
@@ -1641,13 +1644,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Future, Metro Boomin, Kendrick Lamar",
     "artistName": "Future, Metro Boomin, Kendrick Lamar",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 268,
-    "durationLabel": "4:28",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273cec3fc072352b5f4f637d9fa",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/47d05511b21d4fdbd8846fb491bb120e1777c0c7",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/like_that_97?title=Like%20That&artist=Future%2C%20Metro%20Boomin%2C%20Kendrick%20Lamar&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 124,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1659,13 +1662,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Rihanna, Eminem",
     "artistName": "Rihanna, Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 296,
-    "durationLabel": "4:56",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273aa16162c83c19d587a3bfa45",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a24f4cbb0ea21c56113ce830a1a694d787f37fa2",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/love_the_way_you_lie_part_ii_98?title=Love%20The%20Way%20You%20Lie%20(Part%20II)%20-%20Pt.%202&artist=Rihanna%2C%20Eminem&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 135,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1677,12 +1680,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem",
     "artistName": "Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 391,
-    "durationLabel": "6:31",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273c6338d684995af10c2bf0533",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/92ffdbe868c388acba9796ecad82478225069e28",
+      "/api/audio/stream/wicked_ways_99?title=Wicked%20Ways&artist=Eminem&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 146,
@@ -1695,13 +1698,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem",
     "artistName": "Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 296,
-    "durationLabel": "4:56",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c6338d684995af10c2bf0533",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e093fc2139d0c4b6013a6eabf4d8808e56ca9982",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/legacy_100?title=Legacy&artist=Eminem&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 157,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1713,13 +1716,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Logic, Eminem",
     "artistName": "Logic, Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 245,
-    "durationLabel": "4:05",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273e18710f2e462a6cd25218e3a",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e1769714c70695245cfb745072b59fec4eab3899",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/homicide_101?title=Homicide&artist=Logic%2C%20Eminem&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 168,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1731,12 +1734,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem",
     "artistName": "Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 338,
-    "durationLabel": "5:38",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273e4073def0c03a91e3fceaf73",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e40e69c6116b7c8a18b6dd22c788dd6773bd770b",
+      "/api/audio/stream/the_ringer_102?title=The%20Ringer&artist=Eminem&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 121,
@@ -1749,13 +1752,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem",
     "artistName": "Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 262,
-    "durationLabel": "4:22",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273e4073def0c03a91e3fceaf73",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/6fdcebb2c8e54ef6d95cdfcd7cd849c6fd5381f9",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/fall_103?title=Fall&artist=Eminem&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 132,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1767,12 +1770,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Ren",
     "artistName": "Ren",
     "badge": "Nightcore",
-    "durationSec": 150,
-    "durationLabel": "2:30",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2739138c8ee36d6fd76cc021b7d",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/8002216b6aa2a6ab42aad58fa48714f208297aea",
+      "/api/audio/stream/tattoo_tiktok_remix_104?title=Tattoo%20-%20TikTok%20Remix&artist=Ren&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 143,
@@ -1785,12 +1788,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Travis Scott, Young Thug, M.I.A.",
     "artistName": "Travis Scott, Young Thug, M.I.A.",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 203,
-    "durationLabel": "3:23",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273ffbe25fb3b119bda9a2ba0ee",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a02b59377069cf757ba72e1954294853f4175410",
+      "/api/audio/stream/franchise_feat_young_thug_m__105?title=FRANCHISE%20(feat.%20Young%20Thug%20%26%20M.I.A.)&artist=Travis%20Scott%2C%20Young%20Thug%2C%20M.I.A.&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 154,
@@ -1803,13 +1806,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem, White Gold",
     "artistName": "Eminem, White Gold",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 230,
-    "durationLabel": "3:50",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273b84b0516d901f95461bb5165",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/7b784ee3c5fd357a744aa7d4db919644ece55fee",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/zeus_feat_white_gold_106?title=Zeus%20(feat.%20White%20Gold)&artist=Eminem%2C%20White%20Gold&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 165,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1821,13 +1824,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem, Joyner Lucas",
     "artistName": "Eminem, Joyner Lucas",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 245,
-    "durationLabel": "4:05",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273e4073def0c03a91e3fceaf73",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/989fe0fa407a54af5fb00729fc94dad74f01ea79",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/lucky_you_feat_joyner_lucas_107?title=Lucky%20You%20(feat.%20Joyner%20Lucas)&artist=Eminem%2C%20Joyner%20Lucas&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 118,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1839,12 +1842,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Mewsic",
     "artistName": "Mewsic",
     "badge": "Melancholy",
-    "durationSec": 300,
-    "durationLabel": "5:00",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27319083b0cde8b34f98eb92b89",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/d7551f44a14f51fabc41aa59d73c675d473f6c66",
+      "/api/audio/stream/unlasting_from_sword_art_onl_108?title=Unlasting%20(From%20%22Sword%20Art%20Online%20Alicization%3A%20War%20of%20Underworld%22)&artist=Mewsic&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 129,
@@ -1857,12 +1860,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Katy Perry",
     "artistName": "Katy Perry",
     "badge": "Melancholy",
-    "durationSec": 206,
-    "durationLabel": "3:26",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273d20c38f295039520d688a888",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/227ab7203b38df884a00faa36e4357a0692786f2",
+      "/api/audio/stream/e_t_109?title=E.T.&artist=Katy%20Perry&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 140,
@@ -1875,12 +1878,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "bbygirl",
     "artistName": "bbygirl",
     "badge": "Nightcore",
-    "durationSec": 164,
-    "durationLabel": "2:44",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273a1fc45f6f5309458284f1edd",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/c9e8d3cee20d31f246bf8fe327d95eba9a1e3309",
+      "/api/audio/stream/see_you_again_sped_up_reverb_110?title=see%20you%20again%20-%20sped%20up%20%2B%20reverb&artist=bbygirl&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 151,
@@ -1893,12 +1896,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Ren",
     "artistName": "Ren",
     "badge": "Melancholy",
-    "durationSec": 94,
-    "durationLabel": "1:34",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2737f9a496264a9937e5389d037",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/8dc80941573708a145d4792e91c80e696bc0f9da",
+      "/api/audio/stream/babydoll_x_the_perfect_girl_111?title=Babydoll%20x%20The%20perfect%20girl&artist=Ren&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 162,
@@ -1911,12 +1914,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Tate McRae",
     "artistName": "Tate McRae",
     "badge": "Nightcore",
-    "durationSec": 120,
-    "durationLabel": "2:00",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273121da2f49423cff69e11f4d2",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/124a7806ca197989c10c64b62839b88120b819f1",
+      "/api/audio/stream/greedy_sped_up_112?title=greedy%20sped%20up&artist=Tate%20McRae&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 115,
@@ -1929,13 +1932,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Ren",
     "artistName": "Ren",
     "badge": "Nightcore",
-    "durationSec": 171,
-    "durationLabel": "2:51",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27332f7f3ba3e7968b8cac7202c",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f9ee6c6b461c532a4daa0a7ca74c2698d613df45",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/collide_speed_113?title=Collide%20-%20Speed&artist=Ren&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 126,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1947,12 +1950,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "ThxSoMch",
     "artistName": "ThxSoMch",
     "badge": "Melancholy",
-    "durationSec": 135,
-    "durationLabel": "2:15",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273ed795ac97622382819765a7d",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/5355ee23cc1ace41e04959995b9aa140a367ef3e",
+      "/api/audio/stream/hate_114?title=Hate.&artist=ThxSoMch&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 137,
@@ -1970,8 +1973,7 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2736a40ef7fae418977f90bf54c",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/2d3dea3c7bea5fb8b50aa4cfcdc9f24a53b77b2b",
-      "/audio/duvet-x-linger.mp3"
+      "/audio/stronger-than-you-frisk.mp3"
     ],
     "bpm": 148,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -1983,12 +1985,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Tove Lo",
     "artistName": "Tove Lo",
     "badge": "Melancholy",
-    "durationSec": 209,
-    "durationLabel": "3:29",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273edbdf62135e9112a98bffa0c",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f865c64caa355379d18b042914dc0091676f7df9",
+      "/api/audio/stream/habits_stay_high_117?title=Habits%20(Stay%20High)&artist=Tove%20Lo&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 112,
@@ -2001,12 +2003,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "The Weeknd",
     "artistName": "The Weeknd",
     "badge": "Melancholy",
-    "durationSec": 228,
-    "durationLabel": "3:48",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2731f6a2a40bb692936879db730",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/10abf114b144cbd4fc8638ac28aee1e58a7fac3e",
+      "/api/audio/stream/call_out_my_name_118?title=Call%20Out%20My%20Name&artist=The%20Weeknd&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 123,
@@ -2019,12 +2021,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lady Gaga",
     "artistName": "Lady Gaga",
     "badge": "Melancholy",
-    "durationSec": 249,
-    "durationLabel": "4:09",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734ba15b951a5cff36133ca5bd",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e9d3902b0cdb6b38ce5a188e592214fdcdc0ecb6",
+      "/api/audio/stream/judas_119?title=Judas&artist=Lady%20Gaga&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 134,
@@ -2037,12 +2039,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Alessia Cara",
     "artistName": "Alessia Cara",
     "badge": "Melancholy",
-    "durationSec": 230,
-    "durationLabel": "3:50",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2730a48794d471447a030998815",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/da7510a6987187086774a17a3f79cf6752ff1f87",
+      "/api/audio/stream/scars_to_your_beautiful_120?title=Scars%20To%20Your%20Beautiful&artist=Alessia%20Cara&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 145,
@@ -2055,12 +2057,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Ren",
     "artistName": "Ren",
     "badge": "Nightcore",
-    "durationSec": 150,
-    "durationLabel": "2:30",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734c884095838e39cc4ea8fa4d",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/386c498d470657b4974db0a4c96ab749e9901707",
+      "/api/audio/stream/yes_to_heaven_speed_121?title=Yes%20To%20Heaven%20-%20Speed&artist=Ren&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 156,
@@ -2073,12 +2075,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Jeff Williams, Casey Lee Williams",
     "artistName": "Jeff Williams, Casey Lee Williams",
     "badge": "Melancholy",
-    "durationSec": 198,
-    "durationLabel": "3:18",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273473cabf7225c095bb86713a1",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/9c8c45c9fd90ccb1e9fa67f4b1bbe26d8c7d75df",
+      "/api/audio/stream/die_122?title=Die&artist=Jeff%20Williams%2C%20Casey%20Lee%20Williams&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 167,
@@ -2091,12 +2093,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Phoneboy, Justin Magnaye",
     "artistName": "Phoneboy, Justin Magnaye",
     "badge": "Melancholy",
-    "durationSec": 211,
-    "durationLabel": "3:31",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273ef38c139badc07aed8c8a038",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e3a3de709f70d291b85e8b2b41eafcd475ca2b27",
+      "/api/audio/stream/nevermind_123?title=Nevermind&artist=Phoneboy%2C%20Justin%20Magnaye&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 120,
@@ -2109,12 +2111,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Arash",
     "artistName": "Arash",
     "badge": "Melancholy",
-    "durationSec": 208,
-    "durationLabel": "3:28",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27374609ddd951d192024864c34",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/47f8f734020986cd63644d19dfd11441b8a38bfa",
+      "/api/audio/stream/temptation_124?title=Temptation&artist=Arash&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 131,
@@ -2132,8 +2134,8 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273e4073def0c03a91e3fceaf73",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/18257e8fdaddec5065c08e79e013daeb8ac4ec02",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/normal_125?title=Normal&artist=Eminem&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 142,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -2145,13 +2147,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Future, Metro Boomin, Travis Scott",
     "artistName": "Future, Metro Boomin, Travis Scott",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 170,
-    "durationLabel": "2:50",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273cec3fc072352b5f4f637d9fa",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/9edf7068e488e18a9e9bfde4960417cb462e464a",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/cinderella_126?title=Cinderella&artist=Future%2C%20Metro%20Boomin%2C%20Travis%20Scott&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 153,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -2163,12 +2165,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Elliot Sutton, Nenadid",
     "artistName": "Elliot Sutton, Nenadid",
     "badge": "Melancholy",
-    "durationSec": 232,
-    "durationLabel": "3:52",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273dcdc816c9d200bc018838642",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/3e0855c7ccc22b8705ca5d8dbf86a28839cba3d9",
+      "/api/audio/stream/headlock_slowed_127?title=Headlock%20-%20Slowed&artist=Elliot%20Sutton%2C%20Nenadid&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 164,
@@ -2181,13 +2183,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Skylar Grey, Polo G, Mozzy, Eminem",
     "artistName": "Skylar Grey, Polo G, Mozzy, Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 257,
-    "durationLabel": "4:17",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27318b2c39fa740e2822d40d65b",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/3476297bf26347b7039fbab22444c4020b5e522e",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/last_one_standing_feat_polo__128?title=Last%20One%20Standing%20(feat.%20Polo%20G%2C%20Mozzy%20%26%20Eminem)%20-%20From%20Venom%3A%20Let%20There%20Be%20Carnage&artist=Skylar%20Grey%2C%20Polo%20G%2C%20Mozzy%2C%20Eminem&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 117,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -2199,12 +2201,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Ellie Goulding",
     "artistName": "Ellie Goulding",
     "badge": "Melancholy",
-    "durationSec": 254,
-    "durationLabel": "4:14",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2732e3c2d709c711d0c0c4af906",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/b2eeb0b7e6a6d9743c4240383d68377dd323d8a7",
+      "/api/audio/stream/love_me_like_you_do_129?title=Love%20Me%20Like%20You%20Do&artist=Ellie%20Goulding&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 128,
@@ -2217,12 +2219,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Baby Keem, Kendrick Lamar",
     "artistName": "Baby Keem, Kendrick Lamar",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 252,
-    "durationLabel": "4:12",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27335a8a0c8b82b525679eceda6",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/29e8bbf78ac0c629a8d4d1c280d3695ba18b5a71",
+      "/api/audio/stream/family_ties_with_kendrick_la_130?title=family%20ties%20(with%20Kendrick%20Lamar)&artist=Baby%20Keem%2C%20Kendrick%20Lamar&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 139,
@@ -2235,12 +2237,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Alex Warren",
     "artistName": "Alex Warren",
     "badge": "Melancholy",
-    "durationSec": 187,
-    "durationLabel": "3:07",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2738d18d73bbfc8985d52865edf",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/023ecc53465fc16782a581cbdc2e9d738cde1453",
+      "/api/audio/stream/ordinary_131?title=Ordinary&artist=Alex%20Warren&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 150,
@@ -2253,12 +2255,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "DJ Snake, Justin Bieber",
     "artistName": "DJ Snake, Justin Bieber",
     "badge": "Melancholy",
-    "durationSec": 206,
-    "durationLabel": "3:26",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273212d776c31027c511f0ee3bc",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/7864c6e844bdf1438c355017ecab0daceccb82f9",
+      "/api/audio/stream/let_me_love_you_132?title=Let%20Me%20Love%20You&artist=DJ%20Snake%2C%20Justin%20Bieber&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 161,
@@ -2271,12 +2273,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Reol",
     "artistName": "Reol",
     "badge": "Melancholy",
-    "durationSec": 218,
-    "durationLabel": "3:38",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273bd5c074e1fe882039bf0fd0a",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/454b5e10ac5636ce48948f50aeb327aa80f173db",
+      "/api/audio/stream/track_133?title=%E3%82%B5%E3%82%A4%E3%82%B5%E3%82%AD&artist=Reol&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 114,
@@ -2289,12 +2291,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lana Del Rey",
     "artistName": "Lana Del Rey",
     "badge": "Melancholy",
-    "durationSec": 243,
-    "durationLabel": "4:03",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273f894be72a77b1488292672c7",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/3395e01586c33582178f4adb6197e5e455567a42",
+      "/api/audio/stream/dark_paradise_134?title=Dark%20Paradise&artist=Lana%20Del%20Rey&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 125,
@@ -2307,12 +2309,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Veil Of Maya",
     "artistName": "Veil Of Maya",
     "badge": "Melancholy",
-    "durationSec": 190,
-    "durationLabel": "3:10",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2730d4ca29a7c4723c5b19d6f17",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/7d0ce6f818a7ea858d50edcc82dc51cc1ed1789e",
+      "/api/audio/stream/mikasa_135?title=Mikasa&artist=Veil%20Of%20Maya&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 136,
@@ -2325,12 +2327,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Sarah Connor",
     "artistName": "Sarah Connor",
     "badge": "Melancholy",
-    "durationSec": 369,
-    "durationLabel": "6:09",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273cd41650663353cb4bd930a02",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/123dd65b4784f8b5a61985ebe4b58c73c139b0c7",
+      "/api/audio/stream/cold_as_ice_ph_electro_remix_136?title=Cold%20As%20Ice%20-%20PH%20Electro%20Remix&artist=Sarah%20Connor&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 147,
@@ -2343,13 +2345,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kendrick Lamar",
     "artistName": "Kendrick Lamar",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 317,
-    "durationLabel": "5:17",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273e2a0a166493a2bde5480a420",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/c464f327887c9fc71f517bdff47ef10903f306d4",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/wacced_out_murals_137?title=wacced%20out%20murals&artist=Kendrick%20Lamar&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 158,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -2361,13 +2363,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kendrick Lamar",
     "artistName": "Kendrick Lamar",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 158,
-    "durationLabel": "2:38",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273e2a0a166493a2bde5480a420",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/467731e1d2a36b7b9c04e717108aa60b598446ce",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/squabble_up_138?title=squabble%20up&artist=Kendrick%20Lamar&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 169,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -2379,12 +2381,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kendrick Lamar",
     "artistName": "Kendrick Lamar",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 194,
-    "durationLabel": "3:14",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2734e267faafd063f288b4890bc",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/d8a5ebbcbd7260157366493afcd35f3cc1191e0f",
+      "/api/audio/stream/alright_139?title=Alright&artist=Kendrick%20Lamar&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 122,
@@ -2397,12 +2399,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Tee Grizzley",
     "artistName": "Tee Grizzley",
     "badge": "Melancholy",
-    "durationSec": 255,
-    "durationLabel": "4:15",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27324438db1bfee80bd556db8f9",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/5dab7a81e00fc8ea37f4c876a4e66145a45a314b",
+      "/api/audio/stream/first_day_out_140?title=First%20Day%20Out&artist=Tee%20Grizzley&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 133,
@@ -2415,12 +2417,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YoungBoy Never Broke Again",
     "artistName": "YoungBoy Never Broke Again",
     "badge": "Melancholy",
-    "durationSec": 176,
-    "durationLabel": "2:56",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273f139d4aa72c3cf9f9a47cd8f",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a37094c93cf86df6ff5c2c5236c5e0582d2b67e6",
+      "/api/audio/stream/dis_that_141?title=Dis%20%26%20That&artist=YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 144,
@@ -2433,12 +2435,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Migos, YoungBoy Never Broke Again",
     "artistName": "Migos, YoungBoy Never Broke Again",
     "badge": "Melancholy",
-    "durationSec": 196,
-    "durationLabel": "3:16",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273fe125b32fcf094fa625dbdae",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e513a07f099c60d07f7d4528feee857bf33adc29",
+      "/api/audio/stream/need_it_142?title=Need%20It&artist=Migos%2C%20YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 155,
@@ -2451,12 +2453,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Tory Lanez",
     "artistName": "Tory Lanez",
     "badge": "Melancholy",
-    "durationSec": 132,
-    "durationLabel": "2:12",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27353af8d1a7654351c6a03b5fe",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/c36cfa2427d26ac1ee05900f6bdf27caa3543332",
+      "/api/audio/stream/broke_in_a_minute_143?title=Broke%20In%20A%20Minute&artist=Tory%20Lanez&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 166,
@@ -2469,12 +2471,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Imogen Heap",
     "artistName": "Imogen Heap",
     "badge": "Melancholy",
-    "durationSec": 215,
-    "durationLabel": "3:35",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27396623f4784c88259592fb8a1",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/136e557ae6600e8e43a2a12c95fb9e166055d602",
+      "/api/audio/stream/headlock_144?title=Headlock&artist=Imogen%20Heap&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 119,
@@ -2487,12 +2489,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Don Toliver",
     "artistName": "Don Toliver",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 154,
-    "durationLabel": "2:34",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2739d04d25e732c593fb94e7193",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f4ee5e6bf77ea5ac81de6a5b7de4b695aefe8ef1",
+      "/api/audio/stream/no_idea_145?title=No%20Idea&artist=Don%20Toliver&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 130,
@@ -2505,12 +2507,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Michael Jackson",
     "artistName": "Michael Jackson",
     "badge": "Melancholy",
-    "durationSec": 246,
-    "durationLabel": "4:06",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27335f36cb686b0d5a12ab3a9f0",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/2e6e2753fa6ff7e93b3f975b1585de80f1148f03",
+      "/api/audio/stream/chicago_146?title=Chicago&artist=Michael%20Jackson&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 141,
@@ -2523,12 +2525,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "DRILL GATES",
     "artistName": "DRILL GATES",
     "badge": "Melancholy",
-    "durationSec": 156,
-    "durationLabel": "2:36",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273a11d3be86b4ec78b36676df2",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/5e1d70205e95e1a11498b57bde132d3d797719ff",
+      "/api/audio/stream/on_the_floor_drill_slowed_re_147?title=ON%20THE%20FLOOR%20DRILL%20SLOWED%20%2B%20REVERB&artist=DRILL%20GATES&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 152,
@@ -2541,12 +2543,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Yeat",
     "artistName": "Yeat",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 171,
-    "durationLabel": "2:51",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27303e3ce4b238512cfb42dbc95",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f22571049c9a70cf4699b5f114ed2b33003b86b5",
+      "/api/audio/stream/breathe_148?title=Breathe&artist=Yeat&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 163,
@@ -2559,13 +2561,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Juice WRLD, Young Thug",
     "artistName": "Juice WRLD, Young Thug",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 157,
-    "durationLabel": "2:37",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2730bda1f6aa92d42f44d621db6",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/b16a214279b59fc2514e840d4108893afe6329c6",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/bad_boy_with_young_thug_149?title=Bad%20Boy%20(with%20Young%20Thug)&artist=Juice%20WRLD%2C%20Young%20Thug&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 116,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -2577,12 +2579,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Darci",
     "artistName": "Darci",
     "badge": "Melancholy",
-    "durationSec": 204,
-    "durationLabel": "3:24",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2737497244a4357c5b2f8e8e4be",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ed5e5e23f33c0adc61fd778a2e004c63e4c4af9c",
+      "/api/audio/stream/on_my_own_slowed_reverb_150?title=On%20My%20Own%20(slowed%20%2B%20reverb)&artist=Darci&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 127,
@@ -2595,12 +2597,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Ava Max",
     "artistName": "Ava Max",
     "badge": "Melancholy",
-    "durationSec": 187,
-    "durationLabel": "3:07",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273ea46ceca00d552337e5b8ac2",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/027a262bbbce639949fe075756718734c313dac2",
+      "/api/audio/stream/sweet_but_psycho_151?title=Sweet%20but%20Psycho&artist=Ava%20Max&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 138,
@@ -2613,12 +2615,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Rihanna",
     "artistName": "Rihanna",
     "badge": "Melancholy",
-    "durationSec": 267,
-    "durationLabel": "4:27",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273b9ff0a5f40d3406aed5e5e3b",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/2ac14b43fe2451a70c07357ac675ade8da1f776c",
+      "/api/audio/stream/don_t_stop_the_music_152?title=Don't%20Stop%20The%20Music&artist=Rihanna&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 149,
@@ -2631,12 +2633,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Rihanna",
     "artistName": "Rihanna",
     "badge": "Melancholy",
-    "durationSec": 235,
-    "durationLabel": "3:55",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27331548865f7c729290b96c794",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ee800fcd3f6b738d5ffe78de8c958eaa2c4de291",
+      "/api/audio/stream/only_girl_in_the_world_153?title=Only%20Girl%20(In%20The%20World)&artist=Rihanna&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 160,
@@ -2649,12 +2651,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Taylor Swift",
     "artistName": "Taylor Swift",
     "badge": "Melancholy",
-    "durationSec": 232,
-    "durationLabel": "3:52",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2739abdf14e6058bd3903686148",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e5cb812c19b14f4dc4c92a4c996bb92d05e2bf39",
+      "/api/audio/stream/blank_space_154?title=Blank%20Space&artist=Taylor%20Swift&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 113,
@@ -2667,12 +2669,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Taylor Swift",
     "artistName": "Taylor Swift",
     "badge": "Melancholy",
-    "durationSec": 219,
-    "durationLabel": "3:39",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2739abdf14e6058bd3903686148",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/90c43dcdca39db2bed5707998a4e53b2acd1164c",
+      "/api/audio/stream/shake_it_off_155?title=Shake%20It%20Off&artist=Taylor%20Swift&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 124,
@@ -2685,12 +2687,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Taylor Swift",
     "artistName": "Taylor Swift",
     "badge": "Melancholy",
-    "durationSec": 220,
-    "durationLabel": "3:40",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2739abdf14e6058bd3903686148",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a25df04357bb85e0d60aff583092be5eb684d0af",
+      "/api/audio/stream/wildest_dreams_156?title=Wildest%20Dreams&artist=Taylor%20Swift&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 135,
@@ -2703,12 +2705,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lady Gaga",
     "artistName": "Lady Gaga",
     "badge": "Melancholy",
-    "durationSec": 245,
-    "durationLabel": "4:05",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273a47c0e156ea3cebe37fdcab8",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f3c46fd947a19d51447e3fd520ad893fb08a8c44",
+      "/api/audio/stream/bloody_mary_157?title=Bloody%20Mary&artist=Lady%20Gaga&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 146,
@@ -2721,12 +2723,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Katy Perry",
     "artistName": "Katy Perry",
     "badge": "Melancholy",
-    "durationSec": 228,
-    "durationLabel": "3:48",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273d20c38f295039520d688a888",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f5452ebf843f4c126eacc038fbfdc9502bf0a9b5",
+      "/api/audio/stream/firework_158?title=Firework&artist=Katy%20Perry&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 157,
@@ -2739,12 +2741,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Calvin Harris, Ellie Goulding",
     "artistName": "Calvin Harris, Ellie Goulding",
     "badge": "Melancholy",
-    "durationSec": 227,
-    "durationLabel": "3:47",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2738fba5806a323efd272677c4d",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/bb032e25471de6482ac8200e690bb1433d3166ce",
+      "/api/audio/stream/outside_feat_ellie_goulding_159?title=Outside%20(feat.%20Ellie%20Goulding)&artist=Calvin%20Harris%2C%20Ellie%20Goulding&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 168,
@@ -2757,12 +2759,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Steve Lacy",
     "artistName": "Steve Lacy",
     "badge": "Melancholy",
-    "durationSec": 232,
-    "durationLabel": "3:52",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27308a9391fe107890268817ad4",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/0ab3a613e0aa7832d24a2dd340d06ed31b650f45",
+      "/api/audio/stream/bad_habit_160?title=Bad%20Habit&artist=Steve%20Lacy&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 121,
@@ -2775,12 +2777,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Taylor Swift",
     "artistName": "Taylor Swift",
     "badge": "Melancholy",
-    "durationSec": 226,
-    "durationLabel": "3:46",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273b034f9cdf12ae14c603daa99",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f2765af4fcb12d896343889d5faa8144f976f42b",
+      "/api/audio/stream/the_fate_of_ophelia_161?title=The%20Fate%20of%20Ophelia&artist=Taylor%20Swift&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 132,
@@ -2793,12 +2795,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "dadanny",
     "artistName": "dadanny",
     "badge": "Melancholy",
-    "durationSec": 182,
-    "durationLabel": "3:02",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273f2720bc9d89620c8b3995452",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/721779620c5ec3bcb0c27aaf8c41c54d0660a2b1",
+      "/api/audio/stream/can_t_feel_myself_162?title=Can't%20Feel%20Myself&artist=dadanny&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 143,
@@ -2811,12 +2813,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Yeat",
     "artistName": "Yeat",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 239,
-    "durationLabel": "3:59",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273acafc1658bdd56d083d262ab",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/3757c3bd58f451b187761f5dea3a16d6de38fa9d",
+      "/api/audio/stream/no_mor_talk_163?title=No%20mor%C3%AB%20talk&artist=Yeat&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 154,
@@ -2829,13 +2831,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kanye West",
     "artistName": "Kanye West",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 211,
-    "durationLabel": "3:31",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273346d77e155d854735410ed18",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/920b09535e94d18179265783aeb8b3ccb2495977",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/heartless_164?title=Heartless&artist=Kanye%20West&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 165,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -2847,12 +2849,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "DJ Michael Double",
     "artistName": "DJ Michael Double",
     "badge": "Melancholy",
-    "durationSec": 127,
-    "durationLabel": "2:07",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273ed0216c730e7ea6a0f187c0c",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/8a4bf8ca0a85374b3a59957480caccc68981f37a",
+      "/api/audio/stream/heartless_x_heartless_165?title=Heartless%20X%20Heartless&artist=DJ%20Michael%20Double&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 118,
@@ -2865,12 +2867,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "LonelyEve",
     "artistName": "LonelyEve",
     "badge": "Melancholy",
-    "durationSec": 198,
-    "durationLabel": "3:18",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2731e4c6e8c1b72b77b19f98624",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/0902e22b8c304367a646d9a6fea312d0982f5783",
+      "/api/audio/stream/the_hills_x_creepin_x_the_co_166?title=The%20Hills%20X%20Creepin%20X%20The%20Color%20Violet&artist=LonelyEve&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 129,
@@ -2883,12 +2885,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "BLP KOSHER, BabyTron",
     "artistName": "BLP KOSHER, BabyTron",
     "badge": "Melancholy",
-    "durationSec": 208,
-    "durationLabel": "3:28",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273ecffc18e64678294154e182a",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/daf466febe8aaabc704b21394176bce5c53400ad",
+      "/api/audio/stream/mazel_tron_167?title=Mazel%20Tron&artist=BLP%20KOSHER%2C%20BabyTron&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 140,
@@ -2901,12 +2903,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "King Von",
     "artistName": "King Von",
     "badge": "Melancholy",
-    "durationSec": 190,
-    "durationLabel": "3:10",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2737155e10eafd9c0aa6ff2a707",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ac796df2a008642b739d60a193e114a6acc8d015",
+      "/api/audio/stream/what_it_s_like_168?title=What%20It's%20Like&artist=King%20Von&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 151,
@@ -2919,11 +2921,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "333etman",
     "artistName": "333etman",
     "badge": "Melancholy",
-    "durationSec": 182,
-    "durationLabel": "3:02",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273fdbe7166f8ea43971c54dc7d",
     "accentColor": "cyan",
     "sources": [
+      "/api/audio/stream/vvv_169?title=Vvv&artist=333etman&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 162,
@@ -2936,12 +2939,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Peter Pabor, Lemon, AnimeUnity, Kuraiinu",
     "artistName": "Peter Pabor, Lemon, AnimeUnity, Kuraiinu",
     "badge": "Melancholy",
-    "durationSec": 242,
-    "durationLabel": "4:02",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2737b979ffddd2b2ffd0ea371a8",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/2b402dd1c62398059c6dced08d662ba9f06000c0",
+      "/api/audio/stream/spice_food_wars_170?title=Spice%20(Food%20Wars)&artist=Peter%20Pabor%2C%20Lemon%2C%20AnimeUnity%2C%20Kuraiinu&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 115,
@@ -2954,12 +2957,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Hiko",
     "artistName": "Hiko",
     "badge": "Nightcore",
-    "durationSec": 138,
-    "durationLabel": "2:18",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273802d214be61b844059e82b1c",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/2ae19963d943bf14bc0edacda279b39ed498277f",
+      "/api/audio/stream/oui_sped_up_hey_there_s_no_w_171?title=Oui%20(Sped%20Up)%20-%20Hey%20There's%20No%20We%20Without%20You%20and%20I&artist=Hiko&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 126,
@@ -2972,13 +2975,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "TommyMuzzic, ZeddMusique",
     "artistName": "TommyMuzzic, ZeddMusique",
     "badge": "Nightcore",
-    "durationSec": 180,
-    "durationLabel": "3:00",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27332dc79002f26a688ec2613d7",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/dfdd8e62b47c853d02f5af2b101cf7230e9042bd",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/animals_x_starboy_sped_up_to_172?title=Animals%20x%20Starboy%20(sped%20up%20to%20perfection)%20-%20TikTok%20Remix&artist=TommyMuzzic%2C%20ZeddMusique&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 137,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -2990,12 +2993,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "TommyMuzzic, ZeddMusique",
     "artistName": "TommyMuzzic, ZeddMusique",
     "badge": "Nightcore",
-    "durationSec": 124,
-    "durationLabel": "2:04",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2731566fe1451299e01308dd067",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/aa2202677e951cec73e00b17998e59f9dc2f7660",
+      "/api/audio/stream/living_life_in_the_night_tik_173?title=Living%20Life%2C%20In%20The%20Night%20-%20TikTok%20Remix&artist=TommyMuzzic%2C%20ZeddMusique&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 148,
@@ -3008,13 +3011,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "TommyMuzzic, ZeddMusique",
     "artistName": "TommyMuzzic, ZeddMusique",
     "badge": "Nightcore",
-    "durationSec": 137,
-    "durationLabel": "2:17",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27389a9e1afee18fc9a2a94bc0e",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/fe13de47e08a32f2511dc443579f62c35e85b4c0",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/babydoll_x_the_perfect_girl__174?title=Babydoll%20x%20The%20Perfect%20Girl%20-%20TikTok%20Remix&artist=TommyMuzzic%2C%20ZeddMusique&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 159,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3026,12 +3029,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Syrex",
     "artistName": "Syrex",
     "badge": "Nightcore",
-    "durationSec": 135,
-    "durationLabel": "2:15",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27372a75fb8b98f6cfe69661ff5",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f5036d6f3655c16a6d89e754225896ad4ce9a723",
+      "/api/audio/stream/in_the_name_of_love_nightcor_175?title=In%20The%20Name%20Of%20Love%20(Nightcore)&artist=Syrex&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 112,
@@ -3044,12 +3047,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lucian, Amanda Yang",
     "artistName": "Lucian, Amanda Yang",
     "badge": "Melancholy",
-    "durationSec": 208,
-    "durationLabel": "3:28",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273b72a98aa838630e691bf47c2",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/9d7f93df8a7d4b5c102468242cd5f8022cdca2db",
+      "/api/audio/stream/here_176?title=Here&artist=Lucian%2C%20Amanda%20Yang&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 123,
@@ -3062,12 +3065,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Ren",
     "artistName": "Ren",
     "badge": "Nightcore",
-    "durationSec": 175,
-    "durationLabel": "2:55",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734f602c6207b871d4ee785398",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/0a3daef8621a30eb5a0de664ff5e443ac9b6b5b1",
+      "/api/audio/stream/animals_speed_177?title=Animals%20-%20Speed&artist=Ren&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 134,
@@ -3080,13 +3083,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "NightcoreMuzzic, TommyMuzzic",
     "artistName": "NightcoreMuzzic, TommyMuzzic",
     "badge": "Nightcore",
-    "durationSec": 241,
-    "durationLabel": "4:01",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273a849bffdddc8f6a92865cba3",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/5037d9f36811eabf00a1f8ec2badcb1f00ab67e5",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/after_dark_x_sweater_weather_178?title=After%20Dark%20x%20Sweater%20Weather%20(Nightcore)%20-%20TikTok%20Remix&artist=NightcoreMuzzic%2C%20TommyMuzzic&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 145,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3098,12 +3101,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "DJ KridUNG",
     "artistName": "DJ KridUNG",
     "badge": "Nightcore",
-    "durationSec": 167,
-    "durationLabel": "2:47",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2733f2505717a39b6aaab5364f7",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/9769229ed2a797c22371e8f679d27414a6a26abe",
+      "/api/audio/stream/genius_sped_up_179?title=Genius%20-%20Sped%20Up&artist=DJ%20KridUNG&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 156,
@@ -3116,11 +3119,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "EDITKINGS, Verdun Remix",
     "artistName": "EDITKINGS, Verdun Remix",
     "badge": "Melancholy",
-    "durationSec": 112,
-    "durationLabel": "1:52",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273ce2e16b56fb29caa35e378e4",
     "accentColor": "cyan",
     "sources": [
+      "/api/audio/stream/unforgettable_tik_tok_edit_r_180?title=Unforgettable%20(Tik%20Tok%20Edit)%20-%20Remix&artist=EDITKINGS%2C%20Verdun%20Remix&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 167,
@@ -3133,12 +3137,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "EXE ROHIT",
     "artistName": "EXE ROHIT",
     "badge": "Nightcore",
-    "durationSec": 168,
-    "durationLabel": "2:48",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273a9663f459282e6df5fd8fe23",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/bacb1d485dda6a5f94d81e291e180767cee940e3",
+      "/api/audio/stream/dark_horse_sped_up_181?title=Dark%20Horse%20-%20Sped%20Up&artist=EXE%20ROHIT&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 120,
@@ -3151,12 +3155,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Arizona Zervas",
     "artistName": "Arizona Zervas",
     "badge": "Melancholy",
-    "durationSec": 164,
-    "durationLabel": "2:44",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273069a93617a916760ab88ffea",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/18dbed71a2ee41dec2edbecd76e2f67250675dc6",
+      "/api/audio/stream/roxanne_182?title=ROXANNE&artist=Arizona%20Zervas&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 131,
@@ -3169,12 +3173,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "EDITKINGS, Verdun Remix",
     "artistName": "EDITKINGS, Verdun Remix",
     "badge": "Nightcore",
-    "durationSec": 139,
-    "durationLabel": "2:19",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2732eb98a75569c24a25a88cb63",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e7d49425901f55341f2e5c1baa15faadb7334ab4",
+      "/api/audio/stream/you_right_x_luxurious_tiktok_183?title=You%20Right%20x%20Luxurious%20(TikTok%20Edit)%20-%20Remix&artist=EDITKINGS%2C%20Verdun%20Remix&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 142,
@@ -3187,13 +3191,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "LonelyEve",
     "artistName": "LonelyEve",
     "badge": "Nightcore",
-    "durationSec": 175,
-    "durationLabel": "2:55",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273217fc4e9e03b588acfc66d63",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/04abfd7a463a7186514873a08ffe5fd03f0fc392",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/the_hills_x_where_have_you_b_184?title=The%20Hills%20X%20Where%20Have%20You%20Been%20-%20Sped%20Up&artist=LonelyEve&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 153,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3205,12 +3209,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Six Dior",
     "artistName": "Six Dior",
     "badge": "Nightcore",
-    "durationSec": 214,
-    "durationLabel": "3:34",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27340d8783c94ccfaa7f8c57f6c",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f8050e6b13ad59e02f55b8b42eb45ef4a0da87d6",
+      "/api/audio/stream/obsessed_sped_up_185?title=Obsessed%20-%20Sped%20Up&artist=Six%20Dior&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 164,
@@ -3223,13 +3227,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Muppet DJ, SECA Records",
     "artistName": "Muppet DJ, SECA Records",
     "badge": "Nightcore",
-    "durationSec": 177,
-    "durationLabel": "2:57",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273c815ff1f64c9d96015216f6f",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/2f07324aaecb668630cf9c3b0e8ebd032e058fe0",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/so_obesessed_with_me_speed_r_186?title=So%20Obesessed%20With%20Me%20-%20Speed%20-%20Remix&artist=Muppet%20DJ%2C%20SECA%20Records&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 117,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3241,12 +3245,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lewis Hanton",
     "artistName": "Lewis Hanton",
     "badge": "Nightcore",
-    "durationSec": 194,
-    "durationLabel": "3:14",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2739578192ab24f0f4ddce13656",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/0a209629c5b3268f5293ae3de9df3fd7c1f07728",
+      "/api/audio/stream/shameless_sped_up_187?title=Shameless%20-%20Sped%20up&artist=Lewis%20Hanton&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 128,
@@ -3259,13 +3263,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "why mona",
     "artistName": "why mona",
     "badge": "Nightcore",
-    "durationSec": 200,
-    "durationLabel": "3:20",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27359055eb970b07cb66e237417",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/266b206bb14080c0271becb67625a13a6f7482f8",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/wannabe_sped_up_version_188?title=Wannabe%20-%20Sped%20Up%20Version&artist=why%20mona&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 139,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3277,12 +3281,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Darci",
     "artistName": "Darci",
     "badge": "Nightcore",
-    "durationSec": 144,
-    "durationLabel": "2:24",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2737497244a4357c5b2f8e8e4be",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/c88ca239c0afbb795c93344bb32b3a53c811b867",
+      "/api/audio/stream/on_my_own_sped_up_189?title=On%20My%20Own%20(sped%20up)&artist=Darci&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 150,
@@ -3295,13 +3299,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "bbygirl",
     "artistName": "bbygirl",
     "badge": "Nightcore",
-    "durationSec": 92,
-    "durationLabel": "1:32",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2737681c9db1f91ce0a6ad83dd7",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/4a2e511e45ca1cd79475da70569c452949351c3d",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/strangers_sped_up_190?title=strangers%20-%20sped%20up&artist=bbygirl&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 161,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3313,11 +3317,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Bedirhan Kum, shadera",
     "artistName": "Bedirhan Kum, shadera",
     "badge": "Melancholy",
-    "durationSec": 261,
-    "durationLabel": "4:21",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273fcc9ce32b7c4ba8c5e068f12",
     "accentColor": "cyan",
     "sources": [
+      "/api/audio/stream/wasted_remix_191?title=Wasted%20-%20Remix&artist=Bedirhan%20Kum%2C%20shadera&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 114,
@@ -3330,13 +3335,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "ROEINON, bvng",
     "artistName": "ROEINON, bvng",
     "badge": "Nightcore",
-    "durationSec": 166,
-    "durationLabel": "2:46",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2730a23240816160369dc131c02",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ed2a57395d1513a074f842a15c609afa6c70e935",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/too_many_nights_sped_up_192?title=Too%20Many%20Nights%20-%20Sped%20up&artist=ROEINON%2C%20bvng&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 125,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3348,12 +3353,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "rosie xo, brown eyed girl",
     "artistName": "rosie xo, brown eyed girl",
     "badge": "Nightcore",
-    "durationSec": 213,
-    "durationLabel": "3:33",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273920f0c878a6653d055879e8d",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/487efab9011276b06d2c8e5b71b7152910692137",
+      "/api/audio/stream/umbrella_sped_up_193?title=umbrella%20-%20sped%20up&artist=rosie%20xo%2C%20brown%20eyed%20girl&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 136,
@@ -3366,13 +3371,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "¥$, Kanye West, Ty Dolla $ign",
     "artistName": "¥$, Kanye West, Ty Dolla $ign",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 166,
-    "durationLabel": "2:46",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273fb9cedd86a3d08dc053a550d",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/9b4d6ecd7ca1d5564feeb8265f0d84eea30db31b",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/fried_194?title=FRIED&artist=%C2%A5%24%2C%20Kanye%20West%2C%20Ty%20Dolla%20%24ign&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 147,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3384,12 +3389,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Six Dior",
     "artistName": "Six Dior",
     "badge": "Nightcore",
-    "durationSec": 162,
-    "durationLabel": "2:42",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734b2514a78cd7bf0b779955d0",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/8f2240f091581610f4835ee302bf2c4bd5e74271",
+      "/api/audio/stream/sped_up_195?title=%D0%AF%D0%B4%20-%20Sped%20Up&artist=Six%20Dior&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 158,
@@ -3402,13 +3407,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "life illustrated, AA Records, Independent Lemon",
     "artistName": "life illustrated, AA Records, Independent Lemon",
     "badge": "Nightcore",
-    "durationSec": 194,
-    "durationLabel": "3:14",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27366b7a3d7767078ba624358d7",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/7e0c8ea8b3b4c555637a0dcc223d2c7300416f3d",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/umbrella_speed_up_196?title=umbrella%20-%20Speed%20Up&artist=life%20illustrated%2C%20AA%20Records%2C%20Independent%20Lemon&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 169,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3420,12 +3425,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Alexandra Fever, Music Factory, Gordon Roy",
     "artistName": "Alexandra Fever, Music Factory, Gordon Roy",
     "badge": "Nightcore",
-    "durationSec": 162,
-    "durationLabel": "2:42",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273a39741552f7c641c932ec659",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/52d8963b8d3051af510bd91d9e6a5aa76200cd94",
+      "/api/audio/stream/lovely_sped_up_remix_197?title=Lovely%20(Sped%20up)%20-%20Remix&artist=Alexandra%20Fever%2C%20Music%20Factory%2C%20Gordon%20Roy&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 122,
@@ -3438,13 +3443,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Tara Chen, Nightcore FR, Cheeky",
     "artistName": "Tara Chen, Nightcore FR, Cheeky",
     "badge": "Nightcore",
-    "durationSec": 237,
-    "durationLabel": "3:57",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273d8b35a32a828db6af73e4e51",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e7085dea33a76f7b942ca6c55085108c06582096",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/love_story_nightcore_fran_ai_198?title=Love%20Story%20-%20Nightcore%20Fran%C3%A7ais&artist=Tara%20Chen%2C%20Nightcore%20FR%2C%20Cheeky&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 133,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3456,12 +3461,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Tara Chen",
     "artistName": "Tara Chen",
     "badge": "Nightcore",
-    "durationSec": 37,
-    "durationLabel": "0:37",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2731ca7cfc7ce61a63fc2ffe601",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/5ae7d3ec6b7c2f1fca53449762c841867379d804",
+      "/api/audio/stream/superficial_love_sped_up_199?title=Superficial%20Love%20-%20Sped%20Up&artist=Tara%20Chen&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 144,
@@ -3479,7 +3484,7 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734e98d18364fcb98e849e34f4",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/6984bf8652230cad497e2beb72f0dcafde64b7d6",
+      "/api/audio/stream/innocent_arrogance_200?title=innocent%20arrogance&artist=BiSH&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 155,
@@ -3492,12 +3497,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "TOGENASHI TOGEARI",
     "artistName": "TOGENASHI TOGEARI",
     "badge": "Melancholy",
-    "durationSec": 184,
-    "durationLabel": "3:04",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2735f542c83d7832e8822a77562",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/736fc9f4be9fc296bb5ae012924a138daec1f3a4",
+      "/api/audio/stream/wrong_world_201?title=Wrong%20World&artist=TOGENASHI%20TOGEARI&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 166,
@@ -3510,12 +3515,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Retronaut, Salvatore Ganacci",
     "artistName": "Retronaut, Salvatore Ganacci",
     "badge": "Melancholy",
-    "durationSec": 165,
-    "durationLabel": "2:45",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2736f79e566736f9af6606f8680",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/bbe06a6c5ae0a99e5167829cb88fb3ac9f12d967",
+      "/api/audio/stream/talk_202?title=Talk&artist=Retronaut%2C%20Salvatore%20Ganacci&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 119,
@@ -3528,12 +3533,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "pearl, fast forward >>, Tazzy",
     "artistName": "pearl, fast forward >>, Tazzy",
     "badge": "Nightcore",
-    "durationSec": 180,
-    "durationLabel": "3:00",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27391ca68c999912930a802a776",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/dcad6dcba04eccfeb99ff68993d8fab214468fa7",
+      "/api/audio/stream/trance_sped_up_reverb_203?title=trance%20-%20sped%20up%20%2B%20reverb&artist=pearl%2C%20fast%20forward%20%3E%3E%2C%20Tazzy&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 130,
@@ -3546,13 +3551,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "LonelyEve",
     "artistName": "LonelyEve",
     "badge": "Nightcore",
-    "durationSec": 182,
-    "durationLabel": "3:02",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2730f48de8e84875763e76fe425",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/09ecc991d6e13d39a8baa0b19fa0a6c041b08bff",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/reminder_sped_up_204?title=Reminder%20-%20Sped%20Up&artist=LonelyEve&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 141,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3564,12 +3569,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "neko, Shiko Nightcore, Tazzy",
     "artistName": "neko, Shiko Nightcore, Tazzy",
     "badge": "Nightcore",
-    "durationSec": 158,
-    "durationLabel": "2:38",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2737e01869ae641a1c17c621eaf",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/776ac08f0dde13d84a17369dc826a75167380a3b",
+      "/api/audio/stream/harleys_in_hawaii_nightcore_205?title=Harleys%20In%20Hawaii%20-%20Nightcore&artist=neko%2C%20Shiko%20Nightcore%2C%20Tazzy&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 152,
@@ -3582,13 +3587,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "pearl, fast forward >>, Tazzy",
     "artistName": "pearl, fast forward >>, Tazzy",
     "badge": "Nightcore",
-    "durationSec": 188,
-    "durationLabel": "3:08",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27334fd6d47d53e4799c8d8ca6a",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/87ba08407baf0ea68b668295f9c3b52c50231528",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/diamonds_sped_up_reverb_206?title=diamonds%20-%20sped%20up%20%2B%20reverb&artist=pearl%2C%20fast%20forward%20%3E%3E%2C%20Tazzy&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 163,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3600,12 +3605,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Hiko",
     "artistName": "Hiko",
     "badge": "Nightcore",
-    "durationSec": 168,
-    "durationLabel": "2:48",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273e4bed5fbf04a978e51d04b7c",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/67d2b8fce2d9b7f3cfbf5f1e9d53bcb84b53b8ad",
+      "/api/audio/stream/in_the_middle_of_the_night_s_207?title=In%20the%20Middle%20of%20the%20Night%20(Sped%20Up)%20-%20Just%20Call%20My%20Name&artist=Hiko&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 116,
@@ -3618,13 +3623,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Ren",
     "artistName": "Ren",
     "badge": "Nightcore",
-    "durationSec": 125,
-    "durationLabel": "2:05",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27329d669c1dc7c596b53b515be",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a2bdd87b6d9d45b254fb16e3548424db7a87c7b3",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/mind_games_sped_up_208?title=Mind%20Games%20-%20Sped%20Up&artist=Ren&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 127,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3636,12 +3641,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Ren",
     "artistName": "Ren",
     "badge": "Nightcore",
-    "durationSec": 202,
-    "durationLabel": "3:22",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c42098f9adf6475255d8b124",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/65b7b33362ca516a1d068855ba2988b3bb6b9ba6",
+      "/api/audio/stream/often_speed_209?title=Often%20-%20Speed&artist=Ren&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 138,
@@ -3654,13 +3659,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Hiko",
     "artistName": "Hiko",
     "badge": "Nightcore",
-    "durationSec": 114,
-    "durationLabel": "1:54",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273f92a0d8b874c35c9d6837841",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/4ffad54892210065b672025999c79c085efe3a12",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/greedy_sped_up_it_s_obvious__210?title=Greedy%20(Sped%20Up)%20-%20It's%20Obvious%20That%20You%20Want%20Me%2C%20I%20Would%20Want%20Myself&artist=Hiko&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 149,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3672,12 +3677,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kid Cudi, Pharrell Williams, Travis Scott",
     "artistName": "Kid Cudi, Pharrell Williams, Travis Scott",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 238,
-    "durationLabel": "3:58",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273820f2a56e4a57cc9a94672a8",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/31a481648fca6e7ab9d1ef8e96c79aebbb5d6b7a",
+      "/api/audio/stream/at_the_party_feat_pharrell_w_212?title=AT%20THE%20PARTY%20(feat.%20Pharrell%20Williams%20%26%20Travis%20Scott)&artist=Kid%20Cudi%2C%20Pharrell%20Williams%2C%20Travis%20Scott&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 113,
@@ -3690,12 +3695,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "prodbyskat",
     "artistName": "prodbyskat",
     "badge": "Melancholy",
-    "durationSec": 96,
-    "durationLabel": "1:36",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27383c33cfa5ef9ca553bbb5c95",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/1a7282bcdf79eb401dba538619d1ffc80ccf2480",
+      "/api/audio/stream/can_i_be_fr_213?title=Can%20I%20Be%20Fr%3F&artist=prodbyskat&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 124,
@@ -3708,13 +3713,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YoungBoy Never Broke Again",
     "artistName": "YoungBoy Never Broke Again",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 186,
-    "durationLabel": "3:06",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273d2e64824bacd5ca97988f653",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/7a3599747dec1bacc73aa60936f7035d367a28b7",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/lil_top_214?title=Lil%20Top&artist=YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 135,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3726,12 +3731,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "DaBaby, YoungBoy Never Broke Again",
     "artistName": "DaBaby, YoungBoy Never Broke Again",
     "badge": "Melancholy",
-    "durationSec": 150,
-    "durationLabel": "2:30",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2730f8975afd519403248e96725",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/769ceb9fb3e2899381fd14f01a68eb2c40a7f430",
+      "/api/audio/stream/on_this_line_215?title=On%20this%20Line&artist=DaBaby%2C%20YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 146,
@@ -3744,12 +3749,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "DaBaby, YoungBoy Never Broke Again",
     "artistName": "DaBaby, YoungBoy Never Broke Again",
     "badge": "Melancholy",
-    "durationSec": 236,
-    "durationLabel": "3:56",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2730f8975afd519403248e96725",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a08ee14fdeb2d3af0b969dd862262a7bd5c561a2",
+      "/api/audio/stream/neighborhood_superstar_216?title=Neighborhood%20Superstar&artist=DaBaby%2C%20YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 157,
@@ -3762,12 +3767,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YoungBoy Never Broke Again",
     "artistName": "YoungBoy Never Broke Again",
     "badge": "Melancholy",
-    "durationSec": 170,
-    "durationLabel": "2:50",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27327970b15de24e5d352b6ee90",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/97bacc5df2447279a03c700c84dd2b7946d8d4ad",
+      "/api/audio/stream/step_on_shit_217?title=Step%20On%20Shit&artist=YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 168,
@@ -3780,12 +3785,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YoungBoy Never Broke Again",
     "artistName": "YoungBoy Never Broke Again",
     "badge": "Melancholy",
-    "durationSec": 215,
-    "durationLabel": "3:35",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734a92eb0e4fcbe2fb6e1208e5",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a0f1f4ae7c8fcc0cca8d7da6d299541f2704fa26",
+      "/api/audio/stream/rich_as_hell_218?title=Rich%20As%20Hell&artist=YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 121,
@@ -3798,12 +3803,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "King Von",
     "artistName": "King Von",
     "badge": "Melancholy",
-    "durationSec": 95,
-    "durationLabel": "1:35",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273429d4b3d9261b9ccc24d7d36",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/551aef73e52274953bfd27906ef354bdd7f14e4f",
+      "/api/audio/stream/gleesh_place_219?title=Gleesh%20Place&artist=King%20Von&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 132,
@@ -3816,12 +3821,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YoungBoy Never Broke Again",
     "artistName": "YoungBoy Never Broke Again",
     "badge": "Melancholy",
-    "durationSec": 181,
-    "durationLabel": "3:01",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273f139d4aa72c3cf9f9a47cd8f",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/b682176f53889dfa6f6f42657047ae414a47fa39",
+      "/api/audio/stream/no_switch_220?title=No%20Switch&artist=YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 143,
@@ -3834,12 +3839,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Yeat",
     "artistName": "Yeat",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 211,
-    "durationLabel": "3:31",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273acafc1658bdd56d083d262ab",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/d1c7925c7ec93f2658c1d3132dbd9d5fd06451fd",
+      "/api/audio/stream/nun_id_change_221?title=Nun%20id%20change&artist=Yeat&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 154,
@@ -3852,12 +3857,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YoungBoy Never Broke Again",
     "artistName": "YoungBoy Never Broke Again",
     "badge": "Melancholy",
-    "durationSec": 171,
-    "durationLabel": "2:51",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273f139d4aa72c3cf9f9a47cd8f",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/8f410c3f6d4213f86b5600a40463447e15c78541",
+      "/api/audio/stream/fish_scale_222?title=Fish%20Scale&artist=YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 165,
@@ -3870,12 +3875,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YoungBoy Never Broke Again",
     "artistName": "YoungBoy Never Broke Again",
     "badge": "Melancholy",
-    "durationSec": 139,
-    "durationLabel": "2:19",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273d2e64824bacd5ca97988f653",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e41aab9c64c20fe753570d2c7be178055b1881bf",
+      "/api/audio/stream/bad_bad_223?title=Bad%20Bad&artist=YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 118,
@@ -3888,12 +3893,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "King Von",
     "artistName": "King Von",
     "badge": "Melancholy",
-    "durationSec": 160,
-    "durationLabel": "2:40",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273f190674d6e343416189f2596",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/2f1653f6cdd8db9bdcb5383692aad425543d8cda",
+      "/api/audio/stream/war_224?title=War&artist=King%20Von&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 129,
@@ -3906,12 +3911,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YoungBoy Never Broke Again",
     "artistName": "YoungBoy Never Broke Again",
     "badge": "Melancholy",
-    "durationSec": 265,
-    "durationLabel": "4:25",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273f139d4aa72c3cf9f9a47cd8f",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a77129ce9a800609e614ee61533d370ac29eba34",
+      "/api/audio/stream/bring_the_hook_225?title=Bring%20The%20Hook&artist=YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 140,
@@ -3924,12 +3929,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "VERTIGØ",
     "artistName": "VERTIGØ",
     "badge": "Melancholy",
-    "durationSec": 198,
-    "durationLabel": "3:18",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2737455da42f0aff74768df6eba",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/b08872b04d847003f9bd7da2e06f74d82285d780",
+      "/api/audio/stream/s_per_g33ked_226?title=S%C3%9CPER%20G33KED&artist=VERTIG%C3%98&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 151,
@@ -3942,12 +3947,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "King Von, Prince Dre, Lil Durk",
     "artistName": "King Von, Prince Dre, Lil Durk",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 151,
-    "durationLabel": "2:31",
+    "durationSec": 313,
+    "durationLabel": "5:13",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273429d4b3d9261b9ccc24d7d36",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/9d25a8702f9f8f4e5e04e6e150a3edb33a2c3051",
+      "/api/audio/stream/back_again_feat_lil_durk_227?title=Back%20Again%20(feat.%20Lil%20Durk)&artist=King%20Von%2C%20Prince%20Dre%2C%20Lil%20Durk&fallback=%2Faudio%2Fagain-full.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 162,
@@ -3960,13 +3965,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "King Von, Lil Durk",
     "artistName": "King Von, Lil Durk",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 195,
-    "durationLabel": "3:15",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2737155e10eafd9c0aa6ff2a707",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ee00f67c5ee94ec5736c45dc7d4b96dcfa5627bb",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/crazy_story_feat_lil_durk_re_228?title=Crazy%20Story%20(feat.%20Lil%20Durk)%20-%20Remix&artist=King%20Von%2C%20Lil%20Durk&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 115,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -3978,12 +3983,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "BBpanzu",
     "artistName": "BBpanzu",
     "badge": "Melancholy",
-    "durationSec": 180,
-    "durationLabel": "3:00",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273d4f79b215610932a151dac24",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/7426e4d1201c4342b7056a00b7b4ff00521a573e",
+      "/api/audio/stream/bang_bang_bang_229?title=Bang%20Bang%20Bang&artist=BBpanzu&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 126,
@@ -3996,12 +4001,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Timbaland, Keri Hilson, D.O.E.",
     "artistName": "Timbaland, Keri Hilson, D.O.E.",
     "badge": "Melancholy",
-    "durationSec": 179,
-    "durationLabel": "2:59",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2734ed674ab91bdc566534f9285",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/26eb4ef5199b03d40b7f6dbdd93cd059e7129963",
+      "/api/audio/stream/the_way_i_are_230?title=The%20Way%20I%20Are&artist=Timbaland%2C%20Keri%20Hilson%2C%20D.O.E.&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 137,
@@ -4014,12 +4019,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Cheriimoya, Sierra Kidd",
     "artistName": "Cheriimoya, Sierra Kidd",
     "badge": "Melancholy",
-    "durationSec": 123,
-    "durationLabel": "2:03",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273494b0f45343c9fa9d8c38cd6",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/18bc19c15875611ba426dd8ff5f5267693b25ccf",
+      "/api/audio/stream/living_life_in_the_night_231?title=Living%20Life%2C%20In%20The%20Night&artist=Cheriimoya%2C%20Sierra%20Kidd&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 148,
@@ -4032,12 +4037,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Aaron Smith, Luvli, Krono",
     "artistName": "Aaron Smith, Luvli, Krono",
     "badge": "Melancholy",
-    "durationSec": 256,
-    "durationLabel": "4:16",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2738e434692f8d330ad8f5d933a",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/9b85aedbcdbef34dc0364e4a572035762873cc8e",
+      "/api/audio/stream/dancin_krono_remix_232?title=Dancin%20-%20Krono%20Remix&artist=Aaron%20Smith%2C%20Luvli%2C%20Krono&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 159,
@@ -4050,13 +4055,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Elley Duhé, Whethan",
     "artistName": "Elley Duhé, Whethan",
     "badge": "Nightcore",
-    "durationSec": 116,
-    "durationLabel": "1:56",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734d9331367e160fee20bf4e4d",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/80a70591e44ff4defcafcff6e6b97ac1d437934b",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/money_on_the_dash_sped_up_233?title=MONEY%20ON%20THE%20DASH%20-%20SPED%20UP&artist=Elley%20Duh%C3%A9%2C%20Whethan&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 112,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -4068,12 +4073,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "vivi baby, ovg!",
     "artistName": "vivi baby, ovg!",
     "badge": "Melancholy",
-    "durationSec": 151,
-    "durationLabel": "2:31",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273259ecbf56e15464a9afc69c7",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ccdddfeba38ccb93a1d1a9e18ede6c31f39d8830",
+      "/api/audio/stream/my_jealousy_234?title=MY%20JEALOUSY&artist=vivi%20baby%2C%20ovg!&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 123,
@@ -4086,12 +4091,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "TWXNY, Sxilwix, INNXCENCE",
     "artistName": "TWXNY, Sxilwix, INNXCENCE",
     "badge": "Melancholy",
-    "durationSec": 128,
-    "durationLabel": "2:08",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c054bc90882258df6bb865bb",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/6df9aa6b25ee1ec103be6cb8a901c0671c66a092",
+      "/api/audio/stream/heavenly_jumpstyle_slowed_235?title=HEAVENLY%20JUMPSTYLE%20-%20Slowed&artist=TWXNY%2C%20Sxilwix%2C%20INNXCENCE&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 134,
@@ -4104,12 +4109,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "AK, Lynx, Veela",
     "artistName": "AK, Lynx, Veela",
     "badge": "Melancholy",
-    "durationSec": 210,
-    "durationLabel": "3:30",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2731a9cd93bac6657bd079d6146",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/89da664720561dbaff335c8fced7fc62218ca669",
+      "/api/audio/stream/virtual_paradise_236?title=Virtual%20Paradise&artist=AK%2C%20Lynx%2C%20Veela&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 145,
@@ -4122,13 +4127,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "lil yappa, BBpanzu",
     "artistName": "lil yappa, BBpanzu",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 136,
-    "durationLabel": "2:16",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273f83ffc3f5f011beaccaaa6a0",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/fe400d509e1816b5cb1dae56bced4cdf1f3c28bd",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/bang_bang_bang_lil_yappa_min_237?title=Bang%20Bang%20Bang%20-%20lil%20yappa%2Fminus%20b%20remix&artist=lil%20yappa%2C%20BBpanzu&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 156,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -4140,12 +4145,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Bazzi",
     "artistName": "Bazzi",
     "badge": "Melancholy",
-    "durationSec": 148,
-    "durationLabel": "2:28",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273b12705a330af794d79d47c25",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/efbe76ac850a9fa9d45b4db4ebaabd2b6c51b38b",
+      "/api/audio/stream/fantasy_238?title=Fantasy&artist=Bazzi&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 167,
@@ -4158,12 +4163,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "TWXNY, Sxilwix, INNXCENCE",
     "artistName": "TWXNY, Sxilwix, INNXCENCE",
     "badge": "Melancholy",
-    "durationSec": 114,
-    "durationLabel": "1:54",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c054bc90882258df6bb865bb",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ec92122d70fc28d7f796db89daea90c01106ac22",
+      "/api/audio/stream/heavenly_jumpstyle_239?title=HEAVENLY%20JUMPSTYLE&artist=TWXNY%2C%20Sxilwix%2C%20INNXCENCE&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 120,
@@ -4176,12 +4181,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Monster Siren Records, EUREKA REPUBLIC, 松林凜",
     "artistName": "Monster Siren Records, EUREKA REPUBLIC, 松林凜",
     "badge": "Melancholy",
-    "durationSec": 269,
-    "durationLabel": "4:29",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2731fd51a2f939bfd13130f6011",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/7ab53918e6ff66bc3523f048d73b1a7b6dfd1580",
+      "/api/audio/stream/innocence_240?title=Innocence&artist=Monster%20Siren%20Records%2C%20EUREKA%20REPUBLIC%2C%20%E6%9D%BE%E6%9E%97%E5%87%9C&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 131,
@@ -4199,8 +4204,7 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273a22b129b802c989735bb0374",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/6f8a230f845ad6343c503cd9ac05652279fcdf9a",
-      "/audio/duvet-x-linger.mp3"
+      "/audio/no-friends-female.mp3"
     ],
     "bpm": 142,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -4212,13 +4216,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kenke",
     "artistName": "Kenke",
     "badge": "Melancholy",
-    "durationSec": 214,
-    "durationLabel": "3:34",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2731d90366f473fb55ab833e405",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/bd1e980c599f0bdae3dd229c8fceff43ccc44cdc",
-      "/audio/duvet-x-linger.mp3"
+      "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 153,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -4230,12 +4233,11 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "caught dead",
     "artistName": "caught dead",
     "badge": "Melancholy",
-    "durationSec": 151,
-    "durationLabel": "2:31",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab6765630000ba8a436fc94e0125254581899ed5",
     "accentColor": "cyan",
     "sources": [
-      "https://podz-content.spotifycdn.com/audio/clips/0kqO3pNmiKBJ2jDFZP3Ip6/clip_288_60288.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 164,
@@ -4248,11 +4250,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Swezzy, caly",
     "artistName": "Swezzy, caly",
     "badge": "Melancholy",
-    "durationSec": 182,
-    "durationLabel": "3:02",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273bd5a3d1bd09bd873905d114d",
     "accentColor": "cyan",
     "sources": [
+      "/api/audio/stream/vvv_244?title=VVV&artist=Swezzy%2C%20caly&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 117,
@@ -4265,12 +4268,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "mikeeysmind, prodbysky, Sanikwave",
     "artistName": "mikeeysmind, prodbysky, Sanikwave",
     "badge": "Melancholy",
-    "durationSec": 183,
-    "durationLabel": "3:03",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b27381c9077fdb9712e78f318a23",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e97be4117667da6f96b699bbd987e5ae1f526afa",
+      "/api/audio/stream/takeover_245?title=Takeover&artist=mikeeysmind%2C%20prodbysky%2C%20Sanikwave&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 128,
@@ -4283,12 +4286,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Katy Perry",
     "artistName": "Katy Perry",
     "badge": "Melancholy",
-    "durationSec": 227,
-    "durationLabel": "3:47",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2731d955011a3ed477dc77865ad",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/4c37249b9fc2962f5ef829e216314e9caeaee367",
+      "/api/audio/stream/the_one_that_got_away_246?title=The%20One%20That%20Got%20Away&artist=Katy%20Perry&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 139,
@@ -4301,12 +4304,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Temper City",
     "artistName": "Temper City",
     "badge": "Melancholy",
-    "durationSec": 181,
-    "durationLabel": "3:01",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273d6c26d2ae723f7ab553d64cc",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/98af5b6b77831ad55b6d1129148745705a311973",
+      "/api/audio/stream/self_aware_247?title=Self%20Aware&artist=Temper%20City&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 150,
@@ -4319,12 +4322,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "The Nostal Days",
     "artistName": "The Nostal Days",
     "badge": "Melancholy",
-    "durationSec": 190,
-    "durationLabel": "3:10",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273642d531f4896bc68e3a2e251",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/6fc8a43d946dfa04fb391865cb638e6b32cc9193",
+      "/api/audio/stream/house_of_memories_but_it_hit_248?title=House%20of%20Memories%20-%20But%20it%20hits%20different&artist=The%20Nostal%20Days&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 161,
@@ -4337,13 +4340,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Nightcore Cene, Nightcore by Halocene",
     "artistName": "Nightcore Cene, Nightcore by Halocene",
     "badge": "Nightcore",
-    "durationSec": 199,
-    "durationLabel": "3:19",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2730b9782bde915f56d11f39660",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/518503a0c1dcf18c149e9eda38cc0a39b92731e9",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/legends_never_die_249?title=Legends%20Never%20Die&artist=Nightcore%20Cene%2C%20Nightcore%20by%20Halocene&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 114,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -4355,12 +4358,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Nightcore Collectives",
     "artistName": "Nightcore Collectives",
     "badge": "Nightcore",
-    "durationSec": 193,
-    "durationLabel": "3:13",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2732e42b3b5796eb0e190fc1284",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/94888addc51a6260062a92215738c460d7b5b5e6",
+      "/api/audio/stream/angel_with_a_shotgun_250?title=Angel%20With%20a%20Shotgun&artist=Nightcore%20Collectives&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 125,
@@ -4373,12 +4376,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Ashes Remain",
     "artistName": "Ashes Remain",
     "badge": "Melancholy",
-    "durationSec": 173,
-    "durationLabel": "2:53",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2730ed020935eb4fc8d0b617acf",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/db5b55f18acb2e076aa689102551ab8928952ad0",
+      "/api/audio/stream/on_my_own_251?title=On%20My%20Own&artist=Ashes%20Remain&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 136,
@@ -4391,12 +4394,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Tuneit, Ajima, slow hindi",
     "artistName": "Tuneit, Ajima, slow hindi",
     "badge": "Melancholy",
-    "durationSec": 85,
-    "durationLabel": "1:25",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273e7d3e7f2be9844d7d0351e75",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/434b36787ecb06d6f416e40be78cfc3a15d6fc55",
+      "/api/audio/stream/mann_mera_female_acoustic_ve_252?title=Mann%20Mera%20-%20Female%20Acoustic%20Version&artist=Tuneit%2C%20Ajima%2C%20slow%20hindi&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 147,
@@ -4409,12 +4412,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Kenke",
     "artistName": "Kenke",
     "badge": "Melancholy",
-    "durationSec": 199,
-    "durationLabel": "3:19",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2732ea9ae84252df3aeacdcbc68",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/e92437c643190f4a844e7fec5a5cdd9fe328a984",
+      "/api/audio/stream/centuries_female_version_253?title=Centuries%20-%20Female%20Version&artist=Kenke&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 158,
@@ -4427,12 +4430,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "STARSET",
     "artistName": "STARSET",
     "badge": "Melancholy",
-    "durationSec": 288,
-    "durationLabel": "4:48",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734133716cfc80f0a138dc5719",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/95100606047fbbd5f7c1200cb2ae3cc58a26139f",
+      "/api/audio/stream/my_demons_254?title=My%20Demons&artist=STARSET&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 169,
@@ -4445,13 +4448,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Egzod, Maestro Chives, Neoni",
     "artistName": "Egzod, Maestro Chives, Neoni",
     "badge": "Nightcore",
-    "durationSec": 192,
-    "durationLabel": "3:12",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273a99274c2e8a4998fdf44dd34",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/9eeb159531b6b22ecbed2111cf23027dee7d9af6",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/royalty_sped_up_nightcore_255?title=Royalty%20-%20Sped%20Up%2FNightcore&artist=Egzod%2C%20Maestro%20Chives%2C%20Neoni&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 122,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -4463,12 +4466,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Coldplay",
     "artistName": "Coldplay",
     "badge": "Melancholy",
-    "durationSec": 258,
-    "durationLabel": "4:18",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734be302a9ffcb9921db9f29ed",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/cb0aa0a64ef56a161fbe2b298174cd69d8a71a9d",
+      "/api/audio/stream/hymn_for_the_weekend_256?title=Hymn%20for%20the%20Weekend&artist=Coldplay&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 133,
@@ -4481,12 +4484,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Melanie Martinez",
     "artistName": "Melanie Martinez",
     "badge": "Melancholy",
-    "durationSec": 180,
-    "durationLabel": "3:00",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2733899712512f50a8d9e01e951",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/02571c396fcc7c23b6af493d60ea9121c1f397b1",
+      "/api/audio/stream/play_date_257?title=Play%20Date&artist=Melanie%20Martinez&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 144,
@@ -4499,12 +4502,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "The Nostal Days",
     "artistName": "The Nostal Days",
     "badge": "Melancholy",
-    "durationSec": 224,
-    "durationLabel": "3:44",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734e8a0d4fec317a2f726e7c31",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/88cbc03a67dbadd2d7a6878216f46e8b5a11b051",
+      "/api/audio/stream/all_the_things_she_said_but__258?title=All%20The%20Things%20She%20Said%20-%20But%20it%20hits%20different&artist=The%20Nostal%20Days&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 155,
@@ -4517,12 +4520,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YoungBoy Never Broke Again",
     "artistName": "YoungBoy Never Broke Again",
     "badge": "Melancholy",
-    "durationSec": 181,
-    "durationLabel": "3:01",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2734a92eb0e4fcbe2fb6e1208e5",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/210c2021638dde17a667137fc58078820bb73dc4",
+      "/api/audio/stream/in_control_259?title=In%20Control&artist=YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 166,
@@ -4535,12 +4538,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YoungBoy Never Broke Again",
     "artistName": "YoungBoy Never Broke Again",
     "badge": "Melancholy",
-    "durationSec": 262,
-    "durationLabel": "4:22",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2734b3b517f7dd5c8c99202af73",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/dff1ef7ed258329d02e7dc015bba4471c308dbac",
+      "/api/audio/stream/i_hate_youngboy_260?title=I%20Hate%20YoungBoy&artist=YoungBoy%20Never%20Broke%20Again&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 119,
@@ -4553,13 +4556,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Sinnon Nightcore, RubyChan's Nightcore",
     "artistName": "Sinnon Nightcore, RubyChan's Nightcore",
     "badge": "Nightcore",
-    "durationSec": 168,
-    "durationLabel": "2:48",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2735b0387c43daca38fa1e612d7",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f04d57cd7acdfcdea9fad30e54b280cd5b5ee81b",
-      "/audio/clarity-nightcore.mp3"
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 130,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -4571,12 +4573,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YNW Melly",
     "artistName": "YNW Melly",
     "badge": "Melancholy",
-    "durationSec": 223,
-    "durationLabel": "3:43",
+    "durationSec": 226,
+    "durationLabel": "3:46",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c945e5741f61e867c75aa97e",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/06fa9b2f19c842f5bb90aefb01e88c8b2842af3a",
+      "/api/audio/stream/suicidal_262?title=Suicidal&artist=YNW%20Melly&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 141,
@@ -4589,12 +4591,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "YNW Melly",
     "artistName": "YNW Melly",
     "badge": "Melancholy",
-    "durationSec": 194,
-    "durationLabel": "3:14",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2730f5397dc6aa91374897182e0",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/d95ef351eea348d30bfca0cfe317015b77ab1586",
+      "/api/audio/stream/virtual_blue_balenciagas_263?title=Virtual%20(Blue%20Balenciagas)&artist=YNW%20Melly&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 152,
@@ -4607,13 +4609,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lil Tjay, 6LACK",
     "artistName": "Lil Tjay, 6LACK",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 205,
-    "durationLabel": "3:25",
+    "durationSec": 222,
+    "durationLabel": "3:42",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2735af0305457ff290e06dcc4c2",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/687f6e37a7d7ae26e7a7a7bd252945da7d1bb894",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/calling_my_phone_264?title=Calling%20My%20Phone&artist=Lil%20Tjay%2C%206LACK&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "/audio/trap-queen-full.mp3"
     ],
     "bpm": 163,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -4625,13 +4627,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Lil Tjay, Offset, Moneybagg Yo",
     "artistName": "Lil Tjay, Offset, Moneybagg Yo",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 232,
-    "durationLabel": "3:52",
+    "durationSec": 144,
+    "durationLabel": "2:24",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b2735af0305457ff290e06dcc4c2",
     "accentColor": "amber",
     "sources": [
-      "https://p.scdn.co/mp3-preview/65122420e08baf52a9cd5e28d694a379c4b125b6",
-      "/audio/again-full.mp3"
+      "/api/audio/stream/run_it_up_feat_offset_moneyb_265?title=Run%20It%20Up%20(feat.%20Offset%20%26%20Moneybagg%20Yo)&artist=Lil%20Tjay%2C%20Offset%2C%20Moneybagg%20Yo&fallback=%2Faudio%2Fmazeltron.mp3",
+      "/audio/mazeltron.mp3"
     ],
     "bpm": 116,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -4643,12 +4645,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "24kGoldn",
     "artistName": "24kGoldn",
     "badge": "Nightcore",
-    "durationSec": 135,
-    "durationLabel": "2:15",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c684eb44c711db568a4bc065",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/4e4dd1978445ada6f7762052861a526d9713dbdb",
+      "/api/audio/stream/valentino_sped_up_266?title=VALENTINO%20-%20Sped%20Up&artist=24kGoldn&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 127,
@@ -4661,12 +4663,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "The Nostal Days",
     "artistName": "The Nostal Days",
     "badge": "Melancholy",
-    "durationSec": 182,
-    "durationLabel": "3:02",
+    "durationSec": 212,
+    "durationLabel": "3:32",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c886f0d8eac93c1daded7c2a",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/f36a1895344c57b2e01a7651681d765780f97021",
+      "/api/audio/stream/monster_female_version_267?title=Monster%20-%20Female%20Version&artist=The%20Nostal%20Days&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 138,
@@ -4679,12 +4681,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Fly By Nightcore",
     "artistName": "Fly By Nightcore",
     "badge": "Nightcore",
-    "durationSec": 173,
-    "durationLabel": "2:53",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273353559fc86dc255ec9f260b4",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/ddac561e0174af2aaf2c6bb07c9fda29a4a06a0a",
+      "/api/audio/stream/attention_switching_vocals_268?title=Attention%20(Switching%20Vocals)&artist=Fly%20By%20Nightcore&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 149,
@@ -4697,13 +4699,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Fly By Nightcore, Mae Bloom",
     "artistName": "Fly By Nightcore, Mae Bloom",
     "badge": "Nightcore",
-    "durationSec": 152,
-    "durationLabel": "2:32",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27324f6b19e4e9ac2308ee28318",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a8c566e020b0e2c713cc1656a33db4db63c511b6",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/faded_sped_up_version_269?title=Faded%20(Sped%20Up%20Version)&artist=Fly%20By%20Nightcore%2C%20Mae%20Bloom&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 160,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -4715,12 +4717,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "neko",
     "artistName": "neko",
     "badge": "Nightcore",
-    "durationSec": 185,
-    "durationLabel": "3:05",
+    "durationSec": 241,
+    "durationLabel": "4:01",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273b33d1193748badb3f24a7d03",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/a975c781be8f697e5dd4eb810f813630c2bcf261",
+      "/api/audio/stream/disturbia_nightcore_270?title=Disturbia%20-%20Nightcore&artist=neko&fallback=%2Faudio%2Fclarity-nightcore.mp3",
       "/audio/clarity-nightcore.mp3"
     ],
     "bpm": 113,
@@ -4733,13 +4735,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Cherry 葵 Nightcore, ZeroMizKun Nightcore, Sinnon",
     "artistName": "Cherry 葵 Nightcore, ZeroMizKun Nightcore, Sinnon",
     "badge": "Nightcore",
-    "durationSec": 171,
-    "durationLabel": "2:51",
+    "durationSec": 167,
+    "durationLabel": "2:47",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273fe79e2753583763d9d16fb42",
     "accentColor": "fuchsia",
     "sources": [
-      "https://p.scdn.co/mp3-preview/c4e568b98bc91cdd5bb4862bef9fbf11c1ab5dad",
-      "/audio/clarity-nightcore.mp3"
+      "/api/audio/stream/come_back_to_me_nightcore_271?title=Come%20Back%20To%20Me%20-%20Nightcore&artist=Cherry%20%E8%91%B5%20Nightcore%2C%20ZeroMizKun%20Nightcore%2C%20Sinnon&fallback=%2Faudio%2Fend-it-nightcore.mp3",
+      "/audio/end-it-nightcore.mp3"
     ],
     "bpm": 124,
     "audioQualityBadge": "48kHz Hi-Res",
@@ -4751,12 +4753,12 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Seraphina Rossi",
     "artistName": "Seraphina Rossi",
     "badge": "Melancholy",
-    "durationSec": 208,
-    "durationLabel": "3:28",
+    "durationSec": 202,
+    "durationLabel": "3:22",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273c7c9d7873c6430727513a438",
     "accentColor": "cyan",
     "sources": [
-      "https://p.scdn.co/mp3-preview/d18ca00b2baf10b474cc4780529d8e5ffeac6312",
+      "/api/audio/stream/in_the_end_female_version_272?title=In%20the%20End%20-%20Female%20Version&artist=Seraphina%20Rossi&fallback=%2Faudio%2Fduvet-x-linger.mp3",
       "/audio/duvet-x-linger.mp3"
     ],
     "bpm": 135,

@@ -106,8 +106,10 @@ export default function App() {
       focusMode: true,
       showOverheadMap: !isInitialMobile,
       showPerformanceMonitor: false,
-      showEventLog: !isInitialMobile,
+      showEventLog: false,
       showMetricTelemetry: false,
+      highPerformanceMode: !isInitialMobile,
+      webglDepthPeeling: true,
     };
   });
   const [isDevMode, setIsDevMode] = useState<boolean>(() => {
@@ -463,12 +465,14 @@ export default function App() {
     photonSphereRg: number;
     objectCategory: BlackHoleParams['objectCategory'];
     suppressDuringBoot: boolean;
+    highPerformanceMode: boolean;
     evaluate: typeof evaluateProximityThresholds;
   }>({
     spin: params.spin,
     photonSphereRg: metrics.photonSphereRg,
     objectCategory: params.objectCategory,
     suppressDuringBoot: true,
+    highPerformanceMode: Boolean(settings.highPerformanceMode),
     evaluate: evaluateProximityThresholds,
   });
 
@@ -481,6 +485,7 @@ export default function App() {
       photonSphereRg: metrics.photonSphereRg,
       objectCategory: params.objectCategory,
       suppressDuringBoot,
+      highPerformanceMode: Boolean(settings.highPerformanceMode),
       evaluate: evaluateProximityThresholds,
     };
     evaluateProximityThresholds(
@@ -498,6 +503,7 @@ export default function App() {
     showBootOverlay,
     isBootOverlayFading,
     isSingularityCollapsed,
+    settings.highPerformanceMode,
     evaluateProximityThresholds,
   ]);
 
@@ -646,7 +652,8 @@ export default function App() {
           pCtx.suppressDuringBoot
         );
         const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        if (forceImmediate || now - lastObserverDomUpdateRef.current >= 200) {
+        const domThrottleMs = pCtx.highPerformanceMode ? 360 : 200;
+        if (forceImmediate || now - lastObserverDomUpdateRef.current >= domThrottleMs) {
           lastObserverDomUpdateRef.current = now;
           const el = observerReadoutRef.current;
           if (el) {
@@ -899,14 +906,32 @@ export default function App() {
   ]);
 
   // Continuous Real-Time Astrophysical Telemetry Monitor while simulation is running
+  // Refactored to a requestAnimationFrame-based throttle instead of setInterval so telemetry updates never block the main UI thread
   useEffect(() => {
     if (params.timeScale === 0) return;
 
     let tickCount = 0;
-    const intervalId = window.setInterval(() => {
-      const ctrl = sceneControllerRef.current;
-      if (!ctrl || isSingularityCollapsed || ctrl.isOrbitingCamera()) return;
+    let rafId = 0;
+    let isCancelled = false;
+    const telemetryIntervalMs = settings.highPerformanceMode ? 18000 : 9500;
+    let lastSampleTimeMs =
+      typeof performance !== 'undefined' ? performance.now() : Date.now();
 
+    const stepTelemetry = (nowMs: number) => {
+      if (isCancelled) return;
+      rafId = window.requestAnimationFrame(stepTelemetry);
+
+      if (nowMs - lastSampleTimeMs < telemetryIntervalMs) {
+        return;
+      }
+
+      const ctrl = sceneControllerRef.current;
+      // Yield without blocking the main thread while camera is actively orbiting or dragging
+      if (!ctrl || isSingularityCollapsed || isDraggingCameraRef.current || ctrl.isOrbitingCamera()) {
+        return;
+      }
+
+      lastSampleTimeMs = nowMs;
       tickCount += 1;
       const telemetry = ctrl.getOverheadTelemetry();
 
@@ -941,15 +966,21 @@ export default function App() {
           `Photon ring lensed caustic stabilized at r_ph = ${telemetry.photonSphereRs.toFixed(2)} Rₛ`
         );
       }
-    }, 9500);
+    };
 
-    return () => window.clearInterval(intervalId);
+    rafId = window.requestAnimationFrame(stepTelemetry);
+
+    return () => {
+      isCancelled = true;
+      window.cancelAnimationFrame(rafId);
+    };
   }, [
     params.timeScale,
     params.objectCategory,
     params.accretionRate,
     params.accretionState,
     params.spin,
+    settings.highPerformanceMode,
     isSingularityCollapsed,
     appendLogEvent,
   ]);
@@ -2183,6 +2214,7 @@ export default function App() {
                 <OverheadMapWidget
                   sceneController={controllerInstance || sceneControllerRef.current}
                   cameraCoordsRef={cameraCoordsRef}
+                  highPerformanceMode={Boolean(settings.highPerformanceMode)}
                   onSetProbeRadius={(newRadius) =>
                     setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
                   }
@@ -2499,6 +2531,7 @@ export default function App() {
             metrics={metrics}
             sceneController={controllerInstance || sceneControllerRef.current}
             hoverCoordsRef={hoverCoordsRef}
+            highPerformanceMode={Boolean(settings.highPerformanceMode)}
             onChangeProbeRadius={(newRadius) =>
               setParams((prev) => ({ ...prev, probeRadiusRs: newRadius }))
             }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'motion/react';
 import {
   X,
@@ -41,6 +41,9 @@ import {
   Palette,
   Activity,
   ExternalLink,
+  ChevronUp,
+  ChevronDown,
+  Crosshair,
 } from 'lucide-react';
 import {
   VisualizerSettings,
@@ -63,6 +66,7 @@ import {
   SONG_SPEED_PRESETS,
   AUDIO_QUALITY_PRESETS,
   AudioQualityPresetId,
+  filterAndValidatePlaybackQueue,
 } from '../audio/trapQueenPlayer';
 import { AppLanguage, LANGUAGE_OPTIONS, TRANSLATIONS } from '../i18n/translations';
 import {
@@ -77,7 +81,7 @@ import { CodebaseDetailsView } from './CodebaseDetailsView';
 import { DiagnosticSuiteView } from './DiagnosticSuiteView';
 import { IMPORTED_PLAYLIST_TRACKS } from '../audio/importedTracks';
 
-export const SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
+const RAW_SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
   {
     id: 'again',
     title: 'Again',
@@ -133,18 +137,15 @@ export const SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
     id: 'no_friends_female',
     title: 'No Friends',
     subtitle: 'Female Version',
-    artistName: 'Female Version • CADMIUM ft. Rosendale',
+    artistName: 'Female Version • The Nostal Days, Flávia Delfín',
     badge: 'Female Version',
-    durationSec: 226,
-    durationLabel: '3:46',
+    durationSec: 257,
+    durationLabel: '4:17',
     artworkUrl:
-      'https://cdn-images.dzcdn.net/images/cover/36ea7a8f01b1af0000f04348bc71b102/500x500-000000-80-0-0.jpg',
+      'https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273a22b129b802c989735bb0374',
     accentColor: 'cyan',
-    sources: [
-      '/audio/no-friends-female.mp3',
-      'https://archive.org/download/cadmium-no-friendsfeat.-rosendale/CADMIUM%2B-%2BNo%2BFriends%2B%28feat.%2BRosendale%29.mp3',
-    ],
-    bpm: 145,
+    sources: ['/audio/no-friends-female.mp3'],
+    bpm: 142,
     audioQualityBadge: '48kHz Hi-Res',
     genreTag: 'Electronic / Alt',
   },
@@ -171,15 +172,15 @@ export const SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
     id: 'stronger_than_you_frisk',
     title: 'Stronger Than You',
     subtitle: 'Frisk version',
-    artistName: 'Frisk version • Undertale',
+    artistName: 'Frisk version • XanduIsBored, Mom0ki',
     badge: 'Frisk version',
-    durationSec: 237,
-    durationLabel: '3:57',
+    durationSec: 207,
+    durationLabel: '3:27',
     artworkUrl:
       'https://cdn-images.dzcdn.net/images/cover/4c059a18bb7fd25748f77a8eaecb0948/500x500-000000-80-0-0.jpg',
     accentColor: 'emerald',
     sources: ['/audio/stronger-than-you-frisk.mp3'],
-    bpm: 130,
+    bpm: 148,
     audioQualityBadge: '48kHz Hi-Res',
     genreTag: 'Electronic / Alt',
   },
@@ -240,6 +241,9 @@ export const SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
   },
   ...IMPORTED_PLAYLIST_TRACKS,
 ];
+
+export const SETTINGS_SONGS_LIST: SongTrackDefinition[] =
+  filterAndValidatePlaybackQueue(RAW_SETTINGS_SONGS_LIST).acceptedTracks;
 
 export interface UiThemeOption {
   id: UiThemeId;
@@ -423,6 +427,296 @@ interface SettingsModalProps {
   onLockDevSession?: () => void;
 }
 
+interface CustomScrollWorkspaceProps {
+  children: React.ReactNode;
+  className?: string;
+  accentMode?: 'spotify' | 'kerr_claude' | 'cryo_quantum' | 'observatory_gold';
+  activeItemSelector?: string;
+  activeItemLabel?: string;
+  testId?: string;
+}
+
+const CustomScrollWorkspace: React.FC<CustomScrollWorkspaceProps> = ({
+  children,
+  className = '',
+  accentMode = 'observatory_gold',
+  activeItemSelector,
+  activeItemLabel = 'Jump to Active',
+  testId = 'custom-scroll-workspace',
+}) => {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
+  const dragStartYRef = useRef<number>(0);
+  const dragStartScrollTopRef = useRef<number>(0);
+
+  const [scrollMetrics, setScrollMetrics] = useState({
+    scrollTop: 0,
+    scrollHeight: 1,
+    clientHeight: 1,
+    thumbHeightPct: 100,
+    thumbTopPct: 0,
+    scrollPct: 0,
+    canScroll: false,
+  });
+
+  const recalcScrollMetrics = useCallback(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const maxScroll = Math.max(0, scrollHeight - clientHeight);
+    const canScroll = maxScroll > 6;
+    const rawThumbPct = scrollHeight > 0 ? (clientHeight / scrollHeight) * 100 : 100;
+    const thumbHeightPct = canScroll ? Math.min(85, Math.max(10, rawThumbPct)) : 100;
+    const scrollProgress = maxScroll > 0 ? Math.min(1, Math.max(0, scrollTop / maxScroll)) : 0;
+    const thumbTopPct = canScroll ? scrollProgress * (100 - thumbHeightPct) : 0;
+
+    setScrollMetrics({
+      scrollTop,
+      scrollHeight,
+      clientHeight,
+      thumbHeightPct,
+      thumbTopPct,
+      scrollPct: Math.round(scrollProgress * 100),
+      canScroll,
+    });
+  }, []);
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    recalcScrollMetrics();
+
+    const handleScroll = () => recalcScrollMetrics();
+    el.addEventListener('scroll', handleScroll, { passive: true });
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => recalcScrollMetrics());
+      resizeObserver.observe(el);
+      if (el.firstElementChild) {
+        resizeObserver.observe(el.firstElementChild);
+      }
+    }
+
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+      resizeObserver?.disconnect();
+    };
+  }, [recalcScrollMetrics, children]);
+
+  useEffect(() => {
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!isDraggingRef.current) return;
+      const el = viewportRef.current;
+      const track = trackRef.current;
+      if (!el || !track) return;
+
+      const trackRect = track.getBoundingClientRect();
+      const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+      if (trackRect.height <= 0 || maxScroll <= 0) return;
+
+      const deltaY = e.clientY - dragStartYRef.current;
+      const usableTrackPx = Math.max(1, trackRect.height * (1 - scrollMetrics.thumbHeightPct / 100));
+      const scrollDelta = (deltaY / usableTrackPx) * maxScroll;
+      el.scrollTop = Math.min(maxScroll, Math.max(0, dragStartScrollTopRef.current + scrollDelta));
+    };
+
+    const handlePointerUp = () => {
+      isDraggingRef.current = false;
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [scrollMetrics.thumbHeightPct]);
+
+  const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = viewportRef.current;
+    const track = trackRef.current;
+    if (!el || !track) return;
+    const rect = track.getBoundingClientRect();
+    const clickRatio = Math.min(1, Math.max(0, (e.clientY - rect.top) / Math.max(1, rect.height)));
+    const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+    el.scrollTo({
+      top: clickRatio * maxScroll,
+      behavior: 'smooth',
+    });
+  };
+
+  const scrollToTop = () => {
+    viewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const scrollToBottom = () => {
+    const el = viewportRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  };
+
+  const scrollToActiveItem = () => {
+    const el = viewportRef.current;
+    if (!el || !activeItemSelector) return;
+    const target = el.querySelector<HTMLElement>(activeItemSelector);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const thumbColorClass =
+    accentMode === 'spotify'
+      ? 'bg-gradient-to-b from-[#1DB954] to-emerald-500 shadow-[0_0_10px_rgba(29,185,84,0.55)]'
+      : accentMode === 'kerr_claude'
+      ? 'bg-gradient-to-b from-[#E08263] to-[#D97757] shadow-[0_0_10px_rgba(217,119,87,0.5)]'
+      : accentMode === 'cryo_quantum'
+      ? 'bg-gradient-to-b from-emerald-400 to-teal-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
+      : 'bg-gradient-to-b from-zinc-200 to-zinc-400 shadow-[0_0_10px_rgba(255,255,255,0.3)]';
+
+  const badgeAccentClass =
+    accentMode === 'spotify'
+      ? 'text-[#1DB954] border-[#1DB954]/40 bg-[#1DB954]/10'
+      : accentMode === 'kerr_claude'
+      ? 'text-[#F4A688] border-[#D97757]/40 bg-[#D97757]/10'
+      : accentMode === 'cryo_quantum'
+      ? 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
+      : 'text-zinc-200 border-zinc-600/60 bg-zinc-800/80';
+
+  return (
+    <div className="relative flex-1 min-h-0 flex overflow-hidden">
+      {/* Native Scrollbar Suppressed Content Viewport */}
+      <div
+        ref={viewportRef}
+        data-testid={testId}
+        className={`flex-1 min-h-0 overflow-y-auto no-scrollbar ${className}`}
+      >
+        {children}
+      </div>
+
+      {/* Custom Interactive Vertical Telemetry Scroll Rail */}
+      {scrollMetrics.canScroll && (
+        <div
+          data-testid={`${testId}-rail`}
+          className="w-7 sm:w-8 shrink-0 flex flex-col items-center justify-between py-2 px-1 bg-black/55 border-l border-zinc-800/80 select-none z-20"
+          aria-label="Custom Scroll Navigation Rail"
+        >
+          {/* Top Quick-Jump Button */}
+          <button
+            type="button"
+            onClick={scrollToTop}
+            title="Scroll to Top"
+            aria-label="Scroll to Top"
+            className="w-5 h-5 rounded flex items-center justify-center bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700/70 text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
+          >
+            <ChevronUp className="w-3 h-3" />
+          </button>
+
+          {/* Optional Active Item Quick-Jump Button */}
+          {activeItemSelector && (
+            <button
+              type="button"
+              onClick={scrollToActiveItem}
+              title={activeItemLabel}
+              aria-label={activeItemLabel}
+              className={`mt-1 w-5 h-5 rounded flex items-center justify-center border transition-colors cursor-pointer shrink-0 ${badgeAccentClass}`}
+            >
+              <Crosshair className="w-2.5 h-2.5" />
+            </button>
+          )}
+
+          {/* Interactive Scrubber Track + Tick Marks + Draggable Thumb */}
+          <div
+            ref={trackRef}
+            onClick={handleTrackClick}
+            className="relative flex-1 w-2 my-2 rounded-full bg-zinc-900/95 border border-zinc-800/90 cursor-pointer overflow-hidden"
+          >
+            {/* Subtle Telemetry Ruler Ticks */}
+            <div className="absolute inset-0 flex flex-col justify-between py-2 pointer-events-none opacity-35">
+              {Array.from({ length: 9 }).map((_, idx) => (
+                <span key={idx} className="w-full h-px bg-zinc-600" />
+              ))}
+            </div>
+
+            {/* Draggable Scroll Thumb */}
+            <div
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                isDraggingRef.current = true;
+                dragStartYRef.current = e.clientY;
+                dragStartScrollTopRef.current = viewportRef.current?.scrollTop || 0;
+              }}
+              style={{
+                height: `${scrollMetrics.thumbHeightPct}%`,
+                top: `${scrollMetrics.thumbTopPct}%`,
+              }}
+              className={`absolute left-0 right-0 rounded-full transition-[background-color] cursor-grab active:cursor-grabbing ${thumbColorClass}`}
+            />
+          </div>
+
+          {/* Live Scroll Percentage Readout */}
+          <span className="font-mono text-[8px] tabular-nums text-zinc-400 leading-none mb-1">
+            {scrollMetrics.scrollPct}%
+          </span>
+
+          {/* Bottom Quick-Jump Button */}
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            title="Scroll to Bottom"
+            aria-label="Scroll to Bottom"
+            className="w-5 h-5 rounded flex items-center justify-center bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700/70 text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
+          >
+            <ChevronDown className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const LiveSpectrumVisualizer: React.FC<{
+  isPlaying: boolean;
+  playbackRate: number;
+  trackId: string;
+}> = React.memo(({ isPlaying, playbackRate, trackId }) => {
+  const [bands, setBands] = useState<number[]>(() =>
+    trapQueenPlayer.getSpectrumBands(16)
+  );
+
+  useEffect(() => {
+    setBands(trapQueenPlayer.getSpectrumBands(16));
+    if (!isPlaying) return;
+    const interval = window.setInterval(() => {
+      setBands(trapQueenPlayer.getSpectrumBands(16));
+    }, 60);
+    return () => window.clearInterval(interval);
+  }, [isPlaying, playbackRate, trackId]);
+
+  return (
+    <div
+      data-testid="songs-live-spectrum"
+      className="flex items-end gap-1 h-6 shrink-0 self-start sm:self-end"
+      aria-label="Real-Time Audio Frequency Spectrum"
+    >
+      {bands.map((val, idx) => (
+        <span
+          key={idx}
+          className={`w-1 rounded-t transition-all duration-75 ${
+            isPlaying
+              ? idx % 4 === 0
+                ? 'bg-[#1DB954]'
+                : 'bg-zinc-400'
+              : 'bg-zinc-800'
+          }`}
+          style={{ height: `${Math.max(12, Math.round(val * 100))}%` }}
+        />
+      ))}
+    </div>
+  );
+});
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
@@ -467,9 +761,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   >('all');
   const [songSearchQuery, setSongSearchQuery] = useState<string>('');
   const [isShuffleEnabled, setIsShuffleEnabled] = useState<boolean>(false);
-  const [spectrumBands, setSpectrumBands] = useState<number[]>(() =>
-    trapQueenPlayer.getSpectrumBands(16)
-  );
   const [diagnosticSuiteNonce, setDiagnosticSuiteNonce] = useState<number>(0);
   const [diagnosticRunningIdx, setDiagnosticRunningIdx] = useState<number | null>(null);
   const [diagnosticCompletedRuns, setDiagnosticCompletedRuns] = useState<
@@ -482,16 +773,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     trapQueenPlayer.setCatalog(SETTINGS_SONGS_LIST);
     return trapQueenPlayer.subscribe(setPlayerState);
   }, []);
-
-  useEffect(() => {
-    if (!isOpen || activeTab !== 'songs') return;
-    setSpectrumBands(trapQueenPlayer.getSpectrumBands(16));
-    if (!playerState.isPlaying) return;
-    const interval = window.setInterval(() => {
-      setSpectrumBands(trapQueenPlayer.getSpectrumBands(16));
-    }, 60);
-    return () => window.clearInterval(interval);
-  }, [isOpen, activeTab, playerState.isPlaying, playerState.playbackRate, playerState.trackId]);
 
   // Automatically trigger and log the spacetime curvature stress-test suite when the Diagnostic tab is opened
   useEffect(() => {
@@ -869,9 +1150,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Scrollable Modal Body */}
+        {/* Scrollable Modal Body with Custom Telemetry Scroll Rail */}
         {activeTab === 'settings' && (
-          <div className="flex-1 min-h-0 p-3.5 sm:p-5 overflow-y-auto space-y-4 text-xs">
+          <CustomScrollWorkspace
+            accentMode={activeUiThemeId}
+            testId="settings-scroll-workspace"
+            className="p-3.5 sm:p-5 space-y-4 text-xs"
+          >
           {/* Interface Theme & Color Palette Selector (3 Pure-Black Academic Research Themes) */}
           <div
             data-testid="settings-ui-theme-section"
@@ -1022,6 +1307,99 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* High-Performance Mode (WebGL Depth-Peeling & rAF Telemetry Throttle) */}
+          <div
+            data-testid="high-performance-mode-section"
+            className="bg-gradient-to-r from-cyan-950/45 via-neutral-950/90 to-neutral-950/90 border border-cyan-500/35 rounded-xl p-4 space-y-3"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-cyan-300 font-mono text-[11px] uppercase tracking-wider font-semibold">
+                <Zap className="w-4 h-4 text-cyan-400" />
+                <span>High-Performance Mode (WebGL Depth-Peeling &amp; Telemetry Throttle)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {Boolean(settings.webglDepthPeeling ?? settings.highPerformanceMode) && (
+                  <span className="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded border bg-emerald-500/15 text-emerald-300 border-emerald-500/40">
+                    DEPTH-PEELING ON
+                  </span>
+                )}
+                <span
+                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                    settings.highPerformanceMode
+                      ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400/50'
+                      : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                  }`}
+                >
+                  {settings.highPerformanceMode ? 'ACTIVE' : 'OFF'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-start justify-between gap-4 pt-1">
+              <div>
+                <div className="text-neutral-100 font-medium text-xs">
+                  Enable High-Performance Mode
+                </div>
+                <p className="text-[11px] text-neutral-300 leading-relaxed mt-0.5">
+                  Alleviates main-thread UI lag and GPU fill-rate contention during continuous relativistic simulation:
+                </p>
+                <ul className="text-[11px] text-neutral-400 space-y-1 mt-2 font-mono">
+                  <li className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
+                    <span>
+                      Enables WebGL Depth-Peeling (front-to-back alpha threshold &amp; depth-buffer occlusion culling on volumetric disk strata)
+                    </span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
+                    <span>
+                      Throttles continuous astrophysical telemetry, pointer raycasts, and metric tensor calculations via requestAnimationFrame
+                    </span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
+                    <span>
+                      Bypasses full-screen optical lens flare overdraw &amp; caps WebAudio proximity modulation cadence
+                    </span>
+                  </li>
+                </ul>
+              </div>
+
+              <button
+                type="button"
+                data-testid="high-performance-mode-toggle"
+                onClick={() => {
+                  haptics.medium();
+                  onUpdateSettings((prev) => {
+                    const nextHighPerf = !prev.highPerformanceMode;
+                    return {
+                      ...prev,
+                      highPerformanceMode: nextHighPerf,
+                      webglDepthPeeling: nextHighPerf,
+                      ...(nextHighPerf ? { motionBlurEnabled: false } : {}),
+                    };
+                  });
+                }}
+                className={`w-14 h-7.5 rounded-full transition-colors p-1 shrink-0 cursor-pointer border ${
+                  settings.highPerformanceMode
+                    ? 'bg-cyan-500/40 border-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.3)]'
+                    : 'bg-neutral-900 border-neutral-700'
+                }`}
+                aria-pressed={Boolean(settings.highPerformanceMode)}
+                aria-label="Toggle High-Performance Mode"
+                title="Toggle High-Performance Mode (WebGL Depth-Peeling & Telemetry Throttle)"
+              >
+                <div
+                  className={`w-5.5 h-5.5 rounded-full transition-transform ${
+                    settings.highPerformanceMode
+                      ? 'translate-x-6 bg-cyan-300'
+                      : 'translate-x-0 bg-neutral-500'
+                  }`}
+                />
+              </button>
             </div>
           </div>
 
@@ -2005,6 +2383,57 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
 
+            {/* WebGL Depth-Peeling (Front-to-Back Transparent Layer Occlusion Culling) */}
+            <div className="flex items-center justify-between gap-3 pt-1 pb-2 border-b border-neutral-900">
+              <div>
+                <div className="text-neutral-100 font-medium text-xs flex items-center gap-1.5">
+                  <span>WebGL Depth-Peeling</span>
+                  <span
+                    className={`text-[9.5px] font-mono px-1.5 py-0.2 rounded border ${
+                      Boolean(settings.webglDepthPeeling ?? settings.highPerformanceMode)
+                        ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
+                        : 'bg-neutral-900 text-neutral-400 border-neutral-700'
+                    }`}
+                  >
+                    {Boolean(settings.webglDepthPeeling ?? settings.highPerformanceMode)
+                      ? 'DEPTH-PEEL ACTIVE'
+                      : 'MULTI-PASS BLEND'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400 mt-0.5">
+                  Applies front-to-back alpha depth-peeling and early volumetric raymarching termination to eliminate transparent overdraw across the accretion disk and Einstein rings.
+                </p>
+              </div>
+              <button
+                type="button"
+                data-testid="webgl-depth-peeling-toggle"
+                onClick={() => {
+                  haptics.light();
+                  onUpdateSettings((prev) => ({
+                    ...prev,
+                    webglDepthPeeling: !Boolean(
+                      prev.webglDepthPeeling ?? prev.highPerformanceMode
+                    ),
+                  }));
+                }}
+                className={`w-11 h-6 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 ${
+                  Boolean(settings.webglDepthPeeling ?? settings.highPerformanceMode)
+                    ? 'bg-cyan-500/40 border border-cyan-400'
+                    : 'bg-neutral-800 border border-neutral-700'
+                }`}
+                aria-pressed={Boolean(settings.webglDepthPeeling ?? settings.highPerformanceMode)}
+                aria-label="Toggle WebGL depth-peeling"
+              >
+                <div
+                  className={`w-4.5 h-4.5 rounded-full transition-transform ${
+                    Boolean(settings.webglDepthPeeling ?? settings.highPerformanceMode)
+                      ? 'translate-x-5 bg-cyan-300'
+                      : 'translate-x-0 bg-neutral-500'
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* Bloom Intensity Slider */}
             <div className="pt-1 pb-2 border-b border-neutral-900">
               <div className="flex items-center justify-between mb-1.5">
@@ -2852,12 +3281,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
           </div>
-        </div>
+          </CustomScrollWorkspace>
         )}
 
         {/* TAB 2: Spotify-Style Songs Player & Audio Mastering */}
         {activeTab === 'songs' && (() => {
-          const visibleSongs = SETTINGS_SONGS_LIST.filter((tr) => {
+          const validatedCatalog = trapQueenPlayer.getValidatedCatalog();
+          const visibleSongs = validatedCatalog.filter((tr) => {
             const matchesCategory =
               songCategoryFilter === 'all' || tr.genreTag === songCategoryFilter;
             const q = songSearchQuery.trim().toLowerCase();
@@ -2872,18 +3302,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           const handleNextSong = () => {
             haptics.light();
-            if (isShuffleEnabled && SETTINGS_SONGS_LIST.length > 1) {
-              const otherTracks = SETTINGS_SONGS_LIST.filter(
+            if (isShuffleEnabled && validatedCatalog.length > 1) {
+              const otherTracks = validatedCatalog.filter(
                 (tItem) => tItem.id !== playerState.trackId
               );
               const pick =
                 otherTracks[Math.floor(Math.random() * otherTracks.length)] ||
-                SETTINGS_SONGS_LIST[0];
+                validatedCatalog[0];
               trapQueenPlayer.selectTrack(pick.id, true);
             } else {
               trapQueenPlayer.nextTrack();
             }
           };
+
+          const activeBytesMb = playerState.queueValidation.activeTrackBytes
+            ? (playerState.queueValidation.activeTrackBytes / (1024 * 1024)).toFixed(1)
+            : null;
 
           return (
             <motion.div
@@ -2894,8 +3328,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               data-testid="settings-tab-panel-songs"
               className="flex-1 min-h-0 flex flex-col bg-[#121212] text-xs overflow-hidden"
             >
-              {/* Scrollable Upper Songs Workspace (Header + Action Bar + Tracklist Table + Audio Controls) */}
-              <div className="flex-1 min-h-0 overflow-y-auto px-3.5 sm:px-5 py-3.5 space-y-4">
+              {/* Scrollable Upper Songs Workspace with Custom Interactive Scroll Rail */}
+              <CustomScrollWorkspace
+                accentMode="spotify"
+                activeItemSelector={`[data-testid="song-track-${playerState.trackId}"]`}
+                activeItemLabel={`Scroll to Active Song (${activeTrackDef.title})`}
+                testId="songs-scroll-workspace"
+                className="px-3.5 sm:px-5 py-3.5 space-y-4"
+              >
                 {/* Songs Library Header Banner */}
                 <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 p-4 rounded-xl bg-gradient-to-b from-zinc-800/75 to-[#161616] border border-zinc-800/80">
                   <div className="flex items-center gap-4 min-w-0">
@@ -2915,8 +3355,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       )}
                     </div>
                     <div className="min-w-0 space-y-1">
-                      <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
-                        Playlist · {playerState.bitrateDisplay}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
+                          Playlist · {playerState.bitrateDisplay}
+                        </span>
+                        <span
+                          data-testid="audio-queue-validation-badge"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-[9px] font-semibold"
+                          title="Client-side audio completeness & truncation validation passed for all queued tracks"
+                        >
+                          <Check className="w-2.5 h-2.5" />
+                          <span>
+                            FULL-LENGTH VERIFIED · {playerState.queueValidation.verifiedQueueCount} COMPLETE
+                            {activeBytesMb ? ` · ${activeBytesMb} MB` : ''}
+                          </span>
+                        </span>
                       </div>
                       <h3 className="text-base sm:text-xl font-bold text-white tracking-tight truncate">
                         {activeTrackDef.title}
@@ -2926,7 +3379,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <span>·</span>
                         <span>{activeTrackDef.subtitle}</span>
                         <span>·</span>
-                        <span>{SETTINGS_SONGS_LIST.length} songs</span>
+                        <span>{validatedCatalog.length} full songs</span>
                         <span>·</span>
                         <span className="font-mono tabular-nums">
                           {Math.round(activeTrackDef.bpm * playerState.playbackRate)} BPM
@@ -2935,26 +3388,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Subtle Monochrome Live Spectrum Bars */}
-                  <div
-                    data-testid="songs-live-spectrum"
-                    className="flex items-end gap-1 h-6 shrink-0 self-start sm:self-end"
-                    aria-label="Real-Time Audio Frequency Spectrum"
-                  >
-                    {spectrumBands.map((val, idx) => (
-                      <span
-                        key={idx}
-                        className={`w-1 rounded-t transition-all duration-75 ${
-                          playerState.isPlaying
-                            ? idx % 4 === 0
-                              ? 'bg-[#1DB954]'
-                              : 'bg-zinc-400'
-                            : 'bg-zinc-800'
-                        }`}
-                        style={{ height: `${Math.max(12, Math.round(val * 100))}%` }}
-                      />
-                    ))}
-                  </div>
+                  {/* Subtle Monochrome Live Spectrum Bars (Isolated 60ms Renderer) */}
+                  <LiveSpectrumVisualizer
+                    isPlaying={playerState.isPlaying}
+                    playbackRate={playerState.playbackRate}
+                    trackId={playerState.trackId}
+                  />
                 </div>
 
                 {/* Spotify Action Bar: Big Green Play Button + Filter Pills + Search Input */}
@@ -3101,6 +3540,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 <img
                                   src={track.artworkUrl}
                                   alt={`${track.title} (${track.subtitle})`}
+                                  loading="lazy"
+                                  decoding="async"
                                   referrerPolicy="no-referrer"
                                   onError={(e) => {
                                     (e.currentTarget as HTMLImageElement).style.display = 'none';
@@ -3316,7 +3757,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
                 </div>
-              </div>
+              </CustomScrollWorkspace>
 
               {/* Sticky Bottom Spotify Now-Playing Bar */}
               <div className="px-4 py-2.5 bg-[#181818] border-t border-zinc-800/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">

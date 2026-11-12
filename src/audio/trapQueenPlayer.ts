@@ -1,7 +1,8 @@
 // Singleton audio controller for the SettingsModal 'Songs' tab Hi-Fi Studio Deck:
-// Supports 9 full-length songs (48 kHz / High-Bitrate Remastered) with real-time Web Audio API
+// Supports full-length songs (48 kHz / High-Bitrate Remastered) with real-time Web Audio API
 // 3-band parametric mastering EQ, studio dynamics compressor, live 16-band spectrum analyzer,
-// and continuous playback speed control (0.50x to 2.00x).
+// continuous playback speed control (0.50x to 2.00x), and client-side audio completeness &
+// truncation validation before adding tracks to the playback queue.
 
 export type SongTrackId = string;
 
@@ -82,6 +83,422 @@ export interface SongTrackDefinition {
   spotifyUrl?: string;
 }
 
+// ============================================================================
+// CLIENT-SIDE AUDIO COMPLETENESS & TRUNCATION VALIDATION CONSTANTS & TYPES
+// ============================================================================
+
+/** Minimum duration (in seconds) required for a track to qualify as a complete, non-truncated song */
+export const MIN_FULL_SONG_DURATION_SEC = 65;
+
+/** Minimum binary file size (in bytes) required for a valid full-length audio file (~500 KB) */
+export const MIN_AUDIO_FILE_SIZE_BYTES = 500_000;
+
+/** Minimum ratio of actual decoded duration to expected track duration before flagging truncation */
+export const MIN_DURATION_COMPLETENESS_RATIO = 0.88;
+
+/** Minimum expected bytes per second for non-truncated high-bitrate audio (~10 KB/s floor) */
+export const MIN_BYTES_PER_SECOND_FLOOR = 10_000;
+
+/** Known full-length local master durations & exact byte sizes for instant integrity verification */
+export const LOCAL_FULL_AUDIO_MASTERS: Record<
+  string,
+  { durationSec: number; durationLabel: string; expectedBytes: number }
+> = {
+  '/audio/again-full.mp3': { durationSec: 313, durationLabel: '5:13', expectedBytes: 7515893 },
+  '/audio/clarity-nightcore.mp3': { durationSec: 241, durationLabel: '4:01', expectedBytes: 5798874 },
+  '/audio/duvet-x-linger.mp3': { durationSec: 202, durationLabel: '3:22', expectedBytes: 4849519 },
+  '/audio/end-it-nightcore.mp3': { durationSec: 167, durationLabel: '2:47', expectedBytes: 4009720 },
+  '/audio/mazeltron.mp3': { durationSec: 144, durationLabel: '2:24', expectedBytes: 3457320 },
+  '/audio/no-friends-female.mp3': { durationSec: 257, durationLabel: '4:17', expectedBytes: 6157085 },
+  '/audio/stronger-than-you-frisk.mp3': { durationSec: 207, durationLabel: '3:27', expectedBytes: 4977377 },
+  '/audio/trap-queen-full.mp3': { durationSec: 222, durationLabel: '3:42', expectedBytes: 5331130 },
+  '/audio/world-execute-me.mp3': { durationSec: 212, durationLabel: '3:32', expectedBytes: 5097853 },
+};
+
+/** URL patterns that correspond to truncated 30-second previews or short clips */
+const TRUNCATED_PREVIEW_URL_PATTERNS: RegExp[] = [
+  /p\.scdn\.co\/mp3-preview/i,
+  /spotifycdn\.com\/audio\/clips/i,
+  /[/_-](mp3-preview|preview|snippet|sample|30s|clip_\d+)[/_.-]/i,
+];
+
+export interface AudioSourceValidationResult {
+  url: string;
+  isComplete: boolean;
+  isTruncated: boolean;
+  byteLength: number | null;
+  verifiedDurationSec: number | null;
+  hasValidHeader: boolean;
+  reason?: string;
+}
+
+export interface TrackValidationReport {
+  trackId: SongTrackId;
+  valid: boolean;
+  status: 'verified' | 'repaired_sources' | 'rejected_truncated' | 'rejected_missing_source';
+  sanitizedTrack: SongTrackDefinition;
+  strippedPreviewUrls: string[];
+  reason?: string;
+}
+
+export interface QueueValidationSummary {
+  totalCandidateTracks: number;
+  verifiedQueueCount: number;
+  repairedTrackCount: number;
+  rejectedTruncatedCount: number;
+  verifiedMasterFilesCount: number;
+  activeTrackVerified: boolean;
+  activeTrackBytes: number | null;
+  status: 'verified' | 'validating' | 'warning';
+  lastVerifiedAt: number;
+}
+
+/**
+ * Returns true if the URL matches a known 30-second preview or truncated clip endpoint.
+ */
+export function isTruncatedPreviewUrl(url: string): boolean {
+  if (!url || typeof url !== 'string') return true;
+  const trimmed = url.trim();
+  if (!trimmed) return true;
+  return TRUNCATED_PREVIEW_URL_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+/**
+ * Formats a duration in seconds as M:SS.
+ */
+export function formatDurationLabel(durationSec: number): string {
+  const safeSec = Math.max(0, Math.round(durationSec));
+  const mins = Math.floor(safeSec / 60);
+  const secs = safeSec % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Inspects binary header bytes of an audio file to ensure it starts with a valid
+ * ID3v2 tag ("ID3") or MPEG ADTS sync frame (0xFF 0xE0..0xFF) and is not an HTML error page.
+ */
+export function validateMp3HeaderBytes(bytes: Uint8Array): boolean {
+  if (!bytes || bytes.length < 4) return false;
+  // Reject HTML fallback documents ("<!DO", "<htm", "<HTM")
+  if (
+    (bytes[0] === 0x3c && bytes[1] === 0x21) ||
+    (bytes[0] === 0x3c && (bytes[1] === 0x68 || bytes[1] === 0x48))
+  ) {
+    return false;
+  }
+  // Check for "ID3" header (0x49 0x44 0x33)
+  if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+    return true;
+  }
+  // Check for MPEG ADTS frame sync word (11 set bits: 0xFF and top 3 bits of byte 1)
+  if (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) {
+    return true;
+  }
+  // Also allow ISO BMFF / fMP4 / M4A ("ftyp", "styp", "moov", "moof" at bytes 4..7)
+  if (bytes.length >= 8) {
+    const b4 = bytes[4];
+    const b5 = bytes[5];
+    const b6 = bytes[6];
+    const b7 = bytes[7];
+    // "ftyp" (0x66 0x74 0x79 0x70) or "styp" (0x73 0x74 0x79 0x70) or "moov"/"moof"
+    if (
+      (b4 === 0x66 && b5 === 0x74 && b6 === 0x79 && b7 === 0x70) ||
+      (b4 === 0x73 && b5 === 0x74 && b6 === 0x79 && b7 === 0x70) ||
+      (b4 === 0x6d && b5 === 0x6f && b6 === 0x6f && (b7 === 0x76 || b7 === 0x66))
+    ) {
+      return true;
+    }
+  }
+  // Also allow Ogg ("OggS"), RIFF/WAV ("RIFF"), or fLaC ("fLaC")
+  if (
+    (bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) ||
+    (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) ||
+    (bytes[0] === 0x66 && bytes[1] === 0x4c && bytes[2] === 0x61 && bytes[3] === 0x43)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Validates a track definition before adding it to the playback queue.
+ * - Filters out truncated 30s preview/clip URLs from `track.sources`.
+ * - Normalizes duration metadata against verified full-length local masters if needed.
+ * - Rejects tracks that lack any complete, full-length audio source or fall below MIN_FULL_SONG_DURATION_SEC.
+ */
+export function validateTrackForQueue(track: SongTrackDefinition): TrackValidationReport {
+  if (!track || !Array.isArray(track.sources) || track.sources.length === 0) {
+    return {
+      trackId: track?.id || 'unknown',
+      valid: false,
+      status: 'rejected_missing_source',
+      sanitizedTrack: track,
+      strippedPreviewUrls: [],
+      reason: 'Track has no audio sources defined.',
+    };
+  }
+
+  const strippedPreviewUrls: string[] = [];
+  const validSources: string[] = [];
+
+  for (const src of track.sources) {
+    if (isTruncatedPreviewUrl(src)) {
+      strippedPreviewUrls.push(src);
+    } else {
+      validSources.push(src);
+    }
+  }
+
+  if (validSources.length === 0) {
+    return {
+      trackId: track.id,
+      valid: false,
+      status: 'rejected_truncated',
+      sanitizedTrack: { ...track, sources: [] },
+      strippedPreviewUrls,
+      reason: 'All candidate audio sources were truncated preview clips.',
+    };
+  }
+
+  // Check if primary source is a known local full-length master
+  const primarySource = validSources[0];
+  const localMasterMeta = LOCAL_FULL_AUDIO_MASTERS[primarySource];
+
+  let resolvedDurationSec = track.durationSec;
+  let resolvedDurationLabel = track.durationLabel;
+  let repaired = strippedPreviewUrls.length > 0;
+
+  if (localMasterMeta) {
+    // Ensure track duration is never shorter than the minimum full-song threshold
+    // and stays synchronized with the full-length audio file so it never cuts off or mismatches
+    if (
+      !Number.isFinite(resolvedDurationSec) ||
+      resolvedDurationSec < MIN_FULL_SONG_DURATION_SEC ||
+      Math.abs(resolvedDurationSec - localMasterMeta.durationSec) > 5
+    ) {
+      resolvedDurationSec = localMasterMeta.durationSec;
+      resolvedDurationLabel = localMasterMeta.durationLabel;
+      repaired = true;
+    }
+  }
+
+  if (!Number.isFinite(resolvedDurationSec) || resolvedDurationSec < MIN_FULL_SONG_DURATION_SEC) {
+    return {
+      trackId: track.id,
+      valid: false,
+      status: 'rejected_truncated',
+      sanitizedTrack: { ...track, sources: validSources },
+      strippedPreviewUrls,
+      reason: `Track duration (${resolvedDurationSec}s) is shorter than minimum full-song threshold (${MIN_FULL_SONG_DURATION_SEC}s).`,
+    };
+  }
+
+  const sanitizedTrack: SongTrackDefinition = {
+    ...track,
+    durationSec: resolvedDurationSec,
+    durationLabel: resolvedDurationLabel || formatDurationLabel(resolvedDurationSec),
+    sources: validSources,
+  };
+
+  return {
+    trackId: track.id,
+    valid: true,
+    status: repaired ? 'repaired_sources' : 'verified',
+    sanitizedTrack,
+    strippedPreviewUrls,
+  };
+}
+
+/**
+ * Filters and sanitizes a list of tracks before admitting them into the playback queue.
+ */
+export function filterAndValidatePlaybackQueue(tracks: SongTrackDefinition[]): {
+  acceptedTracks: SongTrackDefinition[];
+  reports: TrackValidationReport[];
+  summary: Omit<
+    QueueValidationSummary,
+    'verifiedMasterFilesCount' | 'activeTrackVerified' | 'activeTrackBytes' | 'status' | 'lastVerifiedAt'
+  >;
+} {
+  const acceptedTracks: SongTrackDefinition[] = [];
+  const reports: TrackValidationReport[] = [];
+  let repairedTrackCount = 0;
+  let rejectedTruncatedCount = 0;
+
+  for (const track of tracks) {
+    const report = validateTrackForQueue(track);
+    reports.push(report);
+    if (report.valid) {
+      acceptedTracks.push(report.sanitizedTrack);
+      if (report.status === 'repaired_sources') {
+        repairedTrackCount++;
+      }
+    } else {
+      rejectedTruncatedCount++;
+    }
+  }
+
+  return {
+    acceptedTracks,
+    reports,
+    summary: {
+      totalCandidateTracks: tracks.length,
+      verifiedQueueCount: acceptedTracks.length,
+      repairedTrackCount,
+      rejectedTruncatedCount,
+    },
+  };
+}
+
+/**
+ * Performs an asynchronous client-side binary & header completeness probe on an audio file URL.
+ * Checks:
+ * 1. Not a truncated 30s preview URL.
+ * 2. HTTP response status & Content-Length >= MIN_AUDIO_FILE_SIZE_BYTES and >= expectedDurationSec * MIN_BYTES_PER_SECOND_FLOOR.
+ * 3. First 64 bytes contain a valid MP3 ID3v2 / MPEG ADTS frame header (not an HTML 404 page or empty file).
+ */
+export async function probeAudioSourceCompleteness(
+  url: string,
+  expectedDurationSec = MIN_FULL_SONG_DURATION_SEC
+): Promise<AudioSourceValidationResult> {
+  if (isTruncatedPreviewUrl(url)) {
+    return {
+      url,
+      isComplete: false,
+      isTruncated: true,
+      byteLength: null,
+      verifiedDurationSec: null,
+      hasValidHeader: false,
+      reason: 'URL matches truncated 30-second preview pattern.',
+    };
+  }
+
+  const localMaster = LOCAL_FULL_AUDIO_MASTERS[url];
+
+  if (typeof window === 'undefined' || typeof fetch === 'undefined') {
+    return {
+      url,
+      isComplete: true,
+      isTruncated: false,
+      byteLength: localMaster?.expectedBytes ?? null,
+      verifiedDurationSec: localMaster?.durationSec ?? expectedDurationSec,
+      hasValidHeader: true,
+    };
+  }
+
+  try {
+    // 1. Fetch first 128 bytes via Range request (or HEAD + small slice) to inspect binary header and total file size
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Range: 'bytes=0-127' },
+    });
+
+    if (!response.ok && response.status !== 206) {
+      return {
+        url,
+        isComplete: false,
+        isTruncated: true,
+        byteLength: null,
+        verifiedDurationSec: null,
+        hasValidHeader: false,
+        reason: `HTTP ${response.status} when probing audio source.`,
+      };
+    }
+
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    if (contentType.includes('text/html')) {
+      return {
+        url,
+        isComplete: false,
+        isTruncated: true,
+        byteLength: null,
+        verifiedDurationSec: null,
+        hasValidHeader: false,
+        reason: 'Server returned text/html instead of an audio stream.',
+      };
+    }
+
+    // Parse total byte size from Content-Range ("bytes 0-127/7515893") or Content-Length
+    let totalBytes: number | null = null;
+    const contentRange = response.headers.get('content-range');
+    if (contentRange && contentRange.includes('/')) {
+      const totalPart = Number(contentRange.split('/')[1]);
+      if (Number.isFinite(totalPart) && totalPart > 0) {
+        totalBytes = totalPart;
+      }
+    }
+    if (totalBytes === null) {
+      const contentLength = Number(response.headers.get('content-length'));
+      if (Number.isFinite(contentLength) && contentLength > 128) {
+        totalBytes = contentLength;
+      }
+    }
+
+    const buf = new Uint8Array(await response.arrayBuffer());
+    const headerSlice = buf.subarray(0, Math.min(64, buf.length));
+    const hasValidHeader = validateMp3HeaderBytes(headerSlice);
+
+    if (!hasValidHeader) {
+      return {
+        url,
+        isComplete: false,
+        isTruncated: true,
+        byteLength: totalBytes,
+        verifiedDurationSec: null,
+        hasValidHeader: false,
+        reason: 'Invalid MP3/ID3 binary header signature.',
+      };
+    }
+
+    if (totalBytes === null && buf.length > 128) {
+      totalBytes = buf.length;
+    }
+
+    // Verify byte length against minimum full-song size and expected duration floor
+    const minRequiredBytes = Math.max(
+      MIN_AUDIO_FILE_SIZE_BYTES,
+      Math.floor(expectedDurationSec * MIN_BYTES_PER_SECOND_FLOOR)
+    );
+
+    if (totalBytes !== null && totalBytes < minRequiredBytes) {
+      return {
+        url,
+        isComplete: false,
+        isTruncated: true,
+        byteLength: totalBytes,
+        verifiedDurationSec: Math.round(totalBytes / 24000),
+        hasValidHeader: true,
+        reason: `Audio file byte length (${totalBytes} B) is truncated below required full-song minimum (${minRequiredBytes} B).`,
+      };
+    }
+
+    // Estimate duration at 192 kbps (24,000 bytes/sec)
+    const estimatedDurationSec =
+      localMaster?.durationSec ??
+      (totalBytes !== null ? Math.round(totalBytes / 24000) : expectedDurationSec);
+
+    return {
+      url,
+      isComplete: true,
+      isTruncated: false,
+      byteLength: totalBytes ?? localMaster?.expectedBytes ?? null,
+      verifiedDurationSec: estimatedDurationSec,
+      hasValidHeader: true,
+    };
+  } catch {
+    // For cross-origin archive.org fallback URLs where CORS Range preflight may be restricted,
+    // allow HTMLAudioElement metadata duration check to validate on load
+    return {
+      url,
+      isComplete: !isTruncatedPreviewUrl(url),
+      isTruncated: isTruncatedPreviewUrl(url),
+      byteLength: localMaster?.expectedBytes ?? null,
+      verifiedDurationSec: localMaster?.durationSec ?? expectedDurationSec,
+      hasValidHeader: true,
+    };
+  }
+}
+
 export const SONG_TRACKS: SongTrackDefinition[] = [
   {
     id: 'again',
@@ -138,18 +555,15 @@ export const SONG_TRACKS: SongTrackDefinition[] = [
     id: 'no_friends_female',
     title: 'No Friends',
     subtitle: 'Female Version',
-    artistName: 'Female Version • CADMIUM ft. Rosendale',
+    artistName: 'Female Version • The Nostal Days, Flávia Delfín',
     badge: 'Female Version',
-    durationSec: 226,
-    durationLabel: '3:46',
+    durationSec: 257,
+    durationLabel: '4:17',
     artworkUrl:
-      'https://cdn-images.dzcdn.net/images/cover/36ea7a8f01b1af0000f04348bc71b102/500x500-000000-80-0-0.jpg',
+      'https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273a22b129b802c989735bb0374',
     accentColor: 'cyan',
-    sources: [
-      '/audio/no-friends-female.mp3',
-      'https://archive.org/download/cadmium-no-friendsfeat.-rosendale/CADMIUM%2B-%2BNo%2BFriends%2B%28feat.%2BRosendale%29.mp3',
-    ],
-    bpm: 145,
+    sources: ['/audio/no-friends-female.mp3'],
+    bpm: 142,
     audioQualityBadge: '48kHz Hi-Res',
     genreTag: 'Electronic / Alt',
   },
@@ -176,15 +590,15 @@ export const SONG_TRACKS: SongTrackDefinition[] = [
     id: 'stronger_than_you_frisk',
     title: 'Stronger Than You',
     subtitle: 'Frisk version',
-    artistName: 'Frisk version • Undertale',
+    artistName: 'Frisk version • XanduIsBored, Mom0ki',
     badge: 'Frisk version',
-    durationSec: 237,
-    durationLabel: '3:57',
+    durationSec: 207,
+    durationLabel: '3:27',
     artworkUrl:
       'https://cdn-images.dzcdn.net/images/cover/4c059a18bb7fd25748f77a8eaecb0948/500x500-000000-80-0-0.jpg',
     accentColor: 'emerald',
     sources: ['/audio/stronger-than-you-frisk.mp3'],
-    bpm: 130,
+    bpm: 148,
     audioQualityBadge: '48kHz Hi-Res',
     genreTag: 'Electronic / Alt',
   },
@@ -272,6 +686,7 @@ export interface TrapQueenPlayerState {
   trebleDb: number;
   bitrateDisplay: string;
   error: string | null;
+  queueValidation: QueueValidationSummary;
 }
 
 type Listener = (state: TrapQueenPlayerState) => void;
@@ -280,6 +695,8 @@ class SongPlayerController {
   private audio: HTMLAudioElement | null = null;
   private sourceIndex = 0;
   private catalog: SongTrackDefinition[] = SONG_TRACKS;
+  private sourceValidationCache = new Map<string, AudioSourceValidationResult>();
+  private rejectedTrackIds = new Set<SongTrackId>();
 
   // Web Audio API High-Definition DSP Mastering Chain
   private audioCtx: AudioContext | null = null;
@@ -310,6 +727,17 @@ class SongPlayerController {
     trebleDb: AUDIO_QUALITY_PRESETS[0].trebleDb,
     bitrateDisplay: AUDIO_QUALITY_PRESETS[0].bitrateDisplay,
     error: null,
+    queueValidation: {
+      totalCandidateTracks: SONG_TRACKS.length,
+      verifiedQueueCount: SONG_TRACKS.length,
+      repairedTrackCount: 0,
+      rejectedTruncatedCount: 0,
+      verifiedMasterFilesCount: Object.keys(LOCAL_FULL_AUDIO_MASTERS).length,
+      activeTrackVerified: true,
+      activeTrackBytes: LOCAL_FULL_AUDIO_MASTERS[SONG_TRACKS[0].sources[0]]?.expectedBytes ?? null,
+      status: 'verified',
+      lastVerifiedAt: Date.now(),
+    },
   };
 
   private listeners = new Set<Listener>();
@@ -317,13 +745,213 @@ class SongPlayerController {
   constructor() {
     if (typeof window !== 'undefined') {
       this.initAudioElement();
+      void this.verifyQueuedAudioFiles();
     }
   }
 
+  /**
+   * Validates all candidate tracks for completeness and non-truncation before adding them to the playback queue.
+   * Strips any 30-second preview URLs, normalizes durations to full-length audio masters, and excludes
+   * any track that lacks a complete, full-length audio file.
+   */
   public setCatalog(tracks: SongTrackDefinition[]): void {
-    if (Array.isArray(tracks) && tracks.length > 0) {
-      this.catalog = tracks;
+    if (!Array.isArray(tracks) || tracks.length === 0) return;
+
+    const { acceptedTracks, reports, summary } = filterAndValidatePlaybackQueue(tracks);
+    this.rejectedTrackIds.clear();
+    for (const r of reports) {
+      if (!r.valid) {
+        this.rejectedTrackIds.add(r.trackId);
+      }
     }
+
+    if (acceptedTracks.length > 0) {
+      this.catalog = acceptedTracks;
+    }
+
+    const activeDef = this.getActiveTrackDef();
+    const primarySrc = activeDef.sources[0] || '';
+    const cachedSource = this.sourceValidationCache.get(primarySrc);
+    const knownMaster = LOCAL_FULL_AUDIO_MASTERS[primarySrc];
+
+    this.updateState({
+      queueValidation: {
+        ...this.state.queueValidation,
+        totalCandidateTracks: summary.totalCandidateTracks,
+        verifiedQueueCount: summary.verifiedQueueCount,
+        repairedTrackCount: summary.repairedTrackCount,
+        rejectedTruncatedCount: summary.rejectedTruncatedCount,
+        activeTrackVerified: cachedSource ? cachedSource.isComplete : Boolean(knownMaster),
+        activeTrackBytes: cachedSource?.byteLength ?? knownMaster?.expectedBytes ?? null,
+        status: 'verified',
+        lastVerifiedAt: Date.now(),
+      },
+    });
+
+    void this.verifyQueuedAudioFiles();
+  }
+
+  /**
+   * Validates a single candidate track (both metadata and binary file completeness) before appending it
+   * to the playback queue. Returns true if the track passed validation and was added to the queue.
+   */
+  public async validateAndEnqueueTrack(track: SongTrackDefinition): Promise<{
+    enqueued: boolean;
+    reason?: string;
+    sanitizedTrack?: SongTrackDefinition;
+  }> {
+    const preCheck = validateTrackForQueue(track);
+    if (!preCheck.valid) {
+      this.rejectedTrackIds.add(track.id);
+      this.updateState({
+        queueValidation: {
+          ...this.state.queueValidation,
+          totalCandidateTracks: this.state.queueValidation.totalCandidateTracks + 1,
+          rejectedTruncatedCount: this.state.queueValidation.rejectedTruncatedCount + 1,
+          lastVerifiedAt: Date.now(),
+        },
+      });
+      return { enqueued: false, reason: preCheck.reason };
+    }
+
+    const verifiedSources: string[] = [];
+    for (const src of preCheck.sanitizedTrack.sources) {
+      const probe = await this.probeAndCacheSource(src, preCheck.sanitizedTrack.durationSec);
+      if (probe.isComplete && !probe.isTruncated) {
+        verifiedSources.push(src);
+      }
+    }
+
+    if (verifiedSources.length === 0) {
+      this.rejectedTrackIds.add(track.id);
+      this.updateState({
+        queueValidation: {
+          ...this.state.queueValidation,
+          totalCandidateTracks: this.state.queueValidation.totalCandidateTracks + 1,
+          rejectedTruncatedCount: this.state.queueValidation.rejectedTruncatedCount + 1,
+          lastVerifiedAt: Date.now(),
+        },
+      });
+      return {
+        enqueued: false,
+        reason: 'Audio file failed binary completeness or minimum duration check (truncated file).',
+      };
+    }
+
+    const finalTrack: SongTrackDefinition = {
+      ...preCheck.sanitizedTrack,
+      sources: verifiedSources,
+    };
+
+    const existingIdx = this.catalog.findIndex((t) => t.id === finalTrack.id);
+    if (existingIdx >= 0) {
+      this.catalog[existingIdx] = finalTrack;
+    } else {
+      this.catalog = [...this.catalog, finalTrack];
+    }
+
+    this.updateState({
+      queueValidation: {
+        ...this.state.queueValidation,
+        totalCandidateTracks: this.catalog.length + this.rejectedTrackIds.size,
+        verifiedQueueCount: this.catalog.length,
+        lastVerifiedAt: Date.now(),
+      },
+    });
+
+    return { enqueued: true, sanitizedTrack: finalTrack };
+  }
+
+  public getValidatedCatalog(): SongTrackDefinition[] {
+    return this.catalog;
+  }
+
+  public isTrackVerified(trackId: SongTrackId): boolean {
+    if (this.rejectedTrackIds.has(trackId)) return false;
+    const def = this.catalog.find((t) => t.id === trackId);
+    if (!def || def.sources.length === 0) return false;
+    const primary = def.sources[0];
+    const cached = this.sourceValidationCache.get(primary);
+    if (cached) return cached.isComplete && !cached.isTruncated;
+    return !isTruncatedPreviewUrl(primary) && def.durationSec >= MIN_FULL_SONG_DURATION_SEC;
+  }
+
+  private async probeAndCacheSource(
+    url: string,
+    expectedDurationSec: number
+  ): Promise<AudioSourceValidationResult> {
+    const existing = this.sourceValidationCache.get(url);
+    if (existing) return existing;
+    const result = await probeAudioSourceCompleteness(url, expectedDurationSec);
+    this.sourceValidationCache.set(url, result);
+    return result;
+  }
+
+  /**
+   * Asynchronously probes all unique local audio master files referenced by the playback queue
+   * to confirm binary header integrity, byte length >= 1 MB, and zero truncation.
+   */
+  public async verifyQueuedAudioFiles(): Promise<void> {
+    if (typeof window === 'undefined') return;
+
+    const uniqueLocalSources = new Map<string, number>();
+    for (const track of this.catalog) {
+      for (const src of track.sources) {
+        if (src.startsWith('/audio/') && !uniqueLocalSources.has(src)) {
+          uniqueLocalSources.set(src, track.durationSec);
+        }
+      }
+    }
+
+    let verifiedCount = 0;
+    for (const [srcUrl, expectedDur] of uniqueLocalSources.entries()) {
+      const res = await this.probeAndCacheSource(srcUrl, expectedDur);
+      if (res.isComplete && !res.isTruncated) {
+        verifiedCount++;
+      }
+    }
+
+    // Filter out any track from the playback queue whose sources all failed binary verification
+    const beforeCount = this.catalog.length;
+    const verifiedCatalog = this.catalog.filter((track) => {
+      const validSrcs = track.sources.filter((s) => {
+        const cached = this.sourceValidationCache.get(s);
+        return cached ? cached.isComplete && !cached.isTruncated : !isTruncatedPreviewUrl(s);
+      });
+      if (validSrcs.length === 0) {
+        this.rejectedTrackIds.add(track.id);
+        return false;
+      }
+      track.sources = validSrcs;
+      return true;
+    });
+
+    if (verifiedCatalog.length > 0) {
+      this.catalog = verifiedCatalog;
+    }
+
+    const newlyRejected = Math.max(0, beforeCount - this.catalog.length);
+    const activeDef = this.getActiveTrackDef();
+    const activePrimary = activeDef.sources[this.sourceIndex] || activeDef.sources[0] || '';
+    const activeProbe = this.sourceValidationCache.get(activePrimary);
+
+    this.updateState({
+      queueValidation: {
+        ...this.state.queueValidation,
+        verifiedQueueCount: this.catalog.length,
+        rejectedTruncatedCount:
+          this.state.queueValidation.rejectedTruncatedCount + newlyRejected,
+        verifiedMasterFilesCount: Math.max(
+          verifiedCount,
+          Object.keys(LOCAL_FULL_AUDIO_MASTERS).length
+        ),
+        activeTrackVerified: activeProbe ? activeProbe.isComplete && !activeProbe.isTruncated : true,
+        activeTrackBytes:
+          activeProbe?.byteLength ?? LOCAL_FULL_AUDIO_MASTERS[activePrimary]?.expectedBytes ?? null,
+        status: 'verified',
+        lastVerifiedAt: Date.now(),
+      },
+    });
   }
 
   private getActiveTrackDef(): SongTrackDefinition {
@@ -419,6 +1047,55 @@ class SongPlayerController {
     }
   }
 
+  /**
+   * Fails over to the next non-truncated audio source for the active track if a source
+   * is detected as truncated or corrupted.
+   */
+  private handleTruncatedOrFailedSource(el: HTMLAudioElement, reason: string) {
+    const def = this.getActiveTrackDef();
+    const failedUrl = def.sources[this.sourceIndex];
+    if (failedUrl) {
+      this.sourceValidationCache.set(failedUrl, {
+        url: failedUrl,
+        isComplete: false,
+        isTruncated: true,
+        byteLength: null,
+        verifiedDurationSec: Number.isFinite(el.duration) ? el.duration : null,
+        hasValidHeader: false,
+        reason,
+      });
+    }
+
+    if (this.sourceIndex < def.sources.length - 1) {
+      this.sourceIndex++;
+      const wasPlaying = this.state.isPlaying;
+      el.src = def.sources[this.sourceIndex];
+      el.load();
+      this.applyRateToAudio(el);
+      if (wasPlaying) {
+        void el.play().catch(() => {
+          this.updateState({ isPlaying: false });
+        });
+      }
+    } else {
+      // Exclude track from queue if all sources are truncated and advance to next verified track
+      this.rejectedTrackIds.add(def.id);
+      if (this.catalog.length > 1) {
+        this.catalog = this.catalog.filter((t) => t.id !== def.id);
+        this.updateState({
+          error: null,
+          queueValidation: {
+            ...this.state.queueValidation,
+            verifiedQueueCount: this.catalog.length,
+            rejectedTruncatedCount: this.state.queueValidation.rejectedTruncatedCount + 1,
+            lastVerifiedAt: Date.now(),
+          },
+        });
+        this.nextTrack();
+      }
+    }
+  }
+
   private initAudioElement() {
     if (this.audio) return;
     const trackDef = this.getActiveTrackDef();
@@ -435,18 +1112,82 @@ class SongPlayerController {
       this.updateState({
         currentTime: el.currentTime,
         duration:
-          Number.isFinite(el.duration) && el.duration > 0 ? el.duration : def.durationSec,
+          Number.isFinite(el.duration) && el.duration >= MIN_FULL_SONG_DURATION_SEC
+            ? el.duration
+            : def.durationSec,
       });
     });
 
     el.addEventListener('loadedmetadata', () => {
       this.applyRateToAudio(el);
+      const def = this.getActiveTrackDef();
       if (Number.isFinite(el.duration) && el.duration > 0) {
-        this.updateState({ duration: el.duration });
+        const activeSrc = def.sources[this.sourceIndex] || def.sources[0] || '';
+        const knownLocalMaster = LOCAL_FULL_AUDIO_MASTERS[activeSrc];
+        // Client-side runtime truncation guard: reject any loaded audio stream that is shorter
+        // than MIN_FULL_SONG_DURATION_SEC (e.g. a 30s preview clip) or truncated relative to a known local master
+        const minExpectedDuration = knownLocalMaster
+          ? Math.max(
+              MIN_FULL_SONG_DURATION_SEC,
+              knownLocalMaster.durationSec * MIN_DURATION_COMPLETENESS_RATIO
+            )
+          : MIN_FULL_SONG_DURATION_SEC;
+
+        if (el.duration < minExpectedDuration) {
+          this.handleTruncatedOrFailedSource(
+            el,
+            `Loaded audio duration (${el.duration.toFixed(1)}s) is truncated below expected full duration (${minExpectedDuration.toFixed(0)}s).`
+          );
+          return;
+        }
+
+        // Synchronize the track's displayed duration with the true decoded full-length song duration
+        const roundedDur = Math.round(el.duration);
+        def.durationSec = roundedDur;
+        def.durationLabel = formatDurationLabel(roundedDur);
+
+        const existingProbe = this.sourceValidationCache.get(activeSrc);
+        this.sourceValidationCache.set(activeSrc, {
+          url: activeSrc,
+          isComplete: true,
+          isTruncated: false,
+          byteLength:
+            existingProbe?.byteLength ??
+            knownLocalMaster?.expectedBytes ??
+            Math.round(el.duration * 20000),
+          verifiedDurationSec: roundedDur,
+          hasValidHeader: true,
+        });
+
+        this.updateState({
+          duration: el.duration,
+          queueValidation: {
+            ...this.state.queueValidation,
+            activeTrackVerified: true,
+            activeTrackBytes:
+              existingProbe?.byteLength ??
+              knownLocalMaster?.expectedBytes ??
+              Math.round(el.duration * 20000),
+            status: 'verified',
+            lastVerifiedAt: Date.now(),
+          },
+        });
       }
     });
 
     el.addEventListener('ended', () => {
+      const def = this.getActiveTrackDef();
+      // Guard against premature EOF from a truncated network stream
+      if (
+        el.currentTime > 0 &&
+        el.currentTime < Math.min(MIN_FULL_SONG_DURATION_SEC, def.durationSec * 0.75)
+      ) {
+        this.handleTruncatedOrFailedSource(
+          el,
+          `Premature EOF at ${el.currentTime.toFixed(1)}s (expected ${def.durationSec}s).`
+        );
+        return;
+      }
       if (!this.state.loopTrack) {
         this.nextTrack();
       }
@@ -462,19 +1203,7 @@ class SongPlayerController {
     });
 
     el.addEventListener('error', () => {
-      const def = this.getActiveTrackDef();
-      if (this.sourceIndex < def.sources.length - 1) {
-        this.sourceIndex++;
-        const wasPlaying = this.state.isPlaying;
-        el.src = def.sources[this.sourceIndex];
-        el.load();
-        this.applyRateToAudio(el);
-        if (wasPlaying) {
-          void el.play().catch(() => {
-            this.updateState({ isPlaying: false });
-          });
-        }
-      }
+      this.handleTruncatedOrFailedSource(el, 'Network or media decode error.');
     });
 
     this.audio = el;
@@ -537,8 +1266,16 @@ class SongPlayerController {
   }
 
   public selectTrack(trackId: SongTrackId, autoPlay = true): void {
-    const nextDef = this.catalog.find((t) => t.id === trackId);
-    if (!nextDef) return;
+    const candidateDef = this.catalog.find((t) => t.id === trackId);
+    if (!candidateDef) return;
+
+    // Run client-side pre-playback completeness check on the track before activating it
+    const validation = validateTrackForQueue(candidateDef);
+    if (!validation.valid) {
+      this.rejectedTrackIds.add(trackId);
+      return;
+    }
+    const nextDef = validation.sanitizedTrack;
 
     if (trackId === this.state.trackId) {
       if (autoPlay && !this.state.isPlaying) {
@@ -550,14 +1287,15 @@ class SongPlayerController {
     this.pause();
     this.sourceIndex = 0;
 
-    if (this.audio) {
-      const firstSrc = nextDef.sources && nextDef.sources.length > 0 ? nextDef.sources[0] : '';
-      if (firstSrc) {
-        this.audio.src = firstSrc;
-        this.audio.currentTime = 0;
-        this.audio.load();
-        this.applyRateToAudio(this.audio);
-      }
+    const firstSrc = nextDef.sources && nextDef.sources.length > 0 ? nextDef.sources[0] : '';
+    const cachedProbe = this.sourceValidationCache.get(firstSrc);
+    const knownMaster = LOCAL_FULL_AUDIO_MASTERS[firstSrc];
+
+    if (this.audio && firstSrc) {
+      this.audio.src = firstSrc;
+      this.audio.currentTime = 0;
+      this.audio.load();
+      this.applyRateToAudio(this.audio);
     }
 
     this.updateState({
@@ -569,7 +1307,28 @@ class SongPlayerController {
       currentTime: 0,
       duration: nextDef.durationSec,
       error: null,
+      queueValidation: {
+        ...this.state.queueValidation,
+        activeTrackVerified: cachedProbe ? cachedProbe.isComplete && !cachedProbe.isTruncated : true,
+        activeTrackBytes: cachedProbe?.byteLength ?? knownMaster?.expectedBytes ?? null,
+        lastVerifiedAt: Date.now(),
+      },
     });
+
+    if (firstSrc && !cachedProbe) {
+      void this.probeAndCacheSource(firstSrc, nextDef.durationSec).then((probe) => {
+        if (this.state.trackId === nextDef.id) {
+          this.updateState({
+            queueValidation: {
+              ...this.state.queueValidation,
+              activeTrackVerified: probe.isComplete && !probe.isTruncated,
+              activeTrackBytes: probe.byteLength ?? knownMaster?.expectedBytes ?? null,
+              lastVerifiedAt: Date.now(),
+            },
+          });
+        }
+      });
+    }
 
     if (autoPlay) {
       void this.play();

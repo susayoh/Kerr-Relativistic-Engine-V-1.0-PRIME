@@ -19,6 +19,7 @@ interface MetricTelemetryOverlayProps {
   metrics: DerivedRelativisticMetrics;
   sceneController: BlackHoleSceneController | null;
   hoverCoordsRef?: React.RefObject<{ rRs: number; phiDeg: number; redshiftZ: number } | null>;
+  highPerformanceMode?: boolean;
   onChangeProbeRadius?: (radiusRs: number) => void;
   onClose?: () => void;
   isPhoneMode?: boolean;
@@ -104,6 +105,7 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
   metrics,
   sceneController,
   hoverCoordsRef,
+  highPerformanceMode = false,
   onChangeProbeRadius,
   onClose,
   isPhoneMode = false,
@@ -129,8 +131,9 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
 
   useEffect(() => {
     let animId = 0;
-    const TARGET_FPS = 30;
+    const TARGET_FPS = highPerformanceMode ? 12 : 30;
     const FRAME_INTERVAL_MS = 1000 / TARGET_FPS;
+    const REACT_UPDATE_INTERVAL_MS = highPerformanceMode ? 320 : 160;
     let lastFrameTime = 0;
     let lastSamplePush = 0;
     let lastReactStateUpdate = 0;
@@ -138,9 +141,12 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
     const renderLoop = (now: number) => {
       animId = requestAnimationFrame(renderLoop);
 
-      // 30fps requestAnimationFrame-throttling (~33.33ms interval)
+      // requestAnimationFrame-throttling (~83.33ms in High-Performance Mode, ~33.33ms standard)
       const elapsedFrameMs = now - lastFrameTime;
       if (elapsedFrameMs < FRAME_INTERVAL_MS) {
+        return;
+      }
+      if (sceneController?.isOrbitingCamera()) {
         return;
       }
       const dtSeconds = Math.min(0.1, elapsedFrameMs > 0 && lastFrameTime > 0 ? elapsedFrameMs / 1000 : 1 / TARGET_FPS);
@@ -195,8 +201,8 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
         }
       }
 
-      // Throttle React state update for numeric telemetry readout to at most once every 150ms
-      if (now - lastReactStateUpdate >= 160) {
+      // Throttle React state update for numeric telemetry readout
+      if (now - lastReactStateUpdate >= REACT_UPDATE_INTERVAL_MS) {
         lastReactStateUpdate = now;
         setLiveSample(sample);
       }
@@ -466,6 +472,7 @@ export const MetricTelemetryOverlay: React.FC<MetricTelemetryOverlayProps> = ({
     graphMode,
     isMinimized,
     sceneController,
+    highPerformanceMode,
   ]);
 
   const isInsideErgosphere = liveSample.g_tt >= 0;
