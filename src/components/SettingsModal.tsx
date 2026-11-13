@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'motion/react';
 import {
   X,
@@ -68,6 +68,13 @@ import {
   AudioQualityPresetId,
   filterAndValidatePlaybackQueue,
 } from '../audio/trapQueenPlayer';
+import {
+  SyncedLyricLine,
+  fetchSyncedLyricsForTrack,
+  buildTrackSubtitleFallback,
+  getActiveLyricIndex,
+  getActiveLineProgress,
+} from '../audio/songLyrics';
 import { AppLanguage, LANGUAGE_OPTIONS, TRANSLATIONS } from '../i18n/translations';
 import {
   KerrEngineTierId,
@@ -87,6 +94,7 @@ import {
   TOTAL_CODEBASE_LINES,
   TOTAL_CODEBASE_CHARS,
   computeLiveCodebaseTelemetry,
+  syncLiveCodebaseFromServer,
 } from './CodebaseDetailsView';
 import { DiagnosticSuiteView } from './DiagnosticSuiteView';
 
@@ -113,13 +121,13 @@ const RAW_SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
   {
     id: 'moonrock_saltynuggets',
     title: 'Moonrock',
-    subtitle: 'SaltyNuggets',
+    subtitle: 'XXXTENTACION • SaltyNuggets',
     artistName: 'SaltyNuggets',
-    badge: 'SaltyNuggets',
-    durationSec: 126,
-    durationLabel: '2:06',
+    badge: 'XXXTENTACION',
+    durationSec: 129,
+    durationLabel: '2:09',
     artworkUrl:
-      'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/5e/37/86/5e3786b0-1fe0-8edd-82f0-649e0365c9b5/4070335853141.jpg/600x600bb.jpg',
+      'https://i1.sndcdn.com/artworks-000365422812-92e8l2-t500x500.jpg',
     accentColor: 'emerald',
     sources: ['/audio/moonrock-saltynuggets.mp3'],
     bpm: 144,
@@ -234,8 +242,8 @@ const RAW_SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
     subtitle: 'BLP Kosher & BabyTron',
     artistName: 'BLP Kosher & BabyTron',
     badge: 'MazelTron',
-    durationSec: 187,
-    durationLabel: '3:07',
+    durationSec: 208,
+    durationLabel: '3:28',
     artworkUrl:
       'https://cdn-images.dzcdn.net/images/cover/ee3a4f14c8ecb9ac80b0aec21b884e89/500x500-000000-80-0-0.jpg',
     accentColor: 'cyan',
@@ -621,12 +629,12 @@ const CustomScrollWorkspace: React.FC<CustomScrollWorkspaceProps> = ({
       : 'text-zinc-200 border-zinc-600/60 bg-zinc-800/80';
 
   return (
-    <div className="relative flex-1 min-h-0 flex overflow-hidden">
+    <div className="relative flex-1 min-h-0 min-w-0 max-w-full flex overflow-hidden">
       {/* Native Scrollbar Suppressed Content Viewport */}
       <div
         ref={viewportRef}
         data-testid={testId}
-        className={`flex-1 min-h-0 overflow-y-auto no-scrollbar ${className}`}
+        className={`flex-1 min-h-0 min-w-0 max-w-full overflow-y-auto overflow-x-hidden overscroll-x-none touch-pan-y no-scrollbar ${className}`}
       >
         {children}
       </div>
@@ -744,7 +752,9 @@ const LiveSpectrumVisualizer: React.FC<{
               ? idx % 4 === 0
                 ? 'bg-[#1DB954]'
                 : 'bg-zinc-400'
-              : 'bg-zinc-800'
+              : idx % 2 === 0
+              ? 'bg-[#1DB954]/80'
+              : 'bg-zinc-600'
           }`}
           style={{ height: `${Math.max(12, Math.round(val * 100))}%` }}
         />
@@ -802,6 +812,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [songSearchQuery, setSongSearchQuery] = useState<string>('');
   const [isShuffleEnabled, setIsShuffleEnabled] = useState<boolean>(false);
   const [showSongsAudioFx, setShowSongsAudioFx] = useState<boolean>(false);
+  const [showSubtitles, setShowSubtitles] = useState<boolean>(true);
+  const [lyricSyncMode, setLyricSyncMode] = useState<boolean>(true);
+  const [showFullLyricsCard, setShowFullLyricsCard] = useState<boolean>(false);
+  const [lyricsCinemaMode, setLyricsCinemaMode] = useState<boolean>(false);
+  const [lyricsAutoFollow, setLyricsAutoFollow] = useState<boolean>(true);
+  const [lyricSyncOffsetSec, setLyricSyncOffsetSec] = useState<number>(0);
+  const [isPlayerMinimized, setIsPlayerMinimized] = useState<boolean>(false);
+  const [activeLyrics, setActiveLyrics] = useState<SyncedLyricLine[]>(() =>
+    buildTrackSubtitleFallback(SETTINGS_SONGS_LIST[0])
+  );
+  const lyricsScrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [hasVisitedIqTest, setHasVisitedIqTest] = useState<boolean>(false);
   const [expandedArtworkTrack, setExpandedArtworkTrack] = useState<SongTrackDefinition | null>(
     null
   );
@@ -817,6 +839,97 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isLoadingImportedTracks, setIsLoadingImportedTracks] = useState<boolean>(false);
 
   useEffect(() => {
+    if (activeTab === 'iq_test') {
+      setHasVisitedIqTest(true);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    setLyricSyncOffsetSec(0);
+  }, [playerState.trackId]);
+
+  useEffect(() => {
+    const currentTrack =
+      songsCatalog.find((tr) => tr.id === playerState.trackId) || songsCatalog[0];
+    if (!currentTrack) return;
+    let cancelled = false;
+    const isSpeedModified = /sped\s*up|speed\s*up|nightcore|slowed/i.test(
+      `${currentTrack.title} ${currentTrack.artistName}`
+    );
+    const decodedDur =
+      isSpeedModified && playerState.duration && playerState.duration >= 65
+        ? Math.round(playerState.duration)
+        : undefined;
+    setActiveLyrics(buildTrackSubtitleFallback(currentTrack));
+    fetchSyncedLyricsForTrack(currentTrack, decodedDur)
+      .then((lines) => {
+        if (!cancelled && lines.length > 0) {
+          setActiveLyrics(lines);
+        }
+      })
+      .catch(() => {
+        // Fallback already set
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    playerState.trackId,
+    playerState.isPlaying ? Math.round((playerState.duration || 0) / 10) : 0,
+    songsCatalog,
+  ]);
+
+  const activeLyricIndex = lyricSyncMode
+    ? getActiveLyricIndex(activeLyrics, playerState.currentTime, lyricSyncOffsetSec)
+    : 0;
+  const activeLineProgress = lyricSyncMode
+    ? getActiveLineProgress(
+        activeLyrics,
+        activeLyricIndex,
+        playerState.currentTime,
+        lyricSyncOffsetSec
+      )
+    : 0;
+
+  // Sync live codebase metrics whenever Settings opens or tab switches so the Code tab badge is always up to date
+  const [liveCodebaseTick, setLiveCodebaseTick] = useState<number>(0);
+  useEffect(() => {
+    if (!isOpen) return;
+    syncLiveCodebaseFromServer();
+    const timer = window.setTimeout(() => setLiveCodebaseTick((n) => n + 1), 350);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, activeTab, codebaseRefreshToken]);
+
+  const liveModalCodebase = useMemo(() => {
+    void liveCodebaseTick;
+    void codebaseRefreshToken;
+    return computeLiveCodebaseTelemetry();
+  }, [liveCodebaseTick, codebaseRefreshToken]);
+
+  useEffect(() => {
+    if (!showFullLyricsCard || lyricsCinemaMode || !lyricsAutoFollow || !lyricsScrollContainerRef.current) {
+      return;
+    }
+    const container = lyricsScrollContainerRef.current;
+    const activeEl = container.querySelector<HTMLElement>(
+      `[data-lyric-idx="${activeLyricIndex}"]`
+    );
+    if (activeEl) {
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = activeEl.getBoundingClientRect();
+      const targetTop =
+        container.scrollTop +
+        (activeRect.top - containerRect.top) -
+        container.clientHeight / 2 +
+        activeRect.height / 2;
+      container.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: 'smooth',
+      });
+    }
+  }, [activeLyricIndex, activeLyrics, showFullLyricsCard, lyricsCinemaMode, lyricsAutoFollow]);
+
+  useEffect(() => {
     if (!isImportedTracksLoaded) {
       trapQueenPlayer.setCatalog(SETTINGS_SONGS_LIST);
     }
@@ -830,20 +943,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     import('../audio/importedTracks')
       .then((mod) => {
         if (cancelled) return;
-        const normalizeSongKey = (s: string) =>
-          s
+        const normalizeSongKey = (item: SongTrackDefinition) => {
+          const baseTitle = item.title
             .toLowerCase()
-            .replace(/\(.*?\)|\[.*?\]/g, '')
-            .replace(
-              /-\s*(nightcore|frisk version|female version|sped up|slowed|remix|from .*).*$/i,
-              ''
-            )
+            .replace(/\((?:with|feat\.?|ft\.?)[^)]*\)/gi, '')
+            .replace(/-\s*from\s+.*$/i, '')
             .replace(/[^\p{L}\p{N}]+/gu, '')
             .trim();
+          const versionTag =
+            /nightcore/i.test(`${item.title} ${item.artistName}`)
+              ? 'nightcore'
+              : /sped\s*up|speed\s*up/i.test(item.title)
+                ? 'spedup'
+                : /slowed/i.test(item.title)
+                  ? 'slowed'
+                  : /female\s*version/i.test(`${item.title} ${item.artistName}`)
+                    ? 'female'
+                    : /frisk\s*version/i.test(`${item.title} ${item.artistName}`)
+                      ? 'frisk'
+                      : 'std';
+          return `${baseTitle}_${versionTag}`;
+        };
         const seenKeys = new Set<string>();
         const uniqueCandidates: SongTrackDefinition[] = [];
         for (const item of [...RAW_SETTINGS_SONGS_LIST, ...mod.IMPORTED_PLAYLIST_TRACKS]) {
-          const key = normalizeSongKey(item.title) || item.id;
+          const key = normalizeSongKey(item) || item.id;
           if (!seenKeys.has(key) && !seenKeys.has(item.id)) {
             seenKeys.add(key);
             seenKeys.add(item.id);
@@ -1231,7 +1355,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               haptics.light();
               setActiveTab('code');
             }}
-            className={`flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer whitespace-nowrap min-w-0 overflow-hidden ${
               activeTab === 'code'
                 ? 'bg-zinc-800 border-zinc-400 text-white'
                 : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
@@ -1240,10 +1364,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <span>{t.tabCode}</span>
             <span
               data-testid="settings-tab-code-lines"
-              title={`${(codebaseTotalLines ?? TOTAL_CODEBASE_LINES).toLocaleString()} lines · ${(codebaseTotalChars ?? TOTAL_CODEBASE_CHARS).toLocaleString()} characters`}
-              className="inline text-[9px] text-amber-300/90 font-mono font-bold"
+              title={`${(liveModalCodebase.totalLines || codebaseTotalLines || TOTAL_CODEBASE_LINES).toLocaleString()} lines · ${(liveModalCodebase.totalChars || codebaseTotalChars || TOTAL_CODEBASE_CHARS).toLocaleString()} characters`}
+              className="inline text-[9px] text-amber-300/90 font-mono font-bold truncate"
             >
-              • {codebaseLinesLabel ?? FORMAT_CODEBASE_LINES_BADGE}
+              • {liveModalCodebase.formattedLinesLabel || codebaseLinesLabel || FORMAT_CODEBASE_LINES_BADGE}
             </span>
           </button>
         </div>
@@ -3332,35 +3456,250 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             ) : (
               <div className="space-y-3 pt-1">
-                <div className="flex items-center justify-between gap-4 p-3 rounded-lg bg-neutral-900/75 border border-amber-500/40">
-                  <div className="space-y-0.5 pr-2">
-                    <div className="text-xs font-bold text-amber-200 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Protocol 1987: SN 1987A Triple-Ring & Golden Synth Grid</span>
-                    </div>
-                    <div className="text-[11px] text-neutral-300 leading-snug">
-                      Unleashes the iconic glowing equatorial "Cosmic Pearl Necklace" and twin bipolar hourglass rings of Supernova 1987A, paired with a 1987 Golden-Magenta Cyber Spacetime Manifold and shockwave burst.
-                    </div>
+                {/* Master Actions Bar: Enable All Secret Anomalies + Detonate 1987A Hypernova */}
+                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/35">
+                  <div className="text-[11px] font-mono text-amber-200 font-semibold flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Classified Anomaly Suite (6 Stackable 3D/Shader Modules)</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleSetting('secret1987Mode')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      settings.secret1987Mode ? 'bg-amber-500' : 'bg-neutral-800'
-                    }`}
-                    aria-pressed={Boolean(settings.secret1987Mode)}
-                    aria-label="Toggle Protocol 1987 Secret Mode"
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                        settings.secret1987Mode ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      data-testid="secret-detonate-hypernova-btn"
+                      onClick={() => {
+                        haptics.pulseBoom();
+                        onUpdateSettings((prev) => ({
+                          ...prev,
+                          secretHypernovaNonce: (prev.secretHypernovaNonce ?? 0) + 1,
+                        }));
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/25 hover:bg-rose-500/35 border border-rose-400/60 text-rose-200 font-mono text-[10px] font-bold transition-all cursor-pointer shadow-sm"
+                    >
+                      <Zap className="w-3 h-3 text-rose-300" />
+                      <span>Detonate 1987A Hypernova</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="secret-toggle-all-btn"
+                      onClick={() => {
+                        haptics.medium();
+                        const allActive = Boolean(
+                          settings.secret1987Mode &&
+                            settings.secretQuasarJets &&
+                            settings.secretHawkingSwarm &&
+                            settings.secretWormholePortal &&
+                            settings.secretChromaticOverdrive &&
+                            settings.secretTimeReversal
+                        );
+                        const nextVal = !allActive;
+                        onUpdateSettings((prev) => ({
+                          ...prev,
+                          secret1987Mode: nextVal,
+                          secretQuasarJets: nextVal,
+                          secretHawkingSwarm: nextVal,
+                          secretWormholePortal: nextVal,
+                          secretChromaticOverdrive: nextVal,
+                          secretTimeReversal: nextVal,
+                          secretHypernovaNonce: nextVal
+                            ? (prev.secretHypernovaNonce ?? 0) + 1
+                            : prev.secretHypernovaNonce,
+                        }));
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-mono text-[10px] font-bold transition-colors cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>
+                        {settings.secret1987Mode &&
+                        settings.secretQuasarJets &&
+                        settings.secretHawkingSwarm &&
+                        settings.secretWormholePortal &&
+                        settings.secretChromaticOverdrive &&
+                        settings.secretTimeReversal
+                          ? 'Disable All Anomalies'
+                          : 'Enable All 6 Effects'}
+                      </span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] font-mono text-neutral-400">
-                  <span className="text-amber-300/90">Clearance 1987 Verified</span>
+                {/* Grid of 6 Stackable Classified Anomaly Effects */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* 1. SN 1987A Triple-Ring Nebula & Golden Synth Grid */}
+                  <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-neutral-900/80 border border-amber-500/40">
+                    <div className="space-y-0.5 pr-1">
+                      <div className="text-xs font-bold text-amber-200 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>SN 1987A Triple-Ring &amp; Synth Grid</span>
+                      </div>
+                      <div className="text-[10.5px] text-neutral-300 leading-snug">
+                        Equatorial 24-pearl necklace + twin bipolar hourglass rings &amp; golden spacetime well.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleSetting('secret1987Mode')}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        settings.secret1987Mode ? 'bg-amber-500' : 'bg-neutral-800'
+                      }`}
+                      aria-pressed={Boolean(settings.secret1987Mode)}
+                      aria-label="Toggle Protocol 1987 Secret Mode"
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          settings.secret1987Mode ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* 2. Blandford-Znajek Relativistic Quasar Jets */}
+                  <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-neutral-900/80 border border-cyan-500/40">
+                    <div className="space-y-0.5 pr-1">
+                      <div className="text-xs font-bold text-cyan-200 flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                        <span>Blandford-Znajek Quasar Jets</span>
+                      </div>
+                      <div className="text-[10.5px] text-neutral-300 leading-snug">
+                        Twin polar plasma cones wrapped in double-helix magnetic filaments &amp; superluminal shock knots.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="secret-quasar-jets-toggle"
+                      onClick={() => toggleSetting('secretQuasarJets')}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        settings.secretQuasarJets ? 'bg-cyan-500' : 'bg-neutral-800'
+                      }`}
+                      aria-pressed={Boolean(settings.secretQuasarJets)}
+                      aria-label="Toggle Blandford-Znajek Relativistic Quasar Jets"
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          settings.secretQuasarJets ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* 3. Hawking Quantum Pair-Production Storm */}
+                  <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-neutral-900/80 border border-fuchsia-500/40">
+                    <div className="space-y-0.5 pr-1">
+                      <div className="text-xs font-bold text-fuchsia-200 flex items-center gap-1.5">
+                        <Atom className="w-3.5 h-3.5 text-fuchsia-400 shrink-0" />
+                        <span>Hawking Quantum Pair Storm</span>
+                      </div>
+                      <div className="text-[10.5px] text-neutral-300 leading-snug">
+                        320 Cherenkov matter–antimatter vacuum fluctuation pairs erupting and spiraling from the horizon.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="secret-hawking-swarm-toggle"
+                      onClick={() => toggleSetting('secretHawkingSwarm')}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        settings.secretHawkingSwarm ? 'bg-fuchsia-500' : 'bg-neutral-800'
+                      }`}
+                      aria-pressed={Boolean(settings.secretHawkingSwarm)}
+                      aria-label="Toggle Hawking Quantum Pair-Production Storm"
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          settings.secretHawkingSwarm ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* 4. Einstein-Rosen Wormhole Throat Cage */}
+                  <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-neutral-900/80 border border-purple-500/40">
+                    <div className="space-y-0.5 pr-1">
+                      <div className="text-xs font-bold text-purple-200 flex items-center gap-1.5">
+                        <Compass className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                        <span>Einstein-Rosen Wormhole Cage</span>
+                      </div>
+                      <div className="text-[10.5px] text-neutral-300 leading-snug">
+                        Counter-rotating gyroscopic exotic-matter containment rings &amp; geodesic icosahedral throat lattice.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="secret-wormhole-portal-toggle"
+                      onClick={() => toggleSetting('secretWormholePortal')}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        settings.secretWormholePortal ? 'bg-purple-500' : 'bg-neutral-800'
+                      }`}
+                      aria-pressed={Boolean(settings.secretWormholePortal)}
+                      aria-label="Toggle Einstein-Rosen Wormhole Throat Cage"
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          settings.secretWormholePortal ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* 5. 1987 Retro-Synth Chromatic Prism & Scanlines */}
+                  <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-neutral-900/80 border border-pink-500/40">
+                    <div className="space-y-0.5 pr-1">
+                      <div className="text-xs font-bold text-pink-200 flex items-center gap-1.5">
+                        <Eye className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                        <span>1987 Chromatic Prism &amp; CRT Scanlines</span>
+                      </div>
+                      <div className="text-[10.5px] text-neutral-300 leading-snug">
+                        Full-screen optical RGB wavelength dispersion prism with retro-synth phosphor scanline shimmer.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="secret-chromatic-overdrive-toggle"
+                      onClick={() => toggleSetting('secretChromaticOverdrive')}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        settings.secretChromaticOverdrive ? 'bg-pink-500' : 'bg-neutral-800'
+                      }`}
+                      aria-pressed={Boolean(settings.secretChromaticOverdrive)}
+                      aria-label="Toggle 1987 Chromatic Prism and Scanlines"
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          settings.secretChromaticOverdrive ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* 6. Tachyon Time-Reversal Matrix */}
+                  <div className="flex items-start justify-between gap-3 p-3 rounded-lg bg-neutral-900/80 border border-emerald-500/40">
+                    <div className="space-y-0.5 pr-1">
+                      <div className="text-xs font-bold text-emerald-200 flex items-center gap-1.5">
+                        <RotateCcw className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>Tachyon Time-Reversal Matrix</span>
+                      </div>
+                      <div className="text-[10.5px] text-neutral-300 leading-snug">
+                        Inverts proper-time parity (dτ &lt; 0): spins the accretion disk &amp; rings backward in emerald tachyonic phase.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="secret-time-reversal-toggle"
+                      onClick={() => toggleSetting('secretTimeReversal')}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        settings.secretTimeReversal ? 'bg-emerald-500' : 'bg-neutral-800'
+                      }`}
+                      aria-pressed={Boolean(settings.secretTimeReversal)}
+                      aria-label="Toggle Tachyon Time-Reversal Matrix"
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          settings.secretTimeReversal ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] font-mono text-neutral-400 pt-1">
+                  <span className="text-amber-300/90">Clearance 1987 Verified · All 6 Anomalies Unlocked</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -3369,6 +3708,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...prev,
                         secret1987Unlocked: false,
                         secret1987Mode: false,
+                        secretQuasarJets: false,
+                        secretHawkingSwarm: false,
+                        secretWormholePortal: false,
+                        secretChromaticOverdrive: false,
+                        secretTimeReversal: false,
                       }));
                     }}
                     className="flex items-center gap-1 text-neutral-400 hover:text-rose-300 transition-colors cursor-pointer"
@@ -3425,7 +3769,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
               data-testid="settings-tab-panel-songs"
-              className="flex-1 min-h-0 flex flex-col bg-[#121212] text-xs overflow-hidden"
+              className="flex-1 min-h-0 min-w-0 max-w-full flex flex-col bg-[#121212] text-xs overflow-hidden overscroll-none"
             >
               {/* Scrollable Upper Songs Workspace with Custom Interactive Scroll Rail */}
               <CustomScrollWorkspace
@@ -3435,11 +3779,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 testId="songs-scroll-workspace"
                 className="px-3 sm:px-4 py-2.5 space-y-2.5"
               >
-                {/* Compact Unified Header + Transport + Filter & Audio FX Bar */}
-                <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-b from-zinc-800/65 to-[#161616] border border-zinc-800/80 space-y-2">
-                  <div className="flex items-center justify-between gap-2.5 flex-wrap">
-                    {/* Left: Clickable Song Cover + Active Song Metadata */}
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                {/* Spotify Playlist Header Card (Matching original design without top Play/Shuffle/Repeat) */}
+                <div className="p-4 sm:p-5 rounded-xl bg-gradient-to-b from-zinc-800/60 to-[#181818] border border-zinc-800/80 space-y-3.5 overflow-hidden">
+                  <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 min-w-0">
+                    <div className="flex items-center gap-4 min-w-0">
                       <button
                         type="button"
                         data-testid="songs-header-artwork-btn"
@@ -3449,7 +3792,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         }}
                         title="Click to expand song cover picture"
                         aria-label={`Expand ${activeTrackDef.title} cover picture`}
-                        className="group/art relative w-12 h-12 sm:w-14 sm:h-14 rounded-lg overflow-hidden bg-zinc-900 shadow-lg shrink-0 flex items-center justify-center border border-white/15 hover:border-[#1DB954] transition-all cursor-pointer"
+                        className="group/art relative w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-zinc-900 shadow-xl shrink-0 flex items-center justify-center border border-white/10 hover:border-[#1DB954] transition-all cursor-pointer"
                       >
                         {playerState.artworkUrl ? (
                           <img
@@ -3462,137 +3805,573 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             className="w-full h-full object-cover group-hover/art:scale-105 transition-transform"
                           />
                         ) : (
-                          <Music className="w-5 h-5 text-zinc-500" />
+                          <Music className="w-8 h-8 text-zinc-500" />
                         )}
                         <span className="absolute inset-0 bg-black/45 opacity-0 group-hover/art:opacity-100 transition-opacity flex items-center justify-center text-[9px] font-mono font-bold text-white">
                           EXPAND
                         </span>
                       </button>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="text-sm sm:text-base font-bold text-white tracking-tight truncate">
-                            {activeTrackDef.title}
-                          </h3>
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
+                          PLAYLIST · {playerState.bitrateDisplay.toUpperCase()}
+                        </div>
+                        <div>
                           <span
                             data-testid="audio-queue-validation-badge"
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-[8.5px] font-semibold"
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/35 text-amber-200/90 font-mono text-[9.5px]"
                             title="Client-side audio completeness & truncation validation passed for all queued tracks"
                           >
-                            <Check className="w-2.5 h-2.5" />
+                            <Check className="w-3 h-3 text-amber-400 shrink-0" />
                             <span>
-                              {playerState.queueValidation.verifiedQueueCount} SONGS
+                              FULL-LENGTH VERIFIED · {playerState.queueValidation.verifiedQueueCount}{' '}
+                              COMPLETE
                               {activeBytesMb ? ` · ${activeBytesMb} MB` : ''}
                             </span>
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 truncate">
-                          <span className="text-zinc-200 font-medium truncate">
+                        <h3 className="text-lg sm:text-2xl font-bold text-white tracking-tight truncate pt-0.5">
+                          {activeTrackDef.title}
+                        </h3>
+                        <div className="flex items-center gap-1.5 text-xs text-zinc-400 flex-wrap">
+                          <span className="text-zinc-100 font-semibold">
                             {playerState.artistName}
                           </span>
                           <span>·</span>
-                          <span className="font-mono text-[10px] text-zinc-400">
-                            {playerState.bitrateDisplay}
+                          <span>{activeTrackDef.badge}</span>
+                          <span>·</span>
+                          <span>{validatedCatalog.length} full songs</span>
+                          <span>·</span>
+                          <span className="font-mono text-[11px] text-zinc-300">
+                            {activeTrackDef.bpm} BPM
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Right: Transport Controls (Shuffle + Play/Pause + Repeat Track) + Audio FX Toggle + Spectrum */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <LiveSpectrumVisualizer
-                        isPlaying={playerState.isPlaying}
-                        playbackRate={playerState.playbackRate}
-                        trackId={playerState.trackId}
-                      />
+                    {/* Live 16-Band Spectrum Visualizer */}
+                    <LiveSpectrumVisualizer
+                      isPlaying={playerState.isPlaying}
+                      playbackRate={playerState.playbackRate}
+                      trackId={playerState.trackId}
+                    />
+                  </div>
+                </div>
 
-                      <div
-                        data-testid="songs-top-transport-controls"
-                        className="inline-flex items-center gap-1 px-1.5 py-1 rounded-full bg-[#1a1a1a] border border-zinc-800/90"
-                      >
-                        <button
-                          type="button"
-                          data-testid="songs-top-shuffle-btn"
-                          onClick={() => {
-                            haptics.light();
-                            setIsShuffleEnabled((s) => !s);
-                          }}
-                          aria-pressed={isShuffleEnabled}
-                          className={`p-1.5 rounded-full transition-colors cursor-pointer relative ${
-                            isShuffleEnabled
-                              ? 'text-[#1DB954] bg-[#1DB954]/15'
-                              : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                          }`}
-                          title={isShuffleEnabled ? 'Shuffle: ON' : 'Shuffle: OFF'}
-                          aria-label="Toggle Shuffle"
-                        >
-                          <Shuffle className="w-3.5 h-3.5" />
-                        </button>
+                {/* Native Time-Aligned Lyric Sync Stage (Teleprompter, Cinema Stage & Full Lyrics) */}
+                {showSubtitles && activeLyrics.length > 0 && (() => {
+                  const prev3Line =
+                    activeLyricIndex > 2 ? activeLyrics[activeLyricIndex - 3] : null;
+                  const prev2Line =
+                    activeLyricIndex > 1 ? activeLyrics[activeLyricIndex - 2] : null;
+                  const prevLine =
+                    activeLyricIndex > 0 ? activeLyrics[activeLyricIndex - 1] : null;
+                  const currLine = activeLyrics[activeLyricIndex] || activeLyrics[0];
+                  const nextLine =
+                    activeLyricIndex + 1 < activeLyrics.length
+                      ? activeLyrics[activeLyricIndex + 1]
+                      : null;
+                  const next2Line =
+                    activeLyricIndex + 2 < activeLyrics.length
+                      ? activeLyrics[activeLyricIndex + 2]
+                      : null;
+                  const next3Line =
+                    activeLyricIndex + 3 < activeLyrics.length
+                      ? activeLyrics[activeLyricIndex + 3]
+                      : null;
 
-                        <button
-                          type="button"
-                          data-testid="songs-top-play-pause-btn"
-                          onClick={() => {
-                            haptics.medium();
-                            void trapQueenPlayer.togglePlay();
-                          }}
-                          className="w-8 h-8 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black flex items-center justify-center shadow-md transition-transform hover:scale-105 cursor-pointer shrink-0"
-                          title={playerState.isPlaying ? 'Pause Song' : 'Play Song'}
-                          aria-label={playerState.isPlaying ? 'Pause Song' : 'Play Song'}
-                        >
-                          {playerState.isPlaying ? (
-                            <Pause className="w-3.5 h-3.5 fill-current" />
-                          ) : (
-                            <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                  const renderSyncedLyricWords = (text: string, progress: number) => {
+                    if (!lyricSyncMode) return <span>{text}</span>;
+                    const words = text.split(/\s+/).filter(Boolean);
+                    if (words.length <= 1) return <span>{text}</span>;
+                    const activeWordFloat = progress * words.length;
+                    const activeWordIdx = Math.min(
+                      words.length - 1,
+                      Math.floor(activeWordFloat)
+                    );
+                    return (
+                      <span className="inline">
+                        {words.map((word, wIdx) => {
+                          const isSpoken = wIdx < activeWordIdx;
+                          const isCurrentWord = wIdx === activeWordIdx;
+                          return (
+                            <span
+                              key={wIdx}
+                              className={`transition-colors duration-75 ${
+                                isCurrentWord
+                                  ? 'text-[#1ed760] drop-shadow-[0_0_8px_rgba(29,185,84,0.55)] underline decoration-[#1DB954]/80 decoration-2 underline-offset-4'
+                                  : isSpoken
+                                    ? 'text-white'
+                                    : 'text-zinc-300/75'
+                              }`}
+                            >
+                              {word}
+                              {wIdx < words.length - 1 ? ' ' : ''}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    );
+                  };
+
+                  return (
+                    <div
+                      data-testid="spotify-live-subtitles-card"
+                      className="rounded-xl bg-gradient-to-br from-[#1b2e22]/95 via-[#161a17] to-[#121212] border border-[#1DB954]/45 p-3 sm:p-4 space-y-2.5 shadow-xl overflow-hidden"
+                    >
+                      {/* Top Header & Native Lyric Sync Mode Controls Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-white/10">
+                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                          <button
+                            type="button"
+                            data-testid="lyric-sync-mode-toggle-btn"
+                            aria-pressed={lyricSyncMode}
+                            onClick={() => {
+                              haptics.light();
+                              setLyricSyncMode((prev) => !prev);
+                            }}
+                            title="Toggle Lyric Sync Mode to lock lyrics natively to playback time"
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border font-mono text-[9.5px] font-bold uppercase tracking-wider shrink-0 transition-colors cursor-pointer ${
+                              lyricSyncMode
+                                ? 'bg-[#1DB954]/20 border-[#1DB954]/60 text-[#1ed760]'
+                                : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                lyricSyncMode
+                                  ? `bg-[#1DB954] ${playerState.isPlaying ? 'animate-pulse' : ''}`
+                                  : 'bg-zinc-500'
+                              }`}
+                            />
+                            <span>Lyric Sync Mode: {lyricSyncMode ? 'ON' : 'OFF'}</span>
+                          </button>
+
+                          <span className="px-2 py-0.5 rounded bg-black/40 border border-white/10 font-mono text-[9.5px] text-zinc-300 tabular-nums">
+                            Line {Math.min(activeLyrics.length, activeLyricIndex + 1)} /{' '}
+                            {activeLyrics.length}
+                          </span>
+
+                          {/* Fine-Tune Vocal Sync Offset Calibrator (-0.25s / +0.25s) */}
+                          <div
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-black/45 border border-zinc-700/80 font-mono text-[9.5px]"
+                            title="Fine-tune vocal lyric sync offset in 0.25s steps"
+                          >
+                            <button
+                              type="button"
+                              data-testid="lyric-offset-minus-btn"
+                              onClick={() => {
+                                haptics.light();
+                                setLyricSyncOffsetSec((v) =>
+                                  Math.max(-5, Math.round((v - 0.25) * 100) / 100)
+                                );
+                              }}
+                              className="px-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white cursor-pointer"
+                              title="Delay lyrics by 0.25s"
+                            >
+                              -0.25s
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                setLyricSyncOffsetSec(0);
+                              }}
+                              className={`px-1 rounded cursor-pointer tabular-nums ${
+                                Math.abs(lyricSyncOffsetSec) > 0.01
+                                  ? 'text-[#1ed760] font-bold'
+                                  : 'text-zinc-400'
+                              }`}
+                              title="Reset lyric sync offset to 0.0s"
+                            >
+                              {lyricSyncOffsetSec > 0
+                                ? `+${lyricSyncOffsetSec.toFixed(2)}s`
+                                : `${lyricSyncOffsetSec.toFixed(2)}s`}
+                            </button>
+                            <button
+                              type="button"
+                              data-testid="lyric-offset-plus-btn"
+                              onClick={() => {
+                                haptics.light();
+                                setLyricSyncOffsetSec((v) =>
+                                  Math.min(5, Math.round((v + 0.25) * 100) / 100)
+                                );
+                              }}
+                              className="px-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white cursor-pointer"
+                              title="Advance lyrics by 0.25s"
+                            >
+                              +0.25s
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* View Mode Switcher: Teleprompter / Cinema Stage / Full Lyrics / Auto-Scroll / Hide */}
+                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                          {showFullLyricsCard && !lyricsCinemaMode && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                setLyricsAutoFollow((prev) => !prev);
+                              }}
+                              className={`px-2 py-0.5 rounded-full font-mono text-[9.5px] font-semibold border transition-colors cursor-pointer ${
+                                lyricsAutoFollow
+                                  ? 'bg-[#1DB954]/20 text-[#1ed760] border-[#1DB954]/50'
+                                  : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                              }`}
+                              title="Lock scroll position to currently spoken line"
+                            >
+                              {lyricsAutoFollow ? 'Auto-Scroll: ON' : 'Auto-Scroll: OFF'}
+                            </button>
                           )}
-                        </button>
 
-                        <button
-                          type="button"
-                          data-testid="songs-top-repeat-btn"
-                          onClick={() => {
-                            haptics.light();
-                            trapQueenPlayer.setLoopTrack(!playerState.loopTrack);
-                          }}
-                          aria-pressed={playerState.loopTrack}
-                          className={`p-1.5 rounded-full transition-colors cursor-pointer relative ${
-                            playerState.loopTrack
-                              ? 'text-[#1DB954] bg-[#1DB954]/15'
-                              : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                          }`}
-                          title={playerState.loopTrack ? 'Repeat Track: ON' : 'Repeat Track: OFF'}
-                          aria-label="Repeat Track"
-                        >
-                          <Repeat className="w-3.5 h-3.5" />
-                        </button>
+                          <button
+                            type="button"
+                            data-testid="toggle-teleprompter-lyrics-btn"
+                            onClick={() => {
+                              haptics.light();
+                              setShowFullLyricsCard(false);
+                              setLyricsCinemaMode(false);
+                            }}
+                            className={`px-2.5 py-0.5 rounded-full font-mono text-[10px] font-semibold border transition-colors cursor-pointer ${
+                              !showFullLyricsCard && !lyricsCinemaMode
+                                ? 'bg-[#1DB954] text-black border-[#1DB954]'
+                                : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 border-zinc-700'
+                            }`}
+                            title="Compact 5-line rolling teleprompter lyric sync"
+                          >
+                            Teleprompter
+                          </button>
+
+                          <button
+                            type="button"
+                            data-testid="toggle-cinema-lyrics-btn"
+                            onClick={() => {
+                              haptics.light();
+                              setLyricsCinemaMode((prev) => {
+                                const next = !prev;
+                                if (next) {
+                                  setShowFullLyricsCard(false);
+                                }
+                                return next;
+                              });
+                            }}
+                            className={`px-2.5 py-0.5 rounded-full font-mono text-[10px] font-semibold border transition-colors cursor-pointer ${
+                              lyricsCinemaMode
+                                ? 'bg-[#1DB954] text-black border-[#1DB954]'
+                                : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 border-zinc-700'
+                            }`}
+                            title="Expand large-type Cinema Lyric Stage synced 1:1 with Teleprompter"
+                          >
+                            Cinema Stage
+                          </button>
+
+                          <button
+                            type="button"
+                            data-testid="toggle-full-lyrics-view-btn"
+                            onClick={() => {
+                              haptics.light();
+                              setShowFullLyricsCard((prev) => {
+                                const next = !prev;
+                                if (next) {
+                                  setLyricsCinemaMode(false);
+                                }
+                                return next;
+                              });
+                            }}
+                            className={`px-2.5 py-0.5 rounded-full font-mono text-[10px] font-semibold border transition-colors cursor-pointer ${
+                              showFullLyricsCard && !lyricsCinemaMode
+                                ? 'bg-[#1DB954] text-black border-[#1DB954]'
+                                : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 border-zinc-700'
+                            }`}
+                            title="Browse all song lyrics in a scrollable list"
+                          >
+                            Full Lyrics
+                          </button>
+
+                          <button
+                            type="button"
+                            data-testid="hide-subtitles-btn"
+                            onClick={() => {
+                              haptics.light();
+                              setShowSubtitles(false);
+                            }}
+                            title="Hide Lyrics"
+                            className="px-2 py-0.5 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 font-mono text-[10px] cursor-pointer"
+                          >
+                            Hide
+                          </button>
+                        </div>
                       </div>
 
-                      <button
-                        type="button"
-                        data-testid="toggle-songs-audio-fx-btn"
-                        onClick={() => {
-                          haptics.light();
-                          setShowSongsAudioFx((prev) => !prev);
-                        }}
-                        aria-expanded={showSongsAudioFx}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full font-mono text-[10px] font-semibold border transition-colors cursor-pointer ${
-                          showSongsAudioFx ||
-                          Math.abs(playerState.playbackRate - 1.0) > 0.01 ||
-                          playerState.qualityPreset !== 'flat_reference'
-                            ? 'bg-zinc-200 text-black border-white'
-                            : 'bg-[#202020] hover:bg-[#2a2a2a] text-zinc-300 border-zinc-700/80'
-                        }`}
-                        title="Toggle compact Playback Speed & Equalizer controls"
-                      >
-                        <Sliders className="w-3 h-3" />
-                        <span>Audio FX</span>
-                      </button>
-                    </div>
-                  </div>
+                      {!showFullLyricsCard && !lyricsCinemaMode ? (
+                        /* 5-Line Rolling Teleprompter View */
+                        <div className="space-y-1.5 py-1 px-1">
+                          {prev2Line && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                trapQueenPlayer.seek(prev2Line.timeSec);
+                              }}
+                              className="block w-full text-left text-[11px] text-zinc-600 hover:text-zinc-400 truncate transition-colors cursor-pointer"
+                            >
+                              {prev2Line.text}
+                            </button>
+                          )}
+                          {prevLine && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                trapQueenPlayer.seek(prevLine.timeSec);
+                              }}
+                              className="block w-full text-left text-xs text-zinc-400 hover:text-zinc-200 truncate transition-colors cursor-pointer"
+                            >
+                              {prevLine.text}
+                            </button>
+                          )}
 
-                  {/* Slim Second Row: Category Filter Pills + Search Input */}
-                  <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-zinc-800/60">
-                    <div className="flex items-center gap-1 flex-wrap">
+                          {/* Active Line with Native Word-by-Word Highlight & Progress Bar */}
+                          <div className="rounded-lg bg-black/35 border border-[#1DB954]/40 px-3 py-2 space-y-1.5">
+                            <button
+                              type="button"
+                              data-testid="spotify-active-subtitle-line"
+                              onClick={() => {
+                                haptics.light();
+                                trapQueenPlayer.seek(currLine.timeSec);
+                              }}
+                              className="flex items-baseline justify-between gap-3 w-full text-left group cursor-pointer"
+                            >
+                              <span className="text-sm sm:text-base font-extrabold tracking-tight leading-snug">
+                                {renderSyncedLyricWords(currLine.text, activeLineProgress)}
+                              </span>
+                              <span className="font-mono text-[10px] text-[#1ed760] shrink-0 tabular-nums">
+                                {Math.floor(currLine.timeSec / 60)}:
+                                {Math.floor(currLine.timeSec % 60)
+                                  .toString()
+                                  .padStart(2, '0')}
+                              </span>
+                            </button>
+
+                            {/* Live Syllable / Line Timecode Progress Bar */}
+                            <div className="w-full h-1 rounded-full bg-zinc-800/90 overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-[#1DB954] to-[#1ed760] transition-[width] duration-75"
+                                style={{
+                                  width: `${Math.round(activeLineProgress * 100)}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {nextLine && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                trapQueenPlayer.seek(nextLine.timeSec);
+                              }}
+                              className="block w-full text-left text-xs text-zinc-300/90 hover:text-white truncate transition-colors cursor-pointer font-medium"
+                            >
+                              {nextLine.text}
+                            </button>
+                          )}
+                          {next2Line && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                trapQueenPlayer.seek(next2Line.timeSec);
+                              }}
+                              className="block w-full text-left text-[11px] text-zinc-500 hover:text-zinc-300 truncate transition-colors cursor-pointer"
+                            >
+                              {next2Line.text}
+                            </button>
+                          )}
+                        </div>
+                      ) : lyricsCinemaMode ? (
+                        /* 7-Line Cinema Stage View — Synchronized 1:1 with Teleprompter Active Line */
+                        <div
+                          data-testid="spotify-cinema-lyrics-stage"
+                          className="rounded-xl bg-gradient-to-b from-black/55 via-[#0d1811]/90 to-black/65 border border-[#1DB954]/35 px-4 py-4 sm:px-6 sm:py-5 space-y-2.5 text-center shadow-inner"
+                        >
+                          {prev3Line && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                trapQueenPlayer.seek(prev3Line.timeSec);
+                              }}
+                              className="block w-full text-center text-xs text-zinc-600 hover:text-zinc-400 truncate transition-colors cursor-pointer"
+                            >
+                              {prev3Line.text}
+                            </button>
+                          )}
+                          {prev2Line && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                trapQueenPlayer.seek(prev2Line.timeSec);
+                              }}
+                              className="block w-full text-center text-xs sm:text-sm text-zinc-500 hover:text-zinc-300 truncate transition-colors cursor-pointer"
+                            >
+                              {prev2Line.text}
+                            </button>
+                          )}
+                          {prevLine && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                trapQueenPlayer.seek(prevLine.timeSec);
+                              }}
+                              className="block w-full text-center text-sm sm:text-base text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer font-medium"
+                            >
+                              {prevLine.text}
+                            </button>
+                          )}
+
+                          {/* Cinema Center Spotlight Card — Identical Active Lyric & Progress Sync as Teleprompter */}
+                          <div className="rounded-xl bg-black/60 border border-[#1DB954]/60 px-4 py-3.5 sm:px-5 sm:py-4 space-y-2.5 shadow-[0_0_28px_rgba(29,185,84,0.18)]">
+                            <button
+                              type="button"
+                              data-testid="spotify-active-subtitle-line"
+                              onClick={() => {
+                                haptics.light();
+                                trapQueenPlayer.seek(currLine.timeSec);
+                              }}
+                              className="flex flex-col items-center justify-center gap-1.5 w-full text-center cursor-pointer"
+                            >
+                              <span className="text-base sm:text-xl md:text-2xl font-extrabold tracking-tight leading-snug">
+                                {renderSyncedLyricWords(currLine.text, activeLineProgress)}
+                              </span>
+                              <span className="font-mono text-[10px] text-[#1ed760] px-2 py-0.5 rounded-full bg-[#1DB954]/15 border border-[#1DB954]/35 tabular-nums">
+                                {Math.floor(currLine.timeSec / 60)}:
+                                {Math.floor(currLine.timeSec % 60)
+                                  .toString()
+                                  .padStart(2, '0')}{' '}
+                                · Line {Math.min(activeLyrics.length, activeLyricIndex + 1)} of{' '}
+                                {activeLyrics.length}
+                              </span>
+                            </button>
+
+                            {/* Cinema Live Syllable / Line Progress Bar */}
+                            <div className="w-full h-1.5 rounded-full bg-zinc-800/90 overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-[#1DB954] to-[#1ed760] transition-[width] duration-75"
+                                style={{
+                                  width: `${Math.round(activeLineProgress * 100)}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {nextLine && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                trapQueenPlayer.seek(nextLine.timeSec);
+                              }}
+                              className="block w-full text-center text-sm sm:text-base text-zinc-200 hover:text-white transition-colors cursor-pointer font-semibold"
+                            >
+                              {nextLine.text}
+                            </button>
+                          )}
+                          {next2Line && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                trapQueenPlayer.seek(next2Line.timeSec);
+                              }}
+                              className="block w-full text-center text-xs sm:text-sm text-zinc-400 hover:text-zinc-200 truncate transition-colors cursor-pointer"
+                            >
+                              {next2Line.text}
+                            </button>
+                          )}
+                          {next3Line && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                trapQueenPlayer.seek(next3Line.timeSec);
+                              }}
+                              className="block w-full text-center text-xs text-zinc-500 hover:text-zinc-300 truncate transition-colors cursor-pointer"
+                            >
+                              {next3Line.text}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        /* Full Lyrics Scrollable View */
+                        <div
+                          ref={lyricsScrollContainerRef}
+                          data-testid="spotify-full-lyrics-scroll"
+                          className="relative max-h-60 overflow-y-auto pr-1.5 space-y-1.5 py-1.5 scroll-smooth"
+                        >
+                          {activeLyrics.map((line, lIdx) => {
+                            const isCurrent = lIdx === activeLyricIndex;
+                            const isPast = lIdx < activeLyricIndex;
+                            return (
+                              <button
+                                key={`${line.timeSec}-${lIdx}`}
+                                type="button"
+                                data-lyric-idx={lIdx}
+                                onClick={() => {
+                                  haptics.light();
+                                  trapQueenPlayer.seek(line.timeSec);
+                                }}
+                                className={`w-full flex flex-col gap-1 px-3 py-2 rounded-lg text-left transition-all cursor-pointer ${
+                                  isCurrent
+                                    ? 'bg-[#1DB954]/20 border border-[#1DB954]/55 text-white font-extrabold shadow-md text-sm sm:text-[15px]'
+                                    : isPast
+                                      ? 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] font-medium text-xs'
+                                      : 'text-zinc-300 hover:text-white hover:bg-white/[0.04] font-semibold text-xs'
+                                }`}
+                              >
+                                <div className="w-full flex items-baseline justify-between gap-3">
+                                  <span className="leading-snug">
+                                    {isCurrent
+                                      ? renderSyncedLyricWords(line.text, activeLineProgress)
+                                      : line.text}
+                                  </span>
+                                  <span
+                                    className={`font-mono text-[10px] shrink-0 tabular-nums ${
+                                      isCurrent ? 'text-[#1ed760]' : 'text-zinc-500'
+                                    }`}
+                                  >
+                                    {Math.floor(line.timeSec / 60)}:
+                                    {Math.floor(line.timeSec % 60)
+                                      .toString()
+                                      .padStart(2, '0')}
+                                  </span>
+                                </div>
+                                {isCurrent && (
+                                  <div className="w-full h-1 rounded-full bg-black/50 overflow-hidden mt-0.5">
+                                    <div
+                                      className="h-full bg-[#1ed760] transition-[width] duration-75"
+                                      style={{
+                                        width: `${Math.round(activeLineProgress * 100)}%`,
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Category Filter Pills + Search Input + Subtitles & Audio FX Toggles */}
+                <div className="p-3 rounded-xl bg-[#181818] border border-zinc-800/80 space-y-2.5 overflow-hidden">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                       {(['all', 'Hip-Hop / Trap', 'Nightcore', 'Electronic / Alt', 'Melancholy'] as const).map(
                         (cat) => (
                           <button
@@ -3602,7 +4381,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               haptics.light();
                               setSongCategoryFilter(cat);
                             }}
-                            className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                            className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
                               songCategoryFilter === cat
                                 ? 'bg-white text-black font-semibold'
                                 : 'bg-[#232323] hover:bg-[#2a2a2a] text-zinc-300'
@@ -3614,24 +4393,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       )}
                     </div>
 
-                    <div className="relative w-full sm:w-48">
-                      <Search className="w-3 h-3 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type="text"
-                        value={songSearchQuery}
-                        onChange={(e) => setSongSearchQuery(e.target.value)}
-                        placeholder="Search songs in library"
-                        aria-label="Search songs in library"
-                        className="w-full pl-7 pr-2.5 py-1 rounded-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#242424] border border-transparent focus:border-zinc-600 text-white placeholder-zinc-400 text-[11px] outline-none transition-colors"
-                      />
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <div className="relative flex-1 sm:w-48">
+                        <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={songSearchQuery}
+                          onChange={(e) => setSongSearchQuery(e.target.value)}
+                          placeholder="Search songs in library"
+                          aria-label="Search songs in library"
+                          className="w-full pl-8 pr-3 py-1 rounded-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#242424] border border-transparent focus:border-zinc-600 text-white placeholder-zinc-400 text-[11px] outline-none transition-colors"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        data-testid="toggle-songs-subtitles-btn"
+                        onClick={() => {
+                          haptics.light();
+                          setShowSubtitles((prev) => {
+                            const next = !prev;
+                            if (next) setLyricSyncMode(true);
+                            return next;
+                          });
+                        }}
+                        aria-pressed={showSubtitles && lyricSyncMode}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-mono text-[10.5px] font-semibold border transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
+                          showSubtitles && lyricSyncMode
+                            ? 'bg-[#1DB954] text-black border-[#1DB954]'
+                            : 'bg-[#232323] hover:bg-[#2a2a2a] text-zinc-200 border-zinc-700/80'
+                        }`}
+                        title="Toggle Native Lyric Sync Mode"
+                      >
+                        <Music className="w-3 h-3 shrink-0" />
+                        <span>Lyric Sync Mode</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        data-testid="toggle-songs-audio-fx-btn"
+                        onClick={() => {
+                          haptics.light();
+                          setShowSongsAudioFx((prev) => !prev);
+                        }}
+                        aria-expanded={showSongsAudioFx}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-mono text-[10.5px] font-semibold border transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
+                          showSongsAudioFx ||
+                          Math.abs(playerState.playbackRate - 1.0) > 0.01 ||
+                          playerState.qualityPreset !== 'flat_reference'
+                            ? 'bg-white text-black border-white'
+                            : 'bg-[#232323] hover:bg-[#2a2a2a] text-zinc-200 border-zinc-700/80'
+                        }`}
+                        title="Toggle Playback Speed & Equalizer controls"
+                      >
+                        <Sliders className="w-3 h-3 shrink-0" />
+                        <span>Audio FX</span>
+                      </button>
                     </div>
                   </div>
 
-                  {/* Collapsible Compact Speed & Equalizer Drawer (Collapsed by default to save space) */}
+                  {/* Collapsible Speed & Equalizer Drawer */}
                   {showSongsAudioFx && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2 border-t border-zinc-800/80">
-                      {/* Compact Playback Speed Control */}
-                      <div className="p-2.5 rounded-lg bg-[#121212] border border-zinc-800/80 space-y-1.5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2.5 border-t border-zinc-800/80">
+                      {/* Playback Speed Control */}
+                      <div className="p-3 rounded-lg bg-[#121212] border border-zinc-800/90 space-y-2">
                         <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
                           <span className="text-zinc-200 font-semibold">
                             Speed · {playerState.playbackRate.toFixed(2)}x
@@ -3641,7 +4466,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             onClick={() =>
                               trapQueenPlayer.setPreservesPitch(!playerState.preservesPitch)
                             }
-                            className={`px-1.5 py-0.5 rounded border text-[9px] font-mono cursor-pointer transition-colors whitespace-nowrap ${
+                            className={`px-2 py-0.5 rounded border text-[9.5px] font-mono cursor-pointer transition-colors whitespace-nowrap ${
                               !playerState.preservesPitch
                                 ? 'bg-zinc-200 text-black border-white font-semibold'
                                 : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white'
@@ -3652,7 +4477,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
 
                         <div className="flex items-center gap-2 font-mono text-[9.5px]">
-                          <span className="text-zinc-500">0.5x</span>
+                          <span className="text-zinc-500 shrink-0">0.5x</span>
                           <input
                             type="range"
                             data-testid="song-speed-slider"
@@ -3664,12 +4489,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             onChange={(e) =>
                               trapQueenPlayer.setPlaybackRate(parseFloat(e.target.value))
                             }
-                            className="flex-1 accent-white cursor-pointer h-1"
+                            className="flex-1 min-w-0 accent-white cursor-pointer h-1"
                           />
-                          <span className="text-zinc-500">2.0x</span>
+                          <span className="text-zinc-500 shrink-0">2.0x</span>
                         </div>
 
-                        <div className="grid grid-cols-5 gap-1">
+                        <div className="grid grid-cols-5 gap-1.5">
                           {SONG_SPEED_PRESETS.map((preset) => {
                             const isRateActive =
                               Math.abs(playerState.playbackRate - preset.rate) < 0.02;
@@ -3682,7 +4507,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                   haptics.light();
                                   trapQueenPlayer.setPlaybackRate(preset.rate);
                                 }}
-                                className={`py-0.5 px-1 rounded border font-mono text-[9px] font-semibold transition-colors cursor-pointer text-center whitespace-nowrap ${
+                                className={`py-1 px-1 rounded border font-mono text-[9.5px] font-semibold transition-colors cursor-pointer text-center whitespace-nowrap ${
                                   isRateActive
                                     ? 'bg-white text-black border-white'
                                     : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
@@ -3695,21 +4520,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Compact Equalizer & Audio Quality Control */}
+                      {/* Equalizer & Audio Quality Control */}
                       <div
                         data-testid="songs-dsp-mastering-panel"
-                        className="p-2.5 rounded-lg bg-[#121212] border border-zinc-800/80 space-y-1.5"
+                        className="p-3 rounded-lg bg-[#121212] border border-zinc-800/90 space-y-2"
                       >
                         <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
                           <span className="text-zinc-200 font-semibold">Equalizer &amp; Fidelity</span>
-                          <span className="text-zinc-400 tabular-nums text-[9px]">
+                          <span className="text-zinc-400 tabular-nums text-[9.5px]">
                             {playerState.bassDb >= 0 ? `+${playerState.bassDb}` : playerState.bassDb} /{' '}
                             {playerState.midDb >= 0 ? `+${playerState.midDb}` : playerState.midDb} /{' '}
                             {playerState.trebleDb >= 0 ? `+${playerState.trebleDb}` : playerState.trebleDb} dB
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-1">
+                        <div className="grid grid-cols-2 gap-1.5">
                           {AUDIO_QUALITY_PRESETS.map(
                             (preset: { id: AudioQualityPresetId; label: string; shortTag: string }) => {
                               const isPresetActive = playerState.qualityPreset === preset.id;
@@ -3722,22 +4547,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     haptics.light();
                                     trapQueenPlayer.setQualityPreset(preset.id);
                                   }}
-                                  className={`p-1 rounded border text-left font-mono transition-colors cursor-pointer ${
+                                  className={`px-2 py-1 rounded border text-left font-mono transition-colors cursor-pointer min-w-0 ${
                                     isPresetActive
                                       ? 'bg-zinc-800 border-zinc-400 text-white'
                                       : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
                                   }`}
                                 >
-                                  <div className="text-[8.5px] font-bold truncate">{preset.label}</div>
+                                  <div className="text-[9.5px] font-bold truncate">{preset.label}</div>
                                 </button>
                               );
                             }
                           )}
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 font-mono text-[9px]">
-                          <div>
-                            <div className="flex justify-between text-zinc-400">
+                        <div className="grid grid-cols-3 gap-2.5 font-mono text-[9.5px] pt-0.5">
+                          <div className="min-w-0">
+                            <div className="flex justify-between text-zinc-400 mb-0.5">
                               <span>Bass</span>
                               <span className="text-zinc-200 tabular-nums">
                                 {playerState.bassDb >= 0 ? `+${playerState.bassDb}` : playerState.bassDb}dB
@@ -3757,8 +4582,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             />
                           </div>
 
-                          <div>
-                            <div className="flex justify-between text-zinc-400">
+                          <div className="min-w-0">
+                            <div className="flex justify-between text-zinc-400 mb-0.5">
                               <span>Mid</span>
                               <span className="text-zinc-200 tabular-nums">
                                 {playerState.midDb >= 0 ? `+${playerState.midDb}` : playerState.midDb}dB
@@ -3778,8 +4603,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             />
                           </div>
 
-                          <div>
-                            <div className="flex justify-between text-zinc-400">
+                          <div className="min-w-0">
+                            <div className="flex justify-between text-zinc-400 mb-0.5">
                               <span>Treble</span>
                               <span className="text-zinc-200 tabular-nums">
                                 {playerState.trebleDb >= 0 ? `+${playerState.trebleDb}` : playerState.trebleDb}dB
@@ -3805,12 +4630,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Spotify Tracklist Table */}
-                <div className="rounded-xl bg-[#161616] border border-zinc-800/80 overflow-hidden">
+                <div className="rounded-xl bg-[#161616] border border-zinc-800/80 overflow-hidden max-w-full">
                   {/* Table Column Headers */}
-                  <div className="grid grid-cols-[28px_1fr_56px] sm:grid-cols-[32px_1fr_150px_64px] items-center gap-3 px-3.5 py-1.5 border-b border-zinc-800/80 text-[11px] text-zinc-400 font-medium">
+                  <div className="grid grid-cols-[28px_minmax(0,1fr)_48px] sm:grid-cols-[32px_minmax(0,1fr)_140px_56px] items-center gap-2.5 sm:gap-3 px-3 sm:px-3.5 py-1.5 border-b border-zinc-800/80 text-[11px] text-zinc-400 font-medium">
                     <span className="text-center">#</span>
-                    <span>Title (click cover to expand)</span>
-                    <span className="hidden sm:block">Genre · Tempo</span>
+                    <span className="truncate">Title (click cover to expand)</span>
+                    <span className="hidden sm:block truncate">Genre · Tempo</span>
                     <span className="flex justify-end pr-1">
                       <Clock className="w-3.5 h-3.5" />
                     </span>
@@ -3818,7 +4643,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                   {/* Track Rows */}
                   <div
-                    className="divide-y divide-zinc-800/40"
+                    className="divide-y divide-zinc-800/40 overflow-hidden"
                     role="group"
                     aria-label="Song Library Selector"
                   >
@@ -3838,7 +4663,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               trapQueenPlayer.selectTrack(track.id, true);
                             }
                           }}
-                          className={`w-full grid grid-cols-[28px_1fr_56px] sm:grid-cols-[32px_1fr_150px_64px] items-center gap-3 px-3.5 py-1.5 text-left transition-colors cursor-pointer group ${
+                          className={`w-full max-w-full grid grid-cols-[28px_minmax(0,1fr)_48px] sm:grid-cols-[32px_minmax(0,1fr)_140px_56px] items-center gap-2.5 sm:gap-3 px-3 sm:px-3.5 py-1.5 text-left transition-colors cursor-pointer group overflow-hidden ${
                             isSelected
                               ? 'bg-white/[0.08]'
                               : 'hover:bg-white/[0.05]'
@@ -3867,7 +4692,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           </div>
 
                           {/* Cover (Click to Expand) + Title + Artist */}
-                          <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 overflow-hidden">
                             <div
                               role="button"
                               tabIndex={0}
@@ -3904,16 +4729,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 <Music className="w-4 h-4 text-zinc-500" />
                               )}
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1 overflow-hidden">
                               <div
-                                className={`text-xs font-semibold truncate flex items-center gap-1.5 ${
+                                className={`text-xs font-semibold truncate ${
                                   isSelected ? 'text-[#1DB954]' : 'text-white'
                                 }`}
                               >
-                                <span className="truncate">{track.title}</span>
-                                <span className="font-normal text-zinc-400 shrink-0">
-                                  ({track.subtitle})
-                                </span>
+                                {track.title}
+                                {track.subtitle && track.subtitle !== track.artistName ? (
+                                  <span className="font-normal text-zinc-400 ml-1.5">
+                                    ({track.subtitle})
+                                  </span>
+                                ) : null}
                               </div>
                               <div className="text-[11px] text-zinc-400 truncate">
                                 {track.artistName}
@@ -3937,172 +4764,177 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </CustomScrollWorkspace>
 
-              {/* Sticky Bottom Spotify Now-Playing Bar */}
-              <div className="px-4 py-2 bg-[#181818] border-t border-zinc-800/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0">
-                {/* Left: Clickable Mini Cover + Active Song Info */}
-                <div className="flex items-center gap-3 min-w-0 sm:w-52">
-                  <button
-                    type="button"
-                    data-testid="songs-bottom-artwork-btn"
-                    onClick={() => {
-                      haptics.light();
-                      setExpandedArtworkTrack(activeTrackDef);
-                    }}
-                    title="Click to expand song cover picture"
-                    aria-label={`Expand ${activeTrackDef.title} cover picture`}
-                    className="w-10 h-10 rounded overflow-hidden bg-zinc-900 shrink-0 flex items-center justify-center border border-white/10 hover:border-[#1DB954] transition-all cursor-zoom-in"
+              {/* Expanded Song Artwork Lightbox Modal */}
+              {expandedArtworkTrack && (
+                <div
+                  data-testid="expanded-song-artwork-modal"
+                  onClick={() => setExpandedArtworkTrack(null)}
+                  className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.92 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="relative max-w-md w-full bg-[#161616] border border-zinc-700/80 rounded-2xl p-4 shadow-2xl flex flex-col items-center gap-3.5 text-center"
                   >
-                    {playerState.artworkUrl ? (
-                      <img
-                        src={playerState.artworkUrl}
-                        alt={activeTrackDef.title}
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).style.display = 'none';
-                        }}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <Music className="w-4 h-4 text-zinc-500" />
-                    )}
-                  </button>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-white truncate">
-                      {activeTrackDef.title}
-                    </div>
-                    <div className="text-[11px] text-zinc-400 truncate">
-                      {playerState.artistName}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Expanded Song Artwork Lightbox Modal */}
-                {expandedArtworkTrack && (
-                  <div
-                    data-testid="expanded-song-artwork-modal"
-                    onClick={() => setExpandedArtworkTrack(null)}
-                    className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
-                  >
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.92 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.18, ease: 'easeOut' }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="relative max-w-md w-full bg-[#161616] border border-zinc-700/80 rounded-2xl p-4 shadow-2xl flex flex-col items-center gap-3.5 text-center"
-                    >
-                      <button
-                        type="button"
-                        data-testid="close-expanded-artwork-btn"
-                        onClick={() => setExpandedArtworkTrack(null)}
-                        aria-label="Close expanded song cover"
-                        className="absolute top-3 right-3 p-1.5 rounded-full bg-black/70 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer z-10"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-
-                      <div className="w-64 h-64 sm:w-80 sm:h-80 rounded-xl overflow-hidden bg-zinc-900 border border-white/15 shadow-2xl flex items-center justify-center">
-                        {expandedArtworkTrack.artworkUrl ? (
-                          <img
-                            data-testid="expanded-song-artwork-img"
-                            src={getHighResSongArtworkUrl(expandedArtworkTrack.artworkUrl)}
-                            alt={`${expandedArtworkTrack.title} expanded cover`}
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <Music className="w-16 h-16 text-zinc-600" />
-                        )}
-                      </div>
-
-                      <div className="space-y-1 max-w-full px-2">
-                        <h4 className="text-base sm:text-lg font-bold text-white truncate">
-                          {expandedArtworkTrack.title}
-                        </h4>
-                        <p className="text-xs text-zinc-300 truncate">
-                          {expandedArtworkTrack.artistName}
-                        </p>
-                        <div className="flex items-center justify-center gap-2 text-[10px] font-mono text-zinc-400 pt-0.5">
-                          <span>{expandedArtworkTrack.genreTag || 'Track'}</span>
-                          <span>·</span>
-                          <span>{expandedArtworkTrack.durationLabel}</span>
-                          <span>·</span>
-                          <span>{expandedArtworkTrack.bpm} BPM</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          type="button"
-                          data-testid="expanded-artwork-play-btn"
-                          onClick={() => {
-                            haptics.medium();
-                            if (playerState.trackId === expandedArtworkTrack.id) {
-                              void trapQueenPlayer.togglePlay();
-                            } else {
-                              trapQueenPlayer.selectTrack(expandedArtworkTrack.id, true);
-                            }
-                          }}
-                          className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black font-semibold text-xs transition-transform hover:scale-105 cursor-pointer"
-                        >
-                          {playerState.trackId === expandedArtworkTrack.id &&
-                          playerState.isPlaying ? (
-                            <>
-                              <Pause className="w-3.5 h-3.5 fill-current" />
-                              <span>Pause</span>
-                            </>
-                          ) : (
-                            <>
-                              <Play className="w-3.5 h-3.5 fill-current" />
-                              <span>Play Song</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setExpandedArtworkTrack(null)}
-                          className="px-3.5 py-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
-                        >
-                          Close
-                        </button>
-                      </div>
-                    </motion.div>
-                  </div>
-                )}
-
-                {/* Center: Spotify Transport Controls + Timeline Scrubber */}
-                <div className="flex-1 max-w-md flex flex-col items-center gap-1.5">
-                  <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      data-testid="jukebox-prev-btn"
+                      data-testid="close-expanded-artwork-btn"
+                      onClick={() => setExpandedArtworkTrack(null)}
+                      aria-label="Close expanded song cover"
+                      className="absolute top-3 right-3 p-1.5 rounded-full bg-black/70 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer z-10"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+
+                    <div className="w-64 h-64 sm:w-80 sm:h-80 rounded-xl overflow-hidden bg-zinc-900 border border-white/15 shadow-2xl flex items-center justify-center">
+                      {expandedArtworkTrack.artworkUrl ? (
+                        <img
+                          data-testid="expanded-song-artwork-img"
+                          src={getHighResSongArtworkUrl(expandedArtworkTrack.artworkUrl)}
+                          alt={`${expandedArtworkTrack.title} expanded cover`}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Music className="w-16 h-16 text-zinc-600" />
+                      )}
+                    </div>
+
+                    <div className="space-y-1 max-w-full px-2">
+                      <h4 className="text-base sm:text-lg font-bold text-white truncate">
+                        {expandedArtworkTrack.title}
+                      </h4>
+                      <p className="text-xs text-zinc-300 truncate">
+                        {expandedArtworkTrack.artistName}
+                      </p>
+                      <div className="flex items-center justify-center gap-2 text-[10px] font-mono text-zinc-400 pt-0.5">
+                        <span>{expandedArtworkTrack.genreTag || 'Track'}</span>
+                        <span>·</span>
+                        <span>{expandedArtworkTrack.durationLabel}</span>
+                        <span>·</span>
+                        <span>{expandedArtworkTrack.bpm} BPM</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        data-testid="expanded-artwork-play-btn"
+                        onClick={() => {
+                          haptics.medium();
+                          if (playerState.trackId === expandedArtworkTrack.id) {
+                            void trapQueenPlayer.togglePlay();
+                          } else {
+                            trapQueenPlayer.selectTrack(expandedArtworkTrack.id, true);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black font-semibold text-xs transition-transform hover:scale-105 cursor-pointer"
+                      >
+                        {playerState.trackId === expandedArtworkTrack.id &&
+                        playerState.isPlaying ? (
+                          <>
+                            <Pause className="w-3.5 h-3.5 fill-current" />
+                            <span>Pause</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            <span>Play Song</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedArtworkTrack(null)}
+                        className="px-3.5 py-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </motion.div>
+                </div>
+              )}
+
+              {/* Sticky Bottom Spotify Now-Playing Bar (Supports Minimized Single-Line Mode for Scrolling) */}
+              {isPlayerMinimized ? (
+                <div
+                  data-testid="songs-bottom-player-minimized"
+                  className="relative px-3 sm:px-4 py-1.5 bg-[#181818] border-t border-zinc-800/90 flex items-center justify-between gap-2.5 shrink-0"
+                >
+                  {/* Thin 2px Progress Line Along Top Edge */}
+                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-zinc-800 overflow-hidden pointer-events-none">
+                    <div
+                      className="h-full bg-[#1DB954] transition-[width] duration-150"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.max(
+                            0,
+                            (playerState.currentTime / Math.max(1, playerState.duration)) * 100
+                          )
+                        )}%`,
+                      }}
+                    />
+                  </div>
+
+                  {/* Left: Compact Cover + Track Title & Artist */}
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptics.light();
+                        setExpandedArtworkTrack(activeTrackDef);
+                      }}
+                      title="Expand cover art"
+                      className="w-7 h-7 rounded overflow-hidden bg-zinc-900 shrink-0 flex items-center justify-center border border-white/10 hover:border-[#1DB954] cursor-zoom-in"
+                    >
+                      {playerState.artworkUrl ? (
+                        <img
+                          src={playerState.artworkUrl}
+                          alt={activeTrackDef.title}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Music className="w-3.5 h-3.5 text-zinc-500" />
+                      )}
+                    </button>
+                    <div className="min-w-0 flex items-baseline gap-1.5 truncate">
+                      <span className="text-xs font-semibold text-white truncate">
+                        {activeTrackDef.title}
+                      </span>
+                      <span className="text-[11px] text-zinc-400 truncate hidden xs:inline">
+                        · {playerState.artistName}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right: Compact Transport + Time + Expand Button */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono text-[10px] text-zinc-400 tabular-nums hidden sm:inline">
+                      {Math.floor(playerState.currentTime / 60)}:
+                      {Math.floor(playerState.currentTime % 60)
+                        .toString()
+                        .padStart(2, '0')}{' '}
+                      / {Math.floor(playerState.duration / 60)}:
+                      {Math.floor(playerState.duration % 60)
+                        .toString()
+                        .padStart(2, '0')}
+                    </span>
+
+                    <button
+                      type="button"
                       onClick={() => {
                         haptics.light();
                         trapQueenPlayer.prevTrack();
                       }}
-                      className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
                       title="Previous Track"
                       aria-label="Previous Track"
                     >
-                      <SkipBack className="w-4 h-4 fill-current" />
-                    </button>
-
-                    <button
-                      type="button"
-                      data-testid="jukebox-shuffle-btn"
-                      onClick={() => {
-                        haptics.light();
-                        setIsShuffleEnabled((s) => !s);
-                      }}
-                      aria-pressed={isShuffleEnabled}
-                      className={`p-1.5 rounded-full transition-colors cursor-pointer ${
-                        isShuffleEnabled
-                          ? 'text-[#1DB954] bg-[#1DB954]/15'
-                          : 'text-zinc-400 hover:text-white'
-                      }`}
-                      title={isShuffleEnabled ? 'Shuffle: ON' : 'Shuffle: OFF'}
-                      aria-label="Shuffle Songs"
-                    >
-                      <Shuffle className="w-3.5 h-3.5" />
+                      <SkipBack className="w-3.5 h-3.5 fill-current" />
                     </button>
 
                     <button
@@ -4112,115 +4944,278 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         haptics.medium();
                         void trapQueenPlayer.togglePlay();
                       }}
-                      className="w-8 h-8 rounded-full bg-white hover:scale-105 text-black flex items-center justify-center transition-transform cursor-pointer shrink-0"
+                      className="w-7 h-7 rounded-full bg-white hover:scale-105 text-black flex items-center justify-center transition-transform cursor-pointer shrink-0"
                       title={playerState.isPlaying ? 'Pause Song' : `Play ${activeTrackDef.title}`}
                     >
                       {playerState.isPlaying ? (
-                        <>
-                          <Pause className="w-3.5 h-3.5 fill-current" />
-                          <span className="sr-only">Pause Song</span>
-                        </>
+                        <Pause className="w-3 h-3 fill-current" />
                       ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
-                          <span className="sr-only">Play {activeTrackDef.title}</span>
-                        </>
+                        <Play className="w-3 h-3 fill-current ml-0.5" />
                       )}
-                    </button>
-
-                    <button
-                      type="button"
-                      data-testid="jukebox-loop-btn"
-                      onClick={() => {
-                        haptics.light();
-                        trapQueenPlayer.setLoopTrack(!playerState.loopTrack);
-                      }}
-                      aria-pressed={playerState.loopTrack}
-                      className={`p-1.5 rounded-full transition-colors cursor-pointer ${
-                        playerState.loopTrack
-                          ? 'text-[#1DB954] bg-[#1DB954]/15'
-                          : 'text-zinc-400 hover:text-white'
-                      }`}
-                      title={playerState.loopTrack ? 'Repeat Track: ON' : 'Repeat Track: OFF'}
-                      aria-label="Toggle Loop Track"
-                    >
-                      <Repeat className="w-3.5 h-3.5" />
                     </button>
 
                     <button
                       type="button"
                       data-testid="jukebox-next-btn"
                       onClick={handleNextSong}
-                      className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
                       title="Next Track"
                       aria-label="Next Track"
                     >
-                      <SkipForward className="w-4 h-4 fill-current" />
+                      <SkipForward className="w-3.5 h-3.5 fill-current" />
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid="toggle-minimize-bottom-player-btn"
+                      onClick={() => {
+                        haptics.light();
+                        setIsPlayerMinimized(false);
+                      }}
+                      title="Expand bottom player"
+                      aria-label="Expand bottom player"
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 hover:text-white font-mono text-[10px] font-semibold transition-colors cursor-pointer"
+                    >
+                      <ChevronUp className="w-3 h-3 text-[#1DB954]" />
+                      <span>Expand</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  data-testid="songs-bottom-player-expanded"
+                  className="px-4 py-2 bg-[#181818] border-t border-zinc-800/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0"
+                >
+                  {/* Left: Clickable Mini Cover + Active Song Info + Mobile Minimize Button */}
+                  <div className="flex items-center justify-between gap-2 min-w-0 sm:w-52">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <button
+                        type="button"
+                        data-testid="songs-bottom-artwork-btn"
+                        onClick={() => {
+                          haptics.light();
+                          setExpandedArtworkTrack(activeTrackDef);
+                        }}
+                        title="Click to expand song cover picture"
+                        aria-label={`Expand ${activeTrackDef.title} cover picture`}
+                        className="w-10 h-10 rounded overflow-hidden bg-zinc-900 shrink-0 flex items-center justify-center border border-white/10 hover:border-[#1DB954] transition-all cursor-zoom-in"
+                      >
+                        {playerState.artworkUrl ? (
+                          <img
+                            src={playerState.artworkUrl}
+                            alt={activeTrackDef.title}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).style.display = 'none';
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Music className="w-4 h-4 text-zinc-500" />
+                        )}
+                      </button>
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-white truncate">
+                          {activeTrackDef.title}
+                        </div>
+                        <div className="text-[11px] text-zinc-400 truncate">
+                          {playerState.artistName}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mobile Minimize Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptics.light();
+                        setIsPlayerMinimized(true);
+                      }}
+                      title="Minimize player to see more songs"
+                      aria-label="Minimize bottom player"
+                      className="sm:hidden inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white font-mono text-[10px] font-semibold transition-colors cursor-pointer shrink-0"
+                    >
+                      <ChevronDown className="w-3 h-3" />
+                      <span>Minimize</span>
                     </button>
                   </div>
 
-                  {/* Scrubber Bar */}
-                  <div className="w-full flex items-center gap-2">
-                    <span className="font-mono text-[10px] text-zinc-400 w-8 text-right tabular-nums">
-                      {Math.floor(playerState.currentTime / 60)}:
-                      {Math.floor(playerState.currentTime % 60)
-                        .toString()
-                        .padStart(2, '0')}
-                    </span>
+                  {/* Center: Spotify Transport Controls + Timeline Scrubber */}
+                  <div className="flex-1 max-w-md flex flex-col items-center gap-1.5">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        data-testid="jukebox-prev-btn"
+                        onClick={() => {
+                          haptics.light();
+                          trapQueenPlayer.prevTrack();
+                        }}
+                        className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                        title="Previous Track"
+                        aria-label="Previous Track"
+                      >
+                        <SkipBack className="w-4 h-4 fill-current" />
+                      </button>
+
+                      <button
+                        type="button"
+                        data-testid="jukebox-shuffle-btn"
+                        onClick={() => {
+                          haptics.light();
+                          setIsShuffleEnabled((s) => !s);
+                        }}
+                        aria-pressed={isShuffleEnabled}
+                        className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                          isShuffleEnabled
+                            ? 'text-[#1DB954] bg-[#1DB954]/15'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                        title={isShuffleEnabled ? 'Shuffle: ON' : 'Shuffle: OFF'}
+                        aria-label="Shuffle Songs"
+                      >
+                        <Shuffle className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        data-testid="jukebox-play-pause-btn"
+                        onClick={() => {
+                          haptics.medium();
+                          void trapQueenPlayer.togglePlay();
+                        }}
+                        className="w-8 h-8 rounded-full bg-white hover:scale-105 text-black flex items-center justify-center transition-transform cursor-pointer shrink-0"
+                        title={playerState.isPlaying ? 'Pause Song' : `Play ${activeTrackDef.title}`}
+                      >
+                        {playerState.isPlaying ? (
+                          <>
+                            <Pause className="w-3.5 h-3.5 fill-current" />
+                            <span className="sr-only">Pause Song</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                            <span className="sr-only">Play {activeTrackDef.title}</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        data-testid="jukebox-loop-btn"
+                        onClick={() => {
+                          haptics.light();
+                          trapQueenPlayer.setLoopTrack(!playerState.loopTrack);
+                        }}
+                        aria-pressed={playerState.loopTrack}
+                        className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                          playerState.loopTrack
+                            ? 'text-[#1DB954] bg-[#1DB954]/15'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                        title={playerState.loopTrack ? 'Repeat Track: ON' : 'Repeat Track: OFF'}
+                        aria-label="Toggle Loop Track"
+                      >
+                        <Repeat className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        data-testid="jukebox-next-btn"
+                        onClick={handleNextSong}
+                        className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                        title="Next Track"
+                        aria-label="Next Track"
+                      >
+                        <SkipForward className="w-4 h-4 fill-current" />
+                      </button>
+                    </div>
+
+                    {/* Scrubber Bar */}
+                    <div className="w-full flex items-center gap-2">
+                      <span className="font-mono text-[10px] text-zinc-400 w-8 text-right tabular-nums">
+                        {Math.floor(playerState.currentTime / 60)}:
+                        {Math.floor(playerState.currentTime % 60)
+                          .toString()
+                          .padStart(2, '0')}
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={Math.max(1, playerState.duration)}
+                        step={0.1}
+                        value={Math.min(playerState.currentTime, playerState.duration)}
+                        onChange={(e) => trapQueenPlayer.seek(parseFloat(e.target.value))}
+                        aria-label="Seek active song"
+                        className="flex-1 accent-white hover:accent-[#1DB954] cursor-pointer h-1"
+                      />
+                      <span className="font-mono text-[10px] text-zinc-400 w-8 tabular-nums">
+                        {Math.floor(playerState.duration / 60)}:
+                        {Math.floor(playerState.duration % 60)
+                          .toString()
+                          .padStart(2, '0')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right: Volume Slider + Minimize Button */}
+                  <div className="flex items-center justify-end gap-2 sm:w-52">
+                    <Volume2 className="w-4 h-4 text-zinc-400 shrink-0" />
                     <input
                       type="range"
                       min={0}
-                      max={Math.max(1, playerState.duration)}
-                      step={0.1}
-                      value={Math.min(playerState.currentTime, playerState.duration)}
-                      onChange={(e) => trapQueenPlayer.seek(parseFloat(e.target.value))}
-                      aria-label="Seek active song"
-                      className="flex-1 accent-white hover:accent-[#1DB954] cursor-pointer h-1"
+                      max={1}
+                      step={0.05}
+                      value={playerState.volume}
+                      onChange={(e) => trapQueenPlayer.setVolume(parseFloat(e.target.value))}
+                      aria-label="Song volume"
+                      className="w-20 accent-white hover:accent-[#1DB954] cursor-pointer h-1"
                     />
-                    <span className="font-mono text-[10px] text-zinc-400 w-8 tabular-nums">
-                      {Math.floor(playerState.duration / 60)}:
-                      {Math.floor(playerState.duration % 60)
-                        .toString()
-                        .padStart(2, '0')}
-                    </span>
+                    <button
+                      type="button"
+                      data-testid="toggle-minimize-bottom-player-btn"
+                      onClick={() => {
+                        haptics.light();
+                        setIsPlayerMinimized(true);
+                      }}
+                      title="Minimize bottom player to see more songs"
+                      aria-label="Minimize bottom player"
+                      className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white font-mono text-[10px] font-semibold transition-colors cursor-pointer shrink-0"
+                    >
+                      <ChevronDown className="w-3 h-3" />
+                      <span>Minimize</span>
+                    </button>
                   </div>
                 </div>
-
-                {/* Right: Volume Slider */}
-                <div className="flex items-center justify-end gap-2 sm:w-44">
-                  <Volume2 className="w-4 h-4 text-zinc-400 shrink-0" />
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={playerState.volume}
-                    onChange={(e) => trapQueenPlayer.setVolume(parseFloat(e.target.value))}
-                    aria-label="Song volume"
-                    className="w-24 accent-white hover:accent-[#1DB954] cursor-pointer h-1"
-                  />
-                </div>
-              </div>
+              )}
             </motion.div>
           );
         })()}
 
-        {/* TAB 3: IQ Test Module (Public, Lazy-Loaded) */}
-        {activeTab === 'iq_test' && (
-          <React.Suspense
-            fallback={
-              <div className="flex-1 min-h-0 flex items-center justify-center p-8 text-xs font-mono text-zinc-400">
-                Loading Quantitative IQ Assessment Module...
-              </div>
+        {/* TAB 3: IQ Test Module (Kept mounted once visited so switching tabs never resets progress) */}
+        {(hasVisitedIqTest || activeTab === 'iq_test') && (
+          <div
+            className={
+              activeTab === 'iq_test'
+                ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
+                : 'hidden'
             }
           >
-            <LazyIQTestModule
-              uiTheme={activeUiThemeId}
-              onHapticLight={() => haptics.light()}
-              onHapticMedium={() => haptics.medium()}
-              onHapticSuccess={() => haptics.success()}
-            />
-          </React.Suspense>
+            <React.Suspense
+              fallback={
+                <div className="flex-1 min-h-0 flex items-center justify-center p-8 text-xs font-mono text-zinc-400">
+                  Loading Quantitative IQ Assessment Module...
+                </div>
+              }
+            >
+              <LazyIQTestModule
+                uiTheme={activeUiThemeId}
+                isActiveTab={activeTab === 'iq_test'}
+                onHapticLight={() => haptics.light()}
+                onHapticMedium={() => haptics.medium()}
+                onHapticSuccess={() => haptics.success()}
+              />
+            </React.Suspense>
+          </div>
         )}
 
         {/* TAB 3b: Chess Sandbox Module (Public, Lazy-Loaded) */}

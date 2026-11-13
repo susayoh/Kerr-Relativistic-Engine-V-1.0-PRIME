@@ -363,6 +363,8 @@ export const MOTION_BLUR_FRAGMENT_SHADER = `
   uniform vec2 uResolution;
   uniform float uTimeLapseMix;
   uniform float uExposureBoost;
+  uniform float uSecretChromatic;
+  uniform float uTime;
   varying vec2 vUv;
 
   void main() {
@@ -398,6 +400,22 @@ export const MOTION_BLUR_FRAGMENT_SHADER = `
       vec4 finalColor = accum / max(0.0001, totalWeight);
       vec3 tinted = mix(finalColor.rgb, finalColor.rgb * vec3(0.94, 0.98, 1.06), uStrength * 0.22);
       currentFrame = vec4(clamp(tinted, 0.0, 1.0), 1.0);
+    }
+
+    // 1987 Classified Chromatic Prism & Retro-Synth Scanline Overdrive
+    if (uSecretChromatic > 0.5) {
+      vec2 centerDelta = vUv - vec2(0.5);
+      float distFromCenter = length(centerDelta);
+      vec2 prismShift = centerDelta * (0.011 + 0.018 * distFromCenter) * (0.85 + 0.15 * sin(uTime * 3.2));
+      float rCh = texture2D(tDiffuse, clamp(vUv + prismShift, 0.0, 1.0)).r;
+      float gCh = currentFrame.g;
+      float bCh = texture2D(tDiffuse, clamp(vUv - prismShift * 1.15, 0.0, 1.0)).b;
+      vec3 prismRgb = vec3(rCh, gCh, bCh);
+
+      // Subtle CRT phosphor scanline & synthwave magenta-cyan grade
+      float scanline = 0.92 + 0.08 * sin(vUv.y * uResolution.y * 1.35 - uTime * 8.0);
+      vec3 synthGrade = prismRgb * vec3(1.06, 0.97, 1.12) * scanline;
+      currentFrame.rgb = clamp(mix(currentFrame.rgb, synthGrade, 0.88), 0.0, 1.0);
     }
 
     // Long-Exposure Time-Lapse Astrophotography Accumulation

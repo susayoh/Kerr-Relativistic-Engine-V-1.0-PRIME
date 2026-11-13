@@ -108,8 +108,8 @@ export const LOCAL_FULL_AUDIO_MASTERS: Record<
   '/audio/clarity-nightcore.mp3': { durationSec: 241, durationLabel: '4:01', expectedBytes: 5798874 },
   '/audio/duvet-x-linger.mp3': { durationSec: 206, durationLabel: '3:26', expectedBytes: 4168853 },
   '/audio/end-it-nightcore.mp3': { durationSec: 168, durationLabel: '2:48', expectedBytes: 2696253 },
-  '/audio/mazeltron.mp3': { durationSec: 187, durationLabel: '3:07', expectedBytes: 3777507 },
-  '/audio/moonrock-saltynuggets.mp3': { durationSec: 126, durationLabel: '2:06', expectedBytes: 2547029 },
+  '/audio/mazeltron.mp3': { durationSec: 208, durationLabel: '3:28', expectedBytes: 2538746 },
+  '/audio/moonrock-saltynuggets.mp3': { durationSec: 129, durationLabel: '2:09', expectedBytes: 3107723 },
   '/audio/no-friends-female.mp3': { durationSec: 257, durationLabel: '4:17', expectedBytes: 6157085 },
   '/audio/stronger-than-you-frisk.mp3': { durationSec: 207, durationLabel: '3:27', expectedBytes: 4977377 },
   '/audio/trap-queen-full.mp3': { durationSec: 222, durationLabel: '3:42', expectedBytes: 5331130 },
@@ -522,13 +522,13 @@ export const SONG_TRACKS: SongTrackDefinition[] = [
   {
     id: 'moonrock_saltynuggets',
     title: 'Moonrock',
-    subtitle: 'SaltyNuggets',
+    subtitle: 'XXXTENTACION • SaltyNuggets',
     artistName: 'SaltyNuggets',
-    badge: 'SaltyNuggets',
-    durationSec: 126,
-    durationLabel: '2:06',
+    badge: 'XXXTENTACION',
+    durationSec: 129,
+    durationLabel: '2:09',
     artworkUrl:
-      'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/5e/37/86/5e3786b0-1fe0-8edd-82f0-649e0365c9b5/4070335853141.jpg/600x600bb.jpg',
+      'https://i1.sndcdn.com/artworks-000365422812-92e8l2-t500x500.jpg',
     accentColor: 'emerald',
     sources: ['/audio/moonrock-saltynuggets.mp3'],
     bpm: 144,
@@ -643,8 +643,8 @@ export const SONG_TRACKS: SongTrackDefinition[] = [
     subtitle: 'BLP Kosher & BabyTron',
     artistName: 'BLP Kosher & BabyTron',
     badge: 'MazelTron',
-    durationSec: 187,
-    durationLabel: '3:07',
+    durationSec: 208,
+    durationLabel: '3:28',
     artworkUrl:
       'https://cdn-images.dzcdn.net/images/cover/ee3a4f14c8ecb9ac80b0aec21b884e89/500x500-000000-80-0-0.jpg',
     accentColor: 'cyan',
@@ -723,6 +723,7 @@ class SongPlayerController {
   private compressor: DynamicsCompressorNode | null = null;
   private analyser: AnalyserNode | null = null;
   private freqBuffer: Uint8Array<ArrayBuffer> | null = null;
+  private highPrecisionSyncTimer: number | null = null;
 
   private state: TrapQueenPlayerState = {
     trackId: SONG_TRACKS[0].id,
@@ -1218,18 +1219,45 @@ class SongPlayerController {
 
     el.addEventListener('play', () => {
       this.applyRateToAudio(el);
+      this.startHighPrecisionTimeSync();
       this.updateState({ isPlaying: true, error: null });
     });
 
     el.addEventListener('pause', () => {
+      this.stopHighPrecisionTimeSync();
       this.updateState({ isPlaying: false });
     });
 
     el.addEventListener('error', () => {
+      this.stopHighPrecisionTimeSync();
       this.handleTruncatedOrFailedSource(el, 'Network or media decode error.');
     });
 
     this.audio = el;
+  }
+
+  private startHighPrecisionTimeSync() {
+    this.stopHighPrecisionTimeSync();
+    if (typeof window === 'undefined') return;
+    this.highPrecisionSyncTimer = window.setInterval(() => {
+      const el = this.audio;
+      if (!el || el.paused) return;
+      const def = this.getActiveTrackDef();
+      this.updateState({
+        currentTime: el.currentTime,
+        duration:
+          Number.isFinite(el.duration) && el.duration >= MIN_FULL_SONG_DURATION_SEC
+            ? el.duration
+            : def.durationSec,
+      });
+    }, 60);
+  }
+
+  private stopHighPrecisionTimeSync() {
+    if (this.highPrecisionSyncTimer !== null && typeof window !== 'undefined') {
+      window.clearInterval(this.highPrecisionSyncTimer);
+      this.highPrecisionSyncTimer = null;
+    }
   }
 
   private updateState(partial: Partial<TrapQueenPlayerState>) {

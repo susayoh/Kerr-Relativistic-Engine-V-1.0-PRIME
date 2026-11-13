@@ -154,7 +154,7 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     recordVideo: 'Record',
     stopRecording: 'REC',
 
-    bootInitializingTitle: 'INITIALIZING KERR ENGINE...',
+    bootInitializingTitle: 'INITIALIZING KERR-NEWMAN METRIC CORE...',
     bootInitializingSubtitle: 'Pre-Warming Geodesic Shaders & Covariant Metric Core',
 
     simulationPaused: 'SIMULATION PAUSED',
@@ -269,7 +269,7 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     recordVideo: 'Aufnehmen',
     stopRecording: 'AUFN',
 
-    bootInitializingTitle: 'KERR-ENGINE WIRD INITIALISIERT...',
+    bootInitializingTitle: 'KERR-NEWMAN-METRIK-KERN WIRD INITIALISIERT...',
     bootInitializingSubtitle: 'Geodäten-Shader & Kovarianter Metrik-Kern werden vorbereitet',
 
     simulationPaused: 'SIMULATION PAUSIERT',
@@ -384,7 +384,7 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     recordVideo: '録画',
     stopRecording: '録画中',
 
-    bootInitializingTitle: 'KERR ENGINE 初期化中...',
+    bootInitializingTitle: 'KERR-NEWMAN 計量コアを初期化中...',
     bootInitializingSubtitle: '測地線シェーダー＆共変計量コアをプリウォーム中',
 
     simulationPaused: 'シミュレーション一時停止中',
@@ -499,7 +499,7 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     recordVideo: 'Grabar',
     stopRecording: 'GRAB',
 
-    bootInitializingTitle: 'INICIALIZANDO MOTOR KERR...',
+    bootInitializingTitle: 'INICIALIZANDO NÚCLEO MÉTRICO KERR-NEWMAN...',
     bootInitializingSubtitle: 'Precalentando Shaders Geodésicos y Núcleo Métrico Covariante',
 
     simulationPaused: 'SIMULACIÓN EN PAUSA',
@@ -614,7 +614,7 @@ export const TRANSLATIONS: Record<AppLanguage, UiTranslations> = {
     recordVideo: '录制视频',
     stopRecording: '录制中',
 
-    bootInitializingTitle: '正在初始化 KERR 引擎...',
+    bootInitializingTitle: '正在初始化 KERR-NEWMAN 度规核心...',
     bootInitializingSubtitle: '正在预热测地线着色器与协变度规核心',
 
     simulationPaused: '模拟已暂停',

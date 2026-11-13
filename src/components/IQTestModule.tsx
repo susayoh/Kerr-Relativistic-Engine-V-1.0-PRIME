@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Brain,
   Play,
@@ -9,8 +9,45 @@ import {
   Clock,
   Grid,
   Flag,
+  Shuffle,
+  Sparkles,
+  CheckCircle2,
+  BookOpen,
+  TrendingUp,
+  Activity,
+  Copy,
+  Check,
+  Download,
+  BarChart3,
+  Layers,
+  Gauge,
 } from 'lucide-react';
 import { UiThemeId } from '../scene/BlackHoleScene';
+import {
+  GARDNER_INTELLIGENCES,
+  GARDNER_INTELLIGENCE_MAP,
+  IQ_BATTERY_MODES,
+  EXTRA_VISUAL_MATRIX_QUESTIONS,
+  GARDNER_DOMAIN_QUESTIONS,
+  sampleRandomizedIQQuestions,
+  computeMultipleIntelligencesProfile,
+  getPreviouslySeenQuestionIds,
+  savePreviouslySeenQuestionIds,
+  type GardnerIntelligenceId,
+  type IQBatteryModeId,
+} from './iqQuestionBank';
+import {
+  buildPostTestTelemetryReport,
+  loadGrowthHistory,
+  saveGrowthHistory,
+  appendReportToGrowthHistory,
+  SEED_GROWTH_HISTORY,
+  type GrowthSessionSnapshot,
+} from './iqTelemetryEngine';
+import {
+  GrowthAnalyticsDashboard,
+  PostTestTelemetryReportView,
+} from './GrowthAnalyticsDashboard';
 
 /**
  * Declarative geometric descriptor for rendering an authentic Raven's Progressive Matrices (APM)
@@ -124,6 +161,10 @@ export interface IQQuestion {
   domain: string;
   difficulty: 'Standard' | 'Advanced' | 'Apex';
   points: number;
+  gardnerDomain?: GardnerIntelligenceId;
+  smartLabel?: string;
+  questionFormat?: 'matrix_3x3' | 'cognitive_domain';
+  stimulusLines?: string[];
   question: string;
   formulaHint: string;
   /** 8 given matrix cells in row-major order: [R1C1, R1C2, R1C3, R2C1, R2C2, R2C3, R3C1, R3C2] */
@@ -139,7 +180,7 @@ export interface IQQuestion {
   ];
   /** Visual descriptors for the 6 answer options (A-F) */
   optionCells: MatrixCellDescriptor[];
-  /** Accessible concise text labels for the 6 answer options */
+  /** Accessible concise text labels for the answer options */
   options: string[];
   correctIndex: number;
   explanation: string;
@@ -833,6 +874,36 @@ export const RELATIVITY_IQ_QUESTIONS: IQQuestion[] = [
     explanation:
       'Three orthogonal rules converge at (R3, C3): (1) Outer shape completes the Latin square {Hexagon, Circle, Square} → Square; (2) Dual clock hands start at 180° (Row 3) with an angular spread of 135° (Col 3: 45° → 90° → 135°); (3) Corner markers follow XOR across Row 3: {TR, BR, BL} ⊕ {TR, BL} = {BR}.',
   },
+];
+
+/**
+ * Tag the 16 classic Raven's/Mensa matrices with their primary Howard Gardner domain
+ * (Spatial / Picture Smart vs. Logical-Mathematical / Number-Reasoning Smart) and combine
+ * with the 8 extra visual matrices + 61 multi-domain items to form an 85-question Master Database.
+ */
+const TAGGED_BASE_MATRIX_QUESTIONS: IQQuestion[] = RELATIVITY_IQ_QUESTIONS.map((q, idx) => {
+  const isSpatialMatrix =
+    q.moduleCode === 'MOD-03' ||
+    idx % 2 === 1 ||
+    q.id.includes('vector') ||
+    q.id.includes('rotate') ||
+    q.id.includes('orbital') ||
+    q.id.includes('concentric');
+  const gardnerDomain: GardnerIntelligenceId = isSpatialMatrix
+    ? 'spatial'
+    : 'logical_mathematical';
+  return {
+    ...q,
+    gardnerDomain,
+    smartLabel: isSpatialMatrix ? 'Picture Smart' : 'Number/Reasoning Smart',
+    questionFormat: 'matrix_3x3',
+  };
+});
+
+export const MASTER_IQ_QUESTION_DATABASE: readonly IQQuestion[] = [
+  ...TAGGED_BASE_MATRIX_QUESTIONS,
+  ...EXTRA_VISUAL_MATRIX_QUESTIONS,
+  ...GARDNER_DOMAIN_QUESTIONS,
 ];
 
 /**
@@ -1648,107 +1719,291 @@ const NormativeBellCurveSvg: React.FC<{ userIq?: number }> = ({ userIq }) => {
 
 export interface IQTestModuleProps {
   uiTheme?: UiThemeId;
+  isActiveTab?: boolean;
   onHapticLight?: () => void;
   onHapticMedium?: () => void;
   onHapticSuccess?: () => void;
 }
 
+export type IQSubViewId = 'assessment' | 'growth_analytics' | 'telemetry_report';
+
+interface PersistedIQSessionState {
+  isTestStarted: boolean;
+  currentQuestionIdx: number;
+  selectedAnswers: Record<string, number>;
+  flaggedQuestions: Record<string, boolean>;
+  questionTimingsMs: Record<string, number>;
+  isCompleted: boolean;
+  elapsedSeconds: number;
+  batteryMode: IQBatteryModeId;
+  activeQuestions: IQQuestion[];
+  testDrawNumber: number;
+}
+
+const IQ_SESSION_STORAGE_KEY = 'kerr_iq_test_session_v1';
+
+function createInitialSampledQuestions(mode: IQBatteryModeId = 'comprehensive_18'): IQQuestion[] {
+  const seen = getPreviouslySeenQuestionIds();
+  const drawn = sampleRandomizedIQQuestions(MASTER_IQ_QUESTION_DATABASE, mode, seen);
+  savePreviouslySeenQuestionIds([...seen, ...drawn.map((q) => q.id)]);
+  return drawn;
+}
+
+let memoryIqSessionState: PersistedIQSessionState = (() => {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = window.sessionStorage.getItem(IQ_SESSION_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<PersistedIQSessionState>;
+        const rawMode = parsed.batteryMode;
+        const mode: IQBatteryModeId =
+          rawMode === 'comprehensive_18' ||
+          rawMode === 'gardner_9_quick' ||
+          rawMode === 'matrices_16' ||
+          rawMode === 'full_deep_27' ||
+          (typeof rawMode === 'string' && rawMode.startsWith('domain_'))
+            ? (rawMode as IQBatteryModeId)
+            : 'comprehensive_18';
+        const validQuestions =
+          Array.isArray(parsed.activeQuestions) && parsed.activeQuestions.length > 0
+            ? parsed.activeQuestions
+            : createInitialSampledQuestions(mode);
+        return {
+          isTestStarted: Boolean(parsed.isTestStarted),
+          currentQuestionIdx:
+            typeof parsed.currentQuestionIdx === 'number' ? parsed.currentQuestionIdx : 0,
+          selectedAnswers:
+            parsed.selectedAnswers && typeof parsed.selectedAnswers === 'object'
+              ? parsed.selectedAnswers
+              : {},
+          flaggedQuestions:
+            parsed.flaggedQuestions && typeof parsed.flaggedQuestions === 'object'
+              ? parsed.flaggedQuestions
+              : {},
+          questionTimingsMs:
+            parsed.questionTimingsMs && typeof parsed.questionTimingsMs === 'object'
+              ? parsed.questionTimingsMs
+              : {},
+          isCompleted: Boolean(parsed.isCompleted),
+          elapsedSeconds:
+            typeof parsed.elapsedSeconds === 'number' ? parsed.elapsedSeconds : 0,
+          batteryMode: mode,
+          activeQuestions: validQuestions,
+          testDrawNumber:
+            typeof parsed.testDrawNumber === 'number' && parsed.testDrawNumber >= 1
+              ? parsed.testDrawNumber
+              : 1,
+        };
+      }
+    } catch {
+      // Ignore sessionStorage errors
+    }
+  }
+  return {
+    isTestStarted: false,
+    currentQuestionIdx: 0,
+    selectedAnswers: {},
+    flaggedQuestions: {},
+    questionTimingsMs: {},
+    isCompleted: false,
+    elapsedSeconds: 0,
+    batteryMode: 'comprehensive_18',
+    activeQuestions: createInitialSampledQuestions('comprehensive_18'),
+    testDrawNumber: 1,
+  };
+})();
+
+function savePersistedIqSessionState(next: PersistedIQSessionState): void {
+  memoryIqSessionState = next;
+  if (typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem(IQ_SESSION_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Ignore sessionStorage quota or privacy errors
+    }
+  }
+}
+
 export const IQTestModule: React.FC<IQTestModuleProps> = ({
   uiTheme = 'observatory_gold',
+  isActiveTab = true,
   onHapticLight,
   onHapticMedium,
   onHapticSuccess,
 }) => {
-  const [isTestStarted, setIsTestStarted] = useState<boolean>(false);
-  const [currentQuestionIdx, setCurrentQuestionIdx] = useState<number>(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
-  const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>({});
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
-  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  const [isTestStarted, setIsTestStarted] = useState<boolean>(
+    () => memoryIqSessionState.isTestStarted
+  );
+  const [currentQuestionIdx, setCurrentQuestionIdx] = useState<number>(
+    () => memoryIqSessionState.currentQuestionIdx
+  );
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>(
+    () => memoryIqSessionState.selectedAnswers
+  );
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>(
+    () => memoryIqSessionState.flaggedQuestions
+  );
+  const [questionTimingsMs, setQuestionTimingsMs] = useState<Record<string, number>>(
+    () => memoryIqSessionState.questionTimingsMs || {}
+  );
+  const [isCompleted, setIsCompleted] = useState<boolean>(
+    () => memoryIqSessionState.isCompleted
+  );
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(
+    () => memoryIqSessionState.elapsedSeconds
+  );
+  const [batteryMode, setBatteryMode] = useState<IQBatteryModeId>(
+    () => memoryIqSessionState.batteryMode
+  );
+  const [activeQuestions, setActiveQuestions] = useState<IQQuestion[]>(
+    () => memoryIqSessionState.activeQuestions
+  );
+  const [testDrawNumber, setTestDrawNumber] = useState<number>(
+    () => memoryIqSessionState.testDrawNumber
+  );
+  const [showExplanationInReview, setShowExplanationInReview] = useState<boolean>(false);
+  const [activeSubView, setActiveSubView] = useState<IQSubViewId>('assessment');
+  const [growthHistory, setGrowthHistory] = useState<GrowthSessionSnapshot[]>(() =>
+    loadGrowthHistory()
+  );
+  const [hasCopiedSummary, setHasCopiedSummary] = useState<boolean>(false);
 
+  // Synchronize all IQ test progress to module memory & sessionStorage so tab changes never reset the test
+  useEffect(() => {
+    savePersistedIqSessionState({
+      isTestStarted,
+      currentQuestionIdx,
+      selectedAnswers,
+      flaggedQuestions,
+      questionTimingsMs,
+      isCompleted,
+      elapsedSeconds,
+      batteryMode,
+      activeQuestions,
+      testDrawNumber,
+    });
+  }, [
+    isTestStarted,
+    currentQuestionIdx,
+    selectedAnswers,
+    flaggedQuestions,
+    questionTimingsMs,
+    isCompleted,
+    elapsedSeconds,
+    batteryMode,
+    activeQuestions,
+    testDrawNumber,
+  ]);
+
+  const activePool = activeQuestions.length > 0 ? activeQuestions : RELATIVITY_IQ_QUESTIONS;
   const safeQuestionIdx = Math.min(
     currentQuestionIdx,
-    Math.max(0, RELATIVITY_IQ_QUESTIONS.length - 1)
+    Math.max(0, activePool.length - 1)
   );
-  const currentQuestion = RELATIVITY_IQ_QUESTIONS[safeQuestionIdx] || RELATIVITY_IQ_QUESTIONS[0];
+  const currentQuestion = activePool[safeQuestionIdx] || activePool[0];
+  const currentGardnerMeta =
+    GARDNER_INTELLIGENCE_MAP[currentQuestion.gardnerDomain || 'spatial'] ||
+    GARDNER_INTELLIGENCES[2];
 
+  // Track total elapsed seconds and per-question latency (in ms) while active
   useEffect(() => {
-    if (!isTestStarted || isCompleted) return;
-    const timer = window.setInterval(() => {
+    if (!isTestStarted || isCompleted || !isActiveTab || activeSubView !== 'assessment') return;
+    const secTimer = window.setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
     }, 1000);
-    return () => window.clearInterval(timer);
-  }, [isTestStarted, isCompleted]);
-
-  const totalPossiblePoints = RELATIVITY_IQ_QUESTIONS.reduce((sum, q) => sum + q.points, 0);
-  const earnedPoints = RELATIVITY_IQ_QUESTIONS.reduce((sum, q) => {
-    const chosen = selectedAnswers[q.id];
-    return chosen === q.correctIndex ? sum + q.points : sum;
-  }, 0);
-  const answeredCount = Object.keys(selectedAnswers).length;
-  const correctCount = RELATIVITY_IQ_QUESTIONS.filter(
-    (q) => selectedAnswers[q.id] === q.correctIndex
-  ).length;
-
-  const accuracyRatio = totalPossiblePoints > 0 ? earnedPoints / totalPossiblePoints : 0;
-  const speedBonus =
-    answeredCount >= RELATIVITY_IQ_QUESTIONS.length && elapsedSeconds < 360
-      ? Math.round(Math.max(0, (360 - elapsedSeconds) / 45) * accuracyRatio)
-      : 0;
-  const estimatedIq =
-    answeredCount === 0
-      ? 100
-      : Math.min(162, Math.round(84 + accuracyRatio * 72 + speedBonus));
-
-  const getCognitiveClassification = (
-    iq: number
-  ): { title: string; percentile: string; badgeColor: string } => {
-    if (iq >= 145) {
-      return {
-        title: '99.9th Percentile',
-        percentile: 'Top 0.1%',
-        badgeColor: 'text-amber-300 border-amber-400/60 bg-amber-500/20',
-      };
-    }
-    if (iq >= 130) {
-      return {
-        title: 'Mensa Level',
-        percentile: 'Top 2%',
-        badgeColor: 'text-cyan-300 border-cyan-400/60 bg-cyan-500/20',
-      };
-    }
-    if (iq >= 115) {
-      return {
-        title: 'High Fluid IQ',
-        percentile: 'Top 16%',
-        badgeColor: 'text-emerald-300 border-emerald-400/60 bg-emerald-500/20',
-      };
-    }
-    return {
-      title: 'Standard Range',
-      percentile: 'SD 15',
-      badgeColor: 'text-neutral-300 border-neutral-600 bg-neutral-800',
+    const msTimer = window.setInterval(() => {
+      const qId = currentQuestion?.id;
+      if (!qId) return;
+      setQuestionTimingsMs((prev) => ({
+        ...prev,
+        [qId]: (prev[qId] || 0) + 250,
+      }));
+    }, 250);
+    return () => {
+      window.clearInterval(secTimer);
+      window.clearInterval(msTimer);
     };
+  }, [isTestStarted, isCompleted, isActiveTab, activeSubView, currentQuestion?.id]);
+
+  const profileSummary = useMemo(
+    () => computeMultipleIntelligencesProfile(activePool, selectedAnswers, elapsedSeconds),
+    [activePool, selectedAnswers, elapsedSeconds]
+  );
+
+  const {
+    answeredCount,
+    correctCount,
+    estimatedIq,
+    topStrengths: topGardnerStrengths,
+  } = profileSummary;
+
+  const telemetryReport = useMemo(
+    () =>
+      buildPostTestTelemetryReport(
+        activePool,
+        selectedAnswers,
+        elapsedSeconds,
+        questionTimingsMs
+      ),
+    [activePool, selectedAnswers, elapsedSeconds, questionTimingsMs]
+  );
+
+  /**
+   * Draws a brand-new randomized set of questions from the 85-question database,
+   * excluding recently seen question IDs so every test run has unique questions.
+   */
+  const drawFreshQuestionSet = (modeToUse: IQBatteryModeId, startImmediately: boolean) => {
+    const previousIds = [
+      ...getPreviouslySeenQuestionIds(),
+      ...activePool.map((q) => q.id),
+    ];
+    const freshQuestions = sampleRandomizedIQQuestions(
+      MASTER_IQ_QUESTION_DATABASE,
+      modeToUse,
+      previousIds
+    );
+    savePreviouslySeenQuestionIds([...previousIds, ...freshQuestions.map((q) => q.id)]);
+    const nextDrawNum = testDrawNumber + 1;
+    const freshState: PersistedIQSessionState = {
+      isTestStarted: startImmediately,
+      isCompleted: false,
+      selectedAnswers: {},
+      flaggedQuestions: {},
+      questionTimingsMs: {},
+      currentQuestionIdx: 0,
+      elapsedSeconds: 0,
+      batteryMode: modeToUse,
+      activeQuestions: freshQuestions,
+      testDrawNumber: nextDrawNum,
+    };
+    savePersistedIqSessionState(freshState);
+    setBatteryMode(modeToUse);
+    setActiveQuestions(freshQuestions);
+    setTestDrawNumber(nextDrawNum);
+    setIsTestStarted(startImmediately);
+    setIsCompleted(false);
+    setSelectedAnswers({});
+    setFlaggedQuestions({});
+    setQuestionTimingsMs({});
+    setCurrentQuestionIdx(0);
+    setElapsedSeconds(0);
+    setShowExplanationInReview(false);
+    setActiveSubView('assessment');
   };
 
   const handleStartTest = () => {
     onHapticMedium?.();
-    setIsTestStarted(true);
-    setIsCompleted(false);
-    setSelectedAnswers({});
-    setFlaggedQuestions({});
-    setCurrentQuestionIdx(0);
-    setElapsedSeconds(0);
+    drawFreshQuestionSet(batteryMode, true);
   };
 
   const handleResetTest = () => {
     onHapticLight?.();
-    setIsTestStarted(false);
-    setIsCompleted(false);
-    setSelectedAnswers({});
-    setFlaggedQuestions({});
-    setCurrentQuestionIdx(0);
-    setElapsedSeconds(0);
+    drawFreshQuestionSet(batteryMode, false);
+  };
+
+  const handleChangeBatteryMode = (nextMode: IQBatteryModeId) => {
+    onHapticLight?.();
+    drawFreshQuestionSet(nextMode, false);
   };
 
   const handleSelectOption = (optionIdx: number) => {
@@ -1773,289 +2028,833 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
     }));
   };
 
-  const isObsidian = uiTheme === 'kerr_claude';
-  const isPlanck = uiTheme === 'cryo_quantum';
+  const handleCompleteAssessment = () => {
+    onHapticSuccess?.();
+    setIsCompleted(true);
+    setActiveSubView('telemetry_report');
+    const updatedHistory = appendReportToGrowthHistory(
+      growthHistory,
+      telemetryReport,
+      batteryMode
+    );
+    setGrowthHistory(updatedHistory);
+    saveGrowthHistory(updatedHistory);
+  };
+
+  const handleRecordGrowthRun = () => {
+    // If user has answered items in current session, log current telemetry; otherwise synthesize a realistic progressive calibration run
+    if (answeredCount > 0) {
+      const updated = appendReportToGrowthHistory(growthHistory, telemetryReport, batteryMode);
+      setGrowthHistory(updated);
+      saveGrowthHistory(updated);
+      return;
+    }
+    const simulatedAnswers: Record<string, number> = {};
+    const simulatedTimings: Record<string, number> = {};
+    activePool.forEach((q, idx) => {
+      // High accuracy progressive calibration
+      const pass = (idx + growthHistory.length) % 5 !== 0;
+      simulatedAnswers[q.id] = pass ? q.correctIndex : (q.correctIndex + 1) % q.options.length;
+      simulatedTimings[q.id] = 3200 + ((idx * 530) % 2800);
+    });
+    const simReport = buildPostTestTelemetryReport(
+      activePool,
+      simulatedAnswers,
+      Math.round(activePool.length * 4.2),
+      simulatedTimings
+    );
+    const updated = appendReportToGrowthHistory(growthHistory, simReport, batteryMode);
+    setGrowthHistory(updated);
+    saveGrowthHistory(updated);
+  };
+
+  const handleResetGrowthHistory = () => {
+    const reset = [...SEED_GROWTH_HISTORY];
+    setGrowthHistory(reset);
+    saveGrowthHistory(reset);
+  };
+
+  const handleCopyTelemetrySummary = () => {
+    onHapticSuccess?.();
+    const lines = [
+      '=== KERR RELATIVITY ENGINE — PSYCHOMETRIC & MULTIPLE INTELLIGENCES TELEMETRY ===',
+      `Assessment Set: #${testDrawNumber} (${batteryMode})`,
+      `Full-Scale IQ Estimate: ${telemetryReport.confidenceIntervalLabel} (SD = ${telemetryReport.standardDeviation}, z = ${telemetryReport.zScore})`,
+      `Percentile Rank: ${telemetryReport.percentileRank}th Percentile (${telemetryReport.percentileLabel}) — ${telemetryReport.classificationTitle}`,
+      `Accuracy: ${telemetryReport.correctCount}/${telemetryReport.totalQuestions} (${Math.round(
+        (telemetryReport.correctCount / Math.max(1, telemetryReport.totalQuestions)) * 100
+      )}%)`,
+      `Session Timing: ${telemetryReport.totalElapsedSeconds}s total | ${telemetryReport.avgLatencyMs} ms/item avg`,
+      `Speed-Accuracy Verdict: ${telemetryReport.speedAccuracyVerdict}`,
+      '',
+      '--- COGNITIVE SUB-DOMAIN BREAKDOWN ---',
+      ...telemetryReport.cognitiveSubDomains.map(
+        (sub) =>
+          `• ${sub.title}: ${sub.correctCount}/${sub.itemCount} (${sub.accuracyPercent}%) | Avg ${Math.round(
+            sub.avgLatencyMs
+          )} ms`
+      ),
+      '',
+      '--- DIFFICULTY TIER CALIBRATION ---',
+      ...telemetryReport.difficultyBrackets.map(
+        (b) =>
+          `• ${b.title} (${b.iqCeilingLabel}): ${b.correctCount}/${b.itemCount} (${b.passRatePercent}% Pass)`
+      ),
+      `Calibration Diagnostic: ${telemetryReport.calibrationDiagnostic}`,
+    ];
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(lines.join('\n')).catch(() => {});
+    }
+    setHasCopiedSummary(true);
+    window.setTimeout(() => setHasCopiedSummary(false), 2200);
+  };
+
+  const handleExportTelemetryJson = () => {
+    onHapticMedium?.();
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      engine: 'Kerr-Newman Psychometric & Multiple Intelligences Telemetry Core v2.4',
+      testDrawNumber,
+      batteryMode,
+      headlineReadout: {
+        estimatedIq: telemetryReport.estimatedIq,
+        confidenceInterval: telemetryReport.confidenceIntervalLabel,
+        standardDeviation: telemetryReport.standardDeviation,
+        zScore: telemetryReport.zScore,
+        percentileRank: telemetryReport.percentileRank,
+        classification: telemetryReport.classificationTitle,
+      },
+      sessionMetrics: {
+        totalQuestions: telemetryReport.totalQuestions,
+        answeredCount: telemetryReport.answeredCount,
+        correctCount: telemetryReport.correctCount,
+        totalElapsedSeconds: telemetryReport.totalElapsedSeconds,
+        avgLatencyMs: telemetryReport.avgLatencyMs,
+        speedAccuracyVerdict: telemetryReport.speedAccuracyVerdict,
+        calibrationDiagnostic: telemetryReport.calibrationDiagnostic,
+      },
+      cognitiveSubDomains: telemetryReport.cognitiveSubDomains,
+      difficultyBrackets: telemetryReport.difficultyBrackets,
+      gardnerDomains: telemetryReport.gardnerDomains,
+      latencyCurve: telemetryReport.latencyCurve,
+      growthHistorySnapshots: growthHistory,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kerr-iq-telemetry-set-${testDrawNumber}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  void uiTheme;
   const currentSelectedOption = selectedAnswers[currentQuestion.id];
   const hasAnsweredCurrent = typeof currentSelectedOption === 'number';
-  const classification = getCognitiveClassification(estimatedIq);
   const formattedTime = `${Math.floor(elapsedSeconds / 60)}:${(elapsedSeconds % 60)
     .toString()
     .padStart(2, '0')}`;
+  const isVisualMatrixQuestion =
+    currentQuestion.questionFormat === 'matrix_3x3' &&
+    currentQuestion.optionCells &&
+    currentQuestion.optionCells.length > 0;
+
+  const latestGrowthSnap = growthHistory[growthHistory.length - 1];
+  const baselineGrowthSnap = growthHistory[0];
+  const growthIqDelta =
+    latestGrowthSnap && baselineGrowthSnap
+      ? latestGrowthSnap.compositeIq - baselineGrowthSnap.compositeIq
+      : 0;
 
   return (
     <div
       data-testid="settings-tab-panel-iq-test"
-      className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto space-y-3 text-xs"
+      className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto space-y-3 text-sm text-zinc-200"
     >
-      {/* Clean Compact Header */}
-      <div
-        className={`px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-3 flex-wrap transition-colors ${
-          isObsidian
-            ? 'bg-[#120e0c] border-[#D97757]/40'
-            : isPlanck
-            ? 'bg-[#060f0b] border-emerald-500/40'
-            : 'bg-neutral-950 border-neutral-800'
-        }`}
-      >
-        <div className="flex items-center gap-2.5">
-          <Brain className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span className="font-display text-xs sm:text-sm font-bold uppercase tracking-wider text-white">
-            Mensa &amp; Raven’s Matrices
-          </span>
-          <span
-            data-testid="iq-test-score-readout"
-            className="px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 font-mono text-[10px] text-cyan-300"
-          >
-            {isCompleted ? `IQ ${estimatedIq}` : `${RELATIVITY_IQ_QUESTIONS.length} Matrices`}
-          </span>
-        </div>
+      {/* Top Hero Overview Header — Matches DiagnosticSuiteView & CodebaseDetailsView */}
+      <div className="p-3.5 rounded-2xl bg-zinc-950/80 border border-zinc-800 shadow-lg space-y-2.5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <div className="w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shrink-0">
+              <Brain className="w-3.5 h-3.5 text-cyan-400" />
+            </div>
+            <h3 className="font-display text-xs sm:text-sm font-bold uppercase tracking-wider text-white">
+              Psychometric &amp; Multiple Intelligences Telemetry Suite
+            </h3>
+            <span
+              data-testid="iq-test-score-readout"
+              className="px-2 py-0.5 rounded-md text-[10px] font-mono uppercase tracking-wider border bg-cyan-500/15 text-cyan-300 border-cyan-500/30 whitespace-nowrap"
+            >
+              {isCompleted
+                ? `FSIQ ${telemetryReport.confidenceIntervalLabel} · ${telemetryReport.percentileRank}th %ile`
+                : `Set #${testDrawNumber} · ${activePool.length} Items (${MASTER_IQ_QUESTION_DATABASE.length}-Item Bank)`}
+            </span>
+          </div>
 
-        <div className="flex items-center gap-2">
-          {isTestStarted && (
-            <>
-              <span className="px-2 py-1 rounded-lg bg-neutral-900 border border-neutral-800 font-mono text-[10px] text-neutral-300">
-                {answeredCount}/{RELATIVITY_IQ_QUESTIONS.length}
-              </span>
-              <span className="px-2 py-1 rounded-lg bg-neutral-900 border border-neutral-800 font-mono text-[10px] text-amber-300 flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {formattedTime}
-              </span>
+          {/* Action Toolbar — Matches DiagnosticSuiteView & CodebaseDetailsView */}
+          <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+            <button
+              type="button"
+              data-testid="iq-test-start-btn"
+              onClick={handleStartTest}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-[11px] font-semibold border transition-all cursor-pointer bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border-cyan-500/40 shadow-[0_0_15px_rgba(34,211,238,0.15)]"
+            >
+              <Play className="w-3 h-3 fill-current text-cyan-300" />
+              <span>{isTestStarted ? 'Restart (Fresh Set)' : 'Begin Assessment'}</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="iq-shuffle-pool-btn"
+              onClick={() => {
+                onHapticLight?.();
+                drawFreshQuestionSet(batteryMode, isTestStarted);
+              }}
+              title="Draw a brand-new non-repeating set of questions from the 85-question database"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 font-mono text-[11px] transition-all cursor-pointer"
+            >
+              <Shuffle className="w-3 h-3 text-indigo-400" />
+              <span>New Question Set</span>
+            </button>
+
+            {isTestStarted && (
               <button
                 type="button"
                 data-testid="iq-test-reset-btn"
                 onClick={handleResetTest}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 font-mono text-[11px] cursor-pointer transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700/80 font-mono text-[11px] transition-all cursor-pointer"
               >
-                <RotateCcw className="w-3 h-3" />
+                <RotateCcw className="w-3 h-3 text-zinc-400" />
                 <span>Reset</span>
               </button>
-            </>
-          )}
-
-          <button
-            type="button"
-            data-testid="iq-test-start-btn"
-            onClick={handleStartTest}
-            className="flex items-center gap-1.5 px-3.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400 text-cyan-100 font-mono text-[11px] font-bold transition-all cursor-pointer"
-          >
-            <Play className="w-3 h-3 fill-current text-cyan-300" />
-            <span>{isTestStarted ? 'Restart' : 'Begin Test'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main Container */}
-      <div
-        data-testid="iq-test-logic-modules-container"
-        role="region"
-        aria-label="Mensa and Raven's Progressive Matrices Assessment Container"
-        className="p-4 rounded-xl bg-neutral-950/95 border border-neutral-800"
-      >
-        {!isTestStarted ? (
-          /* Minimal Pre-Test Screen — Questions Hidden Until User Begins */
-          <div
-            data-testid="iq-pretest-briefing"
-            className="py-6 px-3 flex flex-col items-center text-center max-w-md mx-auto space-y-5"
-          >
-            <div className="w-11 h-11 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
-              <Grid className="w-5 h-5 text-cyan-400" />
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="font-display text-sm sm:text-base font-bold text-white uppercase tracking-wider">
-                Non-Verbal Matrix IQ Test
-              </h3>
-              <p className="text-xs text-neutral-400">
-                16 progressive 3×3 visual matrices. Questions unlock when you begin.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-center gap-2 flex-wrap font-mono text-[10px]">
-              <span className="px-2.5 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-neutral-300">
-                16 Items
-              </span>
-              <span className="px-2.5 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-neutral-300">
-                3×3 Matrices
-              </span>
-              <span className="px-2.5 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-cyan-300">
-                SD 15 Scale
-              </span>
-            </div>
-
-            <div className="w-full p-2.5 rounded-xl bg-neutral-900/60 border border-neutral-800/80">
-              <NormativeBellCurveSvg />
-            </div>
+            )}
 
             <button
               type="button"
-              onClick={handleStartTest}
-              className="w-full py-2.5 px-5 rounded-xl bg-cyan-500/25 hover:bg-cyan-500/35 border border-cyan-400 text-white font-mono text-xs font-bold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.2)] cursor-pointer transition-all"
+              data-testid="iq-header-copy-summary-btn"
+              onClick={handleCopyTelemetrySummary}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 font-mono text-[11px] transition-all cursor-pointer"
             >
-              <Play className="w-3.5 h-3.5 fill-current text-cyan-300" />
-              <span>Begin IQ Test</span>
+              {hasCopiedSummary ? (
+                <>
+                  <Check className="w-3 h-3 text-emerald-400" />
+                  <span className="text-emerald-300">Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3 text-zinc-400" />
+                  <span>Copy Summary</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              data-testid="iq-header-export-json-btn"
+              onClick={handleExportTelemetryJson}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 font-mono text-[11px] transition-all cursor-pointer"
+            >
+              <Download className="w-3 h-3 text-cyan-400" />
+              <span>Export JSON</span>
             </button>
           </div>
-        ) : isCompleted ? (
-          /* Minimal Results Screen */
-          <div
-            data-testid="iq-test-results-summary"
-            className="p-4 rounded-xl bg-neutral-900/60 border border-cyan-500/40 space-y-4 max-w-xl mx-auto"
+        </div>
+
+        <p className="text-[11px] text-zinc-400 leading-snug">
+          Evaluates cognitive and practical abilities across Howard Gardner’s 9 Primary Intelligences and Raven’s/Mensa 3×3 Progressive Matrices with D3.js Longitudinal Growth Analytics and Post-Test Telemetry Diagnostics.
+        </p>
+      </div>
+
+      {/* 4 KPI Stat Cards — Matches DiagnosticSuiteView & CodebaseDetailsView */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-zinc-400 text-[11px]">
+            <span>Full-Scale IQ Estimate</span>
+            <Award className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          </div>
+          <div className="mt-1.5 flex items-baseline justify-between gap-1.5">
+            <span className="text-lg font-bold font-mono text-white whitespace-nowrap">
+              {answeredCount > 0 ? telemetryReport.confidenceIntervalLabel : `${estimatedIq} ± 4`}
+            </span>
+            <span className="text-[10px] font-mono text-cyan-300 whitespace-nowrap">
+              {telemetryReport.percentileLabel}
+            </span>
+          </div>
+          <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono text-zinc-400 truncate">
+            <span>SD=15 (z={telemetryReport.zScore})</span>
+            <span className="text-amber-300 truncate ml-1">{telemetryReport.classificationTitle}</span>
+          </div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-zinc-400 text-[11px]">
+            <span>Battery Progress &amp; Accuracy</span>
+            <Gauge className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          </div>
+          <div className="mt-1.5 flex items-baseline gap-1.5">
+            <span className="text-lg font-bold font-mono text-emerald-400 whitespace-nowrap">
+              {correctCount}/{activePool.length}
+            </span>
+            <span className="text-[11px] font-mono text-zinc-400 whitespace-nowrap">
+              ({answeredCount} answered)
+            </span>
+          </div>
+          <div className="mt-1.5 h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-300"
+              style={{
+                width: `${Math.max(
+                  4,
+                  Math.round((answeredCount / Math.max(1, activePool.length)) * 100)
+                )}%`,
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-zinc-400 text-[11px]">
+            <span>Response Latency &amp; Clock</span>
+            <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          </div>
+          <div className="mt-1.5 flex items-baseline gap-1.5">
+            <span className="text-lg font-bold font-mono text-white whitespace-nowrap">
+              {formattedTime}
+            </span>
+            <span className="text-[11px] font-mono text-cyan-300 whitespace-nowrap">
+              {(telemetryReport.avgLatencyMs / 1000).toFixed(1)}s / item
+            </span>
+          </div>
+          <div className="mt-1.5 text-[10px] font-mono text-zinc-400 truncate">
+            {MASTER_IQ_QUESTION_DATABASE.length}-Item Master Pool · Set #{testDrawNumber}
+          </div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-zinc-400 text-[11px]">
+            <span>9-Domain Longitudinal Growth</span>
+            <TrendingUp className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+          </div>
+          <div className="mt-1.5 flex items-baseline gap-1.5">
+            <span className="text-lg font-bold font-mono text-emerald-400 whitespace-nowrap">
+              {growthIqDelta >= 0 ? `+${growthIqDelta}` : growthIqDelta} IQ
+            </span>
+            <span className="text-[11px] font-mono text-zinc-400 whitespace-nowrap">
+              ({growthHistory.length} Sessions)
+            </span>
+          </div>
+          <div className="mt-1.5 text-[10px] font-mono text-indigo-300 truncate">
+            Top: {topGardnerStrengths[0]?.meta.name || 'Spatial'} (
+            {topGardnerStrengths[0]?.meta.smartTitle || 'Picture Smart'})
+          </div>
+        </div>
+      </div>
+
+      {/* Sub-View Switcher Bar — Single Row Toggle between Assessment Suite, Growth Analytics (D3.js), and Telemetry Report */}
+      <div className="p-1.5 rounded-xl bg-zinc-950/90 border border-zinc-800/90 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            data-testid="iq-subview-assessment"
+            onClick={() => {
+              onHapticLight?.();
+              setActiveSubView('assessment');
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-semibold transition-all cursor-pointer border ${
+              activeSubView === 'assessment'
+                ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-[0_0_12px_rgba(34,211,238,0.15)]'
+                : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-zinc-900/70'
+            }`}
           >
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2.5">
-                <Award className="w-6 h-6 text-amber-400 shrink-0" />
-                <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">
-                    Estimated Fluid IQ
-                  </div>
-                  <div className="text-xl font-display font-bold text-white">
-                    {estimatedIq}{' '}
-                    <span className="text-xs font-mono text-cyan-300 font-normal">
-                      ({classification.percentile})
-                    </span>
+            <Layers className="w-3.5 h-3.5 text-cyan-400" />
+            <span>
+              1. Assessment Suite ({isTestStarted ? `Active Q${safeQuestionIdx + 1}/${activePool.length}` : '9 Domain Tests'})
+            </span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="iq-subview-growth-analytics"
+            onClick={() => {
+              onHapticLight?.();
+              setActiveSubView('growth_analytics');
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-semibold transition-all cursor-pointer border ${
+              activeSubView === 'growth_analytics'
+                ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-[0_0_12px_rgba(34,211,238,0.15)]'
+                : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-zinc-900/70'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+            <span>2. Growth Analytics (D3.js)</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="iq-subview-telemetry-report"
+            onClick={() => {
+              onHapticLight?.();
+              setActiveSubView('telemetry_report');
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-semibold transition-all cursor-pointer border ${
+              activeSubView === 'telemetry_report'
+                ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-[0_0_12px_rgba(34,211,238,0.15)]'
+                : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-zinc-900/70'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
+            <span>3. Post-Test Telemetry Report</span>
+          </button>
+        </div>
+
+        <div className="hidden xl:flex items-center gap-1.5 px-2 text-[10px] font-mono text-zinc-400">
+          <Activity className="w-3 h-3 text-cyan-400" />
+          <span>Session Persistence Active</span>
+        </div>
+      </div>
+
+      {/* Main Content Region */}
+      <div
+        data-testid="iq-test-logic-modules-container"
+        role="region"
+        aria-label="Howard Gardner Multiple Intelligences, Growth Analytics, and Post-Test Telemetry Container"
+        className="space-y-3.5"
+      >
+        {activeSubView === 'growth_analytics' ? (
+          <GrowthAnalyticsDashboard
+            history={growthHistory}
+            onRecordSimulatedOrLiveRun={handleRecordGrowthRun}
+            onResetGrowthHistory={handleResetGrowthHistory}
+            onHapticLight={onHapticLight}
+            onHapticSuccess={onHapticSuccess}
+          />
+        ) : activeSubView === 'telemetry_report' || isCompleted ? (
+          <PostTestTelemetryReportView
+            report={telemetryReport}
+            testDrawNumber={testDrawNumber}
+            bellCurveSlot={<NormativeBellCurveSvg userIq={telemetryReport.estimatedIq} />}
+            onReviewQuestions={() => {
+              onHapticLight?.();
+              setIsCompleted(false);
+              setShowExplanationInReview(true);
+              setActiveSubView('assessment');
+            }}
+            onStartNewTest={handleStartTest}
+            onOpenGrowthAnalytics={() => {
+              onHapticLight?.();
+              setActiveSubView('growth_analytics');
+            }}
+            onCopySummary={handleCopyTelemetrySummary}
+            onExportJson={handleExportTelemetryJson}
+            hasCopied={hasCopiedSummary}
+          />
+        ) : !isTestStarted ? (
+          /* Clean Diagnostic/Code-Styled Pre-Test Briefing with Battery Selector & Howard Gardner's 9 Intelligences */
+          <div
+            data-testid="iq-pretest-briefing"
+            className="space-y-4"
+          >
+            {/* Battery Mode Selector Card */}
+            <div className="p-4 rounded-2xl bg-zinc-950/90 border border-zinc-800/90 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+                <div className="flex items-center gap-2">
+                  <Grid className="w-4 h-4 text-cyan-400" />
+                  <h4 className="font-display text-xs sm:text-sm font-bold uppercase tracking-wider text-white">
+                    Composite Assessment Batteries (Stratified Non-Repeating Sampler)
+                  </h4>
+                </div>
+                <span className="font-mono text-xs text-cyan-300">
+                  {activePool.length} Active Items · {MASTER_IQ_QUESTION_DATABASE.length}-Item Master Bank
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {IQ_BATTERY_MODES.map((modeMeta) => {
+                  const isSelectedMode = batteryMode === modeMeta.id;
+                  return (
+                    <button
+                      key={modeMeta.id}
+                      type="button"
+                      data-testid={`iq-battery-mode-${modeMeta.id}`}
+                      onClick={() => handleChangeBatteryMode(modeMeta.id)}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                        isSelectedMode
+                          ? 'bg-cyan-500/15 border-cyan-400 text-white shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                          : 'bg-zinc-900/60 border-zinc-800/90 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900'
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-xs font-bold text-white">
+                            {modeMeta.title}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-zinc-950 border border-zinc-800 font-mono text-[10px] text-cyan-300 shrink-0">
+                            {modeMeta.shortLabel}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 leading-relaxed">
+                          {modeMeta.description}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] font-mono">
+                        <span className={isSelectedMode ? 'text-cyan-300 font-bold' : 'text-zinc-500'}>
+                          {isSelectedMode ? 'ACTIVE BATTERY' : 'CLICK TO SELECT'}
+                        </span>
+                        <span className="text-zinc-400">{modeMeta.questionCount} Qs</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Series of Nine Psychometric Tests Based on Howard Gardner's Theory of Multiple Intelligences */}
+            <div
+              data-testid="gardner-9-intelligences-framework"
+              className="p-4 rounded-2xl bg-zinc-950/90 border border-zinc-800/90 space-y-3.5"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                  <div>
+                    <h4 className="font-display text-xs sm:text-sm font-bold uppercase tracking-wider text-white">
+                      Nine Psychometric Domain Tests — Howard Gardner’s Multiple Intelligences
+                    </h4>
+                    <p className="text-xs text-zinc-400">
+                      Queue or launch any specialized domain assessment below, or run the composite battery across all 9 domains.
+                    </p>
                   </div>
                 </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onHapticLight?.();
+                      setActiveSubView('growth_analytics');
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-emerald-300 font-mono text-xs cursor-pointer transition-colors"
+                  >
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>View D3 Growth Chart</span>
+                  </button>
+                </div>
               </div>
-              <span
-                className={`px-2.5 py-1 rounded-lg border font-mono text-[10px] font-bold ${classification.badgeColor}`}
-              >
-                {classification.title}
-              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {GARDNER_INTELLIGENCES.map((intel) => {
+                  const totalInBank = MASTER_IQ_QUESTION_DATABASE.filter(
+                    (q) => q.gardnerDomain === intel.id
+                  ).length;
+                  const domainModeId: IQBatteryModeId = `domain_${intel.id}`;
+                  const isDomainSelected = batteryMode === domainModeId;
+                  const latestScore = latestGrowthSnap?.domainScores[intel.id] ?? 75;
+
+                  return (
+                    <div
+                      key={intel.id}
+                      data-testid={`gardner-domain-card-${intel.id}`}
+                      className={`p-3.5 rounded-xl border flex flex-col justify-between gap-2.5 transition-all ${
+                        isDomainSelected
+                          ? 'bg-cyan-950/25 border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.12)]'
+                          : 'bg-zinc-900/50 border-zinc-800/90 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span
+                            className={`px-2 py-0.5 rounded border font-mono text-[10px] font-bold ${intel.badgeClass}`}
+                          >
+                            {intel.indexNumber}. {intel.smartTitle}
+                          </span>
+                          <span className="font-mono text-[10px] text-zinc-400">
+                            {totalInBank} Bank Items · {latestScore}%
+                          </span>
+                        </div>
+                        <div className="font-mono text-xs font-bold text-white leading-tight pt-0.5">
+                          {intel.name}
+                        </div>
+                        <div className="text-[11px] font-mono text-cyan-300/90 leading-tight">
+                          {intel.psychometricTestTitle}
+                        </div>
+                        <p className="text-[11px] text-zinc-400 leading-relaxed">
+                          {intel.description}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          data-testid={`select-domain-mode-${intel.id}`}
+                          onClick={() => handleChangeBatteryMode(domainModeId)}
+                          className={`px-2.5 py-1 rounded-lg font-mono text-[10px] border transition-colors cursor-pointer ${
+                            isDomainSelected
+                              ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold'
+                              : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:text-white'
+                          }`}
+                        >
+                          {isDomainSelected ? 'Selected' : 'Queue Test'}
+                        </button>
+
+                        <button
+                          type="button"
+                          data-testid={`launch-domain-test-${intel.id}`}
+                          onClick={() => {
+                            onHapticMedium?.();
+                            drawFreshQuestionSet(domainModeId, true);
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/60 text-cyan-100 font-mono text-[10px] font-bold transition-colors cursor-pointer"
+                        >
+                          <Play className="w-2.5 h-2.5 fill-current text-cyan-300" />
+                          <span>Start {intel.shortCode} Test</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 font-mono text-[11px] text-center">
-              <div className="p-2.5 rounded-lg bg-neutral-950 border border-neutral-800">
-                <span className="text-[9px] text-neutral-500 block">CORRECT</span>
-                <strong className="text-emerald-300">
-                  {correctCount} / {RELATIVITY_IQ_QUESTIONS.length}
-                </strong>
+            {/* Bottom Launch Footer with Normative Curve Preview */}
+            <div className="p-4 rounded-2xl bg-zinc-950/90 border border-zinc-800/90 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="w-full md:w-80 p-2 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
+                <NormativeBellCurveSvg userIq={latestGrowthSnap?.compositeIq} />
               </div>
-              <div className="p-2.5 rounded-lg bg-neutral-950 border border-neutral-800">
-                <span className="text-[9px] text-neutral-500 block">SCORE</span>
-                <strong className="text-amber-300">
-                  {Math.round((earnedPoints / totalPossiblePoints) * 100)}%
-                </strong>
-              </div>
-              <div className="p-2.5 rounded-lg bg-neutral-950 border border-neutral-800">
-                <span className="text-[9px] text-neutral-500 block">TIME</span>
-                <strong className="text-cyan-300">{formattedTime}</strong>
-              </div>
-            </div>
 
-            <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800">
-              <NormativeBellCurveSvg userIq={estimatedIq} />
-            </div>
-
-            <div className="flex items-center justify-between gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  onHapticLight?.();
-                  setIsCompleted(false);
-                }}
-                className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-200 font-mono text-xs cursor-pointer"
-              >
-                Review Matrices
-              </button>
+              <div className="flex-1 space-y-2 text-center md:text-left">
+                <div className="text-xs font-mono uppercase tracking-wider text-cyan-300">
+                  Ready for Calibration · Set #{testDrawNumber}
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  Completing an assessment automatically generates a full Post-Test Telemetry Report (Headline CI, 4-Category Cognitive Sub-Domains, Per-Question Latency Curve, Difficulty Tier Calibration) and appends your scores to the D3.js Growth Analytics timeline.
+                </p>
+              </div>
 
               <button
                 type="button"
                 onClick={handleStartTest}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-cyan-500/25 hover:bg-cyan-500/35 border border-cyan-400 text-cyan-100 font-mono text-xs font-bold cursor-pointer"
+                className="w-full md:w-auto py-3 px-6 rounded-xl bg-cyan-500/25 hover:bg-cyan-500/35 border border-cyan-400 text-white font-mono text-xs font-bold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.2)] cursor-pointer transition-all shrink-0"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Retake</span>
+                <Play className="w-3.5 h-3.5 fill-current text-cyan-300" />
+                <span>
+                  Begin Assessment ({activePool.length} Items)
+                </span>
               </button>
             </div>
           </div>
         ) : (
-          /* Clean Active 3x3 Matrix View */
+          /* Active Question View — Clean Diagnostic/Code Card Layout */
           <div
             data-testid="iq-test-active-question-card"
-            className="space-y-3"
+            className="p-4 rounded-2xl bg-zinc-950/90 border border-zinc-800/90 space-y-4"
           >
-            {/* Minimal Question Bar */}
-            <div className="flex items-center justify-between gap-2 font-mono text-[11px]">
+            {/* Question Header Bar with Howard Gardner Domain Badge & Per-Question Latency */}
+            <div className="flex items-center justify-between gap-2 flex-wrap font-mono text-xs pb-3 border-b border-zinc-800/80">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2.5 py-1 rounded-lg bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 font-bold">
+                  Item {safeQuestionIdx + 1} of {activePool.length}
+                </span>
+                <span
+                  data-testid="iq-active-gardner-badge"
+                  className={`px-2.5 py-1 rounded-lg border font-semibold ${currentGardnerMeta.badgeClass}`}
+                >
+                  {currentGardnerMeta.name} ({currentGardnerMeta.smartTitle})
+                </span>
+                <span className="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 text-[11px]">
+                  {currentQuestion.domain} · {currentQuestion.difficulty} ({currentQuestion.points} pts)
+                </span>
+              </div>
+
               <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 font-bold">
-                  {safeQuestionIdx + 1} / {RELATIVITY_IQ_QUESTIONS.length}
+                <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-cyan-300 text-[11px] flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  <span>
+                    {((questionTimingsMs[currentQuestion.id] || 0) / 1000).toFixed(1)}s on item
+                  </span>
                 </span>
-                <span className="text-neutral-400 text-[10px]">
-                  {currentQuestion.batteryOrigin}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowExplanationInReview((prev) => !prev)}
+                  className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-[11px] cursor-pointer transition-colors"
+                >
+                  {showExplanationInReview ? 'Hide Hint/Logic' : 'Show Hint'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleFlag(currentQuestion.id)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border font-mono text-[11px] cursor-pointer transition-colors ${
+                    flaggedQuestions[currentQuestion.id]
+                      ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-bold'
+                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Flag className="w-3 h-3" />
+                  <span>{flaggedQuestions[currentQuestion.id] ? 'Flagged' : 'Flag'}</span>
+                </button>
               </div>
-
-              <div
-                data-testid="iq-question-prompt"
-                className="text-[11px] font-mono text-neutral-300"
-              >
-                Complete cell (3,3)
-                <span className="sr-only"> — {currentQuestion.question}</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleToggleFlag(currentQuestion.id)}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded border font-mono text-[10px] cursor-pointer transition-colors ${
-                  flaggedQuestions[currentQuestion.id]
-                    ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-bold'
-                    : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
-                }`}
-              >
-                <Flag className="w-2.5 h-2.5" />
-                <span>{flaggedQuestions[currentQuestion.id] ? 'Flagged' : 'Flag'}</span>
-              </button>
             </div>
 
-            {/* 3x3 Matrix + 6 Option Tiles */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-              {/* LEFT: 3x3 Matrix Grid */}
-              <div className="md:col-span-6 flex justify-center">
-                <div className="w-full max-w-[290px] p-2.5 rounded-xl bg-[#070a12] border border-slate-800">
-                  <div className="grid grid-cols-3 gap-2 aspect-square">
-                    {currentQuestion.matrixCells.map((cellDesc, cellIdx) => (
-                      <div
-                        key={cellIdx}
-                        className="relative aspect-square rounded-lg bg-[#0c1220] border border-slate-800 p-1.5 flex items-center justify-center overflow-hidden"
-                      >
-                        <MatrixCellSvg cell={cellDesc} />
-                      </div>
-                    ))}
+            {/* Question Prompt Banner */}
+            <div
+              data-testid="iq-question-prompt"
+              className="p-3.5 rounded-xl bg-zinc-900/70 border border-zinc-800 space-y-1.5"
+            >
+              <div className="text-xs sm:text-sm font-medium text-white leading-relaxed">
+                {currentQuestion.question}
+              </div>
+              <div className="text-[11px] font-mono text-zinc-400">
+                <strong className="text-cyan-300">{currentGardnerMeta.smartTitle}:</strong>{' '}
+                {currentGardnerMeta.description}
+              </div>
+              {showExplanationInReview && (
+                <div className="pt-2 mt-2 border-t border-zinc-800 text-xs font-mono text-amber-200/90 space-y-1">
+                  <div>
+                    <strong>Structural Hint:</strong> {currentQuestion.formulaHint}
+                  </div>
+                  {hasAnsweredCurrent && (
+                    <div className="text-emerald-300">
+                      <strong>Solution Rationale:</strong> {currentQuestion.explanation}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
-                    {/* Missing Cell (3,3) */}
-                    <div
-                      className={`relative aspect-square rounded-lg border-2 border-dashed p-1.5 flex items-center justify-center transition-all ${
-                        hasAnsweredCurrent
-                          ? 'bg-cyan-950/30 border-cyan-400'
-                          : 'bg-cyan-950/15 border-cyan-500/70'
-                      }`}
-                    >
-                      {hasAnsweredCurrent &&
-                      currentQuestion.optionCells[currentSelectedOption] ? (
-                        <MatrixCellSvg
-                          cell={currentQuestion.optionCells[currentSelectedOption]}
-                        />
-                      ) : (
-                        <span className="font-display text-2xl font-bold text-cyan-400">
-                          ?
-                        </span>
-                      )}
+            {isVisualMatrixQuestion ? (
+              /* 3x3 Visual Matrix + 6 Option Tiles (Spatial / Logical-Mathematical Matrices) */
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                {/* LEFT: 3x3 Matrix Grid */}
+                <div className="md:col-span-6 flex justify-center">
+                  <div className="w-full max-w-[300px] p-3 rounded-xl bg-[#070a12] border border-zinc-800">
+                    <div className="grid grid-cols-3 gap-2 aspect-square">
+                      {currentQuestion.matrixCells.map((cellDesc, cellIdx) => (
+                        <div
+                          key={cellIdx}
+                          className="relative aspect-square rounded-lg bg-[#0c1220] border border-slate-800 p-1.5 flex items-center justify-center overflow-hidden"
+                        >
+                          <MatrixCellSvg cell={cellDesc} />
+                        </div>
+                      ))}
+
+                      {/* Missing Cell (3,3) */}
+                      <div
+                        className={`relative aspect-square rounded-lg border-2 border-dashed p-1.5 flex items-center justify-center transition-all ${
+                          hasAnsweredCurrent
+                            ? 'bg-cyan-950/30 border-cyan-400'
+                            : 'bg-cyan-950/15 border-cyan-500/70'
+                        }`}
+                      >
+                        {hasAnsweredCurrent &&
+                        currentQuestion.optionCells[currentSelectedOption] ? (
+                          <MatrixCellSvg
+                            cell={currentQuestion.optionCells[currentSelectedOption]}
+                          />
+                        ) : (
+                          <span className="font-display text-2xl font-bold text-cyan-400">
+                            ?
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* RIGHT: 6 Visual Choice Tiles (A–F) */}
-              <div className="md:col-span-6">
+                {/* RIGHT: 6 Visual Choice Tiles (A–F) */}
+                <div className="md:col-span-6">
+                  <div
+                    className="grid grid-cols-3 gap-2.5"
+                    role="radiogroup"
+                    aria-label={currentQuestion.question}
+                  >
+                    {currentQuestion.options.map((optionText, idx) => {
+                      const isSelected = currentSelectedOption === idx;
+                      const optionCell = currentQuestion.optionCells[idx];
+
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          aria-label={`Option ${String.fromCharCode(65 + idx)}: ${optionText}`}
+                          data-testid={`iq-option-${idx}`}
+                          onClick={() => handleSelectOption(idx)}
+                          className={`relative p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                            isSelected
+                              ? 'bg-cyan-500/20 border-cyan-400 text-white ring-1 ring-cyan-400/50'
+                              : 'bg-zinc-900/70 border-zinc-800 text-zinc-300 hover:border-cyan-400/60 hover:bg-zinc-900'
+                          }`}
+                        >
+                          <span
+                            className={`self-start px-1.5 py-0.5 rounded font-mono text-[10px] font-bold ${
+                              isSelected
+                                ? 'bg-cyan-400 text-zinc-950'
+                                : 'bg-zinc-950 text-zinc-400'
+                            }`}
+                          >
+                            {String.fromCharCode(65 + idx)}
+                          </span>
+
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">
+                            {optionCell && <MatrixCellSvg cell={optionCell} />}
+                          </div>
+
+                          <span className="sr-only">{optionText}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Multi-Domain Howard Gardner Stimulus & Analytical Choice View */
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
+                {/* LEFT: Domain Stimulus Briefing Card */}
+                <div className="md:col-span-5 p-4 rounded-xl bg-zinc-900/60 border border-zinc-800 flex flex-col justify-between gap-3">
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={`px-2 py-0.5 rounded border font-mono text-[10px] font-bold ${currentGardnerMeta.badgeClass}`}
+                      >
+                        {currentGardnerMeta.shortCode} · {currentGardnerMeta.smartTitle}
+                      </span>
+                      <BookOpen className="w-4 h-4 text-zinc-500" />
+                    </div>
+
+                    <div className="text-xs font-display font-bold text-white uppercase tracking-wider">
+                      {currentQuestion.domain}
+                    </div>
+
+                    {currentQuestion.stimulusLines && currentQuestion.stimulusLines.length > 0 && (
+                      <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 font-mono text-xs text-cyan-100/90 space-y-1.5 leading-relaxed">
+                        {currentQuestion.stimulusLines.map((line, lIdx) => (
+                          <div key={lIdx} className="break-words">
+                            {line}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800/80 font-mono text-[11px] text-zinc-400">
+                    <span className="text-cyan-300 font-semibold">Analytical Principle:</span>{' '}
+                    {currentQuestion.formulaHint}
+                  </div>
+                </div>
+
+                {/* RIGHT: Analytical Options (A–D) */}
                 <div
-                  className="grid grid-cols-3 gap-2"
+                  className="md:col-span-7 flex flex-col justify-center gap-2.5"
                   role="radiogroup"
                   aria-label={currentQuestion.question}
                 >
                   {currentQuestion.options.map((optionText, idx) => {
                     const isSelected = currentSelectedOption === idx;
-                    const optionCell = currentQuestion.optionCells[idx];
-
                     return (
                       <button
                         key={idx}
@@ -2065,36 +2864,34 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                         aria-label={`Option ${String.fromCharCode(65 + idx)}: ${optionText}`}
                         data-testid={`iq-option-${idx}`}
                         onClick={() => handleSelectOption(idx)}
-                        className={`relative p-2 rounded-xl border transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
                           isSelected
                             ? 'bg-cyan-500/20 border-cyan-400 text-white ring-1 ring-cyan-400/50'
-                            : 'bg-[#0a0f1c] border-slate-800 text-neutral-300 hover:border-cyan-400/60 hover:bg-[#0f172a]'
+                            : 'bg-zinc-900/60 border-zinc-800 text-zinc-200 hover:border-cyan-400/60 hover:bg-zinc-900'
                         }`}
                       >
                         <span
-                          className={`self-start px-1.5 py-0.2 rounded font-mono text-[9px] font-bold ${
+                          className={`mt-0.5 w-6 h-6 rounded-md font-mono text-xs font-bold flex items-center justify-center shrink-0 ${
                             isSelected
-                              ? 'bg-cyan-400 text-neutral-950'
-                              : 'bg-neutral-900 text-neutral-400'
+                              ? 'bg-cyan-400 text-zinc-950'
+                              : 'bg-zinc-950 border border-zinc-700 text-zinc-300'
                           }`}
                         >
                           {String.fromCharCode(65 + idx)}
                         </span>
-
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">
-                          {optionCell && <MatrixCellSvg cell={optionCell} />}
-                        </div>
-
-                        <span className="sr-only">{optionText}</span>
+                        <span className="text-xs leading-relaxed flex-1">{optionText}</span>
+                        {isSelected && (
+                          <CheckCircle2 className="w-4 h-4 text-cyan-300 shrink-0 mt-0.5" />
+                        )}
                       </button>
                     );
                   })}
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Navigation Footer */}
-            <div className="flex items-center justify-between gap-2 pt-2 border-t border-neutral-800/80">
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-zinc-800/80">
               <button
                 type="button"
                 data-testid="iq-prev-question-btn"
@@ -2103,10 +2900,10 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                   onHapticLight?.();
                   setCurrentQuestionIdx((i) => Math.max(0, i - 1));
                 }}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border font-mono text-xs transition-colors ${
+                className={`flex items-center gap-1 px-3.5 py-2 rounded-xl border font-mono text-xs transition-colors ${
                   safeQuestionIdx === 0
-                    ? 'bg-neutral-950 border-neutral-900 text-neutral-600 cursor-not-allowed'
-                    : 'bg-neutral-900 hover:bg-neutral-800 border-neutral-700 text-neutral-200 cursor-pointer'
+                    ? 'bg-zinc-950 border-zinc-900 text-zinc-600 cursor-not-allowed'
+                    : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-200 cursor-pointer'
                 }`}
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -2114,7 +2911,7 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
               </button>
 
               <div className="flex items-center gap-1 flex-wrap justify-center">
-                {RELATIVITY_IQ_QUESTIONS.map((q, idx) => {
+                {activePool.map((q, idx) => {
                   const isAnswered = typeof selectedAnswers[q.id] === 'number';
                   const isCurrent = idx === safeQuestionIdx;
                   const isFlagged = Boolean(flaggedQuestions[q.id]);
@@ -2128,12 +2925,13 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                         onHapticLight?.();
                         setCurrentQuestionIdx(idx);
                       }}
+                      title={`${idx + 1}. ${q.moduleTitle}`}
                       className={`relative w-6 h-6 rounded-md font-mono text-[10px] font-bold border transition-all cursor-pointer ${
                         isCurrent
                           ? 'bg-cyan-500/30 border-cyan-300 text-white'
                           : isAnswered
                           ? 'bg-cyan-950/70 border-cyan-500/50 text-cyan-200'
-                          : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
+                          : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
                       }`}
                     >
                       {idx + 1}
@@ -2145,17 +2943,17 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                 })}
               </div>
 
-              {safeQuestionIdx < RELATIVITY_IQ_QUESTIONS.length - 1 ? (
+              {safeQuestionIdx < activePool.length - 1 ? (
                 <button
                   type="button"
                   data-testid="iq-next-question-btn"
                   onClick={() => {
                     onHapticLight?.();
                     setCurrentQuestionIdx((i) =>
-                      Math.min(RELATIVITY_IQ_QUESTIONS.length - 1, i + 1)
+                      Math.min(activePool.length - 1, i + 1)
                     );
                   }}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/60 text-cyan-100 font-mono text-xs font-bold cursor-pointer transition-colors"
+                  className="flex items-center gap-1 px-3.5 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/60 text-cyan-100 font-mono text-xs font-bold cursor-pointer transition-colors"
                 >
                   <span>Next</span>
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -2164,14 +2962,11 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                 <button
                   type="button"
                   data-testid="iq-finish-btn"
-                  onClick={() => {
-                    onHapticSuccess?.();
-                    setIsCompleted(true);
-                  }}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500/25 hover:bg-emerald-500/35 border border-emerald-400 text-emerald-100 font-mono text-xs font-bold cursor-pointer transition-colors"
+                  onClick={handleCompleteAssessment}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/25 hover:bg-emerald-500/35 border border-emerald-400 text-emerald-100 font-mono text-xs font-bold cursor-pointer transition-colors"
                 >
                   <Award className="w-3.5 h-3.5" />
-                  <span>Finish</span>
+                  <span>Finish &amp; View Telemetry</span>
                 </button>
               )}
             </div>

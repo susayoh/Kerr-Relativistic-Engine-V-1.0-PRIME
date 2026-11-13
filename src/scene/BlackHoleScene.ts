@@ -220,6 +220,12 @@ export interface VisualizerSettings {
   lowResolutionRender?: boolean;
   secret1987Unlocked?: boolean;
   secret1987Mode?: boolean;
+  secretQuasarJets?: boolean;
+  secretHawkingSwarm?: boolean;
+  secretWormholePortal?: boolean;
+  secretChromaticOverdrive?: boolean;
+  secretTimeReversal?: boolean;
+  secretHypernovaNonce?: number;
   language?: 'en' | 'de' | 'ja' | 'es' | 'zh';
 }
 
@@ -266,6 +272,12 @@ export const DEFAULT_VISUALIZER_SETTINGS: VisualizerSettings = {
   lowResolutionRender: false,
   secret1987Unlocked: false,
   secret1987Mode: false,
+  secretQuasarJets: false,
+  secretHawkingSwarm: false,
+  secretWormholePortal: false,
+  secretChromaticOverdrive: false,
+  secretTimeReversal: false,
+  secretHypernovaNonce: 0,
   language: 'en',
 };
 
@@ -2097,6 +2109,15 @@ export class BlackHoleSceneController {
   private secret1987EquatorialRing!: THREE.Group;
   private secret1987NorthRing!: THREE.Mesh;
   private secret1987SouthRing!: THREE.Mesh;
+  private secretQuasarJetsGroup!: THREE.Group;
+  private secretQuasarHelixGroup!: THREE.Group;
+  private secretQuasarKnotsGroup!: THREE.Group;
+  private secretHawkingSwarmGroup!: THREE.Group;
+  private secretHawkingPoints!: THREE.Points;
+  private secretHawkingBaseData!: Float32Array;
+  private secretWormholePortalGroup!: THREE.Group;
+  private secretWormholeRings: THREE.Mesh[] = [];
+  private lastSecretHypernovaNonce = 0;
 
   private buildSecret1987System() {
     this.secret1987Group = new THREE.Group();
@@ -2162,6 +2183,176 @@ export class BlackHoleSceneController {
     } satisfies InspectedFeature;
 
     this.scene.add(this.secret1987Group);
+
+    // 3. Blandford-Znajek Relativistic Quasar Jets (Polar Plasma Cones + Double-Helix Magnetic Filaments + Superluminal Shock Knots)
+    this.secretQuasarJetsGroup = new THREE.Group();
+    this.secretQuasarJetsGroup.visible = Boolean(this.settings.secretQuasarJets);
+
+    const jetCoreGeo = new THREE.CylinderGeometry(0.16, 1.45, 28, 28, 1, true);
+    const jetCoreMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.34,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const northJetCone = new THREE.Mesh(jetCoreGeo, jetCoreMat);
+    northJetCone.position.set(0, 15.2, 0);
+    northJetCone.rotation.x = Math.PI;
+    this.secretQuasarJetsGroup.add(northJetCone);
+
+    const southJetCone = new THREE.Mesh(jetCoreGeo, jetCoreMat);
+    southJetCone.position.set(0, -15.2, 0);
+    this.secretQuasarJetsGroup.add(southJetCone);
+
+    const innerBeamGeo = new THREE.CylinderGeometry(0.08, 0.32, 32, 16, 1, true);
+    const innerBeamMat = new THREE.MeshBasicMaterial({
+      color: 0xe0f2fe,
+      transparent: true,
+      opacity: 0.72,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const northInnerBeam = new THREE.Mesh(innerBeamGeo, innerBeamMat);
+    northInnerBeam.position.set(0, 17.0, 0);
+    northInnerBeam.rotation.x = Math.PI;
+    this.secretQuasarJetsGroup.add(northInnerBeam);
+
+    const southInnerBeam = new THREE.Mesh(innerBeamGeo, innerBeamMat);
+    southInnerBeam.position.set(0, -17.0, 0);
+    this.secretQuasarJetsGroup.add(southInnerBeam);
+
+    // Helical Poynting-flux magnetic filaments wrapping both polar jets
+    this.secretQuasarHelixGroup = new THREE.Group();
+    for (const signY of [1, -1]) {
+      for (let strand = 0; strand < 2; strand++) {
+        const pts: THREE.Vector3[] = [];
+        const steps = 64;
+        for (let s = 0; s <= steps; s++) {
+          const t = s / steps;
+          const y = signY * (1.8 + t * 27.0);
+          const r = 0.22 + t * 1.35;
+          const angle = t * Math.PI * 8.0 + strand * Math.PI;
+          pts.push(new THREE.Vector3(Math.cos(angle) * r, y, Math.sin(angle) * r));
+        }
+        const curve = new THREE.CatmullRomCurve3(pts);
+        const tubeGeo = new THREE.TubeGeometry(curve, 64, 0.045, 8, false);
+        const tubeMat = new THREE.MeshBasicMaterial({
+          color: strand === 0 ? 0x22d3ee : 0xc084fc,
+          transparent: true,
+          opacity: 0.78,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        this.secretQuasarHelixGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
+      }
+    }
+    this.secretQuasarJetsGroup.add(this.secretQuasarHelixGroup);
+
+    // Superluminal ballistic plasma shock knots pulsing outward along ±Y
+    this.secretQuasarKnotsGroup = new THREE.Group();
+    const knotGeo = new THREE.SphereGeometry(0.28, 12, 12);
+    const knotMat = new THREE.MeshBasicMaterial({
+      color: 0xfef08a,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    for (let k = 0; k < 12; k++) {
+      const knot = new THREE.Mesh(knotGeo, knotMat);
+      knot.userData.knotIndex = k;
+      this.secretQuasarKnotsGroup.add(knot);
+    }
+    this.secretQuasarJetsGroup.add(this.secretQuasarKnotsGroup);
+    this.scene.add(this.secretQuasarJetsGroup);
+
+    // 4. Hawking Quantum Pair-Production Storm (Cherenkov Vacuum Fluctuation Swarm)
+    this.secretHawkingSwarmGroup = new THREE.Group();
+    this.secretHawkingSwarmGroup.visible = Boolean(this.settings.secretHawkingSwarm);
+    const swarmCount = 320;
+    const swarmPositions = new Float32Array(swarmCount * 3);
+    const swarmColors = new Float32Array(swarmCount * 3);
+    this.secretHawkingBaseData = new Float32Array(swarmCount * 4);
+    for (let i = 0; i < swarmCount; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const speed = 0.55 + Math.random() * 1.25;
+      const phase = Math.random();
+      this.secretHawkingBaseData[i * 4 + 0] = theta;
+      this.secretHawkingBaseData[i * 4 + 1] = phi;
+      this.secretHawkingBaseData[i * 4 + 2] = speed;
+      this.secretHawkingBaseData[i * 4 + 3] = phase;
+
+      const r = 2.25 + phase * 9.5;
+      swarmPositions[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta);
+      swarmPositions[i * 3 + 1] = r * Math.cos(phi);
+      swarmPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+
+      // Alternating matter (cyan-emerald) & antimatter (magenta-gold) Cherenkov pairs
+      if (i % 2 === 0) {
+        swarmColors[i * 3 + 0] = 0.22;
+        swarmColors[i * 3 + 1] = 0.95;
+        swarmColors[i * 3 + 2] = 1.0;
+      } else {
+        swarmColors[i * 3 + 0] = 0.98;
+        swarmColors[i * 3 + 1] = 0.38;
+        swarmColors[i * 3 + 2] = 0.92;
+      }
+    }
+    const swarmGeo = new THREE.BufferGeometry();
+    swarmGeo.setAttribute('position', new THREE.BufferAttribute(swarmPositions, 3));
+    swarmGeo.setAttribute('color', new THREE.BufferAttribute(swarmColors, 3));
+    const swarmMat = new THREE.PointsMaterial({
+      size: 0.24,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.92,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.secretHawkingPoints = new THREE.Points(swarmGeo, swarmMat);
+    this.secretHawkingSwarmGroup.add(this.secretHawkingPoints);
+    this.scene.add(this.secretHawkingSwarmGroup);
+
+    // 5. Einstein-Rosen Wormhole Throat Cage (Nested Gyroscopic Exotic-Matter Rings)
+    this.secretWormholePortalGroup = new THREE.Group();
+    this.secretWormholePortalGroup.visible = Boolean(this.settings.secretWormholePortal);
+    this.secretWormholeRings = [];
+    const ringConfigs = [
+      { radius: 3.15, tube: 0.055, color: 0x22d3ee, tiltX: 0.35, tiltZ: 0.2 },
+      { radius: 3.85, tube: 0.05, color: 0xa855f7, tiltX: -0.55, tiltZ: 0.45 },
+      { radius: 4.55, tube: 0.045, color: 0x34d399, tiltX: 0.75, tiltZ: -0.35 },
+    ];
+    for (const cfg of ringConfigs) {
+      const rGeo = new THREE.TorusGeometry(cfg.radius, cfg.tube, 16, 96);
+      const rMat = new THREE.MeshBasicMaterial({
+        color: cfg.color,
+        transparent: true,
+        opacity: 0.78,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const rMesh = new THREE.Mesh(rGeo, rMat);
+      rMesh.rotation.set(cfg.tiltX, 0, cfg.tiltZ);
+      this.secretWormholeRings.push(rMesh);
+      this.secretWormholePortalGroup.add(rMesh);
+    }
+    const portalCageGeo = new THREE.IcosahedronGeometry(2.75, 2);
+    const portalCageMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.28,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const portalCageMesh = new THREE.Mesh(portalCageGeo, portalCageMat);
+    this.secretWormholeRings.push(portalCageMesh);
+    this.secretWormholePortalGroup.add(portalCageMesh);
+    this.scene.add(this.secretWormholePortalGroup);
   }
 
   private buildBinaryAccretionSystem() {
@@ -2520,7 +2711,10 @@ export class BlackHoleSceneController {
 
     if (this.spacetimeWellMesh) {
       const wellMat = this.spacetimeWellMesh.material as THREE.MeshBasicMaterial;
-      if (this.settings.secret1987Mode) {
+      if (this.settings.secretTimeReversal) {
+        wellMat.color.setHex(0x10b981);
+        wellMat.opacity = 0.44 + this.pulseStrength * 0.14;
+      } else if (this.settings.secret1987Mode) {
         wellMat.color.setHex(0xf59e0b);
         wellMat.opacity = 0.42 + this.pulseStrength * 0.14;
       } else {
@@ -2669,6 +2863,8 @@ export class BlackHoleSceneController {
         uResolution: { value: new THREE.Vector2(rtWidth, rtHeight) },
         uTimeLapseMix: { value: 0.0 },
         uExposureBoost: { value: 0.0 },
+        uSecretChromatic: { value: 0.0 },
+        uTime: { value: 0.0 },
       },
       vertexShader: MOTION_BLUR_VERTEX_SHADER,
       fragmentShader: MOTION_BLUR_FRAGMENT_SHADER,
@@ -4206,8 +4402,9 @@ export class BlackHoleSceneController {
     const wallDelta = Math.min(2.5, Math.max(0.001, clockDelta));
     const rawDelta = Math.min(0.25, clockDelta);
     const simDelta = wallDelta * this.params.timeScale;
+    const timeDir = this.settings.secretTimeReversal ? -1.0 : 1.0;
     // 1. Advance Simulation Time & Pre-Compute Uniform-Buffer Orbital Turbulence Math
-    this.accretionDiskSimTime += simDelta;
+    this.accretionDiskSimTime += simDelta * timeDir;
     const elapsed = this.accretionDiskSimTime;
 
     if (this.accretionDiskMat) {
@@ -4306,9 +4503,62 @@ export class BlackHoleSceneController {
       this.secret1987Group.visible = Boolean(this.settings.secret1987Mode);
       if (this.settings.secret1987Mode) {
         this.secret1987Group.scale.setScalar(this.currentScale);
-        this.secret1987EquatorialRing.rotation.y += simDelta * 0.45;
-        this.secret1987NorthRing.rotation.y -= simDelta * 0.32;
-        this.secret1987SouthRing.rotation.y += simDelta * 0.32;
+        this.secret1987EquatorialRing.rotation.y += simDelta * 0.45 * timeDir;
+        this.secret1987NorthRing.rotation.y -= simDelta * 0.32 * timeDir;
+        this.secret1987SouthRing.rotation.y += simDelta * 0.32 * timeDir;
+      }
+    }
+    if (this.secretQuasarJetsGroup) {
+      const showJets = Boolean(this.settings.secretQuasarJets);
+      this.secretQuasarJetsGroup.visible = showJets;
+      if (showJets) {
+        this.secretQuasarJetsGroup.scale.setScalar(this.currentScale);
+        this.secretQuasarHelixGroup.rotation.y += simDelta * 2.4 * timeDir;
+        const knots = this.secretQuasarKnotsGroup.children;
+        for (let k = 0; k < knots.length; k++) {
+          const knot = knots[k];
+          const sign = k % 2 === 0 ? 1 : -1;
+          const phase = ((elapsed * 0.65 * timeDir + k * 0.17) % 1.0 + 1.0) % 1.0;
+          const yPos = sign * (2.2 + phase * 26.5);
+          const pulseScale = (0.65 + 0.55 * Math.sin(phase * Math.PI)) * (1.0 + 0.25 * Math.sin(elapsed * 6.0 + k));
+          knot.position.set(0, yPos, 0);
+          knot.scale.setScalar(pulseScale);
+        }
+      }
+    }
+    if (this.secretHawkingSwarmGroup && this.secretHawkingPoints) {
+      const showSwarm = Boolean(this.settings.secretHawkingSwarm);
+      this.secretHawkingSwarmGroup.visible = showSwarm;
+      if (showSwarm) {
+        this.secretHawkingSwarmGroup.scale.setScalar(this.currentScale);
+        const posAttr = this.secretHawkingPoints.geometry.getAttribute('position') as THREE.BufferAttribute;
+        const arr = posAttr.array as Float32Array;
+        const count = this.secretHawkingBaseData.length / 4;
+        for (let i = 0; i < count; i++) {
+          const baseTheta = this.secretHawkingBaseData[i * 4 + 0];
+          const basePhi = this.secretHawkingBaseData[i * 4 + 1];
+          const speed = this.secretHawkingBaseData[i * 4 + 2];
+          const phase0 = this.secretHawkingBaseData[i * 4 + 3];
+          const cyc = ((phase0 + elapsed * speed * 0.28 * timeDir) % 1.0 + 1.0) % 1.0;
+          const r = 2.18 + cyc * 9.8;
+          const theta = baseTheta + cyc * 3.6 * timeDir;
+          arr[i * 3 + 0] = r * Math.sin(basePhi) * Math.cos(theta);
+          arr[i * 3 + 1] = r * Math.cos(basePhi);
+          arr[i * 3 + 2] = r * Math.sin(basePhi) * Math.sin(theta);
+        }
+        posAttr.needsUpdate = true;
+      }
+    }
+    if (this.secretWormholePortalGroup) {
+      const showPortal = Boolean(this.settings.secretWormholePortal);
+      this.secretWormholePortalGroup.visible = showPortal;
+      if (showPortal) {
+        this.secretWormholePortalGroup.scale.setScalar(this.currentScale);
+        this.secretWormholeRings.forEach((ring, idx) => {
+          const dir = idx % 2 === 0 ? 1 : -1;
+          ring.rotation.x += simDelta * (0.65 + idx * 0.22) * dir * timeDir;
+          ring.rotation.y += simDelta * (0.85 - idx * 0.15) * -dir * timeDir;
+        });
       }
     }
 
@@ -5320,9 +5570,10 @@ export class BlackHoleSceneController {
         this.settings.motionBlurEnabled &&
         this.camMotionBlurStrength > 0.035;
       const useTimeLapse = Boolean(this.settings.timeLapseEnabled);
+      const useSecretChromatic = Boolean(this.settings.secretChromaticOverdrive);
 
       if (
-        (useMotionBlur || useTimeLapse) &&
+        (useMotionBlur || useTimeLapse || useSecretChromatic) &&
         this.motionBlurRenderTarget &&
         this.postMaterial &&
         this.timeLapseTargetA &&
@@ -5345,6 +5596,8 @@ export class BlackHoleSceneController {
           ? this.camMotionBlurStrength
           : 0.0;
         this.postMaterial.uniforms.uVelocity.value.copy(this.camMotionVelocity);
+        this.postMaterial.uniforms.uSecretChromatic.value = useSecretChromatic ? 1.0 : 0.0;
+        this.postMaterial.uniforms.uTime.value = elapsed;
 
         safePerfMark(KERR_PERF_MARKS.gpuScenePassStart);
         this.renderer.setRenderTarget(this.motionBlurRenderTarget);
@@ -6570,16 +6823,35 @@ export class BlackHoleSceneController {
       relativisticAudio.triggerAccretionShockPulse(isStellarCategory(this.params.objectCategory));
     }
     const isSecret1987 = Boolean(nextSettings.secret1987Mode);
+    const wasTimeReversal = Boolean(this.settings?.secretTimeReversal);
+    const isTimeReversal = Boolean(nextSettings.secretTimeReversal);
 
     if (this.secret1987Group) {
       this.secret1987Group.visible = isSecret1987;
     }
-    if (isSecret1987 !== wasSecret1987) {
+    if (this.secretQuasarJetsGroup) {
+      this.secretQuasarJetsGroup.visible = Boolean(nextSettings.secretQuasarJets);
+    }
+    if (this.secretHawkingSwarmGroup) {
+      this.secretHawkingSwarmGroup.visible = Boolean(nextSettings.secretHawkingSwarm);
+    }
+    if (this.secretWormholePortalGroup) {
+      this.secretWormholePortalGroup.visible = Boolean(nextSettings.secretWormholePortal);
+    }
+    if (isSecret1987 !== wasSecret1987 || isTimeReversal !== wasTimeReversal) {
       this.deformSpacetimeWell(this.params.massSolar, this.params.spin);
-      if (isSecret1987) {
+      if (isSecret1987 || isTimeReversal) {
         this.triggerAccretionShockwave(1.5, true);
         this.spawnParameterRipple('mixed', 1.35);
       }
+    }
+    const nextHypernovaNonce = nextSettings.secretHypernovaNonce ?? 0;
+    if (nextHypernovaNonce > this.lastSecretHypernovaNonce) {
+      this.lastSecretHypernovaNonce = nextHypernovaNonce;
+      this.triggerEventHorizonPulse(this.params.objectCategory, true);
+      this.triggerAccretionShockwave(1.95, true);
+      this.spawnParameterRipple('mixed', 1.85);
+      relativisticAudio.triggerAccretionShockPulse(isStellarCategory(this.params.objectCategory));
     }
 
     const isClassicDisk = nextSettings.accretionDiskStyle !== 'raymarched';

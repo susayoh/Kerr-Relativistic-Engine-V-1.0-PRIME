@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Code,
   FileCode,
@@ -34,24 +34,54 @@ export interface CodeFileInfo {
   techTags: string[];
 }
 
-// Live Vite raw source glob so every code edit or newly added file in /src automatically updates the Code tab
-const RAW_SRC_FILES: Record<string, string> =
-  typeof import.meta !== 'undefined' && typeof (import.meta as unknown as { glob?: unknown }).glob === 'function'
-    ? (import.meta as unknown as {
-        glob: (pattern: string[], opts: { query: string; import: string; eager: boolean }) => Record<string, string>;
-      }).glob(
-        [
-          '/src/**/*.{ts,tsx,css}',
-          '/server.ts',
-          '/index.html',
-          '/package.json',
-          '/vite.config.ts',
-          '/tsconfig.json',
-          '/metadata.json',
-        ],
-        { query: '?raw', import: 'default', eager: true }
-      )
-    : {};
+// Live Vite raw source glob (MUST be a literal import.meta.glob call so Vite's AST compiler transforms it)
+let RAW_SRC_FILES: Record<string, string> = {};
+try {
+  // @ts-ignore - Vite compile-time literal glob transform
+  const globResult = import.meta.glob(
+    [
+      '/src/**/*.{ts,tsx,css,json}',
+      '/server.ts',
+      '/index.html',
+      '/package.json',
+      '/vite.config.ts',
+      '/tsconfig.json',
+      '/metadata.json',
+    ],
+    { query: '?raw', import: 'default', eager: true }
+  );
+  if (globResult && typeof globResult === 'object') {
+    RAW_SRC_FILES = globResult as Record<string, string>;
+  }
+} catch {
+  // Fallback in non-Vite Node test environments
+}
+
+// Live on-disk file metrics synced from /api/codebase/telemetry so every update is reflected immediately
+let LIVE_SERVER_METRICS: Record<string, { lines: number; bytes: number; preview: string }> = {};
+const serverMetricsListeners = new Set<() => void>();
+let isFetchingServerMetrics = false;
+
+export function syncLiveCodebaseFromServer(): void {
+  if (typeof window === 'undefined' || typeof fetch !== 'function' || isFetchingServerMetrics) {
+    return;
+  }
+  isFetchingServerMetrics = true;
+  fetch('/api/codebase/telemetry')
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (data && data.files && typeof data.files === 'object') {
+        LIVE_SERVER_METRICS = data.files;
+        serverMetricsListeners.forEach((cb) => cb());
+      }
+    })
+    .catch(() => {
+      // Ignore offline/test environment errors
+    })
+    .finally(() => {
+      isFetchingServerMetrics = false;
+    });
+}
 
 function countRawLines(raw: string): number {
   if (!raw) return 0;
@@ -59,22 +89,51 @@ function countRawLines(raw: string): number {
   return raw.endsWith('\n') ? Math.max(1, lines - 1) : lines;
 }
 
+export const RECENT_CODEBASE_UPDATES = [
+  {
+    title: 'D3.js Growth Analytics Dashboard & Post-Test Telemetry Report',
+    files: 'GrowthAnalyticsDashboard.tsx, iqTelemetryEngine.ts, IQTestModule.tsx',
+    summary:
+      'Implemented D3.js longitudinal line charts across Howard Gardner’s 9 intelligence domains, an aerospace Post-Test Telemetry Report (Headline CI, 4-Category Sub-Domains, Per-Question Latency Curve, Difficulty Calibration, JSON/Summary export), and cleaned up the IQ Test UI to match the Diagnostic & Code tabs.',
+  },
+  {
+    title: 'Howard Gardner’s 9 Multiple Intelligences & 85-Question IQ Database',
+    files: 'IQTestModule.tsx, iqQuestionBank.ts, CodebaseDetailsView.tsx',
+    summary:
+      'Expanded IQ Test into an 85-question master database with stratified non-repeating random sampling across Howard Gardner’s 9 Primary Intelligences (Linguistic, Logical-Mathematical, Spatial, Musical, Bodily-Kinesthetic, Interpersonal, Intrapersonal, Naturalist, Existential) plus 24 visual 3×3 matrices.',
+  },
+  {
+    title: 'Lyric Sync Mode Toggle (Teleprompter, Cinema Stage & Full Lyrics)',
+    files: 'SettingsModal.tsx, songLyrics.ts, coreLyricsData.json, trapQueenPlayer.ts',
+    summary:
+      'Added interactive Lyric Sync Mode toggle with 60ms (16.7Hz) high-precision playback clock, word-by-word highlight & syllable progress bar, 7-line Cinema Stage spotlight synchronized 1:1 with Teleprompter, and ±0.25s vocal sync calibrator.',
+  },
+  {
+    title: 'Authentic Studio Master Audio & Duration Verification',
+    files: 'server.ts, importedTracks.ts, trapQueenPlayer.ts',
+    summary:
+      'Mapped Eminem & major-label tracks to 320kbps/FLAC studio masters, added Apple Music/iTunes studio duration cross-checking, and preserved 1:1 [mm:ss.xx] LRC studio timestamps.',
+  },
+] as const;
+
 const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/scene/BlackHoleScene.ts',
     name: 'BlackHoleScene.ts',
-    lines: 7452,
+    lines: 7529,
+    bytes: 317294,
     subsystem: 'shaders',
     subsystemName: '3D Graphics & Shaders',
     description:
-      'Three.js WebGL rendering pipeline, modular GLSL spacetime raymarching shader orchestration, Hardware WebGL Shader Pre-Warming Cache (geodesic, accretion disk, ergosphere), High-Definition Multi-Stage Supersonic Boom shockwave, Dynamic Quality Tier shader swapping, and Thermal Throttling (u_stepCount).',
+      'Three.js WebGL rendering pipeline, modular GLSL spacetime raymarching shader orchestration, Hardware WebGL Shader Pre-Warming Cache, Supersonic Boom shockwave, Classified 1987 6-Module Anomaly Suite (Quasar Jets, Hawking Swarm, Wormhole Cage, Tachyon Reversal, 1987A Hypernova), and Thermal Throttling.',
     role: 'Primary 3D WebGL Engine, Shader Pre-Warmer & Core',
-    techTags: ['Three.js', 'Custom GLSL', 'Shader Pre-Warming', 'Supersonic Mach Boom', 'Thermal Throttling', 'WebGL2'],
+    techTags: ['Three.js', 'Custom GLSL', 'Shader Pre-Warming', 'Classified 1987 Suite', 'Thermal Throttling', 'WebGL2'],
   },
   {
     path: 'src/scene/shaders/kerrRaymarch.glsl.ts',
     name: 'kerrRaymarch.glsl.ts',
-    lines: 1206,
+    lines: 1205,
+    bytes: 63660,
     subsystem: 'shaders',
     subsystemName: '3D Graphics & Shaders',
     description:
@@ -85,18 +144,20 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/scene/shaders/postProcess.glsl.ts',
     name: 'postProcess.glsl.ts',
-    lines: 990,
+    lines: 973,
+    bytes: 38289,
     subsystem: 'shaders',
     subsystemName: '3D Graphics & Shaders',
     description:
-      'Post-processing, relativistic motion blur, long-exposure time-lapse accumulation, anamorphic & hexagonal aperture lens flare, high-definition Prandtl-Glauert supersonic Mach shockwave, Roche-lobe companion star, and lensed starfield GLSL shaders.',
-    role: 'Post-Processing, Anamorphic Flare & Shockwave GLSL Shaders',
-    techTags: ['Anamorphic Flare', 'Supersonic Shockwave', 'Motion Blur', 'Roche Lobe GLSL'],
+      'Post-processing, relativistic motion blur, long-exposure time-lapse accumulation, anamorphic & hexagonal aperture lens flare, 1987 Chromatic Prism RGB dispersion & CRT scanline shader, Prandtl-Glauert supersonic shockwave, and lensed starfield GLSL shaders.',
+    role: 'Post-Processing, Chromatic Prism, Flare & Shockwave Shaders',
+    techTags: ['Anamorphic Flare', '1987 Chromatic Prism', 'Supersonic Shockwave', 'Motion Blur', 'GLSL'],
   },
   {
     path: 'src/scene/kerrUniforms.ts',
     name: 'kerrUniforms.ts',
-    lines: 371,
+    lines: 370,
+    bytes: 12801,
     subsystem: 'shaders',
     subsystemName: '3D Graphics & Shaders',
     description:
@@ -107,7 +168,8 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/scene/cameraMath.ts',
     name: 'cameraMath.ts',
-    lines: 326,
+    lines: 325,
+    bytes: 9597,
     subsystem: 'shaders',
     subsystemName: '3D Graphics & Shaders',
     description:
@@ -118,18 +180,20 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/scene/renderScaleUtils.ts',
     name: 'renderScaleUtils.ts',
-    lines: 615,
+    lines: 663,
+    bytes: 22648,
     subsystem: 'shaders',
     subsystemName: '3D Graphics & Shaders',
     description:
-      'Desktop pixel-ratio clamping, 30-frame rolling FPS dynamic resolution scaler, User Timing API (performance.mark / performance.measure) pass classifier, Full Geodesic vs. Approximated Null-Geodesic shader snippet generator, passive-cooling RC thermal throttling state machine for u_stepCount, and Shader Pre-Warming Cache manifest & telemetry report builder.',
-    role: 'GPU Performance, Shader Pre-Warming & Thermal Engine',
+      'Desktop pixel-ratio clamping, 30-frame rolling FPS dynamic resolution scaler, User Timing API pass classifier, Full Geodesic vs. Approximated Null-Geodesic shader snippet generator, passive-cooling RC thermal throttling state machine, and Shader Pre-Warming Cache manifest.',
+    role: 'GPU Performance, Shader Pre-Warmer & Thermal Engine',
     techTags: ['Shader Pre-Warming', 'Thermal Throttling', 'User Timing API', 'Dynamic DPR', 'GLSL Snippets'],
   },
   {
     path: 'src/scene/renderScaleUtils.test.ts',
     name: 'renderScaleUtils.test.ts',
-    lines: 332,
+    lines: 447,
+    bytes: 15774,
     subsystem: 'shaders',
     subsystemName: '3D Graphics & Shaders',
     description:
@@ -140,29 +204,32 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/components/SettingsModal.tsx',
     name: 'SettingsModal.tsx',
-    lines: 3583,
+    lines: 5185,
+    bytes: 247800,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
-      'Multi-tab control center providing visualizer settings, audio/theme preferences, Spotify-style Songs player, diagnostic curvature stress-test suite, and codebase telemetry dashboard.',
-    role: 'Central Settings & Audio/Diagnostic Hub',
-    techTags: ['React 18', 'Framer Motion', 'Tailwind CSS', 'State Management'],
+      'Multi-tab control center providing visualizer settings, Classified 1987 6-anomaly vault, Spotify-style Songs player with minimizable bottom bar, Lyric Sync (Teleprompter, Cinema Stage & Full Lyrics with word-by-word highlight & sync offset), persistent IQ Test host, diagnostic stress-test suite, and live Code tab.',
+    role: 'Central Settings, Lyric Sync Audio Deck & Diagnostic Hub',
+    techTags: ['React 19', 'Lyric Sync Engine', 'Cinema Stage', 'Minimizable Player', 'Tailwind CSS'],
   },
   {
     path: 'src/App.tsx',
     name: 'App.tsx',
-    lines: 2793,
+    lines: 2941,
+    bytes: 118740,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
-      'Root application orchestrator managing Three.js canvas mounts, Focus Mode transitions, boot telemetry sequence, 12-ray singularity watermark rendering, event log JSON exports, and synchronized compare viewports.',
+      'Root application orchestrator managing Three.js canvas mounts, Focus Mode transitions, Kerr-Newman Metric Core boot telemetry sequence, 12-ray singularity watermark rendering, event log JSON exports, and synchronized compare viewports.',
     role: 'Application Orchestrator & Viewport Host',
-    techTags: ['React 18', 'Canvas Compositing', 'HTML5 to-image', 'Hooks', 'Keyboard Shortcuts'],
+    techTags: ['React 19', 'Canvas Compositing', 'HTML5 to-image', 'Hooks', 'Keyboard Shortcuts'],
   },
   {
     path: 'src/components/ControlDock.tsx',
     name: 'ControlDock.tsx',
     lines: 2684,
+    bytes: 125747,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -174,6 +241,7 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     path: 'src/components/ChessModule.tsx',
     name: 'ChessModule.tsx',
     lines: 2206,
+    bytes: 74226,
     subsystem: 'interactive',
     subsystemName: 'Interactive Modules',
     description:
@@ -184,18 +252,56 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/components/IQTestModule.tsx',
     name: 'IQTestModule.tsx',
-    lines: 2183,
+    lines: 2790,
+    bytes: 124500,
     subsystem: 'interactive',
     subsystemName: 'Interactive Modules',
     description:
-      'Standardized 24-question psychometric intelligence assessment featuring authentic Mensa-style pattern sequences and Raven’s Progressive Matrices, countdown timer, timed question presentation, and percentile distribution scoring.',
-    role: 'Standardized Psychometric Matrix Assessment',
-    techTags: ['Matrix Reasoning', 'Psychometrics', 'SVG Pattern Generator', 'Timed Assessment'],
+      'Comprehensive psychometric & Howard Gardner 9 Multiple Intelligences assessment suite with Diagnostic/Code-matched observatory UI, 85-question master database, 24 Raven’s/Mensa 3×3 visual matrices, D3.js Growth Analytics integration, and Post-Test Telemetry Report.',
+    role: 'Howard Gardner 9-Intelligence & Matrix IQ Assessment Engine',
+    techTags: ['Howard Gardner 9 Intelligences', 'D3.js Analytics', 'Post-Test Telemetry', '3×3 Matrix SVG'],
+  },
+  {
+    path: 'src/components/GrowthAnalyticsDashboard.tsx',
+    name: 'GrowthAnalyticsDashboard.tsx',
+    lines: 1138,
+    bytes: 44941,
+    subsystem: 'interactive',
+    subsystemName: 'Interactive Modules',
+    description:
+      'D3.js longitudinal Growth Analytics dashboard visualizing user progress across all 9 intelligence domains over time with interactive domain curves, plus the aerospace Post-Test Telemetry Report (Headline CI, 4-Category Sub-Domains, Per-Question Latency Curve, Difficulty Calibration, and JSON/Summary export).',
+    role: 'D3.js Longitudinal Growth Analytics & Post-Test Telemetry Dashboard',
+    techTags: ['D3.js Line Charts', 'Latency Curve', '9-Axis Radar', 'Difficulty Calibration'],
+  },
+  {
+    path: 'src/components/iqTelemetryEngine.ts',
+    name: 'iqTelemetryEngine.ts',
+    lines: 665,
+    bytes: 20503,
+    subsystem: 'interactive',
+    subsystemName: 'Interactive Modules',
+    description:
+      'Pure psychometric telemetry and growth calculation engine computing normal CDF percentiles, confidence intervals, 4-category cognitive sub-domain accuracy & latency, per-question latency curves, difficulty tier pass rates, and longitudinal 9-domain trajectory deltas.',
+    role: 'Psychometric Telemetry & Longitudinal Growth Calculation Engine',
+    techTags: ['Normal CDF Percentile', 'Sub-Domain Classifier', 'Latency Telemetry', 'Longitudinal History'],
+  },
+  {
+    path: 'src/components/iqQuestionBank.ts',
+    name: 'iqQuestionBank.ts',
+    lines: 1215,
+    bytes: 51800,
+    subsystem: 'interactive',
+    subsystemName: 'Interactive Modules',
+    description:
+      'Master question bank defining Howard Gardner’s 9 Primary Intelligences (Linguistic/Word Smart, Logical-Mathematical/Number Smart, Spatial/Picture Smart, Musical/Music Smart, Bodily-Kinesthetic/Body Smart, Interpersonal/People Smart, Intrapersonal/Self Smart, Naturalist/Nature Smart, Existential/Philosophy Smart) and stratified non-repeating test sampling.',
+    role: '9-Domain Multiple Intelligences Question Bank & Stratified Sampler',
+    techTags: ['Multiple Intelligences', 'Stratified Sampling', 'Psychometric Bank', 'Anti-Repetition Memory'],
   },
   {
     path: 'src/physics/gravitationalPhysics.ts',
     name: 'gravitationalPhysics.ts',
     lines: 1439,
+    bytes: 56405,
     subsystem: 'physics',
     subsystemName: 'Mathematical Physics',
     description:
@@ -206,7 +312,8 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/components/KerrRelativityEngineModal.tsx',
     name: 'KerrRelativityEngineModal.tsx',
-    lines: 1046,
+    lines: 1212,
+    bytes: 52284,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -217,18 +324,20 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/components/CodebaseDetailsView.tsx',
     name: 'CodebaseDetailsView.tsx',
-    lines: 1115,
+    lines: 1425,
+    bytes: 65200,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
-      'Interactive codebase telemetry dashboard and architectural analytics module reporting line counts, subsystem categorization, technology stack breakdown, and exportable documentation.',
-    role: 'Codebase Metrics & Architecture Telemetry Dashboard',
-    techTags: ['Interactive Filtering', 'Live Search', 'Subsystem Metrics', 'Markdown & JSON Export'],
+      'Live auto-syncing codebase telemetry dashboard combining Vite ?raw compile-time introspection and /api/codebase/telemetry filesystem inspection to report real-time line counts, byte sizes, subsystem distribution, and recent update logs.',
+    role: 'Live Codebase Metrics & Update Telemetry Dashboard',
+    techTags: ['Live Filesystem Sync', 'Vite ?raw Glob', 'Subsystem Metrics', 'Markdown & JSON Export'],
   },
   {
     path: 'src/components/DiagnosticSuiteView.tsx',
     name: 'DiagnosticSuiteView.tsx',
     lines: 543,
+    bytes: 24385,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -240,6 +349,7 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     path: 'src/components/CompareModeOverlay.tsx',
     name: 'CompareModeOverlay.tsx',
     lines: 907,
+    bytes: 39597,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -250,7 +360,8 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/index.css',
     name: 'index.css',
-    lines: 906,
+    lines: 969,
+    bytes: 24071,
     subsystem: 'infra',
     subsystemName: 'Styling & Infrastructure',
     description:
@@ -262,6 +373,7 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     path: 'src/components/TopBar.tsx',
     name: 'TopBar.tsx',
     lines: 772,
+    bytes: 32283,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -270,31 +382,70 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     techTags: ['Dropdown Selectors', 'Record Actions', 'Haptic Triggers', 'Responsive Header'],
   },
   {
-    path: 'src/audio/importedTracks.ts',
-    name: 'importedTracks.ts',
-    lines: 4766,
+    path: 'server.ts',
+    name: 'server.ts',
+    lines: 1184,
+    bytes: 38250,
     subsystem: 'audio',
     subsystemName: 'Audio & Sonification',
     description:
-      'Complete 266-track audio catalog containing song titles, artist metadata, high-resolution album cover URLs, audio preview streams, durations, BPM tempos, and genre classifications for the Songs tab.',
-    role: 'Master Playlist Track Catalog & Audio Metadata',
-    techTags: ['Audio Catalog', '266 Tracks', 'Cover Artwork', 'Stream Sources'],
+      'Express backend server featuring Verified Studio Master audio resolution (Archive.org FLAC/320kbps + SoundCloud progressive/HLS stream assembler), Apple Music/iTunes studio duration verification, 1:1 LRCLIB synced lyrics proxy (/api/audio/lyrics), and live filesystem codebase telemetry (/api/codebase/telemetry).',
+    role: 'Studio Audio Resolver, Synced Lyrics Proxy & Telemetry Server',
+    techTags: ['Express', 'Studio Master Resolver', 'iTunes Duration Lookup', 'LRCLIB 1:1 Sync', 'HTTP Range Streaming'],
+  },
+  {
+    path: 'src/audio/importedTracks.ts',
+    name: 'importedTracks.ts',
+    lines: 4479,
+    bytes: 165391,
+    subsystem: 'audio',
+    subsystemName: 'Audio & Sonification',
+    description:
+      'Complete 274-track audio catalog containing song titles, artist metadata, high-resolution album cover URLs, verified studio master durations, Archive.org/SoundCloud stream sources, BPM tempos, and genre classifications.',
+    role: 'Master Playlist Track Catalog & Studio Audio Metadata',
+    techTags: ['Audio Catalog', '274 Tracks', 'Studio Durations', 'Stream Sources'],
+  },
+  {
+    path: 'src/audio/coreLyricsData.json',
+    name: 'coreLyricsData.json',
+    lines: 2437,
+    bytes: 53620,
+    subsystem: 'audio',
+    subsystemName: 'Audio & Sonification',
+    description:
+      'Embedded millisecond-accurate studio LRC lyric dataset providing instant zero-latency synchronized subtitles and word-by-word timing for core playlist tracks.',
+    role: 'Embedded Studio LRC Synced Lyrics Dataset',
+    techTags: ['LRC Timestamps', 'Zero-Latency Lyrics', 'Studio Timecodes', 'JSON Dataset'],
   },
   {
     path: 'src/audio/trapQueenPlayer.ts',
     name: 'trapQueenPlayer.ts',
-    lines: 726,
+    lines: 1535,
+    bytes: 51559,
     subsystem: 'audio',
     subsystemName: 'Audio & Sonification',
     description:
-      'Web Audio API multi-track procedural player with stereo panning, variable playback speed (0.5x–2.0x), real-time frequency band FFT analysis, playlist manager, and procedural fallback beat synthesizer.',
-    role: 'Web Audio Music Player & Procedural Beat Engine',
-    techTags: ['Web Audio API', 'FFT Analyser', 'AudioContext', 'Procedural Synthesis'],
+      'Web Audio API multi-track mastering player with 60ms (16.7Hz) high-precision lyric clock, 3-band DSP equalizer, stereo panning, variable playback speed (0.5x–2.0x), real-time 16-band FFT spectrum analysis, and queue completeness validator.',
+    role: 'Web Audio Mastering Player & High-Precision Clock Engine',
+    techTags: ['Web Audio API', '60ms Lyric Clock', '3-Band EQ', 'FFT Analyser'],
+  },
+  {
+    path: 'src/audio/songLyrics.ts',
+    name: 'songLyrics.ts',
+    lines: 315,
+    bytes: 9985,
+    subsystem: 'audio',
+    subsystemName: 'Audio & Sonification',
+    description:
+      'Synchronized lyrics engine featuring 0.01s LRC timestamp parser, 1:1 studio timecode preservation, vocal onset anticipation lead, ±5.0s user sync offset calibration, and real-time word-by-word progress interpolation.',
+    role: 'Lyric Sync Parser & Word-by-Word Progress Engine',
+    techTags: ['Lyric Sync', 'LRC Parser', 'Word-by-Word Progress', 'LRCLIB Client'],
   },
   {
     path: 'src/scene/CompactStarMaterial.ts',
     name: 'CompactStarMaterial.ts',
     lines: 698,
+    bytes: 26941,
     subsystem: 'shaders',
     subsystemName: '3D Graphics & Shaders',
     description:
@@ -305,7 +456,8 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/components/MetricTelemetryOverlay.tsx',
     name: 'MetricTelemetryOverlay.tsx',
-    lines: 694,
+    lines: 701,
+    bytes: 27454,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -316,7 +468,8 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/i18n/translations.ts',
     name: 'translations.ts',
-    lines: 602,
+    lines: 712,
+    bytes: 33464,
     subsystem: 'infra',
     subsystemName: 'Styling & Infrastructure',
     description:
@@ -325,9 +478,22 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     techTags: ['i18n Localization', '5 Languages', 'Astrophysical Glossary'],
   },
   {
+    path: 'src/components/BlackHoleAnatomyOverlay.tsx',
+    name: 'BlackHoleAnatomyOverlay.tsx',
+    lines: 612,
+    bytes: 21201,
+    subsystem: 'hud',
+    subsystemName: 'UI & Command HUD',
+    description:
+      'Dynamic 3D-to-2D projected leader lines identifying the Event Horizon, Ergosphere, ISCO, Photon Sphere, and Relativistic Accretion Flow directly on the viewport.',
+    role: '3D Leader Line Annotation Overlay',
+    techTags: ['3D Vector Unprojection', 'SVG Leader Lines', 'Camera Tracking'],
+  },
+  {
     path: 'src/components/PerformanceMonitorOverlay.tsx',
     name: 'PerformanceMonitorOverlay.tsx',
-    lines: 598,
+    lines: 596,
+    bytes: 22968,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -338,7 +504,8 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
   {
     path: 'src/components/OverheadMapWidget.tsx',
     name: 'OverheadMapWidget.tsx',
-    lines: 553,
+    lines: 569,
+    bytes: 22652,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -347,20 +514,10 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     techTags: ['HTML5 Canvas 2D', 'Orbital Mechanics', 'Interactive Probe Pointer'],
   },
   {
-    path: 'src/components/ArchetypeModal.tsx',
-    name: 'ArchetypeModal.tsx',
-    lines: 459,
-    subsystem: 'hud',
-    subsystemName: 'UI & Command HUD',
-    description:
-      'Cosmic archetype reference guide detailing Supermassive, Intermediate, Stellar-mass, Primordial black holes, and compact stars with real-world astronomical counterparts.',
-    role: 'Astrophysical Archetypes Encyclopedia',
-    techTags: ['Encyclopedia Layout', 'Astrophysical Categorization', 'Solar Mass Scales'],
-  },
-  {
     path: 'src/audio/relativisticAudio.ts',
     name: 'relativisticAudio.ts',
-    lines: 415,
+    lines: 559,
+    bytes: 22573,
     subsystem: 'audio',
     subsystemName: 'Audio & Sonification',
     description:
@@ -369,9 +526,22 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     techTags: ['Web Audio Synthesis', 'BiquadFilterNode', 'Custom Drone Oscillators', 'Chirps'],
   },
   {
+    path: 'src/components/ArchetypeModal.tsx',
+    name: 'ArchetypeModal.tsx',
+    lines: 459,
+    bytes: 24025,
+    subsystem: 'hud',
+    subsystemName: 'UI & Command HUD',
+    description:
+      'Cosmic archetype reference guide detailing Supermassive, Intermediate, Stellar-mass, Primordial black holes, and compact stars with real-world astronomical counterparts.',
+    role: 'Astrophysical Archetypes Encyclopedia',
+    techTags: ['Encyclopedia Layout', 'Astrophysical Categorization', 'Solar Mass Scales'],
+  },
+  {
     path: 'src/components/PhysicsQuickGuideModal.tsx',
     name: 'PhysicsQuickGuideModal.tsx',
     lines: 409,
+    bytes: 21829,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -380,20 +550,10 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     techTags: ['Educational UI', 'Physics Analogies', 'Interactive Diagrams'],
   },
   {
-    path: 'src/components/BlackHoleAnatomyOverlay.tsx',
-    name: 'BlackHoleAnatomyOverlay.tsx',
-    lines: 362,
-    subsystem: 'hud',
-    subsystemName: 'UI & Command HUD',
-    description:
-      'Dynamic 3D-to-2D projected leader lines identifying the Event Horizon, Ergosphere, ISCO, Photon Sphere, and Relativistic Accretion Flow directly on the viewport.',
-    role: '3D Leader Line Annotation Overlay',
-    techTags: ['3D Vector Unprojection', 'SVG Leader Lines', 'Camera Tracking'],
-  },
-  {
     path: 'src/components/CosmicScaleModal.tsx',
     name: 'CosmicScaleModal.tsx',
     lines: 335,
+    bytes: 14666,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -405,6 +565,7 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     path: 'src/components/EventLogOverlay.tsx',
     name: 'EventLogOverlay.tsx',
     lines: 319,
+    bytes: 11226,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -416,6 +577,7 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     path: 'src/components/PhysicsModal.tsx',
     name: 'PhysicsModal.tsx',
     lines: 232,
+    bytes: 10683,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -427,6 +589,7 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     path: 'src/components/ChangelogModal.tsx',
     name: 'ChangelogModal.tsx',
     lines: 231,
+    bytes: 9658,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -435,9 +598,22 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     techTags: ['Terminal UI', 'Changelog Timeline', 'Version Tracking'],
   },
   {
+    path: 'src/physics/gravitationalPhysics.test.ts',
+    name: 'gravitationalPhysics.test.ts',
+    lines: 216,
+    bytes: 8503,
+    subsystem: 'physics',
+    subsystemName: 'Mathematical Physics',
+    description:
+      'Unit test suite verifying Kerr metric calculations, event horizon existence, frame-dragging angular velocity limits, and ISCO prograde vs retrograde radius bounds.',
+    role: 'Physics Metric Verification Unit Tests',
+    techTags: ['Unit Tests', 'Numerical Assertions', 'Boundary Condition Checks'],
+  },
+  {
     path: 'src/components/TimeDilationDisplay.tsx',
     name: 'TimeDilationDisplay.tsx',
-    lines: 182,
+    lines: 185,
+    bytes: 7457,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -449,6 +625,7 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     path: 'src/components/BackgroundSelectorModal.tsx',
     name: 'BackgroundSelectorModal.tsx',
     lines: 143,
+    bytes: 5560,
     subsystem: 'hud',
     subsystemName: 'UI & Command HUD',
     description:
@@ -460,6 +637,7 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     path: 'src/hooks/useHaptics.ts',
     name: 'useHaptics.ts',
     lines: 106,
+    bytes: 3690,
     subsystem: 'infra',
     subsystemName: 'Styling & Infrastructure',
     description:
@@ -468,30 +646,21 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     techTags: ['Navigator.vibrate API', 'Custom Vibration Patterns', 'Fallback Safety'],
   },
   {
-    path: 'src/physics/gravitationalPhysics.test.ts',
-    name: 'gravitationalPhysics.test.ts',
-    lines: 100,
-    subsystem: 'physics',
-    subsystemName: 'Mathematical Physics',
-    description:
-      'Unit test suite verifying Kerr metric calculations, event horizon existence, frame-dragging angular velocity limits, and ISCO prograde vs retrograde radius bounds.',
-    role: 'Physics Metric Verification Unit Tests',
-    techTags: ['Unit Tests', 'Numerical Assertions', 'Boundary Condition Checks'],
-  },
-  {
     path: 'src/main.tsx',
     name: 'main.tsx',
     lines: 5,
+    bytes: 159,
     subsystem: 'infra',
     subsystemName: 'Styling & Infrastructure',
-    description: 'Standard React 18 createRoot DOM bootstrap and index.html mount point.',
+    description: 'Standard React 19 createRoot DOM bootstrap and index.html mount point.',
     role: 'React Application Entry Point',
-    techTags: ['React 18', 'createRoot', 'DOM Mount'],
+    techTags: ['React 19', 'createRoot', 'DOM Mount'],
   },
   {
     path: 'root/config (package.json, vite.config.ts, tsconfig.json, index.html, metadata.json)',
     name: 'Root Configurations',
-    lines: 119,
+    lines: 140,
+    bytes: 4562,
     subsystem: 'infra',
     subsystemName: 'Styling & Infrastructure',
     description:
@@ -504,6 +673,9 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
 function buildLiveCodebaseFiles(): CodeFileInfo[] {
   const knownPaths = new Set<string>();
   const rootConfigPaths = ['/package.json', '/vite.config.ts', '/tsconfig.json', '/index.html', '/metadata.json'];
+  for (const rp of rootConfigPaths) {
+    knownPaths.add(rp);
+  }
 
   const updatedBase = BASE_CODEBASE_FILES.map((entry) => {
     if (entry.path.startsWith('root/config')) {
@@ -511,8 +683,13 @@ function buildLiveCodebaseFiles(): CodeFileInfo[] {
       let rootBytes = 0;
       const rootSnippets: string[] = [];
       for (const rp of rootConfigPaths) {
+        const serverMetric = LIVE_SERVER_METRICS[rp];
         const raw = RAW_SRC_FILES[rp];
-        if (typeof raw === 'string') {
+        if (serverMetric) {
+          rootLines += serverMetric.lines;
+          rootBytes += serverMetric.bytes;
+          rootSnippets.push(`// --- ${rp.slice(1)} ---\n${serverMetric.preview.split(/\r?\n/).slice(0, 12).join('\n')}`);
+        } else if (typeof raw === 'string') {
           rootLines += countRawLines(raw);
           rootBytes += raw.length;
           rootSnippets.push(`// --- ${rp.slice(1)} ---\n${raw.split(/\r?\n/).slice(0, 12).join('\n')}`);
@@ -521,13 +698,23 @@ function buildLiveCodebaseFiles(): CodeFileInfo[] {
       return {
         ...entry,
         lines: rootLines > 0 ? rootLines : entry.lines,
-        bytes: rootBytes > 0 ? rootBytes : undefined,
+        bytes: rootBytes > 0 ? rootBytes : entry.bytes,
         liveSourcePreview: rootSnippets.length > 0 ? rootSnippets.join('\n\n') : undefined,
       };
     }
 
     const normalizedKey = entry.path.startsWith('/') ? entry.path : `/${entry.path}`;
     knownPaths.add(normalizedKey);
+    const serverMetric = LIVE_SERVER_METRICS[normalizedKey];
+    if (serverMetric) {
+      return {
+        ...entry,
+        lines: serverMetric.lines,
+        bytes: serverMetric.bytes,
+        liveSourcePreview: serverMetric.preview,
+      };
+    }
+
     const raw = RAW_SRC_FILES[normalizedKey];
     if (typeof raw === 'string') {
       const allLines = raw.split(/\r?\n/);
@@ -542,9 +729,22 @@ function buildLiveCodebaseFiles(): CodeFileInfo[] {
     return entry;
   });
 
-  // Automatically discover any new files added under /src/** that weren't in BASE_CODEBASE_FILES
-  for (const [globPath, raw] of Object.entries(RAW_SRC_FILES)) {
-    if (!globPath.startsWith('/src/') || knownPaths.has(globPath) || typeof raw !== 'string') {
+  // Automatically discover any new files added on disk or in Vite ?raw glob that weren't in BASE_CODEBASE_FILES
+  const allDiscoveredPaths = new Set<string>([
+    ...Object.keys(RAW_SRC_FILES),
+    ...Object.keys(LIVE_SERVER_METRICS),
+  ]);
+
+  for (const globPath of allDiscoveredPaths) {
+    if (knownPaths.has(globPath)) {
+      continue;
+    }
+    if (!globPath.startsWith('/src/') && globPath !== '/server.ts') {
+      continue;
+    }
+    const serverMetric = LIVE_SERVER_METRICS[globPath];
+    const raw = RAW_SRC_FILES[globPath];
+    if (!serverMetric && typeof raw !== 'string') {
       continue;
     }
     const relPath = globPath.slice(1);
@@ -560,19 +760,21 @@ function buildLiveCodebaseFiles(): CodeFileInfo[] {
     } else if (relPath.startsWith('src/physics/')) {
       subsystem = 'physics';
       subsystemName = 'Mathematical Physics';
-    } else if (relPath.startsWith('src/audio/')) {
+    } else if (relPath.startsWith('src/audio/') || relPath === 'server.ts') {
       subsystem = 'audio';
       subsystemName = 'Audio & Sonification';
     }
     updatedBase.push({
       path: relPath,
       name: fileName,
-      lines: countRawLines(raw),
-      bytes: raw.length,
-      liveSourcePreview: raw.split(/\r?\n/).slice(0, 28).join('\n'),
+      lines: serverMetric ? serverMetric.lines : countRawLines(raw || ''),
+      bytes: serverMetric ? serverMetric.bytes : (raw || '').length,
+      liveSourcePreview: serverMetric
+        ? serverMetric.preview
+        : (raw || '').split(/\r?\n/).slice(0, 28).join('\n'),
       subsystem,
       subsystemName,
-      description: `Live auto-indexed project module (${relPath}) dynamically tracked via Vite raw source introspection.`,
+      description: `Live auto-indexed project module (${relPath}) dynamically tracked via filesystem & Vite raw source introspection.`,
       role: 'Auto-Indexed Source Module',
       techTags: ['TypeScript', 'Live Auto-Sync'],
     });
@@ -687,12 +889,23 @@ export const CodebaseDetailsView: React.FC<CodebaseDetailsViewProps> = ({
   const [viewMode, setViewMode] = useState<'grouped' | 'list'>('grouped');
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [hasCopied, setHasCopied] = useState<boolean>(false);
+  const [serverSyncGeneration, setServerSyncGeneration] = useState<number>(0);
 
-  // Dynamically recompute live codebase files, total lines, and total characters whenever refreshToken updates
+  useEffect(() => {
+    const onUpdated = () => setServerSyncGeneration((g) => g + 1);
+    serverMetricsListeners.add(onUpdated);
+    syncLiveCodebaseFromServer();
+    return () => {
+      serverMetricsListeners.delete(onUpdated);
+    };
+  }, [refreshToken]);
+
+  // Dynamically recompute live codebase files, total lines, and total characters whenever refreshToken or server sync updates
   const liveTelemetry = useMemo(() => {
     void refreshToken;
+    void serverSyncGeneration;
     return computeLiveCodebaseTelemetry();
-  }, [refreshToken]);
+  }, [refreshToken, serverSyncGeneration]);
 
   const liveFiles = liveTelemetry.files;
   const totalLines = liveTelemetry.totalLines;
@@ -732,14 +945,14 @@ export const CodebaseDetailsView: React.FC<CodebaseDetailsViewProps> = ({
 
   const handleCopySummary = () => {
     onHapticSuccess?.();
-    const rows = CODEBASE_FILES.map(
+    const rows = liveFiles.map(
       (f) => `| \`${f.name}\` | ${f.lines.toLocaleString()} | ${f.subsystemName} | ${f.role} |`
     ).join('\n');
 
     const summary = `# Kerr Relativity Engine v1.4 — Codebase Metrics
 Total Lines of Code: ${totalLines.toLocaleString()} Lines
 Total Tracked Files: ${totalFiles} Files
-Technologies: TypeScript, React 18, Three.js (WebGL2/GLSL), Web Audio API, Tailwind CSS
+Technologies: TypeScript, React 19, Three.js (WebGL2/GLSL), Web Audio API, Tailwind CSS
 
 ### Subsystem Breakdown:
 - 3D Graphics & Shaders: ${(subsystemLineTotals['shaders'] || 0).toLocaleString()} lines (${(((subsystemLineTotals['shaders'] || 0) / totalLines) * 100).toFixed(1)}%)
@@ -768,10 +981,12 @@ ${rows}
       project: 'Kerr Relativity Engine',
       version: '1.4 Apex Metric Core',
       totalLines,
+      totalChars,
       totalFiles,
       generatedAt: new Date().toISOString(),
+      recentUpdates: RECENT_CODEBASE_UPDATES,
       subsystemBreakdown: subsystemLineTotals,
-      files: CODEBASE_FILES,
+      files: liveFiles,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json',
@@ -801,7 +1016,7 @@ ${rows}
             </span>
           </div>
           <p className="text-xs text-zinc-400">
-            Live auto-updating architectural breakdown of all {totalFiles} source files across 6 core subsystems (synced directly from raw source).
+            Live auto-updating architectural breakdown of all {totalFiles} source files across 6 core subsystems (synced in real time from raw source &amp; disk).
           </p>
         </div>
 
@@ -959,6 +1174,39 @@ ${rows}
         </div>
       </div>
 
+      {/* Latest Updates & Live Build Synchronization Log */}
+      <div
+        data-testid="codebase-recent-updates-card"
+        className="p-4 rounded-xl bg-zinc-950/90 border border-amber-500/35 space-y-3"
+      >
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 text-xs font-semibold text-amber-300 font-mono uppercase tracking-wider">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>Latest Code Updates &amp; Live Build Sync</span>
+          </div>
+          <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-[10px] font-bold">
+            AUTO-UPDATED ON EVERY BUILD
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+          {RECENT_CODEBASE_UPDATES.map((item, uIdx) => (
+            <div
+              key={uIdx}
+              className="p-3 rounded-lg bg-zinc-900/70 border border-zinc-800/90 space-y-1"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-white">{item.title}</span>
+              </div>
+              <div className="text-[10.5px] font-mono text-amber-300/90 truncate">
+                {item.files}
+              </div>
+              <p className="text-[11px] text-zinc-400 leading-snug">{item.summary}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Filter, Search & View Controls */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
         {/* Subsystem Quick Filter Tabs */}
@@ -1047,7 +1295,7 @@ ${rows}
         /* GROUPED VIEW: 6 Distinct, Clean Subsystem Sections */
         <div className="space-y-4">
           {SUBSYSTEM_METRICS.map((sub) => {
-            const files = CODEBASE_FILES.filter((f) => f.subsystem === sub.id).sort(
+            const files = liveFiles.filter((f) => f.subsystem === sub.id).sort(
               (a, b) => b.lines - a.lines
             );
             const subTotal = files.reduce((sum, f) => sum + f.lines, 0);

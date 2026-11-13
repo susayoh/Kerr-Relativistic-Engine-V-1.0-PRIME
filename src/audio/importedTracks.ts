@@ -349,12 +349,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem, Rihanna",
     "artistName": "Eminem, Rihanna",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 222,
-    "durationLabel": "3:42",
+    "durationSec": 263,
+    "durationLabel": "4:23",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273c08d5fa5c0f1a834acef5100",
     "accentColor": "amber",
     "sources": [
       "/api/audio/stream/love_the_way_you_lie_23?title=Love%20The%20Way%20You%20Lie&artist=Eminem%2C%20Rihanna&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "https://archive.org/download/eminem-recovery_320/2010%20-%20Recovery%2F15%20Love%20the%20Way%20You%20Lie.mp3",
       "/audio/trap-queen-full.mp3"
     ],
     "bpm": 122,
@@ -709,12 +710,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem, Rihanna",
     "artistName": "Eminem, Rihanna",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 313,
-    "durationLabel": "5:13",
+    "durationSec": 250,
+    "durationLabel": "4:10",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b2733c65085a58aae2cccd892cbe",
     "accentColor": "amber",
     "sources": [
       "/api/audio/stream/the_monster_44?title=The%20Monster&artist=Eminem%2C%20Rihanna&fallback=%2Faudio%2Fagain-full.mp3",
+      "https://archive.org/download/flac-eminem-the-marshall-mathers-lp2-expanded-edition-0faea025/12.%20The%20Monster.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 121,
@@ -1645,8 +1647,8 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Rihanna, Eminem",
     "artistName": "Rihanna, Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 144,
-    "durationLabel": "2:24",
+    "durationSec": 296,
+    "durationLabel": "4:56",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273aa16162c83c19d587a3bfa45",
     "accentColor": "amber",
     "sources": [
@@ -1663,12 +1665,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem",
     "artistName": "Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 313,
-    "durationLabel": "5:13",
+    "durationSec": 391,
+    "durationLabel": "6:31",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273c6338d684995af10c2bf0533",
     "accentColor": "amber",
     "sources": [
       "/api/audio/stream/wicked_ways_99?title=Wicked%20Ways&artist=Eminem&fallback=%2Faudio%2Fagain-full.mp3",
+      "https://archive.org/download/flac-eminem-the-marshall-mathers-lp2-expanded-edition-0faea025/21.%20Wicked%20Ways.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 146,
@@ -1681,12 +1684,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem",
     "artistName": "Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 222,
-    "durationLabel": "3:42",
+    "durationSec": 296,
+    "durationLabel": "4:56",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273c6338d684995af10c2bf0533",
     "accentColor": "amber",
     "sources": [
       "/api/audio/stream/legacy_100?title=Legacy&artist=Eminem&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "https://archive.org/download/flac-eminem-the-marshall-mathers-lp2-expanded-edition-0faea025/06.%20Legacy.mp3",
       "/audio/trap-queen-full.mp3"
     ],
     "bpm": 157,
@@ -1699,12 +1703,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Logic, Eminem",
     "artistName": "Logic, Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 144,
-    "durationLabel": "2:24",
+    "durationSec": 245,
+    "durationLabel": "4:05",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273e18710f2e462a6cd25218e3a",
     "accentColor": "amber",
     "sources": [
       "/api/audio/stream/homicide_101?title=Homicide&artist=Logic%2C%20Eminem&fallback=%2Faudio%2Fmazeltron.mp3",
+      "https://archive.org/download/logic-homicide-feat.-eminem-official-audio-mp-3-70-k/Logic%20-%20Homicide%20(feat.%20Eminem)%20(Official%20Audio)(MP3_70K).mp3",
       "/audio/mazeltron.mp3"
     ],
     "bpm": 168,
@@ -1717,12 +1722,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem",
     "artistName": "Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 313,
-    "durationLabel": "5:13",
+    "durationSec": 338,
+    "durationLabel": "5:38",
     "artworkUrl": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000b273e4073def0c03a91e3fceaf73",
     "accentColor": "amber",
     "sources": [
       "/api/audio/stream/the_ringer_102?title=The%20Ringer&artist=Eminem&fallback=%2Faudio%2Fagain-full.mp3",
+      "https://archive.org/download/flac-eminem-kamikaze-7b2a8914/01.%20The%20Ringer.mp3",
       "/audio/again-full.mp3"
     ],
     "bpm": 121,
@@ -1735,12 +1741,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem",
     "artistName": "Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 222,
-    "durationLabel": "3:42",
+    "durationSec": 262,
+    "durationLabel": "4:22",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273e4073def0c03a91e3fceaf73",
     "accentColor": "amber",
     "sources": [
       "/api/audio/stream/fall_103?title=Fall&artist=Eminem&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "https://archive.org/download/flac-eminem-kamikaze-7b2a8914/10.%20Fall.mp3",
       "/audio/trap-queen-full.mp3"
     ],
     "bpm": 132,
@@ -1789,12 +1796,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem, White Gold",
     "artistName": "Eminem, White Gold",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 222,
-    "durationLabel": "3:42",
+    "durationSec": 230,
+    "durationLabel": "3:50",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273b84b0516d901f95461bb5165",
     "accentColor": "amber",
     "sources": [
       "/api/audio/stream/zeus_feat_white_gold_106?title=Zeus%20(feat.%20White%20Gold)&artist=Eminem%2C%20White%20Gold&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "https://archive.org/download/eminem-music-to-be-murdered-by-side-b/%5B2020%5D%20Eminem%20-%20Music_To_Be_Murdered_By-Side_B-24BIT-WEBFLAC-2020-MenInFlac%2F114-eminem-zeus-1caafd.mp3",
       "/audio/trap-queen-full.mp3"
     ],
     "bpm": 165,
@@ -1807,12 +1815,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Eminem, Joyner Lucas",
     "artistName": "Eminem, Joyner Lucas",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 144,
-    "durationLabel": "2:24",
+    "durationSec": 245,
+    "durationLabel": "4:05",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b273e4073def0c03a91e3fceaf73",
     "accentColor": "amber",
     "sources": [
       "/api/audio/stream/lucky_you_feat_joyner_lucas_107?title=Lucky%20You%20(feat.%20Joyner%20Lucas)&artist=Eminem%2C%20Joyner%20Lucas&fallback=%2Faudio%2Fmazeltron.mp3",
+      "https://archive.org/download/flac-eminem-kamikaze-7b2a8914/03.%20Lucky%20You.mp3",
       "/audio/mazeltron.mp3"
     ],
     "bpm": 118,
@@ -2083,6 +2092,7 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "accentColor": "amber",
     "sources": [
       "/api/audio/stream/normal_125?title=Normal&artist=Eminem&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "https://archive.org/download/flac-eminem-kamikaze-7b2a8914/05.%20Normal.mp3",
       "/audio/trap-queen-full.mp3"
     ],
     "bpm": 142,
@@ -2131,12 +2141,13 @@ export const IMPORTED_PLAYLIST_TRACKS: SongTrackDefinition[] = [
     "subtitle": "Skylar Grey, Polo G, Mozzy, Eminem",
     "artistName": "Skylar Grey, Polo G, Mozzy, Eminem",
     "badge": "Hip-Hop / Trap",
-    "durationSec": 222,
-    "durationLabel": "3:42",
+    "durationSec": 257,
+    "durationLabel": "4:17",
     "artworkUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d0000b27318b2c39fa740e2822d40d65b",
     "accentColor": "amber",
     "sources": [
       "/api/audio/stream/last_one_standing_feat_polo__128?title=Last%20One%20Standing%20(feat.%20Polo%20G%2C%20Mozzy%20%26%20Eminem)%20-%20From%20Venom%3A%20Let%20There%20Be%20Carnage&artist=Skylar%20Grey%2C%20Polo%20G%2C%20Mozzy%2C%20Eminem&fallback=%2Faudio%2Ftrap-queen-full.mp3",
+      "https://archive.org/download/flac-skylar-grey-last-one-standing-from-venom-let-there-cd3fa495/Skylar%20Grey%20-%20Last%20One%20Standing%20(From%20Venom%E2%88%B6%20Let%20There%20Be%20Carnage).mp3",
       "/audio/trap-queen-full.mp3"
     ],
     "bpm": 117,
