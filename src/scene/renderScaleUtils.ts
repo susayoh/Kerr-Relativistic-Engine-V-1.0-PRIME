@@ -4,47 +4,43 @@ export interface PixelRatioCapOptions {
   isSoftwareGl?: boolean;
 }
 
-export const DYNAMIC_RES_MIN_DPR = 0.75;
+export const DYNAMIC_RES_MIN_DPR = 0.85;
 export const DYNAMIC_RES_STEP_DPR = 0.15;
 export const DYNAMIC_RES_LOW_FPS_THRESHOLD = 48;
 export const DYNAMIC_RES_RECOVER_FPS_THRESHOLD = 55;
 export const DYNAMIC_RES_ROLLING_WINDOW = 30;
+export const DYNAMIC_RES_WARMUP_FRAMES = 60;
 export const ORBIT_RELAXED_STEP_MULTIPLIER = 1.45;
 export const TELEMETRY_MAX_HZ_INTERVAL_MS = 100;
 
 /**
  * Computes the baseline capped devicePixelRatio:
- * - Desktop viewports (> 1024px): capped at 1.25 by default, or 1.0 when > 1920px wide (or high-performance mode).
- * - Mobile/tablet (<= 1024px): capped at 1.35.
- * - Low-resolution debug mode: 0.50.
- * - Software GL (e.g. headless SwiftShader): 0.65 desktop / 0.85 compact.
+ * - On mobile/Retina viewports (devicePixelRatio >= 2), preserves Math.min(devicePixelRatio, 2.0)
+ *   so the wireframe curvature grid and photon ring stay crisp and anti-aliased.
+ * - Standard viewports: maintains a crisp 1.0 - 2.0 pixel ratio floor (minimum 0.85 in low-res mode).
  */
 export function computeBaseDesktopPixelRatio(
   viewportWidth: number,
   devicePixelRatio: number,
   options: PixelRatioCapOptions = {}
 ): number {
+  const safeDpr =
+    Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1.0;
+
   if (options.lowResolutionRender) {
-    return 0.5;
+    return DYNAMIC_RES_MIN_DPR;
   }
 
-  const isDesktop = viewportWidth > 1024;
+  if (safeDpr >= 2.0) {
+    return Math.min(safeDpr, 2.0);
+  }
+
   if (options.isSoftwareGl) {
-    return isDesktop ? 0.65 : 0.85;
+    return Math.max(1.0, Math.min(safeDpr, 2.0));
   }
 
-  const safeDpr = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1.0;
-
-  let maxDpr: number;
-  if (viewportWidth > 1920) {
-    maxDpr = 1.0;
-  } else if (isDesktop) {
-    maxDpr = options.highPerformanceMode ? 1.0 : 1.25;
-  } else {
-    maxDpr = 1.35;
-  }
-
-  return Math.min(safeDpr, maxDpr);
+  const maxDpr = viewportWidth > 1920 ? 1.5 : 2.0;
+  return Math.max(DYNAMIC_RES_MIN_DPR, Math.min(safeDpr, maxDpr));
 }
 
 /**
@@ -67,21 +63,36 @@ export function computeRollingAverageFps(frameTimesMs: readonly number[]): numbe
 }
 
 /**
- * Steps the dynamic internal pixel ratio down by 0.15 (to a minimum of 0.75) when rolling
- * 30-frame average FPS drops below 48, and steps back up toward baseMaxPixelRatio when FPS > 55.
+ * Steps the dynamic internal pixel ratio down by 0.15 (to a minimum of 0.85, or >= 1.0 on Retina)
+ * when rolling 30-frame average FPS drops below 48 after the initial 60 warmup frames,
+ * and steps back up toward baseMaxPixelRatio when FPS > 55.
  */
 export function stepDynamicResolutionScale(
   currentPixelRatio: number,
   rollingAvgFps: number,
   baseMaxPixelRatio: number,
   minPixelRatio = DYNAMIC_RES_MIN_DPR,
-  step = DYNAMIC_RES_STEP_DPR
+  step = DYNAMIC_RES_STEP_DPR,
+  frameCount?: number
 ): number {
-  const effectiveMin = Math.min(minPixelRatio, baseMaxPixelRatio);
+  const safeMinFloor = Math.max(
+    DYNAMIC_RES_MIN_DPR,
+    baseMaxPixelRatio >= 2.0 ? Math.max(minPixelRatio, 1.0) : minPixelRatio
+  );
+  const effectiveMin = Math.min(safeMinFloor, baseMaxPixelRatio);
   const clampedCurrent = Math.max(effectiveMin, Math.min(baseMaxPixelRatio, currentPixelRatio));
 
   if (baseMaxPixelRatio <= effectiveMin) {
     return baseMaxPixelRatio;
+  }
+
+  // Ignore the first 60 frames after mount (initial boot / shader pre-warming grace period)
+  // before evaluating FPS drops so resolution is never prematurely downscaled on startup.
+  if (frameCount !== undefined && frameCount < DYNAMIC_RES_WARMUP_FRAMES) {
+    if (rollingAvgFps > DYNAMIC_RES_RECOVER_FPS_THRESHOLD) {
+      return Math.min(baseMaxPixelRatio, Number((clampedCurrent + step).toFixed(2)));
+    }
+    return clampedCurrent;
   }
 
   if (rollingAvgFps < DYNAMIC_RES_LOW_FPS_THRESHOLD) {
@@ -150,7 +161,7 @@ export type GeodesicShaderQualityTier = 'Full Geodesic' | 'Approximated Null-Geo
 
 export type GeodesicShaderQualityMode = 'auto' | GeodesicShaderQualityTier;
 
-export const SHADER_QUALITY_HYSTERESIS_MS = 2500;
+export const SHADER_QUALITY_HYSTERESIS_MS = 5000;
 
 export interface ShaderPassTimingInput {
   interFrameMs: number;
@@ -191,7 +202,7 @@ export const GEODESIC_SHADER_SNIPPETS: Record<GeodesicShaderQualityTier, string>
 /**
  * Evaluates whether the engine should swap between 'Full Geodesic' (high detail)
  * and 'Approximated Null-Geodesic' (lower fidelity) fragment shaders based on
- * the instrumented performance telemetry averages and a hysteresis cooldown.
+ * sustained performance telemetry (< 24 FPS for >= 5 continuous seconds).
  */
 export function evaluateDynamicShaderQualityTier(
   currentTier: GeodesicShaderQualityTier,
@@ -213,7 +224,7 @@ export function evaluateDynamicShaderQualityTier(
     };
   }
 
-  // Enforce cooldown between automatic tier swaps to prevent visual oscillation
+  // Enforce 5s sustained window between automatic tier swaps to preserve Full Geodesic quality
   if (elapsedSinceLastSwapMs < hysteresisMs) {
     return {
       nextTier: currentTier,
@@ -222,37 +233,28 @@ export function evaluateDynamicShaderQualityTier(
     };
   }
 
-  const effectiveGpuMs =
-    averagedTelemetry.gpuTimerQueryMs !== null && averagedTelemetry.gpuTimerQueryMs > 0
-      ? Math.max(averagedTelemetry.gpuScenePassMs, averagedTelemetry.gpuTimerQueryMs)
-      : averagedTelemetry.gpuScenePassMs;
-
   if (currentTier === 'Full Geodesic') {
-    const isGpuBottlenecked =
-      averagedTelemetry.classification === 'GPU_FRAGMENT_BOUND' ||
-      (averagedTelemetry.interFrameMs > 20.8 && effectiveGpuMs >= 4.5) ||
-      effectiveGpuMs >= 9.5;
+    // Only downgrade from Full Geodesic when FPS remains sustained below 24 FPS (interFrameMs > 41.67ms)
+    const isSustainedBelow24Fps =
+      averagedTelemetry.interFrameMs > 1000 / 24 &&
+      (averagedTelemetry.classification === 'GPU_FRAGMENT_BOUND' ||
+        averagedTelemetry.gpuScenePassMs >= 8.5);
 
-    if (isGpuBottlenecked) {
+    if (isSustainedBelow24Fps) {
       return {
         nextTier: 'Approximated Null-Geodesic',
         swapped: true,
         reason: `Telemetry avg ${averagedTelemetry.interFrameMs.toFixed(
           2
-        )}ms/frame (GPU Scene Pass ${averagedTelemetry.gpuScenePassMs.toFixed(2)}ms${
-          averagedTelemetry.gpuTimerQueryMs !== null
-            ? `, HW GPU ${averagedTelemetry.gpuTimerQueryMs.toFixed(2)}ms`
-            : ''
-        }) exceeded Full Geodesic budget -> swapping to 'Approximated Null-Geodesic'.`,
+        )}ms/frame (< 24 FPS sustained for >= 5s, GPU Scene Pass ${averagedTelemetry.gpuScenePassMs.toFixed(
+          2
+        )}ms) -> swapping to 'Approximated Null-Geodesic'.`,
       };
     }
   } else {
-    // Currently in 'Approximated Null-Geodesic': upgrade back to 'Full Geodesic' once frame times and GPU pass have comfortable headroom
+    // Upgrade back to 'Full Geodesic' once frame times recover above 24 FPS
     const canUpgradeToFull =
-      averagedTelemetry.classification === 'OPTIMAL_60FPS' &&
-      averagedTelemetry.interFrameMs <= 17.6 &&
-      averagedTelemetry.gpuScenePassMs <= 3.8 &&
-      (averagedTelemetry.gpuTimerQueryMs === null || averagedTelemetry.gpuTimerQueryMs <= 7.5);
+      averagedTelemetry.interFrameMs <= 33.3 && averagedTelemetry.gpuScenePassMs <= 8.0;
 
     if (canUpgradeToFull) {
       return {
@@ -339,7 +341,7 @@ export function clearKerrPerfMarksAndMeasures(): void {
 export type ThermalThrottleLevel = 'NOMINAL' | 'WARM' | 'THROTTLED' | 'CRITICAL';
 
 export interface ThermalThrottleState {
-  /** Current raymarching step count fed into the shader uniform u_stepCount (1..5) */
+  /** Current raymarching step count fed into the shader uniform u_stepCount (96..128 mobile, 128..160+ desktop) */
   uStepCount: number;
   /** Maximum unthrottled step count for the current quality tier */
   maxStepCount: number;
@@ -347,13 +349,13 @@ export interface ThermalThrottleState {
   thermalLoadPct: number;
   /** Estimated GPU die temperature in Celsius for passive/fanless chassis model (38..92°C) */
   estimatedTempC: number;
-  /** Continuous duration in ms that GPU/frame times have remained above the sustained bottleneck threshold */
+  /** Continuous duration in ms that FPS has remained below 24 FPS */
   sustainedBottleneckMs: number;
   /** Timestamp (performance.now() ms) of the last thermal state integration step */
   lastSampleTimeMs: number;
   /** Discrete thermal throttling state classification */
   level: ThermalThrottleLevel;
-  /** True when uStepCount has been reduced below maxStepCount due to thermal load */
+  /** True when uStepCount has been reduced below maxStepCount due to sustained < 24 FPS thermal load */
   throttled: boolean;
 }
 
@@ -366,8 +368,15 @@ export interface ThermalSampleInput {
   maxStepCount?: number;
 }
 
-export const THERMAL_DEFAULT_MAX_STEPS = 5;
-export const THERMAL_MIN_STEPS = 1;
+export const THERMAL_DEFAULT_MAX_STEPS = 160;
+export const THERMAL_DESKTOP_MAX_STEPS = 160;
+export const THERMAL_MOBILE_MAX_STEPS = 128;
+export const THERMAL_DESKTOP_MIN_STEPS = 128;
+export const THERMAL_MOBILE_MIN_STEPS = 96;
+export const THERMAL_MIN_STEPS = 96;
+export const THERMAL_SUSTAINED_LOW_FPS_THRESHOLD = 24;
+export const THERMAL_SUSTAINED_FRAME_MS_THRESHOLD = 1000 / THERMAL_SUSTAINED_LOW_FPS_THRESHOLD;
+export const THERMAL_SUSTAINED_DURATION_MS = 5000;
 export const THERMAL_AMBIENT_TEMP_C = 38.0;
 export const THERMAL_MAX_TEMP_C = 92.0;
 
@@ -392,45 +401,67 @@ export function createInitialThermalState(
 
 /**
  * Integrates GPU frame time metrics over wall-clock time via performance.now() using an asymmetric
- * passive-cooling RC thermal model (faster heating under sustained GPU load, slower passive dissipation)
- * and computes the reduced raymarching ray count (u_stepCount) to prevent thermal runaway on fanless devices.
+ * passive-cooling RC thermal model. Prevents thermal throttling from reducing u_stepCount unless
+ * FPS remains sustained below 24 FPS (interFrameMs > 41.67ms) for at least 5 continuous seconds (5000ms),
+ * and preserves high-fidelity raymarch step counts (minimum 96-128 on mobile, 128-160+ on desktop).
  */
 export function stepThermalThrottlingState(
   prevState: ThermalThrottleState,
   sample: ThermalSampleInput
 ): ThermalThrottleState {
   const maxSteps = Math.max(
-    THERMAL_MIN_STEPS,
+    1,
     Math.round(sample.maxStepCount ?? prevState.maxStepCount ?? THERMAL_DEFAULT_MAX_STEPS)
   );
+  const minStepsForTier =
+    maxSteps >= THERMAL_DESKTOP_MAX_STEPS
+      ? THERMAL_DESKTOP_MIN_STEPS
+      : maxSteps >= THERMAL_MOBILE_MIN_STEPS
+      ? THERMAL_MOBILE_MIN_STEPS
+      : 1;
+
   const rawDtMs =
     prevState.lastSampleTimeMs > 0 ? sample.nowMs - prevState.lastSampleTimeMs : sample.interFrameMs;
   const dtMs = Number.isFinite(rawDtMs) ? Math.max(1.0, Math.min(500.0, rawDtMs)) : 16.67;
 
-  const effectiveGpuMs =
-    sample.gpuTimerQueryMs !== null && sample.gpuTimerQueryMs > 0
-      ? Math.max(sample.gpuScenePassMs, sample.gpuTimerQueryMs)
-      : Math.max(sample.gpuScenePassMs, sample.rafTotalMs * 0.72);
+  // Guard against cumulative/disjoint timer query spikes when interFrameMs is within normal bounds
+  const plausibleTimerQueryMs =
+    sample.gpuTimerQueryMs !== null &&
+    sample.gpuTimerQueryMs > 0 &&
+    sample.gpuTimerQueryMs <= sample.interFrameMs * 1.5
+      ? sample.gpuTimerQueryMs
+      : 0;
+  const effectiveGpuMs = Math.max(
+    sample.gpuScenePassMs,
+    plausibleTimerQueryMs,
+    sample.rafTotalMs * 0.72
+  );
 
-  // Instantaneous GPU/frame load ratio relative to a 16.67ms (60 FPS) / 8.0ms GPU pass envelope
-  const frameLoadRatio = Math.max(0, (sample.interFrameMs - 15.5) / 26.0);
-  const gpuLoadRatio = Math.max(0, (effectiveGpuMs - 4.2) / 14.0);
+  // Only count a frame toward sustained thermal throttling when FPS is strictly below 24 FPS (interFrameMs > 41.67ms)
+  const isBelow24Fps = sample.interFrameMs > THERMAL_SUSTAINED_FRAME_MS_THRESHOLD;
+  const sustainedBottleneckMs = isBelow24Fps
+    ? Math.min(30000, prevState.sustainedBottleneckMs + dtMs)
+    : prevState.sustainedBottleneckMs >= THERMAL_SUSTAINED_DURATION_MS
+    ? Math.max(0, prevState.sustainedBottleneckMs - dtMs * 2.0)
+    : 0;
+
+  const frameLoadRatio = Math.max(0, (sample.interFrameMs - 16.67) / 35.0);
+  const gpuLoadRatio = Math.max(0, (effectiveGpuMs - 5.0) / 18.0);
   const instantLoadPct = Math.max(0, Math.min(100, Math.max(frameLoadRatio, gpuLoadRatio) * 100));
 
-  const isBottleneckedFrame = sample.interFrameMs > 20.5 || effectiveGpuMs > 8.5;
-  const sustainedBottleneckMs = isBottleneckedFrame
-    ? Math.min(30000, prevState.sustainedBottleneckMs + dtMs)
-    : Math.max(0, prevState.sustainedBottleneckMs - dtMs * 1.5);
-
-  // Asymmetric RC thermal time constants: passive chassis heats up in ~2.6s under sustained bottleneck,
-  // and cools down more gradually (~5.2s) once GPU load drops.
-  const tauMs = instantLoadPct > prevState.thermalLoadPct ? 2600.0 : 5200.0;
+  const tauMs = instantLoadPct > prevState.thermalLoadPct ? 3200.0 : 4800.0;
   const alpha = 1.0 - Math.exp(-dtMs / tauMs);
-  const sustainedBoostPct = Math.min(28.0, (sustainedBottleneckMs / 4000.0) * 22.0);
-  const targetThermalLoadPct = Math.min(100, instantLoadPct * 0.82 + sustainedBoostPct);
+  const sustainedBoostPct =
+    sustainedBottleneckMs >= THERMAL_SUSTAINED_DURATION_MS
+      ? Math.min(30.0, (sustainedBottleneckMs / 6000.0) * 24.0)
+      : 0;
+  const targetThermalLoadPct = Math.min(100, instantLoadPct * 0.75 + sustainedBoostPct);
 
   const nextThermalLoadPct = Number(
-    Math.max(0, Math.min(100, prevState.thermalLoadPct + (targetThermalLoadPct - prevState.thermalLoadPct) * alpha)).toFixed(1)
+    Math.max(
+      0,
+      Math.min(100, prevState.thermalLoadPct + (targetThermalLoadPct - prevState.thermalLoadPct) * alpha)
+    ).toFixed(1)
   );
 
   const estimatedTempC = Number(
@@ -441,20 +472,23 @@ export function stepThermalThrottlingState(
   );
 
   let level: ThermalThrottleLevel = 'NOMINAL';
-  let stepReduction = 0;
+  let uStepCount = maxSteps;
 
-  if (nextThermalLoadPct >= 78 || sustainedBottleneckMs >= 4800) {
-    level = 'CRITICAL';
-    stepReduction = 3;
-  } else if (nextThermalLoadPct >= 54 || sustainedBottleneckMs >= 2600) {
-    level = 'THROTTLED';
-    stepReduction = 2;
-  } else if (nextThermalLoadPct >= 32 || sustainedBottleneckMs >= 1200) {
-    level = 'WARM';
-    stepReduction = 1;
+  // Prevent thermal throttling from reducing u_stepCount unless FPS remains sustained below 24 FPS
+  // for at least 5 continuous seconds (5000ms).
+  if (sustainedBottleneckMs >= THERMAL_SUSTAINED_DURATION_MS) {
+    const stepSpan = Math.max(1, maxSteps - minStepsForTier);
+    if (sustainedBottleneckMs >= 7500 || nextThermalLoadPct >= 75) {
+      level = 'CRITICAL';
+      uStepCount = minStepsForTier;
+    } else if (sustainedBottleneckMs >= 6000 || nextThermalLoadPct >= 55) {
+      level = 'THROTTLED';
+      uStepCount = Math.max(minStepsForTier, Math.round(maxSteps - stepSpan * 0.65));
+    } else {
+      level = 'WARM';
+      uStepCount = Math.max(minStepsForTier, Math.round(maxSteps - stepSpan * 0.35));
+    }
   }
-
-  const uStepCount = Math.max(THERMAL_MIN_STEPS, Math.min(maxSteps, maxSteps - stepReduction));
 
   return {
     uStepCount,
@@ -485,10 +519,13 @@ export function classifyFrameBottleneck(
 } {
   const cpuTotalMs = input.cpuSimPhysicsMs + input.cpuCameraUniformsMs;
   const gpuSubmitTotalMs = input.gpuScenePassMs + input.gpuPostPassMs;
-  const effectiveGpuMs =
-    input.gpuTimerQueryMs !== null && input.gpuTimerQueryMs > 0
-      ? Math.max(gpuSubmitTotalMs, input.gpuTimerQueryMs)
-      : gpuSubmitTotalMs;
+  const plausibleTimerQueryMs =
+    input.gpuTimerQueryMs !== null &&
+    input.gpuTimerQueryMs > 0 &&
+    input.gpuTimerQueryMs <= input.interFrameMs * 1.5
+      ? input.gpuTimerQueryMs
+      : 0;
+  const effectiveGpuMs = Math.max(gpuSubmitTotalMs, plausibleTimerQueryMs);
   const unaccountedFrameGapMs = Math.max(
     0,
     Number((input.interFrameMs - input.rafTotalMs).toFixed(2))

@@ -12,6 +12,7 @@ export type GardnerIntelligenceId =
   | 'existential';
 
 export type IQBatteryModeId =
+  | 'observatory_24'
   | 'comprehensive_18'
   | 'gardner_9_quick'
   | 'matrices_16'
@@ -164,12 +165,20 @@ export interface IQBatteryModeMeta {
 
 export const IQ_BATTERY_MODES: readonly IQBatteryModeMeta[] = [
   {
+    id: 'observatory_24',
+    title: 'Observatory 24-Item Psychometric Standard (Q1–Q24)',
+    shortLabel: '24 Items · Q1–Q24 Standard',
+    questionCount: 24,
+    description:
+      'Stratified 24-item battery (Q1–Q24) calibrated across all 9 Gardner Intelligences, 4 Reasoning Sub-Domains, and 4 Difficulty Tiers (Baseline → Mensa-Tier).',
+  },
+  {
     id: 'comprehensive_18',
     title: 'Comprehensive 9-Intelligence & Matrix Battery (18 Items)',
     shortLabel: '18 Items · All 9 Intelligences',
     questionCount: 18,
     description:
-      'Draws 2 randomized questions from each of Howard Gardner’s 9 Multiple Intelligences (including 3×3 visual matrices and domain reasoning) from a 72-item database.',
+      'Draws 2 randomized questions from each of Howard Gardner’s 9 Multiple Intelligences (including 3×3 visual matrices and domain reasoning) from an 85-item database.',
   },
   {
     id: 'gardner_9_quick',
@@ -2558,6 +2567,30 @@ export function sampleRandomizedIQQuestions(
     if (domainPool.length > 0) {
       return pickFromPool(domainPool, Math.min(7, domainPool.length));
     }
+  }
+
+  if (mode === 'observatory_24') {
+    const base18: IQQuestion[] = [];
+    const usedIds = new Set<string>();
+    for (const domainMeta of GARDNER_INTELLIGENCES) {
+      const domainPool = masterDatabase.filter((q) => q.gardnerDomain === domainMeta.id);
+      const picked = pickFromPool(domainPool, 2);
+      picked.forEach((q) => usedIds.add(q.id));
+      base18.push(...picked);
+    }
+    const remainingMatrices = masterDatabase.filter(
+      (q) => q.questionFormat === 'matrix_3x3' && !usedIds.has(q.id)
+    );
+    const extra6 = pickFromPool(remainingMatrices, 6);
+    const combined24 = [...base18, ...extra6].slice(0, 24);
+    const diffRank: Record<IQQuestion['difficulty'], number> = {
+      Standard: 0,
+      Advanced: 1,
+      Apex: 2,
+    };
+    return combined24.sort(
+      (a, b) => diffRank[a.difficulty] - diffRank[b.difficulty] || a.points - b.points
+    );
   }
 
   const perDomainCount = mode === 'gardner_9_quick' ? 1 : mode === 'full_deep_27' ? 3 : 2;

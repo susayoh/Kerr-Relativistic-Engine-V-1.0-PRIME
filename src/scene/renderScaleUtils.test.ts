@@ -8,6 +8,8 @@ import {
   computeOrbitStepMultiplier,
   computeRollingAverageFps,
   createInitialThermalState,
+  DYNAMIC_RES_MIN_DPR,
+  DYNAMIC_RES_WARMUP_FRAMES,
   evaluateDynamicShaderQualityTier,
   GEODESIC_SHADER_SNIPPETS,
   KERR_PERF_MARKS,
@@ -18,40 +20,57 @@ import {
   shouldEmitThrottledTelemetry,
   stepDynamicResolutionScale,
   stepThermalThrottlingState,
+  THERMAL_DESKTOP_MAX_STEPS,
+  THERMAL_DESKTOP_MIN_STEPS,
+  THERMAL_MOBILE_MAX_STEPS,
+  THERMAL_MOBILE_MIN_STEPS,
 } from './renderScaleUtils';
 
-test('computeBaseDesktopPixelRatio clamps >1024px to 1.25 and >1920px to 1.0', () => {
-  // Standard Retina desktop (1440px, DPR 2.0) -> 1.25
-  assert.equal(computeBaseDesktopPixelRatio(1440, 2.0), 1.25);
+test('computeBaseDesktopPixelRatio preserves Math.min(devicePixelRatio, 2.0) on Retina/mobile and >= 0.85-1.0 floor', () => {
+  // Standard Retina desktop (1440px, DPR 2.0) -> 2.0
+  assert.equal(computeBaseDesktopPixelRatio(1440, 2.0), 2.0);
+  // 3x Super-Retina mobile/desktop (DPR 3.0) -> 2.0
+  assert.equal(computeBaseDesktopPixelRatio(390, 3.0), 2.0);
   // Desktop with DPR 1.0 -> 1.0
   assert.equal(computeBaseDesktopPixelRatio(1440, 1.0), 1.0);
-  // Ultrawide / 4K desktop (> 1920px, DPR 2.0) -> 1.0
-  assert.equal(computeBaseDesktopPixelRatio(2560, 2.0), 1.0);
-  assert.equal(computeBaseDesktopPixelRatio(1921, 1.5), 1.0);
-  // Exactly 1920px still uses 1.25 cap
-  assert.equal(computeBaseDesktopPixelRatio(1920, 2.0), 1.25);
-  // Mobile/tablet (<= 1024px) caps at 1.35
-  assert.equal(computeBaseDesktopPixelRatio(768, 2.0), 1.35);
-  // Low-res mode always 0.5
-  assert.equal(computeBaseDesktopPixelRatio(1440, 2.0, { lowResolutionRender: true }), 0.5);
+  // Ultrawide / 4K desktop (> 1920px, DPR 2.0) -> 2.0 (Retina preserved)
+  assert.equal(computeBaseDesktopPixelRatio(2560, 2.0), 2.0);
+  assert.equal(computeBaseDesktopPixelRatio(1921, 1.5), 1.5);
+  // Mobile/tablet (<= 1024px, DPR 2.0) -> 2.0
+  assert.equal(computeBaseDesktopPixelRatio(768, 2.0), 2.0);
+  // Software GL still preserves >= 1.0 floor
+  assert.equal(computeBaseDesktopPixelRatio(1440, 1.0, { isSoftwareGl: true }), 1.0);
+  // Low-res mode uses 0.85 floor instead of 0.5
+  assert.equal(
+    computeBaseDesktopPixelRatio(1440, 2.0, { lowResolutionRender: true }),
+    DYNAMIC_RES_MIN_DPR
+  );
 });
 
-test('stepDynamicResolutionScale steps down by 0.15 below 48 FPS (min 0.75) and recovers above 55 FPS', () => {
-  // Starts at 1.25, FPS drops to 42 -> steps down to 1.10
-  assert.equal(stepDynamicResolutionScale(1.25, 42, 1.25), 1.1);
-  // Still 44 FPS -> steps down to 0.95
+test('stepDynamicResolutionScale ignores first 60 warmup frames, steps down by 0.15 below 48 FPS (min 0.85), and recovers above 55 FPS', () => {
+  assert.equal(DYNAMIC_RES_MIN_DPR, 0.85);
+  assert.equal(DYNAMIC_RES_WARMUP_FRAMES, 60);
+
+  // During initial 60 warmup frames (e.g. frame 0..59), does NOT downscale even if FPS is 30
+  assert.equal(stepDynamicResolutionScale(2.0, 30, 2.0, DYNAMIC_RES_MIN_DPR, 0.15, 15), 2.0);
+  assert.equal(stepDynamicResolutionScale(1.25, 28, 1.25, DYNAMIC_RES_MIN_DPR, 0.15, 59), 1.25);
+
+  // After 60 warmup frames (frameCount >= 60 or omitted), steps down by 0.15 below 48 FPS
+  assert.equal(stepDynamicResolutionScale(1.25, 42, 1.25, DYNAMIC_RES_MIN_DPR, 0.15, 65), 1.1);
   assert.equal(stepDynamicResolutionScale(1.1, 44, 1.25), 0.95);
-  // Still 40 FPS -> steps down to 0.80 -> then clamped to 0.75
-  assert.equal(stepDynamicResolutionScale(0.95, 40, 1.25), 0.8);
-  assert.equal(stepDynamicResolutionScale(0.8, 40, 1.25), 0.75);
-  assert.equal(stepDynamicResolutionScale(0.75, 30, 1.25), 0.75);
+  // Clamps to 0.85 floor (never dropping to 0.5-0.65)
+  assert.equal(stepDynamicResolutionScale(0.95, 40, 1.25), 0.85);
+  assert.equal(stepDynamicResolutionScale(0.85, 30, 1.25), 0.85);
+
+  // On Retina (baseMax = 2.0), enforces >= 1.0 floor
+  assert.equal(stepDynamicResolutionScale(1.1, 35, 2.0), 1.0);
 
   // Deadband (48..55 FPS) holds current scale steady without oscillation
   assert.equal(stepDynamicResolutionScale(0.95, 50, 1.25), 0.95);
   assert.equal(stepDynamicResolutionScale(0.95, 55, 1.25), 0.95);
 
   // Recovers above 55 FPS -> steps back up by 0.15 up to baseMax
-  assert.equal(stepDynamicResolutionScale(0.75, 58, 1.25), 0.9);
+  assert.equal(stepDynamicResolutionScale(0.85, 58, 1.25), 1.0);
   assert.equal(stepDynamicResolutionScale(1.15, 60, 1.25), 1.25);
 });
 
@@ -149,14 +168,15 @@ test('classifyFrameBottleneck distinguishes GPU fragment, CPU rAF, and iframe co
   assert.equal(compositorWait.unaccountedFrameGapMs, 25.2);
 });
 
-test('evaluateDynamicShaderQualityTier swaps between Full Geodesic and Approximated Null-Geodesic based on telemetry', () => {
+test('evaluateDynamicShaderQualityTier preserves Full Geodesic tier unless FPS < 24 for >= 5s', () => {
   assert.equal(GEODESIC_SHADER_SNIPPETS['Full Geodesic'].includes('VOL_RAYMARCH_STEPS 5'), true);
   assert.equal(
     GEODESIC_SHADER_SNIPPETS['Approximated Null-Geodesic'].includes('VOL_RAYMARCH_STEPS 2'),
     true
   );
 
-  const gpuBoundTelemetry = classifyFrameBottleneck({
+  // At 35 FPS (28.5ms/frame, > 24 FPS), stays in Full Geodesic even after 6 seconds
+  const moderateTelemetry = classifyFrameBottleneck({
     interFrameMs: 28.5,
     rafTotalMs: 12.0,
     cpuSimPhysicsMs: 0.5,
@@ -168,28 +188,48 @@ test('evaluateDynamicShaderQualityTier swaps between Full Geodesic and Approxima
     isOrbiting: false,
     pixelRatio: 1.0,
   });
+  const preservedAbove24Fps = evaluateDynamicShaderQualityTier(
+    'Full Geodesic',
+    moderateTelemetry,
+    6000,
+    'auto'
+  );
+  assert.equal(preservedAbove24Fps.swapped, false);
+  assert.equal(preservedAbove24Fps.nextTier, 'Full Geodesic');
 
-  // Respects hysteresis cooldown when elapsedSinceLastSwapMs < 2500ms
+  // Below 24 FPS (48ms/frame): blocked by 5s hysteresis when elapsed < 5000ms
+  const below24FpsTelemetry = classifyFrameBottleneck({
+    interFrameMs: 48.0,
+    rafTotalMs: 22.0,
+    cpuSimPhysicsMs: 0.5,
+    cpuCameraUniformsMs: 0.4,
+    gpuScenePassMs: 16.5,
+    gpuPostPassMs: 0.0,
+    gpuTimerQueryMs: 20.0,
+    renderPasses: 1,
+    isOrbiting: false,
+    pixelRatio: 1.0,
+  });
   const blockedByHysteresis = evaluateDynamicShaderQualityTier(
     'Full Geodesic',
-    gpuBoundTelemetry,
-    800,
+    below24FpsTelemetry,
+    3500,
     'auto'
   );
   assert.equal(blockedByHysteresis.swapped, false);
   assert.equal(blockedByHysteresis.nextTier, 'Full Geodesic');
 
-  // Swaps to 'Approximated Null-Geodesic' when GPU_FRAGMENT_BOUND after cooldown
+  // Swaps to 'Approximated Null-Geodesic' when < 24 FPS sustained for >= 5000ms
   const downgraded = evaluateDynamicShaderQualityTier(
     'Full Geodesic',
-    gpuBoundTelemetry,
-    3000,
+    below24FpsTelemetry,
+    5200,
     'auto'
   );
   assert.equal(downgraded.swapped, true);
   assert.equal(downgraded.nextTier, 'Approximated Null-Geodesic');
 
-  // Upgrades back to 'Full Geodesic' once telemetry recovers to OPTIMAL_60FPS with low GPU pass time
+  // Upgrades back to 'Full Geodesic' once telemetry recovers
   const recoveredTelemetry = classifyFrameBottleneck({
     interFrameMs: 16.5,
     rafTotalMs: 3.2,
@@ -206,7 +246,7 @@ test('evaluateDynamicShaderQualityTier swaps between Full Geodesic and Approxima
   const upgraded = evaluateDynamicShaderQualityTier(
     'Approximated Null-Geodesic',
     recoveredTelemetry,
-    3200,
+    5200,
     'auto'
   );
   assert.equal(upgraded.swapped, true);
@@ -223,33 +263,80 @@ test('evaluateDynamicShaderQualityTier swaps between Full Geodesic and Approxima
   assert.equal(manualApprox.nextTier, 'Approximated Null-Geodesic');
 });
 
-test('stepThermalThrottlingState reduces u_stepCount under sustained GPU bottlenecks via performance.now() and recovers on cooling', () => {
-  let state = createInitialThermalState(1000, 5);
-  assert.equal(state.uStepCount, 5);
+test('stepThermalThrottlingState preserves u_stepCount (160 desktop / 128 mobile, min 96-128) unless FPS < 24 for >= 5 continuous seconds', () => {
+  let state = createInitialThermalState(1000, THERMAL_DESKTOP_MAX_STEPS);
+  assert.equal(state.uStepCount, 160);
   assert.equal(state.level, 'NOMINAL');
   assert.equal(state.throttled, false);
 
-  // Simulate 5.5 seconds of sustained GPU bottlenecks (36ms interFrame, 18ms GPU pass)
+  // 1) 30 FPS (33ms/frame, > 24 FPS) for 10 seconds -> NEVER reduces u_stepCount
   let nowMs = 1000;
-  for (let i = 0; i < 55; i++) {
+  for (let i = 0; i < 100; i++) {
     nowMs += 100;
     state = stepThermalThrottlingState(state, {
       nowMs,
-      interFrameMs: 36.0,
+      interFrameMs: 33.0,
       gpuScenePassMs: 14.5,
       gpuTimerQueryMs: 19.0,
       rafTotalMs: 15.5,
-      maxStepCount: 5,
+      maxStepCount: THERMAL_DESKTOP_MAX_STEPS,
     });
   }
+  assert.equal(state.throttled, false);
+  assert.equal(state.uStepCount, 160);
+  assert.equal(state.level, 'NOMINAL');
 
+  // 2) 20 FPS (50ms/frame, < 24 FPS) for 4.5 seconds (< 5s threshold) -> still does NOT reduce u_stepCount
+  for (let i = 0; i < 45; i++) {
+    nowMs += 100;
+    state = stepThermalThrottlingState(state, {
+      nowMs,
+      interFrameMs: 50.0,
+      gpuScenePassMs: 22.0,
+      gpuTimerQueryMs: 28.0,
+      rafTotalMs: 24.0,
+      maxStepCount: THERMAL_DESKTOP_MAX_STEPS,
+    });
+  }
+  assert.equal(state.throttled, false);
+  assert.equal(state.uStepCount, 160);
+
+  // 3) Continue < 24 FPS past 5.0 continuous seconds (up to 8.0s total) -> throttles down to desktop floor (128)
+  for (let i = 0; i < 35; i++) {
+    nowMs += 100;
+    state = stepThermalThrottlingState(state, {
+      nowMs,
+      interFrameMs: 50.0,
+      gpuScenePassMs: 22.0,
+      gpuTimerQueryMs: 28.0,
+      rafTotalMs: 24.0,
+      maxStepCount: THERMAL_DESKTOP_MAX_STEPS,
+    });
+  }
   assert.equal(state.throttled, true);
-  assert.equal(state.uStepCount <= 3, true);
-  assert.equal(state.estimatedTempC > 55, true);
-  assert.equal(state.sustainedBottleneckMs >= 4800, true);
+  assert.equal(state.uStepCount >= THERMAL_DESKTOP_MIN_STEPS, true);
+  assert.equal(state.uStepCount < THERMAL_DESKTOP_MAX_STEPS, true);
+  assert.equal(state.sustainedBottleneckMs >= 5000, true);
   assert.equal(state.level, 'CRITICAL');
 
-  // Simulate passive cooling over 20 seconds of light 60 FPS frames (16.6ms interFrame, 2.0ms GPU pass)
+  // 4) Mobile tier (maxStepCount = 128) never drops below 96 steps even under severe sustained < 24 FPS load
+  let mobileState = createInitialThermalState(1000, THERMAL_MOBILE_MAX_STEPS);
+  let mobileNow = 1000;
+  for (let i = 0; i < 90; i++) {
+    mobileNow += 100;
+    mobileState = stepThermalThrottlingState(mobileState, {
+      nowMs: mobileNow,
+      interFrameMs: 55.0,
+      gpuScenePassMs: 25.0,
+      gpuTimerQueryMs: 30.0,
+      rafTotalMs: 28.0,
+      maxStepCount: THERMAL_MOBILE_MAX_STEPS,
+    });
+  }
+  assert.equal(mobileState.throttled, true);
+  assert.equal(mobileState.uStepCount >= THERMAL_MOBILE_MIN_STEPS, true);
+
+  // 5) Simulate passive cooling over 60 FPS frames -> recovers back to 160 steps
   for (let i = 0; i < 100; i++) {
     nowMs += 200;
     state = stepThermalThrottlingState(state, {
@@ -258,11 +345,11 @@ test('stepThermalThrottlingState reduces u_stepCount under sustained GPU bottlen
       gpuScenePassMs: 2.0,
       gpuTimerQueryMs: 3.2,
       rafTotalMs: 2.8,
-      maxStepCount: 5,
+      maxStepCount: THERMAL_DESKTOP_MAX_STEPS,
     });
   }
 
-  assert.equal(state.uStepCount, 5);
+  assert.equal(state.uStepCount, 160);
   assert.equal(state.level, 'NOMINAL');
   assert.equal(state.throttled, false);
 });

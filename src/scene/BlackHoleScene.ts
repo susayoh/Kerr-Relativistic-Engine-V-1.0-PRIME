@@ -29,6 +29,7 @@ import {
   DYNAMIC_RES_MIN_DPR,
   DYNAMIC_RES_ROLLING_WINDOW,
   DYNAMIC_RES_STEP_DPR,
+  DYNAMIC_RES_WARMUP_FRAMES,
   evaluateDynamicShaderQualityTier,
   GEODESIC_SHADER_SNIPPETS,
   GeodesicShaderQualityMode,
@@ -44,6 +45,11 @@ import {
   ShaderPrewarmVariantId,
   stepDynamicResolutionScale,
   stepThermalThrottlingState,
+  THERMAL_DESKTOP_MAX_STEPS,
+  THERMAL_DESKTOP_MIN_STEPS,
+  THERMAL_MOBILE_MAX_STEPS,
+  THERMAL_MOBILE_MIN_STEPS,
+  THERMAL_SUSTAINED_DURATION_MS,
   ThermalThrottleLevel,
   ThermalThrottleState,
 } from './renderScaleUtils';
@@ -844,6 +850,7 @@ export class BlackHoleSceneController {
   private rolling30FrameTimesMs: number[] = [];
   private lastTickStartMs = 0;
   private framesSinceResolutionCheck = 0;
+  private totalRenderedFrames = 0;
   private basePixelRatioCap = 1.0;
   private dynamicPixelRatio = 1.0;
   private lastFramePerfMs = 0;
@@ -860,7 +867,10 @@ export class BlackHoleSceneController {
   private gpuTimerExt: { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null = null;
   private activeGpuTimerQuery: WebGLQuery | null = null;
   private lastGpuTimerQueryMs: number | null = null;
-  private thermalState: ThermalThrottleState = createInitialThermalState(0, 5);
+  private thermalState: ThermalThrottleState = createInitialThermalState(
+    0,
+    isMobileDevice ? THERMAL_MOBILE_MAX_STEPS : THERMAL_DESKTOP_MAX_STEPS
+  );
   private thermalStepOverride: number | null = null;
   private shaderPrewarmReport: ShaderPrewarmCacheReport = buildShaderPrewarmCacheReport([], 0, 0);
 
@@ -958,12 +968,12 @@ export class BlackHoleSceneController {
 
     let glContext: WebGL2RenderingContext | null = null;
     try {
-      // Stage 1: Standard WebGL2 context with opaque backbuffer (alpha: false guarantees opaque black space on desktop & mobile)
+      // Stage 1: Standard WebGL2 context with opaque backbuffer and hardware MSAA antialiasing for crisp wireframe grid
       glContext = canvas.getContext('webgl2', {
         alpha: false,
         depth: true,
         stencil: false,
-        antialias: false,
+        antialias: true,
         premultipliedAlpha: false,
         preserveDrawingBuffer: false,
         powerPreference: 'default',
@@ -982,7 +992,7 @@ export class BlackHoleSceneController {
           alpha: false,
           depth: true,
           stencil: false,
-          antialias: false,
+          antialias: true,
           premultipliedAlpha: false,
           preserveDrawingBuffer: false,
           powerPreference: 'high-performance',
@@ -1000,7 +1010,7 @@ export class BlackHoleSceneController {
         this.domElement = defaultCanvas;
         glContext = defaultCanvas.getContext('webgl2', {
           alpha: false,
-          antialias: false,
+          antialias: true,
           failIfMajorPerformanceCaveat: false,
         }) as WebGL2RenderingContext | null;
       }
@@ -1016,7 +1026,7 @@ export class BlackHoleSceneController {
             configurable: true,
             value: () => ({
               alpha: false,
-              antialias: false,
+              antialias: true,
               depth: true,
               failIfMajorPerformanceCaveat: false,
               powerPreference: 'default',
@@ -1051,7 +1061,7 @@ export class BlackHoleSceneController {
           canvas,
           context: glContext,
           alpha: false,
-          antialias: attrs?.antialias ?? false,
+          antialias: attrs?.antialias ?? true,
           powerPreference: 'default',
           preserveDrawingBuffer: attrs?.preserveDrawingBuffer ?? false,
           failIfMajorPerformanceCaveat: false,
@@ -1067,7 +1077,7 @@ export class BlackHoleSceneController {
           this.renderer = new THREE.WebGLRenderer({
             canvas: freshWebglCanvas,
             alpha: false,
-            antialias: false,
+            antialias: true,
             powerPreference: 'default',
             preserveDrawingBuffer: false,
             failIfMajorPerformanceCaveat: false,
@@ -1144,7 +1154,7 @@ export class BlackHoleSceneController {
             if (steps === null || !Number.isFinite(steps)) {
               this.thermalStepOverride = null;
             } else {
-              this.thermalStepOverride = Math.max(1, Math.min(5, Math.round(steps)));
+              this.thermalStepOverride = Math.max(1, Math.min(256, Math.round(steps)));
             }
             const effectiveSteps =
               this.thermalStepOverride !== null
@@ -2741,7 +2751,7 @@ export class BlackHoleSceneController {
       currentScale: this.currentScale,
       expansionProgress: this.expansionProgress,
       companionStarBaseRadius: this.companionStarBaseRadius,
-      initialStepCount: 5.0,
+      initialStepCount: isMobileDevice ? THERMAL_MOBILE_MAX_STEPS : THERMAL_DESKTOP_MAX_STEPS,
     });
 
     this.gravitationalLensMatFull = new THREE.ShaderMaterial({
@@ -4102,10 +4112,12 @@ export class BlackHoleSceneController {
   private configureDevicePixelRatioAndUpscaling(width: number, height: number): number {
     const baseCap = this.computeTargetBasePixelRatio();
     this.basePixelRatioCap = baseCap;
-    const targetPixelRatio =
-      this.settings?.lowResolutionRender || isSoftwareGl
-        ? baseCap
-        : Math.max(Math.min(DYNAMIC_RES_MIN_DPR, baseCap), Math.min(baseCap, this.dynamicPixelRatio || baseCap));
+    const targetPixelRatio = this.settings?.lowResolutionRender
+      ? baseCap
+      : Math.max(
+          Math.min(DYNAMIC_RES_MIN_DPR, baseCap),
+          Math.min(baseCap, this.dynamicPixelRatio || baseCap)
+        );
     this.dynamicPixelRatio = targetPixelRatio;
 
     // Maintain GPU-composited layer promotion and touch-action: none on the canvas DOM element
@@ -4190,10 +4202,12 @@ export class BlackHoleSceneController {
     const width = Math.max(1, this.container.clientWidth || window.innerWidth);
     const height = Math.max(1, this.container.clientHeight || window.innerHeight);
     const baseCap = this.computeTargetBasePixelRatio();
-    const expectedDpr =
-      this.settings?.lowResolutionRender || isSoftwareGl
-        ? baseCap
-        : Math.max(Math.min(DYNAMIC_RES_MIN_DPR, baseCap), Math.min(baseCap, this.dynamicPixelRatio || baseCap));
+    const expectedDpr = this.settings?.lowResolutionRender
+      ? baseCap
+      : Math.max(
+          Math.min(DYNAMIC_RES_MIN_DPR, baseCap),
+          Math.min(baseCap, this.dynamicPixelRatio || baseCap)
+        );
     if (
       width === this.lastResizeWidth &&
       height === this.lastResizeHeight &&
@@ -5708,11 +5722,17 @@ export class BlackHoleSceneController {
         : Math.max(16.67, Math.min(120.0, frameCpuMs));
 
     // Thermal Throttling System:
-    // Samples GPU frame time metrics and performance.now() timestamps via an asymmetric
-    // passive-cooling RC thermal model, reducing raymarching ray count (u_stepCount)
-    // when sustained bottlenecks indicate rising hardware temperature/load.
+    // Preserves Full Geodesic tier and high-fidelity u_stepCount (160 on desktop, 128 on mobile;
+    // minimum 128 desktop / 96 mobile) unless FPS remains sustained below 24 FPS for >= 5 continuous seconds.
+    this.totalRenderedFrames++;
     const maxStepsForTier =
-      this.activeShaderQualityTier === 'Approximated Null-Geodesic' ? 2 : 5;
+      this.activeShaderQualityTier === 'Approximated Null-Geodesic'
+        ? isMobileDevice
+          ? THERMAL_MOBILE_MIN_STEPS
+          : THERMAL_DESKTOP_MIN_STEPS
+        : isMobileDevice
+        ? THERMAL_MOBILE_MAX_STEPS
+        : THERMAL_DESKTOP_MAX_STEPS;
     const prevThermalLevel = this.thermalState.level;
     this.thermalState = stepThermalThrottlingState(this.thermalState, {
       nowMs: tickEndMs,
@@ -5732,7 +5752,7 @@ export class BlackHoleSceneController {
     if (prevThermalLevel !== this.thermalState.level && this.perfConsoleLoggingEnabled) {
       console.info(
         `[Kerr Thermal Throttling] ${prevThermalLevel} -> ${this.thermalState.level} | ` +
-          `u_stepCount: ${effectiveRayStepCount}/${maxStepsForTier} rays | ` +
+          `u_stepCount: ${effectiveRayStepCount}/${maxStepsForTier} steps | ` +
           `Est. Temp: ${this.thermalState.estimatedTempC.toFixed(1)}°C (Load ${this.thermalState.thermalLoadPct.toFixed(
             1
           )}%, Sustained ${this.thermalState.sustainedBottleneckMs}ms)`
@@ -5763,9 +5783,15 @@ export class BlackHoleSceneController {
     }
 
     // Dynamic Quality Tier Evaluator:
-    // Uses rolling performance telemetry averages to swap between 'Full Geodesic' and
-    // 'Approximated Null-Geodesic' fragment shader snippets with a 2.5s hysteresis cooldown.
-    if (this.passTimingHistory.length >= 15) {
+    // Defaults to 'Full Geodesic' on startup and only downgrades if FPS remains sustained < 24 FPS
+    // for at least 5 continuous seconds (5000ms) after the initial 60-frame warmup grace period.
+    if (
+      this.totalRenderedFrames > DYNAMIC_RES_WARMUP_FRAMES &&
+      this.passTimingHistory.length >= 30 &&
+      (this.activeShaderQualityTier !== 'Full Geodesic' ||
+        this.thermalState.sustainedBottleneckMs >= THERMAL_SUSTAINED_DURATION_MS ||
+        this.shaderQualityMode !== 'auto')
+    ) {
       const avgPassSnapshot = this.getAveragedPassTimingsSnapshot();
       if (avgPassSnapshot) {
         const tierEval = evaluateDynamicShaderQualityTier(
@@ -5797,9 +5823,13 @@ export class BlackHoleSceneController {
     }
 
     // Rolling 30-frame dynamic resolution scaler:
-    // Step down internal pixel ratio by 0.15 (min 0.75) when rolling 30-frame avg FPS < 48,
-    // and recover upward toward basePixelRatioCap once rolling FPS exceeds 55 FPS.
-    if (interFrameMs > 0 && interFrameMs < 250) {
+    // Ignores the first 60 warmup frames after mount before evaluating FPS drops so resolution
+    // is never prematurely downscaled during initial boot or shader pre-warming.
+    if (
+      this.totalRenderedFrames > DYNAMIC_RES_WARMUP_FRAMES &&
+      interFrameMs > 0 &&
+      interFrameMs < 250
+    ) {
       this.rolling30FrameTimesMs.push(measuredFrameMs);
       if (this.rolling30FrameTimesMs.length > DYNAMIC_RES_ROLLING_WINDOW) {
         this.rolling30FrameTimesMs.shift();
@@ -5810,8 +5840,7 @@ export class BlackHoleSceneController {
         this.rolling30FrameTimesMs.length >= DYNAMIC_RES_ROLLING_WINDOW &&
         this.framesSinceResolutionCheck >= DYNAMIC_RES_ROLLING_WINDOW &&
         this.renderer &&
-        !this.settings.lowResolutionRender &&
-        !isSoftwareGl
+        !this.settings.lowResolutionRender
       ) {
         this.framesSinceResolutionCheck = 0;
         const avgFps = computeRollingAverageFps(this.rolling30FrameTimesMs);
@@ -5821,7 +5850,8 @@ export class BlackHoleSceneController {
           avgFps,
           this.basePixelRatioCap || 1.0,
           DYNAMIC_RES_MIN_DPR,
-          DYNAMIC_RES_STEP_DPR
+          DYNAMIC_RES_STEP_DPR,
+          this.totalRenderedFrames
         );
         if (Math.abs(nextDpr - currentDpr) >= 0.01) {
           this.dynamicPixelRatio = nextDpr;

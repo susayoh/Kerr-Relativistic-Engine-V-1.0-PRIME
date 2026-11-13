@@ -21,6 +21,9 @@ import {
   BarChart3,
   Layers,
   Gauge,
+  ChevronDown,
+  ChevronUp,
+  Sliders,
 } from 'lucide-react';
 import { UiThemeId } from '../scene/BlackHoleScene';
 import {
@@ -38,6 +41,7 @@ import {
 } from './iqQuestionBank';
 import {
   buildPostTestTelemetryReport,
+  buildCalibrationPreviewTelemetryReport,
   loadGrowthHistory,
   saveGrowthHistory,
   appendReportToGrowthHistory,
@@ -1742,7 +1746,7 @@ interface PersistedIQSessionState {
 
 const IQ_SESSION_STORAGE_KEY = 'kerr_iq_test_session_v1';
 
-function createInitialSampledQuestions(mode: IQBatteryModeId = 'comprehensive_18'): IQQuestion[] {
+function createInitialSampledQuestions(mode: IQBatteryModeId = 'observatory_24'): IQQuestion[] {
   const seen = getPreviouslySeenQuestionIds();
   const drawn = sampleRandomizedIQQuestions(MASTER_IQ_QUESTION_DATABASE, mode, seen);
   savePreviouslySeenQuestionIds([...seen, ...drawn.map((q) => q.id)]);
@@ -1757,13 +1761,14 @@ let memoryIqSessionState: PersistedIQSessionState = (() => {
         const parsed = JSON.parse(raw) as Partial<PersistedIQSessionState>;
         const rawMode = parsed.batteryMode;
         const mode: IQBatteryModeId =
+          rawMode === 'observatory_24' ||
           rawMode === 'comprehensive_18' ||
           rawMode === 'gardner_9_quick' ||
           rawMode === 'matrices_16' ||
           rawMode === 'full_deep_27' ||
           (typeof rawMode === 'string' && rawMode.startsWith('domain_'))
             ? (rawMode as IQBatteryModeId)
-            : 'comprehensive_18';
+            : 'observatory_24';
         const validQuestions =
           Array.isArray(parsed.activeQuestions) && parsed.activeQuestions.length > 0
             ? parsed.activeQuestions
@@ -1807,8 +1812,8 @@ let memoryIqSessionState: PersistedIQSessionState = (() => {
     questionTimingsMs: {},
     isCompleted: false,
     elapsedSeconds: 0,
-    batteryMode: 'comprehensive_18',
-    activeQuestions: createInitialSampledQuestions('comprehensive_18'),
+    batteryMode: 'observatory_24',
+    activeQuestions: createInitialSampledQuestions('observatory_24'),
     testDrawNumber: 1,
   };
 })();
@@ -1937,6 +1942,8 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
     topStrengths: topGardnerStrengths,
   } = profileSummary;
 
+  const [expandedDomainCardId, setExpandedDomainCardId] = useState<GardnerIntelligenceId | null>('logical_mathematical');
+
   const telemetryReport = useMemo(
     () =>
       buildPostTestTelemetryReport(
@@ -1946,6 +1953,14 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
         questionTimingsMs
       ),
     [activePool, selectedAnswers, elapsedSeconds, questionTimingsMs]
+  );
+
+  const displayedTelemetryReport = useMemo(
+    () =>
+      answeredCount > 0 || isCompleted
+        ? telemetryReport
+        : buildCalibrationPreviewTelemetryReport(activePool),
+    [answeredCount, isCompleted, telemetryReport, activePool]
   );
 
   /**
@@ -2042,7 +2057,6 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
   };
 
   const handleRecordGrowthRun = () => {
-    // If user has answered items in current session, log current telemetry; otherwise synthesize a realistic progressive calibration run
     if (answeredCount > 0) {
       const updated = appendReportToGrowthHistory(growthHistory, telemetryReport, batteryMode);
       setGrowthHistory(updated);
@@ -2052,7 +2066,6 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
     const simulatedAnswers: Record<string, number> = {};
     const simulatedTimings: Record<string, number> = {};
     activePool.forEach((q, idx) => {
-      // High accuracy progressive calibration
       const pass = (idx + growthHistory.length) % 5 !== 0;
       simulatedAnswers[q.id] = pass ? q.correctIndex : (q.correctIndex + 1) % q.options.length;
       simulatedTimings[q.id] = 3200 + ((idx * 530) % 2800);
@@ -2076,19 +2089,20 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
 
   const handleCopyTelemetrySummary = () => {
     onHapticSuccess?.();
+    const rpt = displayedTelemetryReport;
     const lines = [
       '=== KERR RELATIVITY ENGINE — PSYCHOMETRIC & MULTIPLE INTELLIGENCES TELEMETRY ===',
       `Assessment Set: #${testDrawNumber} (${batteryMode})`,
-      `Full-Scale IQ Estimate: ${telemetryReport.confidenceIntervalLabel} (SD = ${telemetryReport.standardDeviation}, z = ${telemetryReport.zScore})`,
-      `Percentile Rank: ${telemetryReport.percentileRank}th Percentile (${telemetryReport.percentileLabel}) — ${telemetryReport.classificationTitle}`,
-      `Accuracy: ${telemetryReport.correctCount}/${telemetryReport.totalQuestions} (${Math.round(
-        (telemetryReport.correctCount / Math.max(1, telemetryReport.totalQuestions)) * 100
+      `Full-Scale IQ Estimate: ${rpt.confidenceIntervalLabel} (SD = ${rpt.standardDeviation}, z = ${rpt.zScore})`,
+      `Percentile Rank: ${rpt.percentileRank}th Percentile (${rpt.percentileLabel}) — ${rpt.classificationTitle}`,
+      `Accuracy: ${rpt.correctCount}/${rpt.totalQuestions} (${Math.round(
+        (rpt.correctCount / Math.max(1, rpt.totalQuestions)) * 100
       )}%)`,
-      `Session Timing: ${telemetryReport.totalElapsedSeconds}s total | ${telemetryReport.avgLatencyMs} ms/item avg`,
-      `Speed-Accuracy Verdict: ${telemetryReport.speedAccuracyVerdict}`,
+      `Session Timing: ${rpt.totalElapsedSeconds}s total | ${rpt.avgLatencyMs} ms/item avg`,
+      `Speed-Accuracy Verdict: ${rpt.speedAccuracyVerdict}`,
       '',
       '--- COGNITIVE SUB-DOMAIN BREAKDOWN ---',
-      ...telemetryReport.cognitiveSubDomains.map(
+      ...rpt.cognitiveSubDomains.map(
         (sub) =>
           `• ${sub.title}: ${sub.correctCount}/${sub.itemCount} (${sub.accuracyPercent}%) | Avg ${Math.round(
             sub.avgLatencyMs
@@ -2096,11 +2110,11 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
       ),
       '',
       '--- DIFFICULTY TIER CALIBRATION ---',
-      ...telemetryReport.difficultyBrackets.map(
+      ...rpt.difficultyBrackets.map(
         (b) =>
           `• ${b.title} (${b.iqCeilingLabel}): ${b.correctCount}/${b.itemCount} (${b.passRatePercent}% Pass)`
       ),
-      `Calibration Diagnostic: ${telemetryReport.calibrationDiagnostic}`,
+      `Calibration Diagnostic: ${rpt.calibrationDiagnostic}`,
     ];
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(lines.join('\n')).catch(() => {});
@@ -2111,32 +2125,33 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
 
   const handleExportTelemetryJson = () => {
     onHapticMedium?.();
+    const rpt = displayedTelemetryReport;
     const payload = {
       exportedAt: new Date().toISOString(),
-      engine: 'Kerr-Newman Psychometric & Multiple Intelligences Telemetry Core v2.4',
+      engine: 'Kerr-Newman Psychometric & Multiple Intelligences Telemetry Core v2.5',
       testDrawNumber,
       batteryMode,
       headlineReadout: {
-        estimatedIq: telemetryReport.estimatedIq,
-        confidenceInterval: telemetryReport.confidenceIntervalLabel,
-        standardDeviation: telemetryReport.standardDeviation,
-        zScore: telemetryReport.zScore,
-        percentileRank: telemetryReport.percentileRank,
-        classification: telemetryReport.classificationTitle,
+        estimatedIq: rpt.estimatedIq,
+        confidenceInterval: rpt.confidenceIntervalLabel,
+        standardDeviation: rpt.standardDeviation,
+        zScore: rpt.zScore,
+        percentileRank: rpt.percentileRank,
+        classification: rpt.classificationTitle,
       },
       sessionMetrics: {
-        totalQuestions: telemetryReport.totalQuestions,
-        answeredCount: telemetryReport.answeredCount,
-        correctCount: telemetryReport.correctCount,
-        totalElapsedSeconds: telemetryReport.totalElapsedSeconds,
-        avgLatencyMs: telemetryReport.avgLatencyMs,
-        speedAccuracyVerdict: telemetryReport.speedAccuracyVerdict,
-        calibrationDiagnostic: telemetryReport.calibrationDiagnostic,
+        totalQuestions: rpt.totalQuestions,
+        answeredCount: rpt.answeredCount,
+        correctCount: rpt.correctCount,
+        totalElapsedSeconds: rpt.totalElapsedSeconds,
+        avgLatencyMs: rpt.avgLatencyMs,
+        speedAccuracyVerdict: rpt.speedAccuracyVerdict,
+        calibrationDiagnostic: rpt.calibrationDiagnostic,
       },
-      cognitiveSubDomains: telemetryReport.cognitiveSubDomains,
-      difficultyBrackets: telemetryReport.difficultyBrackets,
-      gardnerDomains: telemetryReport.gardnerDomains,
-      latencyCurve: telemetryReport.latencyCurve,
+      cognitiveSubDomains: rpt.cognitiveSubDomains,
+      difficultyBrackets: rpt.difficultyBrackets,
+      gardnerDomains: rpt.gardnerDomains,
+      latencyCurve: rpt.latencyCurve,
       growthHistorySnapshots: growthHistory,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -2173,38 +2188,39 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
   return (
     <div
       data-testid="settings-tab-panel-iq-test"
-      className="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto space-y-3 text-sm text-zinc-200"
+      className="flex-1 min-h-0 flex flex-col p-4 sm:p-6 overflow-y-auto space-y-5 text-sm text-zinc-200"
     >
-      {/* Top Hero Overview Header — Matches DiagnosticSuiteView & CodebaseDetailsView */}
-      <div className="p-3.5 rounded-2xl bg-zinc-950/80 border border-zinc-800 shadow-lg space-y-2.5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+      {/* Hero Overview Header — Matches DiagnosticSuiteView & CodebaseDetailsView 1:1 */}
+      <div className="p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800 shadow-lg space-y-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div className="flex items-center gap-2 flex-wrap min-w-0">
-            <div className="w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shrink-0">
-              <Brain className="w-3.5 h-3.5 text-cyan-400" />
-            </div>
-            <h3 className="font-display text-xs sm:text-sm font-bold uppercase tracking-wider text-white">
-              Psychometric &amp; Multiple Intelligences Telemetry Suite
+            <h3 className="text-base sm:text-lg font-bold text-white tracking-wide font-display flex items-center gap-2">
+              <Brain className="w-5 h-5 text-emerald-400 shrink-0" />
+              <span>Psychometric Intelligence Suite</span>
             </h3>
             <span
               data-testid="iq-test-score-readout"
-              className="px-2 py-0.5 rounded-md text-[10px] font-mono uppercase tracking-wider border bg-cyan-500/15 text-cyan-300 border-cyan-500/30 whitespace-nowrap"
+              className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-mono text-[11px] font-bold flex items-center gap-1 whitespace-nowrap"
             >
-              {isCompleted
-                ? `FSIQ ${telemetryReport.confidenceIntervalLabel} · ${telemetryReport.percentileRank}th %ile`
-                : `Set #${testDrawNumber} · ${activePool.length} Items (${MASTER_IQ_QUESTION_DATABASE.length}-Item Bank)`}
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              <span>
+                {isCompleted
+                  ? `FSIQ ${telemetryReport.confidenceIntervalLabel} · ${telemetryReport.percentileRank}TH %ILE`
+                  : `SET #${testDrawNumber} · Q1–Q${activePool.length}`}
+              </span>
             </span>
           </div>
 
           {/* Action Toolbar — Matches DiagnosticSuiteView & CodebaseDetailsView */}
-          <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
             <button
               type="button"
               data-testid="iq-test-start-btn"
               onClick={handleStartTest}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-[11px] font-semibold border transition-all cursor-pointer bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border-cyan-500/40 shadow-[0_0_15px_rgba(34,211,238,0.15)]"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/60 text-emerald-200 transition-colors text-xs font-semibold cursor-pointer shadow-sm whitespace-nowrap"
             >
-              <Play className="w-3 h-3 fill-current text-cyan-300" />
-              <span>{isTestStarted ? 'Restart (Fresh Set)' : 'Begin Assessment'}</span>
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>{isTestStarted ? 'Restart Suite' : 'Begin Suite'}</span>
             </button>
 
             <button
@@ -2215,10 +2231,10 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                 drawFreshQuestionSet(batteryMode, isTestStarted);
               }}
               title="Draw a brand-new non-repeating set of questions from the 85-question database"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 font-mono text-[11px] transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white transition-colors text-xs font-medium cursor-pointer whitespace-nowrap"
             >
-              <Shuffle className="w-3 h-3 text-indigo-400" />
-              <span>New Question Set</span>
+              <Shuffle className="w-3.5 h-3.5 text-cyan-400" />
+              <span>New Set</span>
             </button>
 
             {isTestStarted && (
@@ -2226,9 +2242,9 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                 type="button"
                 data-testid="iq-test-reset-btn"
                 onClick={handleResetTest}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700/80 font-mono text-[11px] transition-all cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition-colors text-xs font-medium cursor-pointer whitespace-nowrap"
               >
-                <RotateCcw className="w-3 h-3 text-zinc-400" />
+                <RotateCcw className="w-3.5 h-3.5 text-zinc-400" />
                 <span>Reset</span>
               </button>
             )}
@@ -2237,16 +2253,16 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
               type="button"
               data-testid="iq-header-copy-summary-btn"
               onClick={handleCopyTelemetrySummary}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 font-mono text-[11px] transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white transition-colors text-xs font-medium cursor-pointer whitespace-nowrap"
             >
               {hasCopiedSummary ? (
                 <>
-                  <Check className="w-3 h-3 text-emerald-400" />
-                  <span className="text-emerald-300">Copied</span>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-emerald-300 font-semibold">Copied!</span>
                 </>
               ) : (
                 <>
-                  <Copy className="w-3 h-3 text-zinc-400" />
+                  <Copy className="w-3.5 h-3.5 text-amber-400" />
                   <span>Copy Summary</span>
                 </>
               )}
@@ -2256,106 +2272,76 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
               type="button"
               data-testid="iq-header-export-json-btn"
               onClick={handleExportTelemetryJson}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 font-mono text-[11px] transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white transition-colors text-xs font-medium cursor-pointer whitespace-nowrap"
             >
-              <Download className="w-3 h-3 text-cyan-400" />
+              <Download className="w-3.5 h-3.5 text-sky-400" />
               <span>Export JSON</span>
             </button>
           </div>
         </div>
-
-        <p className="text-[11px] text-zinc-400 leading-snug">
-          Evaluates cognitive and practical abilities across Howard Gardner’s 9 Primary Intelligences and Raven’s/Mensa 3×3 Progressive Matrices with D3.js Longitudinal Growth Analytics and Post-Test Telemetry Diagnostics.
+        <p className="text-xs text-zinc-400 leading-relaxed">
+          Evaluates cognitive and fluid reasoning across Howard Gardner’s 9 Primary Intelligences and Raven’s/Mensa 3×3 Progressive Matrices with D3.js Growth Analytics and Post-Test Telemetry Diagnostics ({MASTER_IQ_QUESTION_DATABASE.length}-item calibrated bank).
         </p>
       </div>
 
-      {/* 4 KPI Stat Cards — Matches DiagnosticSuiteView & CodebaseDetailsView */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-        <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-400 text-[11px]">
-            <span>Full-Scale IQ Estimate</span>
-            <Award className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+      {/* 4 Clean Big Stats Cards — Matches CodebaseDetailsView & DiagnosticSuiteView */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-zinc-800/90">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
+            <span>Full-Scale IQ (95% CI)</span>
+            <Award className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="mt-1.5 flex items-baseline justify-between gap-1.5">
-            <span className="text-lg font-bold font-mono text-white whitespace-nowrap">
-              {answeredCount > 0 ? telemetryReport.confidenceIntervalLabel : `${estimatedIq} ± 4`}
-            </span>
-            <span className="text-[10px] font-mono text-cyan-300 whitespace-nowrap">
-              {telemetryReport.percentileLabel}
-            </span>
+          <div className="mt-1 text-2xl font-bold font-mono text-white tracking-tight tabular-nums">
+            {displayedTelemetryReport.confidenceIntervalLabel}
           </div>
-          <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono text-zinc-400 truncate">
-            <span>SD=15 (z={telemetryReport.zScore})</span>
-            <span className="text-amber-300 truncate ml-1">{telemetryReport.classificationTitle}</span>
+          <div className="text-xs text-zinc-500 mt-0.5 font-mono truncate">
+            {displayedTelemetryReport.percentileRank}th %ile · σ = 15 ({displayedTelemetryReport.zScore})
           </div>
         </div>
 
-        <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-400 text-[11px]">
-            <span>Battery Progress &amp; Accuracy</span>
-            <Gauge className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+        <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-zinc-800/90">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
+            <span>Items Verified</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           </div>
-          <div className="mt-1.5 flex items-baseline gap-1.5">
-            <span className="text-lg font-bold font-mono text-emerald-400 whitespace-nowrap">
-              {correctCount}/{activePool.length}
-            </span>
-            <span className="text-[11px] font-mono text-zinc-400 whitespace-nowrap">
-              ({answeredCount} answered)
-            </span>
+          <div className="mt-1 text-2xl font-bold font-mono text-emerald-300 tracking-tight tabular-nums">
+            {answeredCount > 0 ? `${correctCount} / ${activePool.length}` : `0 / ${activePool.length}`}
           </div>
-          <div className="mt-1.5 h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-300"
-              style={{
-                width: `${Math.max(
-                  4,
-                  Math.round((answeredCount / Math.max(1, activePool.length)) * 100)
-                )}%`,
-              }}
-            />
+          <div className="text-xs text-zinc-500 mt-0.5 truncate">
+            {answeredCount} answered · {MASTER_IQ_QUESTION_DATABASE.length}-item master bank
           </div>
         </div>
 
-        <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-400 text-[11px]">
-            <span>Response Latency &amp; Clock</span>
-            <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+        <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-zinc-800/90">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
+            <span>Response Latency</span>
+            <Clock className="w-4 h-4 text-sky-400" />
           </div>
-          <div className="mt-1.5 flex items-baseline gap-1.5">
-            <span className="text-lg font-bold font-mono text-white whitespace-nowrap">
-              {formattedTime}
-            </span>
-            <span className="text-[11px] font-mono text-cyan-300 whitespace-nowrap">
-              {(telemetryReport.avgLatencyMs / 1000).toFixed(1)}s / item
-            </span>
+          <div className="mt-1 text-2xl font-bold font-mono text-white tracking-tight tabular-nums">
+            {(displayedTelemetryReport.avgLatencyMs / 1000).toFixed(1)}s{' '}
+            <span className="text-xs font-normal text-zinc-400">/ item</span>
           </div>
-          <div className="mt-1.5 text-[10px] font-mono text-zinc-400 truncate">
-            {MASTER_IQ_QUESTION_DATABASE.length}-Item Master Pool · Set #{testDrawNumber}
+          <div className="text-xs text-zinc-500 mt-0.5 font-mono truncate">
+            Elapsed {formattedTime} · {displayedTelemetryReport.avgLatencyMs.toLocaleString()} ms avg
           </div>
         </div>
 
-        <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-400 text-[11px]">
-            <span>9-Domain Longitudinal Growth</span>
-            <TrendingUp className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+        <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-zinc-800/90">
+          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
+            <span>9-Domain Growth</span>
+            <TrendingUp className="w-4 h-4 text-purple-400" />
           </div>
-          <div className="mt-1.5 flex items-baseline gap-1.5">
-            <span className="text-lg font-bold font-mono text-emerald-400 whitespace-nowrap">
-              {growthIqDelta >= 0 ? `+${growthIqDelta}` : growthIqDelta} IQ
-            </span>
-            <span className="text-[11px] font-mono text-zinc-400 whitespace-nowrap">
-              ({growthHistory.length} Sessions)
-            </span>
+          <div className="mt-1 text-2xl font-bold font-mono text-amber-300 tracking-tight tabular-nums">
+            {growthIqDelta >= 0 ? `+${growthIqDelta}` : growthIqDelta} IQ
           </div>
-          <div className="mt-1.5 text-[10px] font-mono text-indigo-300 truncate">
-            Top: {topGardnerStrengths[0]?.meta.name || 'Spatial'} (
-            {topGardnerStrengths[0]?.meta.smartTitle || 'Picture Smart'})
+          <div className="text-xs text-zinc-500 mt-0.5 truncate">
+            {growthHistory.length} Sessions · Top: {topGardnerStrengths[0]?.meta.shortCode || 'LOG'}
           </div>
         </div>
       </div>
 
-      {/* Sub-View Switcher Bar — Single Row Toggle between Assessment Suite, Growth Analytics (D3.js), and Telemetry Report */}
-      <div className="p-1.5 rounded-xl bg-zinc-950/90 border border-zinc-800/90 flex items-center justify-between gap-2 flex-wrap">
+      {/* Execution Progress & Sub-View Navigation Bar (Matches DiagnosticSuiteView Execution Progress Bar) */}
+      <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
         <div className="flex items-center gap-1.5 flex-wrap">
           <button
             type="button"
@@ -2364,15 +2350,15 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
               onHapticLight?.();
               setActiveSubView('assessment');
             }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-semibold transition-all cursor-pointer border ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all cursor-pointer border whitespace-nowrap ${
               activeSubView === 'assessment'
-                ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-[0_0_12px_rgba(34,211,238,0.15)]'
-                : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-zinc-900/70'
+                ? 'bg-zinc-800 border-zinc-400 text-white shadow-sm'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
             }`}
           >
             <Layers className="w-3.5 h-3.5 text-cyan-400" />
             <span>
-              1. Assessment Suite ({isTestStarted ? `Active Q${safeQuestionIdx + 1}/${activePool.length}` : '9 Domain Tests'})
+              1. Assessment ({isTestStarted ? `Q${safeQuestionIdx + 1}/Q${activePool.length}` : `Q1–Q${activePool.length}`})
             </span>
           </button>
 
@@ -2383,10 +2369,10 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
               onHapticLight?.();
               setActiveSubView('growth_analytics');
             }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-semibold transition-all cursor-pointer border ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all cursor-pointer border whitespace-nowrap ${
               activeSubView === 'growth_analytics'
-                ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-[0_0_12px_rgba(34,211,238,0.15)]'
-                : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-zinc-900/70'
+                ? 'bg-zinc-800 border-zinc-400 text-white shadow-sm'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
             }`}
           >
             <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
@@ -2400,20 +2386,36 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
               onHapticLight?.();
               setActiveSubView('telemetry_report');
             }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-[11px] font-semibold transition-all cursor-pointer border ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all cursor-pointer border whitespace-nowrap ${
               activeSubView === 'telemetry_report'
-                ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 shadow-[0_0_12px_rgba(34,211,238,0.15)]'
-                : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-zinc-900/70'
+                ? 'bg-zinc-800 border-zinc-400 text-white shadow-sm'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
             }`}
           >
             <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
-            <span>3. Post-Test Telemetry Report</span>
+            <span>3. Post-Test Telemetry</span>
           </button>
         </div>
 
-        <div className="hidden xl:flex items-center gap-1.5 px-2 text-[10px] font-mono text-zinc-400">
-          <Activity className="w-3 h-3 text-cyan-400" />
-          <span>Session Persistence Active</span>
+        <div className="w-full md:w-36 shrink-0 space-y-1">
+          <div className="flex items-center justify-between text-[11px] whitespace-nowrap">
+            <span className="font-semibold text-zinc-300">Progress</span>
+            <span className="font-mono text-zinc-400 tabular-nums">
+              {answeredCount}/{activePool.length} (
+              {Math.round((answeredCount / Math.max(1, activePool.length)) * 100)}%)
+            </span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-zinc-900 overflow-hidden border border-zinc-800">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-amber-400 transition-all duration-300"
+              style={{
+                width: `${Math.max(
+                  4,
+                  Math.round((answeredCount / Math.max(1, activePool.length)) * 100)
+                )}%`,
+              }}
+            />
+          </div>
         </div>
       </div>
 
@@ -2422,7 +2424,7 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
         data-testid="iq-test-logic-modules-container"
         role="region"
         aria-label="Howard Gardner Multiple Intelligences, Growth Analytics, and Post-Test Telemetry Container"
-        className="space-y-3.5"
+        className="space-y-4"
       >
         {activeSubView === 'growth_analytics' ? (
           <GrowthAnalyticsDashboard
@@ -2434,9 +2436,11 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
           />
         ) : activeSubView === 'telemetry_report' || isCompleted ? (
           <PostTestTelemetryReportView
-            report={telemetryReport}
+            report={displayedTelemetryReport}
             testDrawNumber={testDrawNumber}
-            bellCurveSlot={<NormativeBellCurveSvg userIq={telemetryReport.estimatedIq} />}
+            bellCurveSlot={
+              <NormativeBellCurveSvg userIq={displayedTelemetryReport.estimatedIq} />
+            }
             onReviewQuestions={() => {
               onHapticLight?.();
               setIsCompleted(false);
@@ -2453,26 +2457,24 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
             hasCopied={hasCopiedSummary}
           />
         ) : !isTestStarted ? (
-          /* Clean Diagnostic/Code-Styled Pre-Test Briefing with Battery Selector & Howard Gardner's 9 Intelligences */
+          /* Clean Diagnostic/Code-Styled Pre-Test Overview */
           <div
             data-testid="iq-pretest-briefing"
             className="space-y-4"
           >
-            {/* Battery Mode Selector Card */}
-            <div className="p-4 rounded-2xl bg-zinc-950/90 border border-zinc-800/90 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
-                <div className="flex items-center gap-2">
+            {/* Battery Mode Distribution & Selector Card (Matches CodebaseDetailsView Subsystem Share Card) */}
+            <div className="p-4 rounded-xl bg-zinc-950/90 border border-zinc-800 space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-zinc-200 flex items-center gap-2">
                   <Grid className="w-4 h-4 text-cyan-400" />
-                  <h4 className="font-display text-xs sm:text-sm font-bold uppercase tracking-wider text-white">
-                    Composite Assessment Batteries (Stratified Non-Repeating Sampler)
-                  </h4>
-                </div>
-                <span className="font-mono text-xs text-cyan-300">
-                  {activePool.length} Active Items · {MASTER_IQ_QUESTION_DATABASE.length}-Item Master Bank
+                  <span>Composite Assessment Batteries (Stratified Non-Repeating Sampler)</span>
+                </span>
+                <span className="text-zinc-400 font-mono">
+                  Active: Q1–Q{activePool.length} · Click any battery to configure
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
                 {IQ_BATTERY_MODES.map((modeMeta) => {
                   const isSelectedMode = batteryMode === modeMeta.id;
                   return (
@@ -2481,31 +2483,31 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                       type="button"
                       data-testid={`iq-battery-mode-${modeMeta.id}`}
                       onClick={() => handleChangeBatteryMode(modeMeta.id)}
-                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
                         isSelectedMode
-                          ? 'bg-cyan-500/15 border-cyan-400 text-white shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-                          : 'bg-zinc-900/60 border-zinc-800/90 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900'
+                          ? 'bg-zinc-900 border-emerald-500/60 text-white shadow-md shadow-emerald-950/20'
+                          : 'bg-zinc-900/50 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900'
                       }`}
                     >
                       <div className="space-y-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono text-xs font-bold text-white">
-                            {modeMeta.title}
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="px-2 py-0.5 rounded bg-zinc-950 border border-zinc-800 font-mono text-[10px] font-bold text-cyan-300">
+                            {modeMeta.questionCount} ITEMS
                           </span>
-                          <span className="px-2 py-0.5 rounded bg-zinc-950 border border-zinc-800 font-mono text-[10px] text-cyan-300 shrink-0">
-                            {modeMeta.shortLabel}
+                          <span
+                            className={`text-[10px] font-mono font-bold ${
+                              isSelectedMode ? 'text-emerald-400' : 'text-zinc-500'
+                            }`}
+                          >
+                            {isSelectedMode ? 'SELECTED' : 'SELECT'}
                           </span>
                         </div>
-                        <p className="text-[11px] text-zinc-400 leading-relaxed">
+                        <div className="font-bold text-white text-xs pt-0.5 leading-snug">
+                          {modeMeta.title}
+                        </div>
+                        <p className="text-[11px] text-zinc-400 leading-snug">
                           {modeMeta.description}
                         </p>
-                      </div>
-
-                      <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] font-mono">
-                        <span className={isSelectedMode ? 'text-cyan-300 font-bold' : 'text-zinc-500'}>
-                          {isSelectedMode ? 'ACTIVE BATTERY' : 'CLICK TO SELECT'}
-                        </span>
-                        <span className="text-zinc-400">{modeMeta.questionCount} Qs</span>
                       </div>
                     </button>
                   );
@@ -2513,137 +2515,177 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
               </div>
             </div>
 
-            {/* Series of Nine Psychometric Tests Based on Howard Gardner's Theory of Multiple Intelligences */}
+            {/* 9 Intelligence Domains — Styled Identically to DiagnosticSuiteView Scenario Cards */}
             <div
               data-testid="gardner-9-intelligences-framework"
-              className="p-4 rounded-2xl bg-zinc-950/90 border border-zinc-800/90 space-y-3.5"
+              className="space-y-2.5"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                  <div>
-                    <h4 className="font-display text-xs sm:text-sm font-bold uppercase tracking-wider text-white">
-                      Nine Psychometric Domain Tests — Howard Gardner’s Multiple Intelligences
-                    </h4>
-                    <p className="text-xs text-zinc-400">
-                      Queue or launch any specialized domain assessment below, or run the composite battery across all 9 domains.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onHapticLight?.();
-                      setActiveSubView('growth_analytics');
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-emerald-300 font-mono text-xs cursor-pointer transition-colors"
-                  >
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    <span>View D3 Growth Chart</span>
-                  </button>
-                </div>
+              <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
+                <span className="font-semibold text-zinc-200">
+                  Nine Intelligence Domains &amp; Psychometric Sub-Batteries (Howard Gardner Framework)
+                </span>
+                <span>Click any domain row to inspect criteria or launch a dedicated 7-item test</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {GARDNER_INTELLIGENCES.map((intel) => {
-                  const totalInBank = MASTER_IQ_QUESTION_DATABASE.filter(
-                    (q) => q.gardnerDomain === intel.id
-                  ).length;
-                  const domainModeId: IQBatteryModeId = `domain_${intel.id}`;
-                  const isDomainSelected = batteryMode === domainModeId;
-                  const latestScore = latestGrowthSnap?.domainScores[intel.id] ?? 75;
+              {GARDNER_INTELLIGENCES.map((intel) => {
+                const domainQuestions = MASTER_IQ_QUESTION_DATABASE.filter(
+                  (q) => q.gardnerDomain === intel.id
+                );
+                const totalInBank = domainQuestions.length;
+                const domainModeId: IQBatteryModeId = `domain_${intel.id}`;
+                const isDomainSelected = batteryMode === domainModeId;
+                const isExpanded = expandedDomainCardId === intel.id;
+                const latestScore = latestGrowthSnap?.domainScores[intel.id] ?? 80;
+                const baselineScore = baselineGrowthSnap?.domainScores[intel.id] ?? 62;
+                const delta = latestScore - baselineScore;
 
-                  return (
+                return (
+                  <div
+                    key={intel.id}
+                    data-testid={`gardner-domain-card-${intel.id}`}
+                    className={`rounded-xl border transition-all ${
+                      isExpanded || isDomainSelected
+                        ? 'bg-zinc-950 border-emerald-500/60 shadow-lg shadow-emerald-950/20'
+                        : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
                     <div
-                      key={intel.id}
-                      data-testid={`gardner-domain-card-${intel.id}`}
-                      className={`p-3.5 rounded-xl border flex flex-col justify-between gap-2.5 transition-all ${
-                        isDomainSelected
-                          ? 'bg-cyan-950/25 border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.12)]'
-                          : 'bg-zinc-900/50 border-zinc-800/90 hover:border-zinc-700'
-                      }`}
+                      className="p-3.5 cursor-pointer select-none"
+                      onClick={() => {
+                        onHapticLight?.();
+                        setExpandedDomainCardId(isExpanded ? null : intel.id);
+                      }}
                     >
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 flex-wrap min-w-0">
+                          <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-750 font-mono text-xs font-bold text-cyan-300">
+                            MOD-{intel.indexNumber} · {intel.shortCode}
+                          </span>
+                          <h4 className="font-bold text-white text-sm hover:text-amber-300 transition-colors">
+                            {intel.name}
+                          </h4>
                           <span
-                            className={`px-2 py-0.5 rounded border font-mono text-[10px] font-bold ${intel.badgeClass}`}
+                            className={`px-2 py-0.5 rounded-md border font-mono text-xs ${intel.badgeClass}`}
                           >
-                            {intel.indexNumber}. {intel.smartTitle}
-                          </span>
-                          <span className="font-mono text-[10px] text-zinc-400">
-                            {totalInBank} Bank Items · {latestScore}%
+                            {intel.smartTitle}
                           </span>
                         </div>
-                        <div className="font-mono text-xs font-bold text-white leading-tight pt-0.5">
-                          {intel.name}
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            data-testid={`select-domain-mode-${intel.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleChangeBatteryMode(domainModeId);
+                            }}
+                            className={`px-2.5 py-1 rounded-lg border text-xs font-mono transition-all cursor-pointer ${
+                              isDomainSelected
+                                ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200 font-bold'
+                                : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-300'
+                            }`}
+                          >
+                            {isDomainSelected ? 'Queued (7 Qs)' : 'Queue Mode'}
+                          </button>
+
+                          <button
+                            type="button"
+                            data-testid={`launch-domain-test-${intel.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onHapticMedium?.();
+                              drawFreshQuestionSet(domainModeId, true);
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 hover:text-white text-xs font-mono font-semibold transition-all cursor-pointer"
+                          >
+                            <Play className="w-3 h-3 fill-current" />
+                            <span>Start {intel.shortCode}</span>
+                          </button>
+
+                          <span className="px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 font-mono text-xs font-bold text-emerald-300 tabular-nums">
+                            {latestScore}% ({delta >= 0 ? `+${delta}%` : `${delta}%`})
+                          </span>
+
+                          {isExpanded ? (
+                            <ChevronUp className="w-4 h-4 text-amber-400" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-zinc-400" />
+                          )}
                         </div>
-                        <div className="text-[11px] font-mono text-cyan-300/90 leading-tight">
-                          {intel.psychometricTestTitle}
-                        </div>
-                        <p className="text-[11px] text-zinc-400 leading-relaxed">
-                          {intel.description}
-                        </p>
                       </div>
 
-                      <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          data-testid={`select-domain-mode-${intel.id}`}
-                          onClick={() => handleChangeBatteryMode(domainModeId)}
-                          className={`px-2.5 py-1 rounded-lg font-mono text-[10px] border transition-colors cursor-pointer ${
-                            isDomainSelected
-                              ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold'
-                              : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:text-white'
-                          }`}
-                        >
-                          {isDomainSelected ? 'Selected' : 'Queue Test'}
-                        </button>
+                      <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                        {intel.description}
+                      </p>
 
-                        <button
-                          type="button"
-                          data-testid={`launch-domain-test-${intel.id}`}
-                          onClick={() => {
-                            onHapticMedium?.();
-                            drawFreshQuestionSet(domainModeId, true);
-                          }}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/60 text-cyan-100 font-mono text-[10px] font-bold transition-colors cursor-pointer"
-                        >
-                          <Play className="w-2.5 h-2.5 fill-current text-cyan-300" />
-                          <span>Start {intel.shortCode} Test</span>
-                        </button>
+                      <div className="mt-2 text-xs font-mono text-zinc-400 flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-zinc-500 font-semibold uppercase text-[11px]">
+                            Psychometric Battery:
+                          </span>
+                          <span className="text-zinc-300 bg-zinc-900/80 px-2 py-0.5 rounded border border-zinc-800">
+                            {intel.psychometricTestTitle}
+                          </span>
+                        </div>
+                        <span className="text-zinc-400">{totalInBank} calibrated items in bank</span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+
+                    {isExpanded && (
+                      <div className="px-4 pb-3.5 pt-2 border-t border-zinc-800/80 bg-zinc-900/30 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-mono">
+                        <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
+                          <span className="text-[10px] text-zinc-400 block uppercase">
+                            Domain Pool Capacity
+                          </span>
+                          <span className="text-white font-bold">
+                            {totalInBank} Verified Questions
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
+                          <span className="text-[10px] text-zinc-400 block uppercase">
+                            Longitudinal Mastery
+                          </span>
+                          <span className="text-emerald-300 font-bold">
+                            Baseline {baselineScore}% → Current {latestScore}%
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
+                          <span className="text-[10px] text-zinc-400 block uppercase">
+                            Sample Analytical Focus
+                          </span>
+                          <span className="text-cyan-300 truncate block">
+                            {domainQuestions[0]?.domain || intel.psychometricTestTitle}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Bottom Launch Footer with Normative Curve Preview */}
-            <div className="p-4 rounded-2xl bg-zinc-950/90 border border-zinc-800/90 flex flex-col md:flex-row items-center justify-between gap-4">
+            {/* Engineering & Psychometric Specifications Footer (Matches DiagnosticSuiteView & CodebaseDetailsView Footer) */}
+            <div className="p-4 rounded-xl bg-zinc-950/90 border border-zinc-800 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="w-full md:w-80 p-2 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
-                <NormativeBellCurveSvg userIq={latestGrowthSnap?.compositeIq} />
+                <NormativeBellCurveSvg userIq={displayedTelemetryReport.estimatedIq} />
               </div>
 
-              <div className="flex-1 space-y-2 text-center md:text-left">
-                <div className="text-xs font-mono uppercase tracking-wider text-cyan-300">
-                  Ready for Calibration · Set #{testDrawNumber}
+              <div className="flex-1 space-y-1.5 text-center md:text-left">
+                <div className="text-xs font-mono uppercase tracking-wider text-emerald-300 font-bold">
+                  Ready for Calibration · Set #{testDrawNumber} (Q1–Q{activePool.length})
                 </div>
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  Completing an assessment automatically generates a full Post-Test Telemetry Report (Headline CI, 4-Category Cognitive Sub-Domains, Per-Question Latency Curve, Difficulty Tier Calibration) and appends your scores to the D3.js Growth Analytics timeline.
+                  Completing an assessment automatically compiles the Post-Test Telemetry Report (Headline CI, 4-Category Sub-Domains, Per-Question Latency Curve, Difficulty Tier Calibration) and records your 9-domain vector into D3.js Growth Analytics.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={handleStartTest}
-                className="w-full md:w-auto py-3 px-6 rounded-xl bg-cyan-500/25 hover:bg-cyan-500/35 border border-cyan-400 text-white font-mono text-xs font-bold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.2)] cursor-pointer transition-all shrink-0"
+                className="w-full md:w-auto py-2.5 px-5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/60 text-emerald-100 font-mono text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all shrink-0"
               >
-                <Play className="w-3.5 h-3.5 fill-current text-cyan-300" />
-                <span>
-                  Begin Assessment ({activePool.length} Items)
-                </span>
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Begin Assessment (Q1–Q{activePool.length})</span>
               </button>
             </div>
           </div>

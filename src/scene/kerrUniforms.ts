@@ -252,7 +252,7 @@ export function createInitialKerrUniforms(
     currentScale = 1.0,
     expansionProgress = 1.0,
     companionStarBaseRadius = 3.85,
-    initialStepCount = 5.0,
+    initialStepCount = 160.0,
   } = options;
 
   const mapped = mapParamsToKerrUniformValues(params, settings);

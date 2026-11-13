@@ -9,6 +9,7 @@ import {
 import { MASTER_IQ_QUESTION_DATABASE } from './IQTestModule';
 import {
   buildPostTestTelemetryReport,
+  buildCalibrationPreviewTelemetryReport,
   normalCdfPercentile,
   SEED_GROWTH_HISTORY,
   appendReportToGrowthHistory,
@@ -51,7 +52,13 @@ test('MASTER_IQ_QUESTION_DATABASE has unique IDs and >= 7 items per each of the 
   }
 });
 
-test('sampleRandomizedIQQuestions draws stratified sets and supports all 9 individual domain psychometric tests', () => {
+test('sampleRandomizedIQQuestions draws stratified sets including observatory_24 (Q1-Q24) and all 9 individual domain tests', () => {
+  const obs24 = sampleRandomizedIQQuestions(MASTER_IQ_QUESTION_DATABASE, 'observatory_24');
+  assert.equal(obs24.length, 24);
+  // Progressive difficulty ordering check: first item is Standard and last item is Advanced/Apex
+  assert.equal(obs24[0].difficulty, 'Standard');
+  assert.ok(obs24[obs24.length - 1].points >= obs24[0].points);
+
   const comp18 = sampleRandomizedIQQuestions(MASTER_IQ_QUESTION_DATABASE, 'comprehensive_18');
   assert.equal(comp18.length, 18);
 
@@ -106,7 +113,21 @@ test('computeMultipleIntelligencesProfile calculates accurate composite IQ and 9
   assert.ok(profile.domainScores.every((d) => d.percent === 100));
 });
 
-test('buildPostTestTelemetryReport computes Headline CI, 4 Sub-Domains, Latency Curve, and 4 Difficulty Brackets', () => {
+test('buildPostTestTelemetryReport & buildCalibrationPreviewTelemetryReport compute Headline CI, 4 Sub-Domains, Q1-Q24 Latency Curve, and 4 Difficulty Brackets', () => {
+  const obs24 = sampleRandomizedIQQuestions(MASTER_IQ_QUESTION_DATABASE, 'observatory_24');
+  const previewReport = buildCalibrationPreviewTelemetryReport(obs24);
+  assert.equal(previewReport.totalQuestions, 24);
+  assert.equal(previewReport.latencyCurve.length, 24);
+  assert.equal(previewReport.latencyCurve[0].label, 'Q1');
+  assert.equal(previewReport.latencyCurve[23].label, 'Q24');
+  assert.ok(previewReport.latencyCurve[0].questionPrompt.length > 5);
+  assert.ok(previewReport.latencyCurve[0].correctOptionText.length > 0);
+  assert.equal(previewReport.standardDeviation, 15);
+  assert.ok(previewReport.confidenceIntervalLabel.includes('±'));
+  assert.equal(previewReport.cognitiveSubDomains.length, 4);
+  assert.equal(previewReport.difficultyBrackets.length, 4);
+  assert.ok(previewReport.secondHalfAvgLatencyMs > previewReport.firstHalfAvgLatencyMs);
+
   const sample = sampleRandomizedIQQuestions(MASTER_IQ_QUESTION_DATABASE, 'comprehensive_18');
   const answers: Record<string, number> = {};
   const timings: Record<string, number> = {};
@@ -127,10 +148,12 @@ test('buildPostTestTelemetryReport computes Headline CI, 4 Sub-Domains, Latency 
   assert.equal(normalCdfPercentile(100), 50);
 });
 
-test('computeGrowthAnalyticsSummaries & appendReportToGrowthHistory track 9-domain longitudinal trajectories', () => {
+test('computeGrowthAnalyticsSummaries & appendReportToGrowthHistory track 9-domain longitudinal trajectories and focus share shifts', () => {
   const summaries = computeGrowthAnalyticsSummaries(SEED_GROWTH_HISTORY);
   assert.equal(summaries.length, 9);
   assert.ok(summaries.every((s) => s.latestScore >= s.baselineScore));
+  const totalShare = summaries.reduce((acc, s) => acc + s.focusSharePercent, 0);
+  assert.ok(totalShare >= 99.5 && totalShare <= 100.5);
 
   const sample = sampleRandomizedIQQuestions(MASTER_IQ_QUESTION_DATABASE, 'gardner_9_quick');
   const answers: Record<string, number> = {};
@@ -149,4 +172,5 @@ test('computeGrowthAnalyticsSummaries & appendReportToGrowthHistory track 9-doma
     report.estimatedIq
   );
 });
+
 

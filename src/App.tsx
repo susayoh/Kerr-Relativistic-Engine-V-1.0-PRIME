@@ -109,8 +109,8 @@ export default function App() {
       showPerformanceMonitor: false,
       showEventLog: false,
       showMetricTelemetry: false,
-      highPerformanceMode: !isInitialMobile,
-      webglDepthPeeling: true,
+      highPerformanceMode: false,
+      webglDepthPeeling: false,
     };
   });
   const [isDevMode, setIsDevMode] = useState<boolean>(() => {
@@ -2445,13 +2445,13 @@ export default function App() {
         {showBootOverlay && (
           <div
             data-testid="cinematic-boot-overlay"
-            className={`absolute inset-0 z-30 flex flex-col items-center justify-center pointer-events-none select-none transition-opacity duration-500 ${
+            className={`fixed inset-0 z-30 flex flex-col items-center justify-center text-center pointer-events-none select-none transition-opacity duration-500 ${
               isBootOverlayFading ? 'opacity-0' : 'opacity-100'
             }`}
           >
-            <div className="pointer-events-none px-6 py-4 rounded-xl bg-[#050507]/95 border border-zinc-800/90 backdrop-blur-md shadow-[0_24px_70px_rgba(0,0,0,0.98)] font-mono text-xs text-left space-y-2.5 max-w-sm w-full">
-              <div className="flex items-center justify-between gap-3 pb-2 border-b border-zinc-800/80">
-                <div className="flex items-center gap-2">
+            <div className="pointer-events-none px-6 py-5 rounded-xl bg-[#050507]/95 border border-zinc-800/90 backdrop-blur-md shadow-[0_24px_70px_rgba(0,0,0,0.98)] font-mono text-xs text-center flex flex-col items-center justify-center space-y-2.5 max-w-sm w-full mx-auto">
+              <div className="flex items-center justify-center gap-2.5 w-full pb-2.5 border-b border-zinc-800/80">
+                <div className="flex items-center justify-center gap-2">
                   {/* 12-Ray Starburst Singularity Emblem (Same as Watermark Logo) */}
                   <svg
                     data-testid="boot-kerr-engine-logo"
@@ -2499,12 +2499,12 @@ export default function App() {
                 </span>
               </div>
 
-              <div className="flex items-center gap-2.5 text-zinc-100 font-semibold tracking-wider text-[11px]">
+              <div className="flex items-center justify-center gap-2.5 text-zinc-100 font-semibold tracking-wider text-[11px] text-center w-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-200 animate-pulse shrink-0" />
                 <span>{t.bootInitializingTitle}</span>
               </div>
 
-              <div className="text-[10px] text-zinc-400 tracking-wider pl-4">
+              <div className="text-[10px] text-zinc-400 tracking-wider text-center w-full">
                 {t.bootInitializingSubtitle}
               </div>
 
@@ -2519,18 +2519,18 @@ export default function App() {
         {showWatermarkOverlay && (
           <div
             data-testid="boot-watermark-overlay"
-            className={`absolute inset-0 z-30 flex flex-col items-center justify-center pointer-events-none select-none transition-opacity duration-500 ease-out ${
+            className={`fixed inset-0 z-30 flex flex-col items-center justify-center text-center pointer-events-none select-none transition-opacity duration-500 ease-out ${
               isWatermarkOverlayFading ? 'opacity-0' : 'opacity-100'
             }`}
           >
-            <div className="flex items-center gap-4 px-6 py-4 drop-shadow-[0_6px_28px_rgba(0,0,0,0.95)]">
+            <div className="flex flex-col items-center justify-center text-center gap-3 px-6 py-4 mx-auto drop-shadow-[0_6px_28px_rgba(0,0,0,0.95)]">
               {/* 12-Ray Starburst Singularity Emblem (Static on Watermark; Only Initializing UI Spins) */}
               <svg
                 data-testid="watermark-kerr-engine-logo"
                 width="44"
                 height="44"
                 viewBox="-24 -24 48 48"
-                className="shrink-0 overflow-visible"
+                className="shrink-0 overflow-visible mx-auto"
                 aria-hidden="true"
               >
                 {[0, 1, 2, 3, 4, 5].map((i) => {
@@ -2563,12 +2563,12 @@ export default function App() {
                 />
               </svg>
 
-              {/* Delicate Vertical Architectural Hairline Divider */}
-              <div className="h-10 w-px bg-gradient-to-b from-transparent via-[#E88B6B]/60 to-transparent" />
+              {/* Delicate Horizontal Architectural Hairline Divider */}
+              <div className="w-24 h-px bg-gradient-to-r from-transparent via-[#E88B6B]/60 to-transparent mx-auto" />
 
               {/* Kerr Relativity Engine v1.4 Signature Typography */}
-              <div className="flex flex-col text-left">
-                <div className="flex items-baseline gap-2.5">
+              <div className="flex flex-col items-center justify-center text-center">
+                <div className="flex items-baseline justify-center gap-2.5">
                   <span className="font-display text-lg sm:text-xl font-bold tracking-[0.12em] text-zinc-100 uppercase">
                     KERR RELATIVITY ENGINE
                   </span>
@@ -2576,7 +2576,7 @@ export default function App() {
                     v1.4
                   </span>
                 </div>
-                <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.2em] text-zinc-400 uppercase mt-0.5">
+                <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.2em] text-zinc-400 uppercase mt-1 text-center">
                   GENERATED BY KERR ENGINE · APEX METRIC CORE
                 </span>
               </div>
