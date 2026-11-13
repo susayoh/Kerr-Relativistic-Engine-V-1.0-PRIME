@@ -111,6 +111,22 @@ const RAW_SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
     genreTag: 'Hip-Hop / Trap',
   },
   {
+    id: 'moonrock_saltynuggets',
+    title: 'Moonrock',
+    subtitle: 'SaltyNuggets',
+    artistName: 'SaltyNuggets',
+    badge: 'SaltyNuggets',
+    durationSec: 126,
+    durationLabel: '2:06',
+    artworkUrl:
+      'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/5e/37/86/5e3786b0-1fe0-8edd-82f0-649e0365c9b5/4070335853141.jpg/600x600bb.jpg',
+    accentColor: 'emerald',
+    sources: ['/audio/moonrock-saltynuggets.mp3'],
+    bpm: 144,
+    audioQualityBadge: '48kHz Hi-Res',
+    genreTag: 'Hip-Hop / Trap',
+  },
+  {
     id: 'clarity_nightcore',
     title: 'Clarity',
     subtitle: 'Nightcore',
@@ -132,8 +148,8 @@ const RAW_SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
     subtitle: 'Nightcore',
     artistName: 'Nightcore • Sinnon / RIELL',
     badge: 'Nightcore',
-    durationSec: 167,
-    durationLabel: '2:47',
+    durationSec: 168,
+    durationLabel: '2:48',
     artworkUrl:
       'https://cdn-images.dzcdn.net/images/cover/146c8de07fdcd33369bc3267195df94d/500x500-000000-80-0-0.jpg',
     accentColor: 'fuchsia',
@@ -164,8 +180,8 @@ const RAW_SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
     subtitle: 'Bôa × The Cranberries',
     artistName: 'Bôa × The Cranberries',
     badge: 'Mashup',
-    durationSec: 202,
-    durationLabel: '3:22',
+    durationSec: 206,
+    durationLabel: '3:26',
     artworkUrl:
       'https://cdn-images.dzcdn.net/images/cover/fc0d073cdce93824ed0038a6f0ec7ed6/500x500-000000-80-0-0.jpg',
     accentColor: 'amber',
@@ -218,8 +234,8 @@ const RAW_SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
     subtitle: 'BLP Kosher & BabyTron',
     artistName: 'BLP Kosher & BabyTron',
     badge: 'MazelTron',
-    durationSec: 144,
-    durationLabel: '2:24',
+    durationSec: 187,
+    durationLabel: '3:07',
     artworkUrl:
       'https://cdn-images.dzcdn.net/images/cover/ee3a4f14c8ecb9ac80b0aec21b884e89/500x500-000000-80-0-0.jpg',
     accentColor: 'cyan',
@@ -252,6 +268,14 @@ const RAW_SETTINGS_SONGS_LIST: SongTrackDefinition[] = [
 
 export const SETTINGS_SONGS_LIST: SongTrackDefinition[] =
   filterAndValidatePlaybackQueue(RAW_SETTINGS_SONGS_LIST).acceptedTracks;
+
+function getHighResSongArtworkUrl(url: string): string {
+  if (!url) return '';
+  return url
+    .replace(/\/100x100bb\./g, '/600x600bb.')
+    .replace(/\/500x500-000000-80-0-0\.jpg/g, '/1000x1000-000000-80-0-0.jpg')
+    .replace(/-large\.(jpg|png)/g, '-t500x500.$1');
+}
 
 export interface UiThemeOption {
   id: UiThemeId;
@@ -777,6 +801,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   >('all');
   const [songSearchQuery, setSongSearchQuery] = useState<string>('');
   const [isShuffleEnabled, setIsShuffleEnabled] = useState<boolean>(false);
+  const [showSongsAudioFx, setShowSongsAudioFx] = useState<boolean>(false);
+  const [expandedArtworkTrack, setExpandedArtworkTrack] = useState<SongTrackDefinition | null>(
+    null
+  );
   const [diagnosticSuiteNonce, setDiagnosticSuiteNonce] = useState<number>(0);
   const [diagnosticRunningIdx, setDiagnosticRunningIdx] = useState<number | null>(null);
   const [diagnosticCompletedRuns, setDiagnosticCompletedRuns] = useState<
@@ -802,10 +830,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     import('../audio/importedTracks')
       .then((mod) => {
         if (cancelled) return;
-        const merged = filterAndValidatePlaybackQueue([
-          ...RAW_SETTINGS_SONGS_LIST,
-          ...mod.IMPORTED_PLAYLIST_TRACKS,
-        ]).acceptedTracks;
+        const normalizeSongKey = (s: string) =>
+          s
+            .toLowerCase()
+            .replace(/\(.*?\)|\[.*?\]/g, '')
+            .replace(
+              /-\s*(nightcore|frisk version|female version|sped up|slowed|remix|from .*).*$/i,
+              ''
+            )
+            .replace(/[^\p{L}\p{N}]+/gu, '')
+            .trim();
+        const seenKeys = new Set<string>();
+        const uniqueCandidates: SongTrackDefinition[] = [];
+        for (const item of [...RAW_SETTINGS_SONGS_LIST, ...mod.IMPORTED_PLAYLIST_TRACKS]) {
+          const key = normalizeSongKey(item.title) || item.id;
+          if (!seenKeys.has(key) && !seenKeys.has(item.id)) {
+            seenKeys.add(key);
+            seenKeys.add(item.id);
+            uniqueCandidates.push(item);
+          }
+        }
+        const merged = filterAndValidatePlaybackQueue(uniqueCandidates).acceptedTracks;
         trapQueenPlayer.setCatalog(merged);
         setSongsCatalog(merged);
         setIsImportedTracksLoaded(true);
@@ -3388,139 +3433,167 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 activeItemSelector={`[data-testid="song-track-${playerState.trackId}"]`}
                 activeItemLabel={`Scroll to Active Song (${activeTrackDef.title})`}
                 testId="songs-scroll-workspace"
-                className="px-3.5 sm:px-5 py-3.5 space-y-4"
+                className="px-3 sm:px-4 py-2.5 space-y-2.5"
               >
-                {/* Songs Library Header Banner */}
-                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 p-4 rounded-xl bg-gradient-to-b from-zinc-800/75 to-[#161616] border border-zinc-800/80">
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-md overflow-hidden bg-zinc-900 shadow-2xl shrink-0 flex items-center justify-center border border-white/10">
-                      {playerState.artworkUrl ? (
-                        <img
-                          src={playerState.artworkUrl}
-                          alt={`${playerState.artistName} - ${playerState.trackTitle} cover`}
-                          referrerPolicy="no-referrer"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = 'none';
-                          }}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <Music className="w-7 h-7 text-zinc-500" />
-                      )}
-                    </div>
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
-                          Playlist · {playerState.bitrateDisplay}
+                {/* Compact Unified Header + Transport + Filter & Audio FX Bar */}
+                <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-b from-zinc-800/65 to-[#161616] border border-zinc-800/80 space-y-2">
+                  <div className="flex items-center justify-between gap-2.5 flex-wrap">
+                    {/* Left: Clickable Song Cover + Active Song Metadata */}
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <button
+                        type="button"
+                        data-testid="songs-header-artwork-btn"
+                        onClick={() => {
+                          haptics.light();
+                          setExpandedArtworkTrack(activeTrackDef);
+                        }}
+                        title="Click to expand song cover picture"
+                        aria-label={`Expand ${activeTrackDef.title} cover picture`}
+                        className="group/art relative w-12 h-12 sm:w-14 sm:h-14 rounded-lg overflow-hidden bg-zinc-900 shadow-lg shrink-0 flex items-center justify-center border border-white/15 hover:border-[#1DB954] transition-all cursor-pointer"
+                      >
+                        {playerState.artworkUrl ? (
+                          <img
+                            src={playerState.artworkUrl}
+                            alt={`${playerState.artistName} - ${playerState.trackTitle} cover`}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).style.display = 'none';
+                            }}
+                            className="w-full h-full object-cover group-hover/art:scale-105 transition-transform"
+                          />
+                        ) : (
+                          <Music className="w-5 h-5 text-zinc-500" />
+                        )}
+                        <span className="absolute inset-0 bg-black/45 opacity-0 group-hover/art:opacity-100 transition-opacity flex items-center justify-center text-[9px] font-mono font-bold text-white">
+                          EXPAND
                         </span>
-                        <span
-                          data-testid="audio-queue-validation-badge"
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-[9px] font-semibold"
-                          title="Client-side audio completeness & truncation validation passed for all queued tracks"
-                        >
-                          <Check className="w-2.5 h-2.5" />
-                          <span>
-                            FULL-LENGTH VERIFIED · {playerState.queueValidation.verifiedQueueCount} COMPLETE
-                            {activeBytesMb ? ` · ${activeBytesMb} MB` : ''}
+                      </button>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="text-sm sm:text-base font-bold text-white tracking-tight truncate">
+                            {activeTrackDef.title}
+                          </h3>
+                          <span
+                            data-testid="audio-queue-validation-badge"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-mono text-[8.5px] font-semibold"
+                            title="Client-side audio completeness & truncation validation passed for all queued tracks"
+                          >
+                            <Check className="w-2.5 h-2.5" />
+                            <span>
+                              {playerState.queueValidation.verifiedQueueCount} SONGS
+                              {activeBytesMb ? ` · ${activeBytesMb} MB` : ''}
+                            </span>
                           </span>
-                        </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 truncate">
+                          <span className="text-zinc-200 font-medium truncate">
+                            {playerState.artistName}
+                          </span>
+                          <span>·</span>
+                          <span className="font-mono text-[10px] text-zinc-400">
+                            {playerState.bitrateDisplay}
+                          </span>
+                        </div>
                       </div>
-                      <h3 className="text-base sm:text-xl font-bold text-white tracking-tight truncate">
-                        {activeTrackDef.title}
-                      </h3>
-                      <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 flex-wrap">
-                        <span className="text-zinc-200 font-medium">{playerState.artistName}</span>
-                        <span>·</span>
-                        <span>{activeTrackDef.subtitle}</span>
-                        <span>·</span>
-                        <span>
-                          {isLoadingImportedTracks
-                            ? `${validatedCatalog.length} songs (loading full catalog...)`
-                            : `${validatedCatalog.length} full songs`}
-                        </span>
-                        <span>·</span>
-                        <span className="font-mono tabular-nums">
-                          {Math.round(activeTrackDef.bpm * playerState.playbackRate)} BPM
-                        </span>
+                    </div>
+
+                    {/* Right: Transport Controls (Shuffle + Play/Pause + Repeat Track) + Audio FX Toggle + Spectrum */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <LiveSpectrumVisualizer
+                        isPlaying={playerState.isPlaying}
+                        playbackRate={playerState.playbackRate}
+                        trackId={playerState.trackId}
+                      />
+
+                      <div
+                        data-testid="songs-top-transport-controls"
+                        className="inline-flex items-center gap-1 px-1.5 py-1 rounded-full bg-[#1a1a1a] border border-zinc-800/90"
+                      >
+                        <button
+                          type="button"
+                          data-testid="songs-top-shuffle-btn"
+                          onClick={() => {
+                            haptics.light();
+                            setIsShuffleEnabled((s) => !s);
+                          }}
+                          aria-pressed={isShuffleEnabled}
+                          className={`p-1.5 rounded-full transition-colors cursor-pointer relative ${
+                            isShuffleEnabled
+                              ? 'text-[#1DB954] bg-[#1DB954]/15'
+                              : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                          }`}
+                          title={isShuffleEnabled ? 'Shuffle: ON' : 'Shuffle: OFF'}
+                          aria-label="Toggle Shuffle"
+                        >
+                          <Shuffle className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          data-testid="songs-top-play-pause-btn"
+                          onClick={() => {
+                            haptics.medium();
+                            void trapQueenPlayer.togglePlay();
+                          }}
+                          className="w-8 h-8 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black flex items-center justify-center shadow-md transition-transform hover:scale-105 cursor-pointer shrink-0"
+                          title={playerState.isPlaying ? 'Pause Song' : 'Play Song'}
+                          aria-label={playerState.isPlaying ? 'Pause Song' : 'Play Song'}
+                        >
+                          {playerState.isPlaying ? (
+                            <Pause className="w-3.5 h-3.5 fill-current" />
+                          ) : (
+                            <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          data-testid="songs-top-repeat-btn"
+                          onClick={() => {
+                            haptics.light();
+                            trapQueenPlayer.setLoopTrack(!playerState.loopTrack);
+                          }}
+                          aria-pressed={playerState.loopTrack}
+                          className={`p-1.5 rounded-full transition-colors cursor-pointer relative ${
+                            playerState.loopTrack
+                              ? 'text-[#1DB954] bg-[#1DB954]/15'
+                              : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                          }`}
+                          title={playerState.loopTrack ? 'Repeat Track: ON' : 'Repeat Track: OFF'}
+                          aria-label="Repeat Track"
+                        >
+                          <Repeat className="w-3.5 h-3.5" />
+                        </button>
                       </div>
+
+                      <button
+                        type="button"
+                        data-testid="toggle-songs-audio-fx-btn"
+                        onClick={() => {
+                          haptics.light();
+                          setShowSongsAudioFx((prev) => !prev);
+                        }}
+                        aria-expanded={showSongsAudioFx}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full font-mono text-[10px] font-semibold border transition-colors cursor-pointer ${
+                          showSongsAudioFx ||
+                          Math.abs(playerState.playbackRate - 1.0) > 0.01 ||
+                          playerState.qualityPreset !== 'flat_reference'
+                            ? 'bg-zinc-200 text-black border-white'
+                            : 'bg-[#202020] hover:bg-[#2a2a2a] text-zinc-300 border-zinc-700/80'
+                        }`}
+                        title="Toggle compact Playback Speed & Equalizer controls"
+                      >
+                        <Sliders className="w-3 h-3" />
+                        <span>Audio FX</span>
+                      </button>
                     </div>
                   </div>
 
-                  {/* Subtle Monochrome Live Spectrum Bars (Isolated 60ms Renderer) */}
-                  <LiveSpectrumVisualizer
-                    isPlaying={playerState.isPlaying}
-                    playbackRate={playerState.playbackRate}
-                    trackId={playerState.trackId}
-                  />
-                </div>
-
-                {/* Spotify Action Bar: Shuffle + Big Green Play Button + Repeat Track + Filter Pills + Search Input */}
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <div
-                      data-testid="songs-top-transport-controls"
-                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-[#1a1a1a] border border-zinc-800/90"
-                    >
-                      <button
-                        type="button"
-                        data-testid="songs-top-shuffle-btn"
-                        onClick={() => {
-                          haptics.light();
-                          setIsShuffleEnabled((s) => !s);
-                        }}
-                        aria-pressed={isShuffleEnabled}
-                        className={`p-2 rounded-full transition-colors cursor-pointer relative ${
-                          isShuffleEnabled
-                            ? 'text-[#1DB954] bg-[#1DB954]/15'
-                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                        }`}
-                        title={isShuffleEnabled ? 'Shuffle: ON' : 'Shuffle: OFF'}
-                        aria-label="Toggle Shuffle"
-                      >
-                        <Shuffle className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        data-testid="songs-top-play-pause-btn"
-                        onClick={() => {
-                          haptics.medium();
-                          void trapQueenPlayer.togglePlay();
-                        }}
-                        className="w-10 h-10 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black flex items-center justify-center shadow-lg transition-transform hover:scale-105 cursor-pointer shrink-0"
-                        title={playerState.isPlaying ? 'Pause Song' : 'Play Song'}
-                        aria-label={playerState.isPlaying ? 'Pause Song' : 'Play Song'}
-                      >
-                        {playerState.isPlaying ? (
-                          <Pause className="w-4 h-4 fill-current" />
-                        ) : (
-                          <Play className="w-4 h-4 fill-current ml-0.5" />
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        data-testid="songs-top-repeat-btn"
-                        onClick={() => {
-                          haptics.light();
-                          trapQueenPlayer.setLoopTrack(!playerState.loopTrack);
-                        }}
-                        aria-pressed={playerState.loopTrack}
-                        className={`p-2 rounded-full transition-colors cursor-pointer relative ${
-                          playerState.loopTrack
-                            ? 'text-[#1DB954] bg-[#1DB954]/15'
-                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                        }`}
-                        title={playerState.loopTrack ? 'Repeat Track: ON' : 'Repeat Track: OFF'}
-                        aria-label="Repeat Track"
-                      >
-                        <Repeat className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Category Filter Pills */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {(['all', 'Melancholy', 'Hip-Hop / Trap', 'Nightcore', 'Electronic / Alt'] as const).map(
+                  {/* Slim Second Row: Category Filter Pills + Search Input */}
+                  <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-zinc-800/60">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {(['all', 'Hip-Hop / Trap', 'Nightcore', 'Electronic / Alt', 'Melancholy'] as const).map(
                         (cat) => (
                           <button
                             key={cat}
@@ -3529,7 +3602,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               haptics.light();
                               setSongCategoryFilter(cat);
                             }}
-                            className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                            className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
                               songCategoryFilter === cat
                                 ? 'bg-white text-black font-semibold'
                                 : 'bg-[#232323] hover:bg-[#2a2a2a] text-zinc-300'
@@ -3540,28 +3613,203 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         )
                       )}
                     </div>
+
+                    <div className="relative w-full sm:w-48">
+                      <Search className="w-3 h-3 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={songSearchQuery}
+                        onChange={(e) => setSongSearchQuery(e.target.value)}
+                        placeholder="Search songs in library"
+                        aria-label="Search songs in library"
+                        className="w-full pl-7 pr-2.5 py-1 rounded-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#242424] border border-transparent focus:border-zinc-600 text-white placeholder-zinc-400 text-[11px] outline-none transition-colors"
+                      />
+                    </div>
                   </div>
 
-                  {/* Track Search Input */}
-                  <div className="relative w-full sm:w-52">
-                    <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={songSearchQuery}
-                      onChange={(e) => setSongSearchQuery(e.target.value)}
-                      placeholder="Search songs in library"
-                      aria-label="Search songs in library"
-                      className="w-full pl-8 pr-3 py-1.5 rounded-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#242424] border border-transparent focus:border-zinc-600 text-white placeholder-zinc-400 text-xs outline-none transition-colors"
-                    />
-                  </div>
+                  {/* Collapsible Compact Speed & Equalizer Drawer (Collapsed by default to save space) */}
+                  {showSongsAudioFx && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2 border-t border-zinc-800/80">
+                      {/* Compact Playback Speed Control */}
+                      <div className="p-2.5 rounded-lg bg-[#121212] border border-zinc-800/80 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
+                          <span className="text-zinc-200 font-semibold">
+                            Speed · {playerState.playbackRate.toFixed(2)}x
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              trapQueenPlayer.setPreservesPitch(!playerState.preservesPitch)
+                            }
+                            className={`px-1.5 py-0.5 rounded border text-[9px] font-mono cursor-pointer transition-colors whitespace-nowrap ${
+                              !playerState.preservesPitch
+                                ? 'bg-zinc-200 text-black border-white font-semibold'
+                                : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            {!playerState.preservesPitch ? 'Pitch Shift: ON' : 'Pitch Lock: ON'}
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2 font-mono text-[9.5px]">
+                          <span className="text-zinc-500">0.5x</span>
+                          <input
+                            type="range"
+                            data-testid="song-speed-slider"
+                            aria-label="Song Playback Speed"
+                            min={0.5}
+                            max={2.0}
+                            step={0.05}
+                            value={playerState.playbackRate}
+                            onChange={(e) =>
+                              trapQueenPlayer.setPlaybackRate(parseFloat(e.target.value))
+                            }
+                            className="flex-1 accent-white cursor-pointer h-1"
+                          />
+                          <span className="text-zinc-500">2.0x</span>
+                        </div>
+
+                        <div className="grid grid-cols-5 gap-1">
+                          {SONG_SPEED_PRESETS.map((preset) => {
+                            const isRateActive =
+                              Math.abs(playerState.playbackRate - preset.rate) < 0.02;
+                            return (
+                              <button
+                                key={preset.label}
+                                type="button"
+                                data-testid={`song-speed-${preset.label}`}
+                                onClick={() => {
+                                  haptics.light();
+                                  trapQueenPlayer.setPlaybackRate(preset.rate);
+                                }}
+                                className={`py-0.5 px-1 rounded border font-mono text-[9px] font-semibold transition-colors cursor-pointer text-center whitespace-nowrap ${
+                                  isRateActive
+                                    ? 'bg-white text-black border-white'
+                                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                                }`}
+                              >
+                                {preset.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Compact Equalizer & Audio Quality Control */}
+                      <div
+                        data-testid="songs-dsp-mastering-panel"
+                        className="p-2.5 rounded-lg bg-[#121212] border border-zinc-800/80 space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
+                          <span className="text-zinc-200 font-semibold">Equalizer &amp; Fidelity</span>
+                          <span className="text-zinc-400 tabular-nums text-[9px]">
+                            {playerState.bassDb >= 0 ? `+${playerState.bassDb}` : playerState.bassDb} /{' '}
+                            {playerState.midDb >= 0 ? `+${playerState.midDb}` : playerState.midDb} /{' '}
+                            {playerState.trebleDb >= 0 ? `+${playerState.trebleDb}` : playerState.trebleDb} dB
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-1">
+                          {AUDIO_QUALITY_PRESETS.map(
+                            (preset: { id: AudioQualityPresetId; label: string; shortTag: string }) => {
+                              const isPresetActive = playerState.qualityPreset === preset.id;
+                              return (
+                                <button
+                                  key={preset.id}
+                                  type="button"
+                                  data-testid={`audio-quality-preset-${preset.id}`}
+                                  onClick={() => {
+                                    haptics.light();
+                                    trapQueenPlayer.setQualityPreset(preset.id);
+                                  }}
+                                  className={`p-1 rounded border text-left font-mono transition-colors cursor-pointer ${
+                                    isPresetActive
+                                      ? 'bg-zinc-800 border-zinc-400 text-white'
+                                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                                  }`}
+                                >
+                                  <div className="text-[8.5px] font-bold truncate">{preset.label}</div>
+                                </button>
+                              );
+                            }
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 font-mono text-[9px]">
+                          <div>
+                            <div className="flex justify-between text-zinc-400">
+                              <span>Bass</span>
+                              <span className="text-zinc-200 tabular-nums">
+                                {playerState.bassDb >= 0 ? `+${playerState.bassDb}` : playerState.bassDb}dB
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min={-6}
+                              max={9}
+                              step={0.5}
+                              value={playerState.bassDb}
+                              onChange={(e) =>
+                                trapQueenPlayer.setCustomEq('bass', parseFloat(e.target.value))
+                              }
+                              aria-label="85Hz Sub-Bass Gain"
+                              className="w-full accent-white cursor-pointer h-1"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between text-zinc-400">
+                              <span>Mid</span>
+                              <span className="text-zinc-200 tabular-nums">
+                                {playerState.midDb >= 0 ? `+${playerState.midDb}` : playerState.midDb}dB
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min={-6}
+                              max={9}
+                              step={0.5}
+                              value={playerState.midDb}
+                              onChange={(e) =>
+                                trapQueenPlayer.setCustomEq('mid', parseFloat(e.target.value))
+                              }
+                              aria-label="2.4kHz Vocal Presence Gain"
+                              className="w-full accent-white cursor-pointer h-1"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between text-zinc-400">
+                              <span>Treble</span>
+                              <span className="text-zinc-200 tabular-nums">
+                                {playerState.trebleDb >= 0 ? `+${playerState.trebleDb}` : playerState.trebleDb}dB
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min={-6}
+                              max={9}
+                              step={0.5}
+                              value={playerState.trebleDb}
+                              onChange={(e) =>
+                                trapQueenPlayer.setCustomEq('treble', parseFloat(e.target.value))
+                              }
+                              aria-label="10kHz High-Shelf Air Gain"
+                              className="w-full accent-white cursor-pointer h-1"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Spotify Tracklist Table */}
                 <div className="rounded-xl bg-[#161616] border border-zinc-800/80 overflow-hidden">
                   {/* Table Column Headers */}
-                  <div className="grid grid-cols-[28px_1fr_56px] sm:grid-cols-[32px_1fr_150px_64px] items-center gap-3 px-3.5 py-2 border-b border-zinc-800/80 text-[11px] text-zinc-400 font-medium">
+                  <div className="grid grid-cols-[28px_1fr_56px] sm:grid-cols-[32px_1fr_150px_64px] items-center gap-3 px-3.5 py-1.5 border-b border-zinc-800/80 text-[11px] text-zinc-400 font-medium">
                     <span className="text-center">#</span>
-                    <span>Title</span>
+                    <span>Title (click cover to expand)</span>
                     <span className="hidden sm:block">Genre · Tempo</span>
                     <span className="flex justify-end pr-1">
                       <Clock className="w-3.5 h-3.5" />
@@ -3590,7 +3838,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               trapQueenPlayer.selectTrack(track.id, true);
                             }
                           }}
-                          className={`w-full grid grid-cols-[28px_1fr_56px] sm:grid-cols-[32px_1fr_150px_64px] items-center gap-3 px-3.5 py-2 text-left transition-colors cursor-pointer group ${
+                          className={`w-full grid grid-cols-[28px_1fr_56px] sm:grid-cols-[32px_1fr_150px_64px] items-center gap-3 px-3.5 py-1.5 text-left transition-colors cursor-pointer group ${
                             isSelected
                               ? 'bg-white/[0.08]'
                               : 'hover:bg-white/[0.05]'
@@ -3618,9 +3866,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             )}
                           </div>
 
-                          {/* Cover + Title + Artist */}
+                          {/* Cover (Click to Expand) + Title + Artist */}
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-9 h-9 rounded overflow-hidden bg-zinc-900 shrink-0 flex items-center justify-center border border-white/5">
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              data-testid={`song-row-artwork-${track.id}`}
+                              title={`Expand ${track.title} cover picture`}
+                              aria-label={`Expand ${track.title} cover picture`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                haptics.light();
+                                setExpandedArtworkTrack(track);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setExpandedArtworkTrack(track);
+                                }
+                              }}
+                              className="group/rowart relative w-9 h-9 rounded overflow-hidden bg-zinc-900 shrink-0 flex items-center justify-center border border-white/10 hover:border-[#1DB954] transition-all cursor-zoom-in"
+                            >
                               {track.artworkUrl ? (
                                 <img
                                   src={track.artworkUrl}
@@ -3631,7 +3898,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                   onError={(e) => {
                                     (e.currentTarget as HTMLImageElement).style.display = 'none';
                                   }}
-                                  className="w-full h-full object-cover"
+                                  className="w-full h-full object-cover group-hover/rowart:scale-110 transition-transform"
                                 />
                               ) : (
                                 <Music className="w-4 h-4 text-zinc-500" />
@@ -3668,187 +3935,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     })}
                   </div>
                 </div>
-
-                {/* Clean Monochrome Playback Speed & EQ Panel */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {/* Playback Speed Control Card */}
-                  <div className="p-3.5 rounded-xl bg-[#161616] border border-zinc-800/80 space-y-2.5">
-                    <div className="flex items-center justify-between gap-2 font-mono text-[10.5px]">
-                      <span className="text-zinc-200 font-semibold">
-                        Playback Speed · {playerState.playbackRate.toFixed(2)}x
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          trapQueenPlayer.setPreservesPitch(!playerState.preservesPitch)
-                        }
-                        className={`px-2 py-0.5 rounded border text-[9.5px] font-mono cursor-pointer transition-colors whitespace-nowrap ${
-                          !playerState.preservesPitch
-                            ? 'bg-zinc-200 text-black border-white font-semibold'
-                            : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        {!playerState.preservesPitch ? 'Pitch Shift: ON' : 'Pitch Lock: ON'}
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-2 font-mono text-[10px]">
-                      <span className="text-zinc-500">0.5x</span>
-                      <input
-                        type="range"
-                        data-testid="song-speed-slider"
-                        aria-label="Song Playback Speed"
-                        min={0.5}
-                        max={2.0}
-                        step={0.05}
-                        value={playerState.playbackRate}
-                        onChange={(e) =>
-                          trapQueenPlayer.setPlaybackRate(parseFloat(e.target.value))
-                        }
-                        className="flex-1 accent-white cursor-pointer h-1"
-                      />
-                      <span className="text-zinc-500">2.0x</span>
-                    </div>
-
-                    <div className="grid grid-cols-5 gap-1">
-                      {SONG_SPEED_PRESETS.map((preset) => {
-                        const isRateActive =
-                          Math.abs(playerState.playbackRate - preset.rate) < 0.02;
-                        return (
-                          <button
-                            key={preset.label}
-                            type="button"
-                            data-testid={`song-speed-${preset.label}`}
-                            onClick={() => {
-                              haptics.light();
-                              trapQueenPlayer.setPlaybackRate(preset.rate);
-                            }}
-                            className={`py-1 px-1 rounded border font-mono text-[9.5px] font-semibold transition-colors cursor-pointer text-center whitespace-nowrap ${
-                              isRateActive
-                                ? 'bg-white text-black border-white'
-                                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            {preset.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Monochrome Equalizer & Audio Quality Card */}
-                  <div
-                    data-testid="songs-dsp-mastering-panel"
-                    className="p-3.5 rounded-xl bg-[#161616] border border-zinc-800/80 space-y-2.5"
-                  >
-                    <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
-                      <span className="text-zinc-200 font-semibold">Equalizer &amp; Audio Quality</span>
-                      <span className="text-zinc-400 tabular-nums">
-                        {playerState.bassDb >= 0 ? `+${playerState.bassDb}` : playerState.bassDb} /{' '}
-                        {playerState.midDb >= 0 ? `+${playerState.midDb}` : playerState.midDb} /{' '}
-                        {playerState.trebleDb >= 0 ? `+${playerState.trebleDb}` : playerState.trebleDb} dB
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-4 gap-1">
-                      {AUDIO_QUALITY_PRESETS.map(
-                        (preset: { id: AudioQualityPresetId; label: string; shortTag: string }) => {
-                          const isPresetActive = playerState.qualityPreset === preset.id;
-                          return (
-                            <button
-                              key={preset.id}
-                              type="button"
-                              data-testid={`audio-quality-preset-${preset.id}`}
-                              onClick={() => {
-                                haptics.light();
-                                trapQueenPlayer.setQualityPreset(preset.id);
-                              }}
-                              className={`p-1.5 rounded border text-left font-mono transition-colors cursor-pointer ${
-                                isPresetActive
-                                  ? 'bg-zinc-800 border-zinc-400 text-white'
-                                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
-                              }`}
-                            >
-                              <div className="text-[9px] font-bold truncate">{preset.label}</div>
-                            </button>
-                          );
-                        }
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 font-mono text-[9.5px]">
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-zinc-400">
-                          <span>Bass</span>
-                          <span className="text-zinc-200 tabular-nums">
-                            {playerState.bassDb >= 0 ? `+${playerState.bassDb}` : playerState.bassDb}dB
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min={-6}
-                          max={9}
-                          step={0.5}
-                          value={playerState.bassDb}
-                          onChange={(e) =>
-                            trapQueenPlayer.setCustomEq('bass', parseFloat(e.target.value))
-                          }
-                          aria-label="85Hz Sub-Bass Gain"
-                          className="w-full accent-white cursor-pointer h-1"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-zinc-400">
-                          <span>Mid</span>
-                          <span className="text-zinc-200 tabular-nums">
-                            {playerState.midDb >= 0 ? `+${playerState.midDb}` : playerState.midDb}dB
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min={-6}
-                          max={9}
-                          step={0.5}
-                          value={playerState.midDb}
-                          onChange={(e) =>
-                            trapQueenPlayer.setCustomEq('mid', parseFloat(e.target.value))
-                          }
-                          aria-label="2.4kHz Vocal Presence Gain"
-                          className="w-full accent-white cursor-pointer h-1"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-zinc-400">
-                          <span>Treble</span>
-                          <span className="text-zinc-200 tabular-nums">
-                            {playerState.trebleDb >= 0 ? `+${playerState.trebleDb}` : playerState.trebleDb}dB
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min={-6}
-                          max={9}
-                          step={0.5}
-                          value={playerState.trebleDb}
-                          onChange={(e) =>
-                            trapQueenPlayer.setCustomEq('treble', parseFloat(e.target.value))
-                          }
-                          aria-label="10kHz High-Shelf Air Gain"
-                          className="w-full accent-white cursor-pointer h-1"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </CustomScrollWorkspace>
 
               {/* Sticky Bottom Spotify Now-Playing Bar */}
-              <div className="px-4 py-2.5 bg-[#181818] border-t border-zinc-800/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-                {/* Left: Mini Cover + Active Song Info */}
+              <div className="px-4 py-2 bg-[#181818] border-t border-zinc-800/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0">
+                {/* Left: Clickable Mini Cover + Active Song Info */}
                 <div className="flex items-center gap-3 min-w-0 sm:w-52">
-                  <div className="w-10 h-10 rounded overflow-hidden bg-zinc-900 shrink-0 flex items-center justify-center border border-white/10">
+                  <button
+                    type="button"
+                    data-testid="songs-bottom-artwork-btn"
+                    onClick={() => {
+                      haptics.light();
+                      setExpandedArtworkTrack(activeTrackDef);
+                    }}
+                    title="Click to expand song cover picture"
+                    aria-label={`Expand ${activeTrackDef.title} cover picture`}
+                    className="w-10 h-10 rounded overflow-hidden bg-zinc-900 shrink-0 flex items-center justify-center border border-white/10 hover:border-[#1DB954] transition-all cursor-zoom-in"
+                  >
                     {playerState.artworkUrl ? (
                       <img
                         src={playerState.artworkUrl}
@@ -3862,7 +3965,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     ) : (
                       <Music className="w-4 h-4 text-zinc-500" />
                     )}
-                  </div>
+                  </button>
                   <div className="min-w-0">
                     <div className="text-xs font-semibold text-white truncate">
                       {activeTrackDef.title}
@@ -3872,6 +3975,99 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Expanded Song Artwork Lightbox Modal */}
+                {expandedArtworkTrack && (
+                  <div
+                    data-testid="expanded-song-artwork-modal"
+                    onClick={() => setExpandedArtworkTrack(null)}
+                    className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+                  >
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.92 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.18, ease: 'easeOut' }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="relative max-w-md w-full bg-[#161616] border border-zinc-700/80 rounded-2xl p-4 shadow-2xl flex flex-col items-center gap-3.5 text-center"
+                    >
+                      <button
+                        type="button"
+                        data-testid="close-expanded-artwork-btn"
+                        onClick={() => setExpandedArtworkTrack(null)}
+                        aria-label="Close expanded song cover"
+                        className="absolute top-3 right-3 p-1.5 rounded-full bg-black/70 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer z-10"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+
+                      <div className="w-64 h-64 sm:w-80 sm:h-80 rounded-xl overflow-hidden bg-zinc-900 border border-white/15 shadow-2xl flex items-center justify-center">
+                        {expandedArtworkTrack.artworkUrl ? (
+                          <img
+                            data-testid="expanded-song-artwork-img"
+                            src={getHighResSongArtworkUrl(expandedArtworkTrack.artworkUrl)}
+                            alt={`${expandedArtworkTrack.title} expanded cover`}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Music className="w-16 h-16 text-zinc-600" />
+                        )}
+                      </div>
+
+                      <div className="space-y-1 max-w-full px-2">
+                        <h4 className="text-base sm:text-lg font-bold text-white truncate">
+                          {expandedArtworkTrack.title}
+                        </h4>
+                        <p className="text-xs text-zinc-300 truncate">
+                          {expandedArtworkTrack.artistName}
+                        </p>
+                        <div className="flex items-center justify-center gap-2 text-[10px] font-mono text-zinc-400 pt-0.5">
+                          <span>{expandedArtworkTrack.genreTag || 'Track'}</span>
+                          <span>·</span>
+                          <span>{expandedArtworkTrack.durationLabel}</span>
+                          <span>·</span>
+                          <span>{expandedArtworkTrack.bpm} BPM</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          data-testid="expanded-artwork-play-btn"
+                          onClick={() => {
+                            haptics.medium();
+                            if (playerState.trackId === expandedArtworkTrack.id) {
+                              void trapQueenPlayer.togglePlay();
+                            } else {
+                              trapQueenPlayer.selectTrack(expandedArtworkTrack.id, true);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black font-semibold text-xs transition-transform hover:scale-105 cursor-pointer"
+                        >
+                          {playerState.trackId === expandedArtworkTrack.id &&
+                          playerState.isPlaying ? (
+                            <>
+                              <Pause className="w-3.5 h-3.5 fill-current" />
+                              <span>Pause</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>Play Song</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedArtworkTrack(null)}
+                          className="px-3.5 py-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors cursor-pointer"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
 
                 {/* Center: Spotify Transport Controls + Timeline Scrubber */}
                 <div className="flex-1 max-w-md flex flex-col items-center gap-1.5">

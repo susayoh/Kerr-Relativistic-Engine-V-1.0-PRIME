@@ -173,12 +173,25 @@ async function resolveAndCacheFullTrack(
         .replace(/\s*\((with|feat\.)[^)]+\)/gi, '')
         .replace(/\s*-\s*From.*$/i, '')
         .trim();
+      const baseSongTitle = cleanTitle
+        .replace(/\s*[-–]\s*(sped up|speed up|slowed|nightcore|remix|tiktok.*|female version|frisk version).*$/i, '')
+        .replace(/\s*\((sped up|speed up|slowed|nightcore|remix|tiktok.*|female version|frisk version)[^)]*\)/gi, '')
+        .trim();
       const primaryArtist = artist
         .split(',')[0]
         .replace(/[^\p{L}\p{N}\s]/gu, ' ')
         .trim();
 
-      const queries = [`${cleanTitle} ${primaryArtist}`.trim(), cleanTitle];
+      const queries = Array.from(
+        new Set(
+          [
+            `${cleanTitle} ${primaryArtist}`.trim(),
+            cleanTitle,
+            `${baseSongTitle} ${primaryArtist}`.trim(),
+            baseSongTitle,
+          ].filter(Boolean)
+        )
+      );
       let clientId = await getSoundCloudClientId(false);
 
       let bestCandidate: SoundCloudTrackCandidate | null = null;
@@ -188,13 +201,13 @@ async function resolveAndCacheFullTrack(
         if (!q) continue;
         let searchUrl = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(
           q
-        )}&client_id=${clientId}&limit=12`;
+        )}&client_id=${clientId}&limit=15`;
         let res = await fetch(searchUrl, { signal: AbortSignal.timeout(6000) });
         if (res.status === 401 || res.status === 403) {
           clientId = await getSoundCloudClientId(true);
           searchUrl = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(
             q
-          )}&client_id=${clientId}&limit=12`;
+          )}&client_id=${clientId}&limit=15`;
           res = await fetch(searchUrl, { signal: AbortSignal.timeout(6000) });
         }
         if (!res.ok) continue;
@@ -213,8 +226,7 @@ async function resolveAndCacheFullTrack(
           const hasPlayableStream = transcodings.some(
             (tr) =>
               tr.format?.protocol === 'progressive' ||
-              (tr.format?.protocol === 'hls' &&
-                (tr.preset === 'aac_160k' || tr.preset === 'aac_96k'))
+              (tr.format?.protocol === 'hls' && tr.preset !== 'abr_sq')
           );
           if (!hasPlayableStream) continue;
 
@@ -225,7 +237,7 @@ async function resolveAndCacheFullTrack(
           }
         }
 
-        if (bestScore >= 85) break;
+        if (bestScore >= 75 && bestCandidate) break;
       }
 
       if (!bestCandidate || !bestCandidate.media?.transcodings) {
@@ -234,13 +246,17 @@ async function resolveAndCacheFullTrack(
 
       const transcodings = bestCandidate.media.transcodings;
       const chosenTranscoding =
+        transcodings.find((tr) => tr.format?.protocol === 'progressive') ||
         transcodings.find(
           (tr) => tr.format?.protocol === 'hls' && tr.preset === 'aac_160k'
         ) ||
         transcodings.find(
           (tr) => tr.format?.protocol === 'hls' && tr.preset === 'aac_96k'
         ) ||
-        transcodings.find((tr) => tr.format?.protocol === 'progressive');
+        transcodings.find(
+          (tr) => tr.format?.protocol === 'hls' && tr.preset !== 'abr_sq'
+        ) ||
+        transcodings.find((tr) => tr.format?.protocol === 'hls');
 
       if (!chosenTranscoding) {
         return null;
@@ -397,7 +413,11 @@ async function startServer() {
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+        watch: null,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -411,25 +431,6 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Kerr Relativity Engine server listening on http://0.0.0.0:${PORT}`);
-
-    // Pre-warm the top imported playlist tracks in the background so first click is instant
-    const initialPrewarm = [
-      { id: 'your_eyes_2', title: 'your eyes', artist: '68+1' },
-      { id: 'timeless_feat_playboi_carti_3', title: 'Timeless (feat. Playboi Carti)', artist: 'The Weeknd, Playboi Carti' },
-      { id: 'i_want_it_all_5', title: 'I Want It All', artist: 'nextcry, k1ttyflwrs., rainluv ✮' },
-      { id: 'starboy_sped_up_6', title: 'Starboy - Sped Up', artist: 'fam0uz' },
-      { id: 'molly_7', title: 'Molly', artist: 'Votabias' },
-      { id: 'orchestrat_8', title: 'ORCHESTRATË', artist: 'Yeat' },
-      { id: 'keep_up_sped_up_9', title: 'KEEP UP - Sped Up', artist: 'ODECORE, Odetari' },
-      { id: 'losted_10', title: 'Losted', artist: 'Lowx, TTM' },
-      { id: 'carnival_11', title: 'CARNIVAL', artist: '¥$, Kanye West, Ty Dolla $ign' },
-      { id: 'die_with_a_smile_14', title: 'Die With A Smile', artist: 'Lady Gaga, Bruno Mars' },
-    ];
-    void (async () => {
-      for (const item of initialPrewarm) {
-        await resolveAndCacheFullTrack(item.id, item.title, item.artist);
-      }
-    })();
   });
 }
 

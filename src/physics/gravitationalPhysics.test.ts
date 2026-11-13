@@ -190,5 +190,27 @@ test('DEFAULT_VISUALIZER_SETTINGS includes lowResolutionRender disabled by defau
   assert.equal(DEFAULT_VISUALIZER_SETTINGS.highPerformanceMode, false);
 });
 
+test('trapQueenPlayer includes Moonrock by SaltyNuggets, defaults to flat Spotify reference audio, and has no duplicate tracks', async () => {
+  const { SONG_TRACKS, trapQueenPlayer } = await import('../audio/trapQueenPlayer');
+  const { IMPORTED_PLAYLIST_TRACKS } = await import('../audio/importedTracks');
 
+  const moonrock = SONG_TRACKS.find((t) => t.id === 'moonrock_saltynuggets');
+  assert.ok(moonrock, 'Moonrock by SaltyNuggets must exist in SONG_TRACKS');
+  assert.equal(moonrock?.title, 'Moonrock');
+  assert.equal(moonrock?.artistName, 'SaltyNuggets');
+  assert.deepEqual(moonrock?.sources, ['/audio/moonrock-saltynuggets.mp3']);
 
+  const state = trapQueenPlayer.getState();
+  assert.equal(state.loopTrack, false);
+  assert.equal(state.preservesPitch, true);
+  assert.equal(state.qualityPreset, 'flat_reference');
+  assert.equal(state.bassDb, 0.0);
+  assert.equal(state.midDb, 0.0);
+  assert.equal(state.trebleDb, 0.0);
+
+  const ids = new Set<string>();
+  for (const t of [...SONG_TRACKS, ...IMPORTED_PLAYLIST_TRACKS]) {
+    assert.equal(ids.has(t.id), false, `Duplicate track id found: ${t.id}`);
+    ids.add(t.id);
+  }
+});

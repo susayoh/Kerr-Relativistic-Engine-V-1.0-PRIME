@@ -25,44 +25,44 @@ export interface AudioQualityPreset {
 
 export const AUDIO_QUALITY_PRESETS: AudioQualityPreset[] = [
   {
+    id: 'flat_reference',
+    label: 'Spotify Direct (Flat)',
+    shortTag: '0.0 dB Direct',
+    description: 'Pure uncolored studio master response matching native Spotify playback.',
+    bassDb: 0.0,
+    midDb: 0.0,
+    trebleDb: 0.0,
+    bitrateDisplay: '320 kbps · 48.0 kHz · Direct',
+  },
+  {
     id: 'hires_studio',
     label: 'Hi-Res Studio Master',
     shortTag: '24-Bit / 48kHz DSP',
-    description: 'Balanced sub-bass warmth (+3.5 dB), vocal presence (+1.5 dB), and 10 kHz harmonic air (+4.0 dB).',
-    bassDb: 3.5,
-    midDb: 1.5,
-    trebleDb: 4.0,
+    description: 'Subtle sub-bass warmth (+1.5 dB), vocal presence (+0.5 dB), and 10 kHz harmonic air (+1.5 dB).',
+    bassDb: 1.5,
+    midDb: 0.5,
+    trebleDb: 1.5,
     bitrateDisplay: '320 kbps · 48.0 kHz · 24-Bit DSP',
   },
   {
     id: 'bass_boost',
     label: '808 Sub-Harmonic Boost',
-    shortTag: '808 Overdrive',
-    description: 'Deep 85 Hz low-shelf punch (+7.0 dB) with soft-knee studio limiting for hip-hop & bass tracks.',
-    bassDb: 7.0,
-    midDb: 0.5,
-    trebleDb: 2.5,
+    shortTag: '808 Warmth',
+    description: 'Clean 85 Hz low-shelf punch (+3.5 dB) for hip-hop & bass tracks without clipping.',
+    bassDb: 3.5,
+    midDb: 0.0,
+    trebleDb: 1.0,
     bitrateDisplay: '320 kbps · 48.0 kHz · 808 Sub',
   },
   {
     id: 'nightcore_crystal',
-    label: 'Crystal Air & Transients',
+    label: 'Crystal Air & Vocals',
     shortTag: 'High-Definition Air',
-    description: 'Enhanced upper-mid definition (+2.5 dB) and crisp 10 kHz sparkle (+5.5 dB) for Nightcore & vocals.',
-    bassDb: 2.0,
-    midDb: 2.5,
-    trebleDb: 5.5,
+    description: 'Gentle upper-mid clarity (+1.0 dB) and 10 kHz air (+2.5 dB) for Nightcore & vocals.',
+    bassDb: 1.0,
+    midDb: 1.0,
+    trebleDb: 2.5,
     bitrateDisplay: '320 kbps · 48.0 kHz · Crystal EQ',
-  },
-  {
-    id: 'flat_reference',
-    label: 'Flat Reference Monitor',
-    shortTag: '0.0 dB Direct',
-    description: 'Uncolored studio reference response with transparent peak protection.',
-    bassDb: 0.0,
-    midDb: 0.0,
-    trebleDb: 0.0,
-    bitrateDisplay: '192 kbps · 48.0 kHz · Direct',
   },
 ];
 
@@ -106,9 +106,10 @@ export const LOCAL_FULL_AUDIO_MASTERS: Record<
 > = {
   '/audio/again-full.mp3': { durationSec: 313, durationLabel: '5:13', expectedBytes: 7515893 },
   '/audio/clarity-nightcore.mp3': { durationSec: 241, durationLabel: '4:01', expectedBytes: 5798874 },
-  '/audio/duvet-x-linger.mp3': { durationSec: 202, durationLabel: '3:22', expectedBytes: 4849519 },
-  '/audio/end-it-nightcore.mp3': { durationSec: 167, durationLabel: '2:47', expectedBytes: 4009720 },
-  '/audio/mazeltron.mp3': { durationSec: 144, durationLabel: '2:24', expectedBytes: 3457320 },
+  '/audio/duvet-x-linger.mp3': { durationSec: 206, durationLabel: '3:26', expectedBytes: 4168853 },
+  '/audio/end-it-nightcore.mp3': { durationSec: 168, durationLabel: '2:48', expectedBytes: 2696253 },
+  '/audio/mazeltron.mp3': { durationSec: 187, durationLabel: '3:07', expectedBytes: 3777507 },
+  '/audio/moonrock-saltynuggets.mp3': { durationSec: 126, durationLabel: '2:06', expectedBytes: 2547029 },
   '/audio/no-friends-female.mp3': { durationSec: 257, durationLabel: '4:17', expectedBytes: 6157085 },
   '/audio/stronger-than-you-frisk.mp3': { durationSec: 207, durationLabel: '3:27', expectedBytes: 4977377 },
   '/audio/trap-queen-full.mp3': { durationSec: 222, durationLabel: '3:42', expectedBytes: 5331130 },
@@ -375,7 +376,7 @@ export async function probeAudioSourceCompleteness(
 
   const localMaster = LOCAL_FULL_AUDIO_MASTERS[url];
 
-  if (typeof window === 'undefined' || typeof fetch === 'undefined') {
+  if (localMaster || typeof window === 'undefined' || typeof fetch === 'undefined') {
     return {
       url,
       isComplete: true,
@@ -474,14 +475,13 @@ export async function probeAudioSourceCompleteness(
 
     // Estimate duration at 192 kbps (24,000 bytes/sec)
     const estimatedDurationSec =
-      localMaster?.durationSec ??
-      (totalBytes !== null ? Math.round(totalBytes / 24000) : expectedDurationSec);
+      totalBytes !== null ? Math.round(totalBytes / 24000) : expectedDurationSec;
 
     return {
       url,
       isComplete: true,
       isTruncated: false,
-      byteLength: totalBytes ?? localMaster?.expectedBytes ?? null,
+      byteLength: totalBytes,
       verifiedDurationSec: estimatedDurationSec,
       hasValidHeader: true,
     };
@@ -492,8 +492,8 @@ export async function probeAudioSourceCompleteness(
       url,
       isComplete: !isTruncatedPreviewUrl(url),
       isTruncated: isTruncatedPreviewUrl(url),
-      byteLength: localMaster?.expectedBytes ?? null,
-      verifiedDurationSec: localMaster?.durationSec ?? expectedDurationSec,
+      byteLength: null,
+      verifiedDurationSec: expectedDurationSec,
       hasValidHeader: true,
     };
   }
@@ -520,6 +520,22 @@ export const SONG_TRACKS: SongTrackDefinition[] = [
     genreTag: 'Hip-Hop / Trap',
   },
   {
+    id: 'moonrock_saltynuggets',
+    title: 'Moonrock',
+    subtitle: 'SaltyNuggets',
+    artistName: 'SaltyNuggets',
+    badge: 'SaltyNuggets',
+    durationSec: 126,
+    durationLabel: '2:06',
+    artworkUrl:
+      'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/5e/37/86/5e3786b0-1fe0-8edd-82f0-649e0365c9b5/4070335853141.jpg/600x600bb.jpg',
+    accentColor: 'emerald',
+    sources: ['/audio/moonrock-saltynuggets.mp3'],
+    bpm: 144,
+    audioQualityBadge: '48kHz Hi-Res',
+    genreTag: 'Hip-Hop / Trap',
+  },
+  {
     id: 'clarity_nightcore',
     title: 'Clarity',
     subtitle: 'Nightcore',
@@ -541,8 +557,8 @@ export const SONG_TRACKS: SongTrackDefinition[] = [
     subtitle: 'Nightcore',
     artistName: 'Nightcore • Sinnon / RIELL',
     badge: 'Nightcore',
-    durationSec: 167,
-    durationLabel: '2:47',
+    durationSec: 168,
+    durationLabel: '2:48',
     artworkUrl:
       'https://cdn-images.dzcdn.net/images/cover/146c8de07fdcd33369bc3267195df94d/500x500-000000-80-0-0.jpg',
     accentColor: 'fuchsia',
@@ -573,8 +589,8 @@ export const SONG_TRACKS: SongTrackDefinition[] = [
     subtitle: 'Bôa × The Cranberries',
     artistName: 'Bôa × The Cranberries',
     badge: 'Mashup',
-    durationSec: 202,
-    durationLabel: '3:22',
+    durationSec: 206,
+    durationLabel: '3:26',
     artworkUrl:
       'https://cdn-images.dzcdn.net/images/cover/fc0d073cdce93824ed0038a6f0ec7ed6/500x500-000000-80-0-0.jpg',
     accentColor: 'amber',
@@ -627,8 +643,8 @@ export const SONG_TRACKS: SongTrackDefinition[] = [
     subtitle: 'BLP Kosher & BabyTron',
     artistName: 'BLP Kosher & BabyTron',
     badge: 'MazelTron',
-    durationSec: 144,
-    durationLabel: '2:24',
+    durationSec: 187,
+    durationLabel: '3:07',
     artworkUrl:
       'https://cdn-images.dzcdn.net/images/cover/ee3a4f14c8ecb9ac80b0aec21b884e89/500x500-000000-80-0-0.jpg',
     accentColor: 'cyan',
@@ -712,7 +728,7 @@ class SongPlayerController {
     trackId: SONG_TRACKS[0].id,
     isPlaying: false,
     playbackRate: 1.0,
-    preservesPitch: false,
+    preservesPitch: true,
     currentTime: 0,
     duration: SONG_TRACKS[0].durationSec,
     volume: 0.9,
@@ -720,11 +736,11 @@ class SongPlayerController {
     artistName: SONG_TRACKS[0].artistName,
     badge: SONG_TRACKS[0].badge,
     artworkUrl: SONG_TRACKS[0].artworkUrl,
-    qualityPreset: 'hires_studio',
-    loopTrack: true,
-    bassDb: AUDIO_QUALITY_PRESETS[0].bassDb,
-    midDb: AUDIO_QUALITY_PRESETS[0].midDb,
-    trebleDb: AUDIO_QUALITY_PRESETS[0].trebleDb,
+    qualityPreset: 'flat_reference',
+    loopTrack: false,
+    bassDb: 0.0,
+    midDb: 0.0,
+    trebleDb: 0.0,
     bitrateDisplay: AUDIO_QUALITY_PRESETS[0].bitrateDisplay,
     error: null,
     queueValidation: {
@@ -960,6 +976,14 @@ class SongPlayerController {
 
   private ensureWebAudioMasteringGraph(): void {
     if (typeof window === 'undefined' || !this.audio || this.audioCtx) return;
+    // Keep native direct HTMLAudioElement output when EQ is flat (0.0 dB) for pure Spotify-grade fidelity
+    if (
+      Math.abs(this.state.bassDb) < 0.05 &&
+      Math.abs(this.state.midDb) < 0.05 &&
+      Math.abs(this.state.trebleDb) < 0.05
+    ) {
+      return;
+    }
     try {
       const AudioContextCtor =
         window.AudioContext ||
@@ -988,15 +1012,7 @@ class SongPlayerController {
       treble.frequency.value = 10000;
       treble.gain.value = this.state.trebleDb;
 
-      // 4. Studio Mastering Dynamics Compressor / Limiter
-      const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -14;
-      comp.knee.value = 18;
-      comp.ratio.value = 3.2;
-      comp.attack.value = 0.004;
-      comp.release.value = 0.18;
-
-      // 5. Real-Time Spectrum Analyser (64-point FFT -> 16 visible bands)
+      // 4. Real-Time Spectrum Analyser (64-point FFT -> 16 visible bands)
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 64;
       analyser.smoothingTimeConstant = 0.78;
@@ -1004,8 +1020,7 @@ class SongPlayerController {
       source.connect(bass);
       bass.connect(mid);
       mid.connect(treble);
-      treble.connect(comp);
-      comp.connect(analyser);
+      treble.connect(analyser);
       analyser.connect(ctx.destination);
 
       this.audioCtx = ctx;
@@ -1013,7 +1028,7 @@ class SongPlayerController {
       this.bassFilter = bass;
       this.midFilter = mid;
       this.trebleFilter = treble;
-      this.compressor = comp;
+      this.compressor = null;
       this.analyser = analyser;
       this.freqBuffer = new Uint8Array(analyser.frequencyBinCount);
     } catch {
@@ -1022,6 +1037,14 @@ class SongPlayerController {
   }
 
   private syncEqFilters(): void {
+    if (
+      !this.audioCtx &&
+      (Math.abs(this.state.bassDb) >= 0.05 ||
+        Math.abs(this.state.midDb) >= 0.05 ||
+        Math.abs(this.state.trebleDb) >= 0.05)
+    ) {
+      this.ensureWebAudioMasteringGraph();
+    }
     if (this.bassFilter) {
       this.bassFilter.gain.value = this.state.bassDb;
     }
@@ -1104,7 +1127,7 @@ class SongPlayerController {
     el.src = trackDef.sources[this.sourceIndex];
     el.loop = this.state.loopTrack;
     el.volume = this.state.volume;
-    el.preload = 'auto';
+    el.preload = 'none';
     this.applyRateToAudio(el);
 
     el.addEventListener('timeupdate', () => {
@@ -1315,7 +1338,7 @@ class SongPlayerController {
       },
     });
 
-    if (firstSrc && !cachedProbe) {
+    if (firstSrc && !cachedProbe && firstSrc.startsWith('/audio/')) {
       void this.probeAndCacheSource(firstSrc, nextDef.durationSec).then((probe) => {
         if (this.state.trackId === nextDef.id) {
           this.updateState({
