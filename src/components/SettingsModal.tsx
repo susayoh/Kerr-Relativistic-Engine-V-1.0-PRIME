@@ -70,10 +70,14 @@ import {
 } from '../audio/trapQueenPlayer';
 import {
   SyncedLyricLine,
+  LyricsMatchMetadata,
   fetchSyncedLyricsForTrack,
   buildTrackSubtitleFallback,
   getActiveLyricIndex,
   getActiveLineProgress,
+  clearLyricsCacheForTrack,
+  getLastLyricsMatchMeta,
+  resolveCanonicalSongIdentity,
 } from '../audio/songLyrics';
 import { AppLanguage, LANGUAGE_OPTIONS, TRANSLATIONS } from '../i18n/translations';
 import {
@@ -457,6 +461,7 @@ interface SettingsModalProps {
   onTriggerKerrCalculation?: (tierOverride?: KerrEngineTierId) => void;
   onExportGeodesicCsv?: () => void;
   onExportEventLogJson?: () => void;
+  onOpenWatermarkStudioModal?: () => void;
   eventLogCount?: number;
   activeParams?: BlackHoleParams;
   onRecordDiagnosticStressTest?: (
@@ -781,6 +786,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onTriggerKerrCalculation,
   onExportGeodesicCsv,
   onExportEventLogJson,
+  onOpenWatermarkStudioModal,
   eventLogCount,
   activeParams,
   onRecordDiagnosticStressTest,
@@ -818,9 +824,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [lyricsCinemaMode, setLyricsCinemaMode] = useState<boolean>(false);
   const [lyricsAutoFollow, setLyricsAutoFollow] = useState<boolean>(true);
   const [lyricSyncOffsetSec, setLyricSyncOffsetSec] = useState<number>(0);
+  const [lyricVariantIndex, setLyricVariantIndex] = useState<number>(0);
+  const [isRetryingVersion, setIsRetryingVersion] = useState<boolean>(false);
+  const [showVersionRetryPanel, setShowVersionRetryPanel] = useState<boolean>(false);
+  const [versionRetryFeedback, setVersionRetryFeedback] = useState<string | null>(null);
+  const [versionRetryNonce, setVersionRetryNonce] = useState<number>(0);
   const [isPlayerMinimized, setIsPlayerMinimized] = useState<boolean>(false);
   const [activeLyrics, setActiveLyrics] = useState<SyncedLyricLine[]>(() =>
     buildTrackSubtitleFallback(SETTINGS_SONGS_LIST[0])
+  );
+  const [activeLyricsMatchMeta, setActiveLyricsMatchMeta] = useState<LyricsMatchMetadata | null>(
+    null
   );
   const lyricsScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [hasVisitedIqTest, setHasVisitedIqTest] = useState<boolean>(false);
@@ -838,6 +852,56 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isImportedTracksLoaded, setIsImportedTracksLoaded] = useState<boolean>(false);
   const [isLoadingImportedTracks, setIsLoadingImportedTracks] = useState<boolean>(false);
 
+  const handleRetryTrackVersion = useCallback(
+    async (
+      targetTrackId: string,
+      mode: 'next_best' | 'original_studio' | 'sped_up' | 'slowed' = 'next_best',
+      resetHistory = false
+    ) => {
+      haptics.medium();
+      setIsRetryingVersion(true);
+      setShowVersionRetryPanel(true);
+      setVersionRetryFeedback(
+        resetHistory
+          ? 'Restoring default version...'
+          : `Marking song & searching ${
+              mode === 'original_studio'
+                ? 'Original Studio Master'
+                : mode === 'sped_up'
+                ? 'Sped Up / Nightcore'
+                : mode === 'slowed'
+                ? 'Slowed Version'
+                : 'next best audio match'
+            }...`
+      );
+      clearLyricsCacheForTrack(targetTrackId);
+      const result = await trapQueenPlayer.retryTrackVersion(
+        targetTrackId,
+        mode,
+        resetHistory
+      );
+      setIsRetryingVersion(false);
+      setVersionRetryNonce((n) => n + 1);
+      if (result.ok) {
+        const durBadge = result.durationSec
+          ? ` (${Math.floor(result.durationSec / 60)}:${String(
+              Math.round(result.durationSec % 60)
+            ).padStart(2, '0')})`
+          : '';
+        setVersionRetryFeedback(
+          resetHistory
+            ? 'Restored default version (Attempt #1).'
+            : `Loaded Version Attempt #${result.attempt}${durBadge} — Lyrics re-synced!`
+        );
+      } else {
+        setVersionRetryFeedback(
+          result.error || `Tried Attempt #${result.attempt} — re-synced lyrics.`
+        );
+      }
+    },
+    [haptics]
+  );
+
   useEffect(() => {
     if (activeTab === 'iq_test') {
       setHasVisitedIqTest(true);
@@ -846,6 +910,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   useEffect(() => {
     setLyricSyncOffsetSec(0);
+    setLyricVariantIndex(0);
+    setVersionRetryFeedback(null);
   }, [playerState.trackId]);
 
   useEffect(() => {
@@ -853,18 +919,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       songsCatalog.find((tr) => tr.id === playerState.trackId) || songsCatalog[0];
     if (!currentTrack) return;
     let cancelled = false;
-    const isSpeedModified = /sped\s*up|speed\s*up|nightcore|slowed/i.test(
-      `${currentTrack.title} ${currentTrack.artistName}`
-    );
     const decodedDur =
-      isSpeedModified && playerState.duration && playerState.duration >= 65
+      playerState.duration && playerState.duration >= 45
         ? Math.round(playerState.duration)
-        : undefined;
-    setActiveLyrics(buildTrackSubtitleFallback(currentTrack));
-    fetchSyncedLyricsForTrack(currentTrack, decodedDur)
+        : currentTrack.durationSec;
+    setActiveLyrics(buildTrackSubtitleFallback(currentTrack, decodedDur));
+    setActiveLyricsMatchMeta(getLastLyricsMatchMeta(currentTrack.id) || null);
+    fetchSyncedLyricsForTrack(currentTrack, decodedDur, {
+      variantIndex: lyricVariantIndex,
+      forceRefresh: versionRetryNonce > 0,
+    })
       .then((lines) => {
         if (!cancelled && lines.length > 0) {
           setActiveLyrics(lines);
+          setActiveLyricsMatchMeta(getLastLyricsMatchMeta(currentTrack.id) || null);
         }
       })
       .catch(() => {
@@ -875,7 +943,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     };
   }, [
     playerState.trackId,
-    playerState.isPlaying ? Math.round((playerState.duration || 0) / 10) : 0,
+    Math.round((playerState.duration || 0) / 3),
+    lyricVariantIndex,
+    versionRetryNonce,
     songsCatalog,
   ]);
 
@@ -3257,6 +3327,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 )}
 
+                {onOpenWatermarkStudioModal && (
+                  <button
+                    type="button"
+                    data-testid="settings-watermark-studio-btn"
+                    onClick={() => {
+                      haptics.medium();
+                      onOpenWatermarkStudioModal();
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[10px] font-bold bg-[#201815] hover:bg-[#2c201c] border border-[#D97757]/60 text-[#F4A688] transition-all cursor-pointer"
+                    title="Open Kerr Engine Watermark Logo Studio (Still & Moving Watermark Exports & Color Palettes)"
+                  >
+                    <Sparkles className="w-3 h-3 text-[#E88B6B]" />
+                    <span>Watermark Logo Studio</span>
+                  </button>
+                )}
+
                 {onToggleRecording && (
                   <button
                     type="button"
@@ -3849,13 +3935,113 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Live 16-Band Spectrum Visualizer */}
-                    <LiveSpectrumVisualizer
-                      isPlaying={playerState.isPlaying}
-                      playbackRate={playerState.playbackRate}
-                      trackId={playerState.trackId}
-                    />
+                    {/* Live 16-Band Spectrum Visualizer + Wrong Version Quick Action */}
+                    <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
+                      <LiveSpectrumVisualizer
+                        isPlaying={playerState.isPlaying}
+                        playbackRate={playerState.playbackRate}
+                        trackId={playerState.trackId}
+                      />
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          data-testid="header-wrong-version-retry-btn"
+                          disabled={isRetryingVersion}
+                          onClick={() => {
+                            void handleRetryTrackVersion(activeTrackDef.id, 'next_best', false);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/45 text-amber-200 font-mono text-[10px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                          title="Mark this song as not the right version you want and automatically try another audio source"
+                        >
+                          <RotateCcw
+                            className={`w-3 h-3 text-amber-300 ${
+                              isRetryingVersion ? 'animate-spin' : ''
+                            }`}
+                          />
+                          <span>
+                            {isRetryingVersion
+                              ? 'Trying New Version...'
+                              : 'Wrong Version? Try Again'}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="toggle-version-options-btn"
+                          onClick={() => {
+                            haptics.light();
+                            setShowVersionRetryPanel((prev) => !prev);
+                          }}
+                          className={`px-2 py-1 rounded-full border font-mono text-[9.5px] transition-colors cursor-pointer ${
+                            showVersionRetryPanel
+                              ? 'bg-amber-500 text-black border-amber-400 font-bold'
+                              : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border-zinc-700'
+                          }`}
+                          title="Choose which version style to search for (Studio, Sped Up, Slowed)"
+                        >
+                          Version Options
+                        </button>
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Expandable Version Selector & Retry Status Strip */}
+                  {(showVersionRetryPanel || versionRetryFeedback) && (
+                    <div
+                      data-testid="song-version-retry-panel"
+                      className="rounded-lg bg-black/55 border border-amber-500/35 px-3 py-2.5 space-y-2"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 font-mono text-[9.5px] font-bold text-amber-300 uppercase">
+                            Attempt #{trapQueenPlayer.getTrackVersionInfo(activeTrackDef.id).attempt}
+                          </span>
+                          <span className="text-[11px] text-zinc-200 font-medium">
+                            Not the right version of &ldquo;{activeTrackDef.title}&rdquo;? Pick what to try next:
+                          </span>
+                        </div>
+                        {versionRetryFeedback && (
+                          <span className="font-mono text-[10px] text-[#1ed760]">
+                            {versionRetryFeedback}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {(
+                          [
+                            { id: 'next_best', label: 'Try Next Best Match' },
+                            { id: 'original_studio', label: 'Original Studio Master' },
+                            { id: 'sped_up', label: 'Sped Up / Nightcore' },
+                            { id: 'slowed', label: 'Slowed & Reverb' },
+                          ] as const
+                        ).map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            data-testid={`retry-version-mode-${opt.id}`}
+                            disabled={isRetryingVersion}
+                            onClick={() => {
+                              void handleRetryTrackVersion(activeTrackDef.id, opt.id, false);
+                            }}
+                            className="px-2.5 py-1 rounded-md bg-zinc-900 hover:bg-amber-500/20 border border-zinc-700 hover:border-amber-400/60 text-zinc-200 hover:text-amber-200 font-mono text-[10px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          data-testid="retry-version-reset-btn"
+                          disabled={isRetryingVersion}
+                          onClick={() => {
+                            void handleRetryTrackVersion(activeTrackDef.id, 'next_best', true);
+                          }}
+                          className="px-2.5 py-1 rounded-md bg-zinc-900/70 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white font-mono text-[10px] transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          Reset Default
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Native Time-Aligned Lyric Sync Stage (Teleprompter, Cinema Stage & Full Lyrics) */}
@@ -3917,114 +4103,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   return (
                     <div
                       data-testid="spotify-live-subtitles-card"
-                      className="rounded-xl bg-gradient-to-br from-[#1b2e22]/95 via-[#161a17] to-[#121212] border border-[#1DB954]/45 p-3 sm:p-4 space-y-2.5 shadow-xl overflow-hidden"
+                      className="rounded-xl bg-gradient-to-br from-[#1b2e22]/95 via-[#161a17] to-[#121212] border border-[#1DB954]/45 p-3 sm:p-3.5 space-y-2 shadow-xl overflow-hidden"
                     >
-                      {/* Top Header & Native Lyric Sync Mode Controls Bar */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-white/10">
-                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                          <button
-                            type="button"
-                            data-testid="lyric-sync-mode-toggle-btn"
-                            aria-pressed={lyricSyncMode}
-                            onClick={() => {
-                              haptics.light();
-                              setLyricSyncMode((prev) => !prev);
-                            }}
-                            title="Toggle Lyric Sync Mode to lock lyrics natively to playback time"
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border font-mono text-[9.5px] font-bold uppercase tracking-wider shrink-0 transition-colors cursor-pointer ${
-                              lyricSyncMode
-                                ? 'bg-[#1DB954]/20 border-[#1DB954]/60 text-[#1ed760]'
-                                : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                lyricSyncMode
-                                  ? `bg-[#1DB954] ${playerState.isPlaying ? 'animate-pulse' : ''}`
-                                  : 'bg-zinc-500'
-                              }`}
-                            />
-                            <span>Lyric Sync Mode: {lyricSyncMode ? 'ON' : 'OFF'}</span>
-                          </button>
-
-                          <span className="px-2 py-0.5 rounded bg-black/40 border border-white/10 font-mono text-[9.5px] text-zinc-300 tabular-nums">
-                            Line {Math.min(activeLyrics.length, activeLyricIndex + 1)} /{' '}
-                            {activeLyrics.length}
-                          </span>
-
-                          {/* Fine-Tune Vocal Sync Offset Calibrator (-0.25s / +0.25s) */}
-                          <div
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-black/45 border border-zinc-700/80 font-mono text-[9.5px]"
-                            title="Fine-tune vocal lyric sync offset in 0.25s steps"
-                          >
-                            <button
-                              type="button"
-                              data-testid="lyric-offset-minus-btn"
-                              onClick={() => {
-                                haptics.light();
-                                setLyricSyncOffsetSec((v) =>
-                                  Math.max(-5, Math.round((v - 0.25) * 100) / 100)
-                                );
-                              }}
-                              className="px-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white cursor-pointer"
-                              title="Delay lyrics by 0.25s"
-                            >
-                              -0.25s
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                haptics.light();
-                                setLyricSyncOffsetSec(0);
-                              }}
-                              className={`px-1 rounded cursor-pointer tabular-nums ${
-                                Math.abs(lyricSyncOffsetSec) > 0.01
-                                  ? 'text-[#1ed760] font-bold'
-                                  : 'text-zinc-400'
-                              }`}
-                              title="Reset lyric sync offset to 0.0s"
-                            >
-                              {lyricSyncOffsetSec > 0
-                                ? `+${lyricSyncOffsetSec.toFixed(2)}s`
-                                : `${lyricSyncOffsetSec.toFixed(2)}s`}
-                            </button>
-                            <button
-                              type="button"
-                              data-testid="lyric-offset-plus-btn"
-                              onClick={() => {
-                                haptics.light();
-                                setLyricSyncOffsetSec((v) =>
-                                  Math.min(5, Math.round((v + 0.25) * 100) / 100)
-                                );
-                              }}
-                              className="px-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white cursor-pointer"
-                              title="Advance lyrics by 0.25s"
-                            >
-                              +0.25s
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* View Mode Switcher: Teleprompter / Cinema Stage / Full Lyrics / Auto-Scroll / Hide */}
-                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-                          {showFullLyricsCard && !lyricsCinemaMode && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                haptics.light();
-                                setLyricsAutoFollow((prev) => !prev);
-                              }}
-                              className={`px-2 py-0.5 rounded-full font-mono text-[9.5px] font-semibold border transition-colors cursor-pointer ${
-                                lyricsAutoFollow
-                                  ? 'bg-[#1DB954]/20 text-[#1ed760] border-[#1DB954]/50'
-                                  : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                              }`}
-                              title="Lock scroll position to currently spoken line"
-                            >
-                              {lyricsAutoFollow ? 'Auto-Scroll: ON' : 'Auto-Scroll: OFF'}
-                            </button>
-                          )}
-
+                      {/* Row 1: Primary View Mode Switcher + Line Progress + Hide (Zero Overflow) */}
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 pb-1.5 border-b border-white/10">
+                        <div className="flex items-center gap-1 flex-wrap min-w-0">
                           <button
                             type="button"
                             data-testid="toggle-teleprompter-lyrics-btn"
@@ -4089,6 +4172,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             Full Lyrics
                           </button>
 
+                          {showFullLyricsCard && !lyricsCinemaMode && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                setLyricsAutoFollow((prev) => !prev);
+                              }}
+                              className={`px-2 py-0.5 rounded-full font-mono text-[9.5px] font-semibold border transition-colors cursor-pointer ${
+                                lyricsAutoFollow
+                                  ? 'bg-[#1DB954]/20 text-[#1ed760] border-[#1DB954]/50'
+                                  : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                              }`}
+                              title="Lock scroll position to currently spoken line"
+                            >
+                              {lyricsAutoFollow ? 'Auto-Scroll: ON' : 'Auto-Scroll: OFF'}
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="px-2 py-0.5 rounded bg-black/45 border border-white/10 font-mono text-[9.5px] text-zinc-300 tabular-nums">
+                            Line {Math.min(activeLyrics.length, activeLyricIndex + 1)} /{' '}
+                            {activeLyrics.length}
+                          </span>
+
                           <button
                             type="button"
                             data-testid="hide-subtitles-btn"
@@ -4104,8 +4212,155 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                       </div>
 
+                      {/* Row 2: Sync Calibration + Cycle Lyrics Transcript + Wrong Version Retry */}
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 pb-1 border-b border-white/5">
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                          <button
+                            type="button"
+                            data-testid="lyric-sync-mode-toggle-btn"
+                            aria-pressed={lyricSyncMode}
+                            onClick={() => {
+                              haptics.light();
+                              setLyricSyncMode((prev) => !prev);
+                            }}
+                            title="Toggle Lyric Sync Mode to lock lyrics natively to playback time"
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border font-mono text-[9.5px] font-bold uppercase tracking-wider shrink-0 transition-colors cursor-pointer ${
+                              lyricSyncMode
+                                ? 'bg-[#1DB954]/20 border-[#1DB954]/60 text-[#1ed760]'
+                                : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                lyricSyncMode
+                                  ? `bg-[#1DB954] ${playerState.isPlaying ? 'animate-pulse' : ''}`
+                                  : 'bg-zinc-500'
+                              }`}
+                            />
+                            <span>Sync: {lyricSyncMode ? 'ON' : 'OFF'}</span>
+                          </button>
+
+                          {/* Fine-Tune Vocal Sync Offset Calibrator (-0.25s / +0.25s) */}
+                          <div
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-black/45 border border-zinc-700/80 font-mono text-[9.5px]"
+                            title="Fine-tune vocal lyric sync offset in 0.25s steps"
+                          >
+                            <button
+                              type="button"
+                              data-testid="lyric-offset-minus-btn"
+                              onClick={() => {
+                                haptics.light();
+                                setLyricSyncOffsetSec((v) =>
+                                  Math.max(-10, Math.round((v - 0.25) * 100) / 100)
+                                );
+                              }}
+                              className="px-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white cursor-pointer"
+                              title="Delay lyrics by 0.25s"
+                            >
+                              -0.25s
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                haptics.light();
+                                setLyricSyncOffsetSec(0);
+                              }}
+                              className={`px-1 rounded cursor-pointer tabular-nums ${
+                                Math.abs(lyricSyncOffsetSec) > 0.01
+                                  ? 'text-[#1ed760] font-bold'
+                                  : 'text-zinc-400'
+                              }`}
+                              title="Reset lyric sync offset to 0.0s"
+                            >
+                              {lyricSyncOffsetSec > 0
+                                ? `+${lyricSyncOffsetSec.toFixed(2)}s`
+                                : `${lyricSyncOffsetSec.toFixed(2)}s`}
+                            </button>
+                            <button
+                              type="button"
+                              data-testid="lyric-offset-plus-btn"
+                              onClick={() => {
+                                haptics.light();
+                                setLyricSyncOffsetSec((v) =>
+                                  Math.min(10, Math.round((v + 0.25) * 100) / 100)
+                                );
+                              }}
+                              className="px-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white cursor-pointer"
+                              title="Advance lyrics by 0.25s"
+                            >
+                              +0.25s
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            data-testid="cycle-lyrics-variant-btn"
+                            onClick={() => {
+                              haptics.light();
+                              setLyricVariantIndex((v) => v + 1);
+                            }}
+                            className="px-2 py-0.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-mono text-[9.5px] transition-colors cursor-pointer"
+                            title="Lyrics don't match this edit? Click to cycle to the next studio LRC transcript"
+                          >
+                            Alt Lyrics #{lyricVariantIndex + 1}
+                          </button>
+
+                          {(() => {
+                            const canonicalInfo = resolveCanonicalSongIdentity(
+                              activeTrackDef.id,
+                              activeTrackDef.title,
+                              activeTrackDef.artistName
+                            );
+                            const matchArtist =
+                              activeLyricsMatchMeta?.matchedArtistName ||
+                              canonicalInfo.primaryArtist;
+                            const matchTitle =
+                              activeLyricsMatchMeta?.matchedTrackName ||
+                              canonicalInfo.canonicalTitle;
+                            const confPct = activeLyricsMatchMeta?.confidencePct;
+                            const scaleVal = activeLyricsMatchMeta?.timeScale;
+                            return (
+                              <span
+                                data-testid="lyrics-canonical-match-badge"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/40 border border-emerald-500/35 text-emerald-200 font-mono text-[9.5px] max-w-full truncate"
+                                title={`Canonical Lyrics Finder Match: ${matchArtist} — ${matchTitle}`}
+                              >
+                                <Check className="w-2.5 h-2.5 text-[#1ed760] shrink-0" />
+                                <span className="truncate">
+                                  Matched: {matchArtist} — {matchTitle}
+                                  {confPct ? ` (${confPct}%)` : ''}
+                                  {scaleVal && Math.abs(1 - scaleVal) > 0.03
+                                    ? ` · ${scaleVal.toFixed(2)}x Tempo`
+                                    : ''}
+                                </span>
+                              </span>
+                            );
+                          })()}
+                        </div>
+
+                        <button
+                          type="button"
+                          data-testid="mark-wrong-version-btn"
+                          disabled={isRetryingVersion}
+                          onClick={() => {
+                            void handleRetryTrackVersion(activeTrackDef.id, 'next_best', false);
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/45 text-amber-200 font-mono text-[9.5px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                          title="Not the right song version you want? Click to mark and try another source"
+                        >
+                          <RotateCcw
+                            className={`w-2.5 h-2.5 text-amber-300 ${
+                              isRetryingVersion ? 'animate-spin' : ''
+                            }`}
+                          />
+                          <span>
+                            {isRetryingVersion ? 'Trying Again...' : 'Wrong Version? Try Again'}
+                          </span>
+                        </button>
+                      </div>
+
                       {!showFullLyricsCard && !lyricsCinemaMode ? (
-                        /* 5-Line Rolling Teleprompter View */
+                        /* 5-Line Rolling Teleprompter View (Full Text Wrapping — Zero Clipping) */
                         <div className="space-y-1.5 py-1 px-1">
                           {prev2Line && (
                             <button
@@ -4114,7 +4369,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 haptics.light();
                                 trapQueenPlayer.seek(prev2Line.timeSec);
                               }}
-                              className="block w-full text-left text-[11px] text-zinc-600 hover:text-zinc-400 truncate transition-colors cursor-pointer"
+                              className="block w-full text-left text-[11px] text-zinc-500 hover:text-zinc-300 whitespace-normal break-words leading-snug transition-colors cursor-pointer"
                             >
                               {prev2Line.text}
                             </button>
@@ -4126,7 +4381,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 haptics.light();
                                 trapQueenPlayer.seek(prevLine.timeSec);
                               }}
-                              className="block w-full text-left text-xs text-zinc-400 hover:text-zinc-200 truncate transition-colors cursor-pointer"
+                              className="block w-full text-left text-xs text-zinc-400 hover:text-zinc-200 whitespace-normal break-words leading-snug transition-colors cursor-pointer"
                             >
                               {prevLine.text}
                             </button>
@@ -4143,7 +4398,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               }}
                               className="flex items-baseline justify-between gap-3 w-full text-left group cursor-pointer"
                             >
-                              <span className="text-sm sm:text-base font-extrabold tracking-tight leading-snug">
+                              <span className="text-sm sm:text-base font-extrabold tracking-tight leading-snug whitespace-normal break-words min-w-0 flex-1">
                                 {renderSyncedLyricWords(currLine.text, activeLineProgress)}
                               </span>
                               <span className="font-mono text-[10px] text-[#1ed760] shrink-0 tabular-nums">
@@ -4172,7 +4427,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 haptics.light();
                                 trapQueenPlayer.seek(nextLine.timeSec);
                               }}
-                              className="block w-full text-left text-xs text-zinc-300/90 hover:text-white truncate transition-colors cursor-pointer font-medium"
+                              className="block w-full text-left text-xs text-zinc-300/90 hover:text-white whitespace-normal break-words leading-snug transition-colors cursor-pointer font-medium"
                             >
                               {nextLine.text}
                             </button>
@@ -4184,7 +4439,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 haptics.light();
                                 trapQueenPlayer.seek(next2Line.timeSec);
                               }}
-                              className="block w-full text-left text-[11px] text-zinc-500 hover:text-zinc-300 truncate transition-colors cursor-pointer"
+                              className="block w-full text-left text-[11px] text-zinc-500 hover:text-zinc-300 whitespace-normal break-words leading-snug transition-colors cursor-pointer"
                             >
                               {next2Line.text}
                             </button>
@@ -4203,7 +4458,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 haptics.light();
                                 trapQueenPlayer.seek(prev3Line.timeSec);
                               }}
-                              className="block w-full text-center text-xs text-zinc-600 hover:text-zinc-400 truncate transition-colors cursor-pointer"
+                              className="block w-full text-center text-xs text-zinc-600 hover:text-zinc-400 whitespace-normal break-words leading-snug transition-colors cursor-pointer"
                             >
                               {prev3Line.text}
                             </button>
@@ -4215,7 +4470,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 haptics.light();
                                 trapQueenPlayer.seek(prev2Line.timeSec);
                               }}
-                              className="block w-full text-center text-xs sm:text-sm text-zinc-500 hover:text-zinc-300 truncate transition-colors cursor-pointer"
+                              className="block w-full text-center text-xs sm:text-sm text-zinc-500 hover:text-zinc-300 whitespace-normal break-words leading-snug transition-colors cursor-pointer"
                             >
                               {prev2Line.text}
                             </button>
@@ -4227,7 +4482,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 haptics.light();
                                 trapQueenPlayer.seek(prevLine.timeSec);
                               }}
-                              className="block w-full text-center text-sm sm:text-base text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer font-medium"
+                              className="block w-full text-center text-sm sm:text-base text-zinc-400 hover:text-zinc-200 whitespace-normal break-words leading-snug transition-colors cursor-pointer font-medium"
                             >
                               {prevLine.text}
                             </button>
@@ -4244,7 +4499,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               }}
                               className="flex flex-col items-center justify-center gap-1.5 w-full text-center cursor-pointer"
                             >
-                              <span className="text-base sm:text-xl md:text-2xl font-extrabold tracking-tight leading-snug">
+                              <span className="text-base sm:text-xl md:text-2xl font-extrabold tracking-tight leading-snug whitespace-normal break-words">
                                 {renderSyncedLyricWords(currLine.text, activeLineProgress)}
                               </span>
                               <span className="font-mono text-[10px] text-[#1ed760] px-2 py-0.5 rounded-full bg-[#1DB954]/15 border border-[#1DB954]/35 tabular-nums">
@@ -4275,7 +4530,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 haptics.light();
                                 trapQueenPlayer.seek(nextLine.timeSec);
                               }}
-                              className="block w-full text-center text-sm sm:text-base text-zinc-200 hover:text-white transition-colors cursor-pointer font-semibold"
+                              className="block w-full text-center text-sm sm:text-base text-zinc-200 hover:text-white whitespace-normal break-words leading-snug transition-colors cursor-pointer font-semibold"
                             >
                               {nextLine.text}
                             </button>
@@ -4287,7 +4542,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 haptics.light();
                                 trapQueenPlayer.seek(next2Line.timeSec);
                               }}
-                              className="block w-full text-center text-xs sm:text-sm text-zinc-400 hover:text-zinc-200 truncate transition-colors cursor-pointer"
+                              className="block w-full text-center text-xs sm:text-sm text-zinc-400 hover:text-zinc-200 whitespace-normal break-words leading-snug transition-colors cursor-pointer"
                             >
                               {next2Line.text}
                             </button>
@@ -4299,7 +4554,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 haptics.light();
                                 trapQueenPlayer.seek(next3Line.timeSec);
                               }}
-                              className="block w-full text-center text-xs text-zinc-500 hover:text-zinc-300 truncate transition-colors cursor-pointer"
+                              className="block w-full text-center text-xs text-zinc-500 hover:text-zinc-300 whitespace-normal break-words leading-snug transition-colors cursor-pointer"
                             >
                               {next3Line.text}
                             </button>
@@ -4333,7 +4588,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 }`}
                               >
                                 <div className="w-full flex items-baseline justify-between gap-3">
-                                  <span className="leading-snug">
+                                  <span className="leading-snug whitespace-normal break-words">
                                     {isCurrent
                                       ? renderSyncedLyricWords(line.text, activeLineProgress)
                                       : line.text}
@@ -4753,9 +5008,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             {track.genreTag} · {track.bpm} BPM
                           </div>
 
-                          {/* Duration */}
-                          <div className="text-[11px] font-mono tabular-nums text-zinc-400 text-right pr-1">
-                            {track.durationLabel}
+                          {/* Duration + Wrong Version Retry Button */}
+                          <div className="flex items-center justify-end gap-1.5 text-[11px] font-mono tabular-nums text-zinc-400 text-right pr-0.5">
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              data-testid={`retry-song-version-row-${track.id}`}
+                              title={`Not the right version of "${track.title}"? Click to mark and try another source`}
+                              aria-label={`Try another version of ${track.title}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleRetryTrackVersion(track.id, 'next_best', false);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  void handleRetryTrackVersion(track.id, 'next_best', false);
+                                }
+                              }}
+                              className={`inline-flex items-center justify-center w-5 h-5 rounded-full border transition-colors ${
+                                trapQueenPlayer.getTrackVersionInfo(track.id).attempt > 1
+                                  ? 'bg-amber-500/20 border-amber-400/60 text-amber-300'
+                                  : 'bg-zinc-900/80 border-zinc-700/70 text-zinc-400 hover:text-amber-300 hover:border-amber-400/60 opacity-75 group-hover:opacity-100'
+                              }`}
+                            >
+                              <RotateCcw className="w-2.5 h-2.5" />
+                            </span>
+                            <span>{track.durationLabel}</span>
                           </div>
                         </button>
                       );

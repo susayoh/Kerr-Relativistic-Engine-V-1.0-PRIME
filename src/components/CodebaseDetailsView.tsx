@@ -91,6 +91,18 @@ function countRawLines(raw: string): number {
 
 export const RECENT_CODEBASE_UPDATES = [
   {
+    title: 'Canonical Multi-Factor Lyrics Finder & Executive Codebase Dossier',
+    files: 'songLyrics.ts, server.ts, SettingsModal.tsx, CodebaseDetailsView.tsx',
+    summary:
+      'Engineered a multi-factor canonical lyrics resolution algorithm (60+ pseudonymous Nightcore/Sped-Up artist overrides, token Jaccard similarity, LRC timestamp density verification, and dual-mode tempo-ratio scaling) plus an executive-grade 7-section Codebase Telemetry Summary Dossier.',
+  },
+  {
+    title: '60FPS Watermark Studio, Song Version Retry & Streamlined IQ Navigation',
+    files: 'WatermarkStudioModal.tsx, TopBar.tsx, SettingsModal.tsx, IQTestModule.tsx',
+    summary:
+      'Added interactive 12-Ray Starburst Watermark Studio with 5 color themes & 3 motion presets, Wrong Song Version Retry engine (Next Best / Studio / Sped Up / Slowed), and streamlined non-blocking IQ Test navigation.',
+  },
+  {
     title: 'D3.js Growth Analytics Dashboard & Post-Test Telemetry Report',
     files: 'GrowthAnalyticsDashboard.tsx, iqTelemetryEngine.ts, IQTestModule.tsx',
     summary:
@@ -101,18 +113,6 @@ export const RECENT_CODEBASE_UPDATES = [
     files: 'IQTestModule.tsx, iqQuestionBank.ts, CodebaseDetailsView.tsx',
     summary:
       'Expanded IQ Test into an 85-question master database with stratified non-repeating random sampling across Howard Gardner’s 9 Primary Intelligences (Linguistic, Logical-Mathematical, Spatial, Musical, Bodily-Kinesthetic, Interpersonal, Intrapersonal, Naturalist, Existential) plus 24 visual 3×3 matrices.',
-  },
-  {
-    title: 'Lyric Sync Mode Toggle (Teleprompter, Cinema Stage & Full Lyrics)',
-    files: 'SettingsModal.tsx, songLyrics.ts, coreLyricsData.json, trapQueenPlayer.ts',
-    summary:
-      'Added interactive Lyric Sync Mode toggle with 60ms (16.7Hz) high-precision playback clock, word-by-word highlight & syllable progress bar, 7-line Cinema Stage spotlight synchronized 1:1 with Teleprompter, and ±0.25s vocal sync calibrator.',
-  },
-  {
-    title: 'Authentic Studio Master Audio & Duration Verification',
-    files: 'server.ts, importedTracks.ts, trapQueenPlayer.ts',
-    summary:
-      'Mapped Eminem & major-label tracks to 320kbps/FLAC studio masters, added Apple Music/iTunes studio duration cross-checking, and preserved 1:1 [mm:ss.xx] LRC studio timestamps.',
   },
 ] as const;
 
@@ -382,16 +382,28 @@ const BASE_CODEBASE_FILES: CodeFileInfo[] = [
     techTags: ['Dropdown Selectors', 'Record Actions', 'Haptic Triggers', 'Responsive Header'],
   },
   {
+    path: 'src/components/WatermarkStudioModal.tsx',
+    name: 'WatermarkStudioModal.tsx',
+    lines: 715,
+    bytes: 29450,
+    subsystem: 'hud',
+    subsystemName: 'UI & Command HUD',
+    description:
+      'Interactive 12-Ray Starburst Watermark Studio providing side-by-side Still Emblem and 60FPS Animated Singularity previews, 5 astrophysical color palettes (Observatory Gold, Relativistic Cyan, Crimson Singularity, Emerald Quantum, Pure Monochrome), 3 motion presets, and 2400×900 PNG / 60FPS WebM / SVG vector export.',
+    role: '12-Ray Starburst Watermark Studio & 60FPS Exporter',
+    techTags: ['SVG Starburst', '60FPS Canvas Animation', '5 Color Palettes', 'PNG & WebM Export'],
+  },
+  {
     path: 'server.ts',
     name: 'server.ts',
-    lines: 1184,
-    bytes: 38250,
+    lines: 1503,
+    bytes: 55939,
     subsystem: 'audio',
     subsystemName: 'Audio & Sonification',
     description:
-      'Express backend server featuring Verified Studio Master audio resolution (Archive.org FLAC/320kbps + SoundCloud progressive/HLS stream assembler), Apple Music/iTunes studio duration verification, 1:1 LRCLIB synced lyrics proxy (/api/audio/lyrics), and live filesystem codebase telemetry (/api/codebase/telemetry).',
-    role: 'Studio Audio Resolver, Synced Lyrics Proxy & Telemetry Server',
-    techTags: ['Express', 'Studio Master Resolver', 'iTunes Duration Lookup', 'LRCLIB 1:1 Sync', 'HTTP Range Streaming'],
+      'Express backend server featuring Verified Studio Master audio resolution (Archive.org FLAC/320kbps + SoundCloud progressive/HLS stream assembler), Song Version Retry engine (/api/audio/retry-version), Multi-Factor Canonical LRCLIB synced lyrics solver (/api/audio/lyrics), and live filesystem codebase telemetry (/api/codebase/telemetry).',
+    role: 'Studio Audio Resolver, Canonical Lyrics Proxy & Telemetry Server',
+    techTags: ['Express', 'Canonical Lyrics Solver', 'Version Retry API', 'iTunes Duration Lookup', 'HTTP Range Streaming'],
   },
   {
     path: 'src/audio/importedTracks.ts',
@@ -889,6 +901,7 @@ export const CodebaseDetailsView: React.FC<CodebaseDetailsViewProps> = ({
   const [viewMode, setViewMode] = useState<'grouped' | 'list'>('grouped');
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [hasCopied, setHasCopied] = useState<boolean>(false);
+  const [showSummaryPreview, setShowSummaryPreview] = useState<boolean>(false);
   const [serverSyncGeneration, setServerSyncGeneration] = useState<number>(0);
 
   useEffect(() => {
@@ -943,36 +956,152 @@ export const CodebaseDetailsView: React.FC<CodebaseDetailsViewProps> = ({
     });
   }, [liveFiles, searchQuery, selectedSubsystem, sortBy]);
 
-  const handleCopySummary = () => {
-    onHapticSuccess?.();
-    const rows = liveFiles.map(
-      (f) => `| \`${f.name}\` | ${f.lines.toLocaleString()} | ${f.subsystemName} | ${f.role} |`
+  const comprehensiveSummaryMarkdown = useMemo(() => {
+    const sortedByLines = [...liveFiles].sort((a, b) => b.lines - a.lines);
+    const totalKB = (totalChars / 1024).toFixed(1);
+    const totalMB = (totalChars / (1024 * 1024)).toFixed(2);
+    const avgLinesPerFile = Math.round(totalLines / Math.max(1, totalFiles));
+    const medianLines =
+      sortedByLines[Math.floor(sortedByLines.length / 2)]?.lines || avgLinesPerFile;
+    const top3Modules = sortedByLines
+      .slice(0, 3)
+      .map((f) => `${f.name} (${f.lines.toLocaleString()} lines)`)
+      .join(' · ');
+
+    const makeAsciiBar = (pct: number) => {
+      const filled = Math.max(1, Math.min(20, Math.round((pct / 100) * 20)));
+      return `${'█'.repeat(filled)}${'░'.repeat(20 - filled)}`;
+    };
+
+    const subsystemTableRows = SUBSYSTEM_METRICS.map((sub) => {
+      const subFiles = sortedByLines.filter((f) => f.subsystem === sub.id);
+      const subLines = subsystemLineTotals[sub.id] || 0;
+      const subBytes = subFiles.reduce((s, f) => s + (f.bytes ?? f.lines * 42), 0);
+      const subKB = (subBytes / 1024).toFixed(1);
+      const pct = totalLines > 0 ? (subLines / totalLines) * 100 : 0;
+      const leadModule = subFiles[0]
+        ? `\`${subFiles[0].name}\` (${subFiles[0].lines.toLocaleString()} L)`
+        : '—';
+      return `| **${sub.name}** | ${subFiles.length} | ${subLines.toLocaleString()} | ${subKB} KB | **${pct.toFixed(1)}%** \`${makeAsciiBar(pct)}\` | ${leadModule} |`;
+    }).join('\n');
+
+    const rankedInventoryRows = sortedByLines
+      .map((f, idx) => {
+        const kb = ((f.bytes ?? f.lines * 42) / 1024).toFixed(1);
+        const pct = totalLines > 0 ? ((f.lines / totalLines) * 100).toFixed(2) : '0.00';
+        const tags = f.techTags.slice(0, 4).join(', ');
+        return `| ${idx + 1} | \`${f.path}\` | ${f.subsystemName} | **${f.lines.toLocaleString()}** | ${kb} KB | ${pct}% | ${f.role} | ${tags} |`;
+      })
+      .join('\n');
+
+    const recentChangelogRows = RECENT_CODEBASE_UPDATES.map(
+      (u, idx) =>
+        `${idx + 1}. **${u.title}** (\`${u.files}\`)\n   - ${u.summary}`
     ).join('\n');
 
-    const summary = `# Kerr Relativity Engine v1.4 — Codebase Metrics
-Total Lines of Code: ${totalLines.toLocaleString()} Lines
-Total Tracked Files: ${totalFiles} Files
-Technologies: TypeScript, React 19, Three.js (WebGL2/GLSL), Web Audio API, Tailwind CSS
+    const subsystemDetailedManifest = SUBSYSTEM_METRICS.map((sub) => {
+      const subFiles = sortedByLines.filter((f) => f.subsystem === sub.id);
+      const subLines = subsystemLineTotals[sub.id] || 0;
+      const pct = totalLines > 0 ? ((subLines / totalLines) * 100).toFixed(1) : '0.0';
+      const items = subFiles
+        .map(
+          (f) =>
+            `  - **\`${f.path}\`** — **${f.lines.toLocaleString()} lines** (${(
+              (f.bytes ?? f.lines * 42) / 1024
+            ).toFixed(1)} KB) · *${f.role}*\n    - ${f.description}\n    - *Tech Stack:* \`${f.techTags.join('` · `')}\``
+        )
+        .join('\n');
+      return `#### ${sub.name} — ${subLines.toLocaleString()} Lines (${pct}% · ${subFiles.length} Modules)\n${items}`;
+    }).join('\n\n');
 
-### Subsystem Breakdown:
-- 3D Graphics & Shaders: ${(subsystemLineTotals['shaders'] || 0).toLocaleString()} lines (${(((subsystemLineTotals['shaders'] || 0) / totalLines) * 100).toFixed(1)}%)
-- UI & Command HUD: ${(subsystemLineTotals['hud'] || 0).toLocaleString()} lines (${(((subsystemLineTotals['hud'] || 0) / totalLines) * 100).toFixed(1)}%)
-- Interactive Modules (Chess & IQ Test): ${(subsystemLineTotals['interactive'] || 0).toLocaleString()} lines (${(((subsystemLineTotals['interactive'] || 0) / totalLines) * 100).toFixed(1)}%)
-- Mathematical Physics & Geodesics: ${(subsystemLineTotals['physics'] || 0).toLocaleString()} lines (${(((subsystemLineTotals['physics'] || 0) / totalLines) * 100).toFixed(1)}%)
-- Web Audio & Procedural Sonification: ${(subsystemLineTotals['audio'] || 0).toLocaleString()} lines (${(((subsystemLineTotals['audio'] || 0) / totalLines) * 100).toFixed(1)}%)
-- Styling & Core Infrastructure: ${(subsystemLineTotals['infra'] || 0).toLocaleString()} lines (${(((subsystemLineTotals['infra'] || 0) / totalLines) * 100).toFixed(1)}%)
+    return `# ═══════════════════════════════════════════════════════════════════════════
+# KERR RELATIVITY ENGINE v1.4 — APEX METRIC CORE
+# EXECUTIVE ARCHITECTURAL & LIVE CODEBASE TELEMETRY DOSSIER
+# ═══════════════════════════════════════════════════════════════════════════
 
-### File Breakdown:
-| File | Lines | Subsystem | Role |
-| :--- | :--- | :--- | :--- |
-${rows}
+## I. EXECUTIVE SYSTEM TELEMETRY SNAPSHOT
+- **System Designation:** Kerr Relativity Engine v1.4 (Apex Metric Core)
+- **Telemetry Sync Mode:** Live Dual-Channel Introspection (\`Vite ?raw AST Glob\` + \`/api/codebase/telemetry\` Filesystem Sync)
+- **Total Lines of Code:** **${totalLines.toLocaleString()} Lines**
+- **Total Source Characters / Footprint:** **${totalChars.toLocaleString()} chars** (**${totalKB} KB** / **${totalMB} MB**)
+- **Total Tracked Source Modules:** **${totalFiles} Files** across **6 Core Subsystems**
+- **Module Density Metrics:** Avg **${avgLinesPerFile.toLocaleString()} lines/module** · Median **${medianLines.toLocaleString()} lines/module**
+- **Largest Primary Engines:** ${top3Modules}
+- **Snapshot Generated:** ${new Date().toISOString()}
+
+---
+
+## II. MULTI-LAYER TECHNOLOGY STACK & RUNTIME MATRIX
+| Architectural Layer | Primary Frameworks & Engines | Core Mathematical / Algorithmic Capabilities |
+| :--- | :--- | :--- |
+| **1. 3D Spacetime & WebGL2 Shaders** | Three.js r187, Custom WebGL2 GLSL, HTML5 Canvas 2D | Boyer-Lindquist geodesic raymarching, Novikov-Thorne relativistic accretion disk, Doppler beaming, Hardware Shader Pre-Warming Cache, RC Thermal Throttling |
+| **2. Mathematical Physics Core** | TypeScript 7 Strict Numerical Solver, Node Test Suite | Exact Kerr metric tensor ($g_{\\mu\\nu}$), Event Horizons ($r_\\pm$), Ergosphere ($r_E$), Prograde/Retrograde ISCO & Photon Sphere, Carter Constant ($Q$), 4th-Order Runge-Kutta (RK4) |
+| **3. Command HUD & Watermark Studio** | React 19, Tailwind CSS v4, Motion 12, html-to-image | Dual-mode desktop/mobile HUD, Side-by-Side Compare Viewport, 60FPS 12-Ray Starburst Watermark Studio (5 Color Themes, 3 Motion Presets, PNG/WebM/SVG Export) |
+| **4. Audio DSP & Canonical Lyrics Finder** | Web Audio API, 3-Band EQ, 16-Band FFT, LRCLIB Proxy | 274-Track Studio Catalog, Multi-Factor Canonical Lyrics Finder (Artist Override Map + Token Jaccard + LRC Density + Dual-Mode Tempo Scaling), Version Retry Engine |
+| **5. Psychometrics & Chess AI Sandbox** | D3.js v7, SVG Matrix Renderer, Minimax Alpha-Beta | Howard Gardner 9 Multiple Intelligences (85-Question Bank + 24 Raven's 3×3 Matrices), D3.js Longitudinal Growth Curves, Lichess-Referenced Chess Engine (10 Bots) |
+| **6. Full-Stack Streaming & Telemetry** | Express 4, Node.js FS/Streams, Vite 8 Middleware | Verified 320kbps/FLAC Archive.org & SoundCloud HLS stream assembler, HTTP 206 Byte-Range streaming, Apple Music/iTunes duration verification, Live Codebase API |
+
+---
+
+## III. SUBSYSTEM QUANTITATIVE DISTRIBUTION (6 CORE ARCHITECTURES)
+| Subsystem Architecture | Modules | Total Lines | Footprint | Share & Distribution Bar | Lead Module |
+| :--- | :---: | :---: | :---: | :--- | :--- |
+${subsystemTableRows}
+| **TOTAL CODEBASE** | **${totalFiles}** | **${totalLines.toLocaleString()}** | **${totalKB} KB** | **100.0%** \`████████████████████\` | **All 6 Subsystems** |
+
+---
+
+## IV. FLAGSHIP ALGORITHMIC & ENGINEERING CAPABILITIES
+1. **General Relativistic Kerr Raymarching & Shader Pre-Warming (\`BlackHoleScene.ts\`, \`kerrRaymarch.glsl.ts\`)**
+   - Integrates null photon geodesics in curved Boyer-Lindquist spacetime with frame-dragging ($\\omega = -g_{t\\phi}/g_{\\phi\\phi}$), gravitational redshift, relativistic Doppler beaming, and anamorphic lens flare. Includes an offscreen WebGL Shader Pre-Warming Cache and passive-cooling RC thermal throttling state machine.
+2. **Analytical Kerr Metric Tensor & RK4 Trajectory Solver (\`gravitationalPhysics.ts\`)**
+   - Computes exact horizon radii $r_\\pm = M \\pm \\sqrt{M^2 - a^2}$, static limit ergosphere boundaries, prograde/retrograde ISCO and photon sphere orbits, Kretschmann curvature invariants, and CSV-exportable RK4 geodesic trajectories.
+3. **Multi-Factor Canonical Lyrics Finder & Version Retry Engine (\`songLyrics.ts\`, \`server.ts\`, \`trapQueenPlayer.ts\`)**
+   - Resolves pseudonymous Nightcore/Sped-Up uploaders and viral TikTok subtitles to canonical recording artists across all 274 tracks. Scores LRCLIB transcripts via Title Token Jaccard similarity, Canonical Artist verification, LRC timestamp structural density, and Dual-Mode Tempo-Ratio scaling, paired with one-click Wrong Version Retry (\`next_best\`, \`original_studio\`, \`sped_up\`, \`slowed\`).
+4. **Howard Gardner 9-Intelligence Psychometric Suite & D3.js Growth Analytics (\`IQTestModule.tsx\`, \`GrowthAnalyticsDashboard.tsx\`)**
+   - Features an 85-question stratified master bank across all 9 Multiple Intelligences + 24 procedural 3×3 visual matrices, normal CDF percentile scoring, per-question latency curves, and D3.js longitudinal trajectory charts.
+5. **12-Ray Starburst Watermark Studio (\`WatermarkStudioModal.tsx\`)**
+   - Side-by-side high-resolution still emblem and 60FPS animated singularity canvas with 5 color palettes, 3 motion dynamics presets, live speed/glow/scale sliders, and 2400×900 PNG, 60FPS WebM video, and scalable SVG exports.
+
+---
+
+## V. RECENT ENGINEERING CHANGELOG & LIVE BUILD SYNC
+${recentChangelogRows}
+
+---
+
+## VI. COMPLETE RANKED MODULE INVENTORY (${totalFiles} TRACKED FILES)
+| Rank | File Path | Subsystem | Lines | Size | Share | Architectural Role | Primary Tech Tags |
+| :---: | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
+${rankedInventoryRows}
+
+---
+
+## VII. PER-SUBSYSTEM DETAILED MODULE MANIFEST & IMPLEMENTATION NOTES
+${subsystemDetailedManifest}
 `;
+  }, [liveFiles, subsystemLineTotals, totalChars, totalFiles, totalLines]);
 
+  const handleCopySummary = () => {
+    onHapticSuccess?.();
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(summary);
+      navigator.clipboard.writeText(comprehensiveSummaryMarkdown);
       setHasCopied(true);
-      setTimeout(() => setHasCopied(false), 2400);
+      setTimeout(() => setHasCopied(false), 2600);
     }
+  };
+
+  const handleDownloadSummaryMarkdown = () => {
+    onHapticSuccess?.();
+    const blob = new Blob([comprehensiveSummaryMarkdown], {
+      type: 'text/markdown;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = `kerr-engine-v1.4-executive-codebase-summary-${Date.now()}.md`;
+    link.href = url;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 6000);
   };
 
   const handleExportJson = () => {
@@ -986,6 +1115,7 @@ ${rows}
       generatedAt: new Date().toISOString(),
       recentUpdates: RECENT_CODEBASE_UPDATES,
       subsystemBreakdown: subsystemLineTotals,
+      executiveSummaryMarkdown: comprehensiveSummaryMarkdown,
       files: liveFiles,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -1020,24 +1150,47 @@ ${rows}
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           <button
             type="button"
+            data-testid="copy-codebase-summary-btn"
             onClick={handleCopySummary}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-750 text-zinc-200 hover:text-white transition-colors text-xs font-medium cursor-pointer"
-            title="Copy formatted markdown report of all code counts and architecture details"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
+              hasCopied
+                ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200 font-semibold shadow-[0_0_16px_rgba(16,185,129,0.25)]'
+                : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/45 text-amber-200 font-semibold'
+            }`}
+            title="Copy comprehensive 7-section Executive Architectural & Telemetry Dossier to clipboard"
           >
             {hasCopied ? (
               <>
                 <Check className="w-4 h-4 text-emerald-400" />
-                <span className="text-emerald-300 font-semibold">Copied!</span>
+                <span className="text-emerald-200 font-semibold">Copied Executive Dossier!</span>
               </>
             ) : (
               <>
-                <Copy className="w-4 h-4 text-amber-400" />
+                <Copy className="w-4 h-4 text-amber-300" />
                 <span>Copy Summary</span>
               </>
             )}
+          </button>
+
+          <button
+            type="button"
+            data-testid="toggle-summary-dossier-preview-btn"
+            onClick={() => {
+              onHapticLight?.();
+              setShowSummaryPreview((prev) => !prev);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
+              showSummaryPreview
+                ? 'bg-zinc-200 text-black border-white font-semibold'
+                : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-750 text-zinc-200 hover:text-white'
+            }`}
+            title="Preview the full formatted 7-section Executive Summary Dossier inline"
+          >
+            <FileCode className="w-4 h-4 text-amber-300" />
+            <span>{showSummaryPreview ? 'Hide Dossier' : 'Preview Dossier'}</span>
           </button>
 
           <button
@@ -1051,6 +1204,50 @@ ${rows}
           </button>
         </div>
       </div>
+
+      {/* Interactive Executive Summary Dossier Preview Drawer */}
+      {showSummaryPreview && (
+        <div
+          data-testid="executive-summary-dossier-preview"
+          className="p-4 rounded-2xl bg-zinc-950/95 border border-amber-500/45 shadow-xl space-y-3"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span className="font-mono text-xs font-bold uppercase tracking-wider text-amber-300">
+                  Executive Codebase &amp; Architectural Telemetry Dossier (7 Sections)
+                </span>
+              </div>
+              <p className="text-[11px] text-zinc-400">
+                Includes System Telemetry Snapshot, 6-Layer Tech Matrix, ASCII Distribution Bars, Flagship Algorithms, Changelog, Ranked Inventory of all {totalFiles} files, and Per-Subsystem Module Manifest.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleCopySummary}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 font-mono text-[11px] font-semibold cursor-pointer"
+              >
+                {hasCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                <span>{hasCopied ? 'Copied!' : 'Copy Full Markdown'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadSummaryMarkdown}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 font-mono text-[11px] font-semibold cursor-pointer"
+              >
+                <Download className="w-3 h-3 text-emerald-400" />
+                <span>Download .MD</span>
+              </button>
+            </div>
+          </div>
+
+          <pre className="p-3.5 rounded-xl bg-black/80 border border-zinc-800/90 text-[11px] font-mono text-zinc-200 overflow-x-auto max-h-80 leading-relaxed whitespace-pre">
+            <code>{comprehensiveSummaryMarkdown}</code>
+          </pre>
+        </div>
+      )}
 
       {/* 4 Clean Big Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

@@ -55,6 +55,7 @@ import { computeLiveCodebaseTelemetry } from './components/CodebaseDetailsView';
 import { CompareModeOverlay } from './components/CompareModeOverlay';
 import { PerformanceMonitorOverlay } from './components/PerformanceMonitorOverlay';
 import { ChangelogModal } from './components/ChangelogModal';
+import { WatermarkStudioModal } from './components/WatermarkStudioModal';
 import { useHaptics, setGlobalHapticIntensity } from './hooks/useHaptics';
 import { TRANSLATIONS } from './i18n/translations';
 import { toPng, toCanvas } from 'html-to-image';
@@ -138,6 +139,7 @@ export default function App() {
   const [hasOpenedSettingsModal, setHasOpenedSettingsModal] = useState<boolean>(false);
   const [isKerrLogModalOpen, setIsKerrLogModalOpen] = useState<boolean>(false);
   const [isChangelogModalOpen, setIsChangelogModalOpen] = useState<boolean>(false);
+  const [isWatermarkStudioModalOpen, setIsWatermarkStudioModalOpen] = useState<boolean>(false);
   const [activeKerrTerminalRun, setActiveKerrTerminalRun] = useState<KerrEngineRunLog | null>(null);
   const [kerrEngineLogs, setKerrEngineLogs] = useState<KerrEngineRunLog[]>(() => [
     generateKerrEngineCalculationRun(
@@ -1848,6 +1850,7 @@ export default function App() {
   }, []);
   const handleCloseSettingsModal = useCallback(() => setIsSettingsModalOpen(false), []);
   const handleOpenChangelogModal = useCallback(() => setIsChangelogModalOpen(true), []);
+  const handleOpenWatermarkStudioModal = useCallback(() => setIsWatermarkStudioModalOpen(true), []);
   const handleOpenKerrLogModal = useCallback(() => setIsKerrLogModalOpen(true), []);
 
   const handleTogglePerfMonitor = useCallback(() => {
@@ -2022,6 +2025,7 @@ export default function App() {
             language={settings.language || 'en'}
             uiTheme={settings.uiTheme || 'observatory_gold'}
             onOpenChangelogModal={handleOpenChangelogModal}
+            onOpenWatermarkStudioModal={handleOpenWatermarkStudioModal}
             isDevMode={isDevMode}
             onUnlockDevMode={handleUnlockDevMode}
           />
@@ -2733,38 +2737,49 @@ export default function App() {
             data-testid="focus-mode-status-line"
             className="hud-panel absolute bottom-3.5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 rounded-full bg-[#080605]/88 backdrop-blur-md border border-[#D97757]/35 text-zinc-300 font-mono text-[10px] sm:text-[11px] shadow-[0_8px_30px_rgba(0,0,0,0.85)] whitespace-nowrap max-w-[95vw]"
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="-24 -24 48 48"
-              className="shrink-0 overflow-visible"
-              aria-hidden="true"
+            <button
+              type="button"
+              data-testid="focus-mode-watermark-studio-btn"
+              onClick={() => {
+                haptics.light();
+                setIsWatermarkStudioModalOpen(true);
+              }}
+              title="Open Watermark Logo Studio (Still & Moving)"
+              className="flex items-center justify-center p-0.5 rounded hover:bg-zinc-800/80 transition-transform hover:scale-110 cursor-pointer shrink-0"
             >
-              {[0, 1, 2, 3, 4, 5].map((i) => {
-                const angle = (i * Math.PI) / 6;
-                const rRay = i % 2 === 0 ? 18 : 14.5;
-                return (
-                  <line
-                    key={i}
-                    x1={Math.cos(angle) * -rRay}
-                    y1={Math.sin(angle) * -rRay}
-                    x2={Math.cos(angle) * rRay}
-                    y2={Math.sin(angle) * rRay}
-                    stroke="rgba(232, 139, 107, 0.94)"
-                    strokeWidth={i % 3 === 0 ? '2.4' : '1.6'}
-                    strokeLinecap="round"
-                  />
-                );
-              })}
-              <circle
-                cx="0"
-                cy="0"
-                r="4.6"
-                fill="#090A0F"
-                stroke="rgba(246, 184, 158, 0.96)"
-                strokeWidth="2.1"
-              />
-            </svg>
+              <svg
+                width="14"
+                height="14"
+                viewBox="-24 -24 48 48"
+                className="shrink-0 overflow-visible"
+                aria-hidden="true"
+              >
+                {[0, 1, 2, 3, 4, 5].map((i) => {
+                  const angle = (i * Math.PI) / 6;
+                  const rRay = i % 2 === 0 ? 18 : 14.5;
+                  return (
+                    <line
+                      key={i}
+                      x1={Math.cos(angle) * -rRay}
+                      y1={Math.sin(angle) * -rRay}
+                      x2={Math.cos(angle) * rRay}
+                      y2={Math.sin(angle) * rRay}
+                      stroke="rgba(232, 139, 107, 0.94)"
+                      strokeWidth={i % 3 === 0 ? '2.4' : '1.6'}
+                      strokeLinecap="round"
+                    />
+                  );
+                })}
+                <circle
+                  cx="0"
+                  cy="0"
+                  r="4.6"
+                  fill="#090A0F"
+                  stroke="rgba(246, 184, 158, 0.96)"
+                  strokeWidth="2.1"
+                />
+              </svg>
+            </button>
             <span className="font-semibold text-[#F7F4EE] truncate">
               {activePreset.name}
             </span>
@@ -2886,6 +2901,10 @@ export default function App() {
         onTriggerKerrCalculation={handleTriggerManualKerrSolve}
         onExportGeodesicCsv={handleExportGeodesicCsvClick}
         onExportEventLogJson={handleExportEventLogJson}
+        onOpenWatermarkStudioModal={() => {
+          setIsSettingsModalOpen(false);
+          setIsWatermarkStudioModalOpen(true);
+        }}
         eventLogCount={eventLogs.length}
         activeParams={params}
         onRecordDiagnosticStressTest={handleRecordDiagnosticStressTest}
@@ -2935,6 +2954,14 @@ export default function App() {
         isOpen={isChangelogModalOpen}
         onClose={() => setIsChangelogModalOpen(false)}
         uiTheme={settings.uiTheme || 'observatory_gold'}
+      />
+
+      {/* High-Resolution Still & 60FPS Moving Watermark Logo Studio Modal */}
+      <WatermarkStudioModal
+        isOpen={isWatermarkStudioModalOpen}
+        onClose={() => setIsWatermarkStudioModalOpen(false)}
+        uiTheme={settings.uiTheme || 'observatory_gold'}
+        hapticsEnabled={settings.hapticsEnabled !== false}
       />
     </div>
   );

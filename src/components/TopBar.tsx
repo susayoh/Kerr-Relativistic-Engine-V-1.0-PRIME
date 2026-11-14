@@ -59,6 +59,7 @@ interface TopBarProps {
   language?: AppLanguage;
   uiTheme?: UiThemeId;
   onOpenChangelogModal?: () => void;
+  onOpenWatermarkStudioModal?: () => void;
   isDevMode?: boolean;
   onUnlockDevMode?: () => void;
 }
@@ -91,6 +92,7 @@ export const TopBar: React.FC<TopBarProps> = React.memo(({
   language = 'en',
   uiTheme = 'observatory_gold',
   onOpenChangelogModal,
+  onOpenWatermarkStudioModal,
   onToggleCleanMode,
   isDevMode = false,
   onUnlockDevMode,
@@ -284,16 +286,22 @@ export const TopBar: React.FC<TopBarProps> = React.memo(({
             onContextMenu={(e) => e.preventDefault()}
             className="group relative overflow-hidden flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-1 rounded-md border bg-[#120e0c] hover:bg-[#1a1412] border-[#D97757]/35 hover:border-[#D97757]/65 whitespace-nowrap transition-all select-none touch-none"
           >
-            {/* Signature 12-Ray Starburst Singularity Emblem (Consistent across all UI themes) */}
+            {/* Signature 12-Ray Starburst Singularity Emblem (Click to open Watermark Logo Studio) */}
             <button
               type="button"
-              onClick={() => {
+              data-testid="topbar-watermark-studio-btn"
+              onClick={(e) => {
+                e.stopPropagation();
                 if (didTriggerHoldRef.current) return;
                 haptics.light();
-                onSelectPreset('ton618');
+                if (onOpenWatermarkStudioModal) {
+                  onOpenWatermarkStudioModal();
+                } else {
+                  onSelectPreset('ton618');
+                }
               }}
-              title="Kerr Engine — Reset to TON 618"
-              className="relative flex items-center justify-center w-4.5 h-4.5 sm:w-5 sm:h-5 rounded border bg-[#1a1412] border-[#D97757]/55 group-hover:border-[#E89578] transition-all shrink-0 cursor-pointer"
+              title="Open Kerr Engine Watermark Logo Studio (Still & Moving)"
+              className="relative flex items-center justify-center w-4.5 h-4.5 sm:w-5 sm:h-5 rounded border bg-[#1a1412] border-[#D97757]/55 hover:border-[#F6B89E] group-hover:border-[#E89578] transition-all shrink-0 cursor-pointer"
             >
               <svg
                 width="14"

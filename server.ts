@@ -15,12 +15,20 @@ interface CachedAudioEntry {
   mimeType: string;
   byteLength: number;
   durationSec: number;
+  sourceCandidateId?: string;
+  matchedTitle?: string;
+  matchedArtist?: string;
+  versionAttempt?: number;
 }
+
+export type VersionRetryMode = 'next_best' | 'original_studio' | 'sped_up' | 'slowed';
 
 const memoryMetaCache = new Map<string, CachedAudioEntry>();
 const inFlightResolutions = new Map<string, Promise<CachedAudioEntry | null>>();
 const lyricsCache = new Map<string, Array<{ timeSec: number; text: string }>>();
 const officialDurationCache = new Map<string, number>();
+const rejectedCandidatesByTrack = new Map<string, Set<string>>();
+const trackVersionAttempt = new Map<string, number>();
 
 // Direct verified 320kbps / FLAC-derived studio masters for tracks whose official SoundCloud uploads are SNIP-restricted
 const VERIFIED_STUDIO_MASTER_URLS: Record<
@@ -152,10 +160,149 @@ const NON_ORIGINAL_UPLOADER_NAMES = new Set([
   'speed up songs',
   'nightcore reality',
   'syrex',
+  'ren',
+  'hiko',
+  'sinnon nightcore',
+  'rshcxn',
+  'scuitsgt',
+  'sanny',
+  'sphere',
+  'elliot sutton',
+  'nenadid',
+  'drill gates',
+  'dj michael double',
+  'tommymuzzic',
+  'zeddmusique',
+  'dj kridung',
+  'editkings',
+  'verdun remix',
+  'exe rohit',
+  'lewis hanton',
+  'roeinon',
+  'bvng',
+  'six dior',
+  'nightcore fr',
+  'cheeky',
+  'neko',
+  'shiko nightcore',
+  'tazzy',
+  'pearl',
+  'fast forward',
+  'the nostal days',
+  'nightcore cene',
+  'nightcore by halocene',
+  'nightcore collectives',
+  'kenke',
+  'fly by nightcore',
+  'mae bloom',
+  'seraphina rossi',
+  'cherry 葵 nightcore',
+  'kawaii nightcore',
+  'angelwing',
 ]);
 
-export function extractMeaningfulArtists(targetTitle: string, targetArtist: string): string[] {
+const CANONICAL_SERVER_TRACK_OVERRIDES: Record<
+  string,
+  { canonicalTitle: string; canonicalArtist: string; altTitles?: string[]; studioDurationSec?: number }
+> = {
+  starboy_sped_up_6: { canonicalTitle: 'Starboy', canonicalArtist: 'The Weeknd, Daft Punk', studioDurationSec: 230 },
+  wasted_nightcore_bass_booste_13: { canonicalTitle: 'Wasted', canonicalArtist: 'Juice WRLD, Lil Uzi Vert', studioDurationSec: 258 },
+  little_do_you_know_sped_up_r_15: { canonicalTitle: 'Little Do You Know', canonicalArtist: 'Alex & Sierra', studioDurationSec: 185 },
+  after_hours_best_part_tiktok_31: { canonicalTitle: 'After Hours', canonicalArtist: 'The Weeknd', studioDurationSec: 361 },
+  instrumental_71: { canonicalTitle: 'Камин', canonicalArtist: 'EMIN, JONY', altTitles: ['Kamin'], studioDurationSec: 186 },
+  kamin_speed_up_72: { canonicalTitle: 'Камин', canonicalArtist: 'EMIN, JONY', altTitles: ['Kamin'], studioDurationSec: 186 },
+  feat_jony_73: { canonicalTitle: 'Камин', canonicalArtist: 'EMIN, JONY', altTitles: ['Kamin'], studioDurationSec: 186 },
+  d_anum_79: { canonicalTitle: 'Džanum', canonicalArtist: 'Teya Dora', altTitles: ['Dzanum'], studioDurationSec: 174 },
+  tattoo_tiktok_remix_104: { canonicalTitle: 'Tattoo', canonicalArtist: 'Loreen', studioDurationSec: 183 },
+  see_you_again_sped_up_reverb_110: { canonicalTitle: 'See You Again', canonicalArtist: 'Tyler, The Creator, Kali Uchis', studioDurationSec: 180 },
+  babydoll_x_the_perfect_girl_111: { canonicalTitle: 'Babydoll', canonicalArtist: 'Ari Abdul', altTitles: ['The Perfect Girl'], studioDurationSec: 162 },
+  collide_speed_113: { canonicalTitle: 'Collide', canonicalArtist: 'Justine Skye', studioDurationSec: 260 },
+  yes_to_heaven_speed_121: { canonicalTitle: 'Say Yes To Heaven', canonicalArtist: 'Lana Del Rey', altTitles: ['Yes To Heaven'], studioDurationSec: 209 },
+  headlock_slowed_127: { canonicalTitle: 'Headlock', canonicalArtist: 'Imogen Heap', studioDurationSec: 214 },
+  orchestrat_142: { canonicalTitle: 'ORCHESTRATË', canonicalArtist: 'Yeat', altTitles: ['ORCHESTRATE'], studioDurationSec: 175 },
+  on_the_floor_drill_slowed_re_147: { canonicalTitle: 'On The Floor', canonicalArtist: 'Jennifer Lopez, Pitbull', studioDurationSec: 284 },
+  if_we_being_r_al_151: { canonicalTitle: 'If We Being Rëal', canonicalArtist: 'Yeat', altTitles: ['If We Being Real'], studioDurationSec: 172 },
+  flawl_ss_feat_lil_uzi_vert_152: { canonicalTitle: 'Flawlëss', canonicalArtist: 'Yeat, Lil Uzi Vert', altTitles: ['Flawless'], studioDurationSec: 176 },
+  no_mor_talk_157: { canonicalTitle: 'No morë talk', canonicalArtist: 'Yeat', altTitles: ['No more talk'], studioDurationSec: 182 },
+  s_per_g33ked_159: { canonicalTitle: 'SÜPER G33KED', canonicalArtist: '6arelyhuman', altTitles: ['SUPER GEEKED'] },
+  heartless_x_heartless_165: { canonicalTitle: 'Heartless', canonicalArtist: 'The Weeknd', studioDurationSec: 198 },
+  the_hills_x_creepin_x_the_co_166: { canonicalTitle: 'The Hills', canonicalArtist: 'The Weeknd', altTitles: ['Creepin', 'The Color Violet'], studioDurationSec: 242 },
+  oui_sped_up_hey_there_s_no_w_171: { canonicalTitle: 'oui', canonicalArtist: 'Jeremih', studioDurationSec: 238 },
+  animals_x_starboy_sped_up_to_172: { canonicalTitle: 'Animals', canonicalArtist: 'Maroon 5', altTitles: ['Starboy'], studioDurationSec: 231 },
+  living_life_in_the_night_tik_173: { canonicalTitle: 'Living Life, In The Night', canonicalArtist: 'Cheriimoya, Sierra Kidd', studioDurationSec: 155 },
+  babydoll_x_the_perfect_girl__174: { canonicalTitle: 'Babydoll', canonicalArtist: 'Ari Abdul', altTitles: ['The Perfect Girl'], studioDurationSec: 162 },
+  in_the_name_of_love_nightcor_175: { canonicalTitle: 'In the Name of Love', canonicalArtist: 'Martin Garrix, Bebe Rexha', studioDurationSec: 195 },
+  animals_speed_177: { canonicalTitle: 'Animals', canonicalArtist: 'Maroon 5', studioDurationSec: 231 },
+  after_dark_x_sweater_weather_178: { canonicalTitle: 'After Dark', canonicalArtist: 'Mr.Kitty', altTitles: ['Sweater Weather'], studioDurationSec: 259 },
+  genius_sped_up_179: { canonicalTitle: 'Genius', canonicalArtist: 'LSD, Sia, Diplo, Labrinth', studioDurationSec: 213 },
+  unforgettable_tik_tok_edit_r_180: { canonicalTitle: 'Unforgettable', canonicalArtist: 'French Montana, Swae Lee', studioDurationSec: 233 },
+  dark_horse_sped_up_181: { canonicalTitle: 'Dark Horse', canonicalArtist: 'Katy Perry, Juicy J', studioDurationSec: 215 },
+  you_right_x_luxurious_tiktok_183: { canonicalTitle: 'You Right', canonicalArtist: 'Doja Cat, The Weeknd', altTitles: ['Luxurious'], studioDurationSec: 186 },
+  the_hills_x_where_have_you_b_184: { canonicalTitle: 'The Hills', canonicalArtist: 'The Weeknd', altTitles: ['Where Have You Been'], studioDurationSec: 242 },
+  obsessed_sped_up_185: { canonicalTitle: 'Obsessed', canonicalArtist: 'Mariah Carey', studioDurationSec: 242 },
+  so_obesessed_with_me_speed_r_186: { canonicalTitle: 'Obsessed', canonicalArtist: 'Mariah Carey', studioDurationSec: 242 },
+  shameless_sped_up_187: { canonicalTitle: 'Shameless', canonicalArtist: 'Camila Cabello', studioDurationSec: 219 },
+  wannabe_sped_up_version_188: { canonicalTitle: 'Wannabe', canonicalArtist: 'why mona', altTitles: ['Wannabe Spice Girls'], studioDurationSec: 162 },
+  strangers_sped_up_190: { canonicalTitle: 'Strangers', canonicalArtist: 'Kenya Grace', studioDurationSec: 172 },
+  too_many_nights_sped_up_192: { canonicalTitle: 'Too Many Nights', canonicalArtist: 'Metro Boomin, Future, Don Toliver', studioDurationSec: 199 },
+  sped_up_195: { canonicalTitle: 'Яд', canonicalArtist: 'Erika Lundmoen', altTitles: ['Yad'], studioDurationSec: 191 },
+  umbrella_speed_up_196: { canonicalTitle: 'Umbrella', canonicalArtist: 'Rihanna, JAY-Z', studioDurationSec: 275 },
+  love_story_nightcore_fran_ai_198: { canonicalTitle: 'Love Story', canonicalArtist: 'Indila', studioDurationSec: 316 },
+  superficial_love_sped_up_199: { canonicalTitle: 'Superficial Love', canonicalArtist: 'Ruth B.', studioDurationSec: 208 },
+  reminder_sped_up_204: { canonicalTitle: 'Reminder', canonicalArtist: 'The Weeknd', studioDurationSec: 218 },
+  harleys_in_hawaii_nightcore_205: { canonicalTitle: 'Harleys In Hawaii', canonicalArtist: 'Katy Perry', studioDurationSec: 185 },
+  diamonds_sped_up_reverb_206: { canonicalTitle: 'Diamonds', canonicalArtist: 'Rihanna', studioDurationSec: 225 },
+  in_the_middle_of_the_night_s_207: { canonicalTitle: 'Middle of the Night', canonicalArtist: 'Elley Duhé', altTitles: ['Middle of the Night Elley Duhe'], studioDurationSec: 184 },
+  mind_games_sped_up_208: { canonicalTitle: 'Mind Games', canonicalArtist: 'Sickick', studioDurationSec: 229 },
+  often_speed_209: { canonicalTitle: 'Often', canonicalArtist: 'The Weeknd', studioDurationSec: 249 },
+  greedy_sped_up_it_s_obvious__210: { canonicalTitle: 'greedy', canonicalArtist: 'Tate McRae', studioDurationSec: 131 },
+  house_of_memories_but_it_hit_248: { canonicalTitle: 'House of Memories', canonicalArtist: 'Panic! At The Disco', studioDurationSec: 208 },
+  legends_never_die_249: { canonicalTitle: 'Legends Never Die', canonicalArtist: 'League of Legends, Against The Current', studioDurationSec: 235 },
+  angel_with_a_shotgun_250: { canonicalTitle: 'Angel With a Shotgun', canonicalArtist: 'The Cab', studioDurationSec: 223 },
+  centuries_female_version_253: { canonicalTitle: 'Centuries', canonicalArtist: 'Fall Out Boy', studioDurationSec: 228 },
+  all_the_things_she_said_but__258: { canonicalTitle: 'All The Things She Said', canonicalArtist: 't.A.T.u.', studioDurationSec: 214 },
+  attention_switching_vocals_268: { canonicalTitle: 'Attention', canonicalArtist: 'Charlie Puth', studioDurationSec: 208 },
+  faded_sped_up_version_269: { canonicalTitle: 'Faded', canonicalArtist: 'Alan Walker', studioDurationSec: 212 },
+  disturbia_nightcore_270: { canonicalTitle: 'Disturbia', canonicalArtist: 'Rihanna', studioDurationSec: 238 },
+  come_back_to_me_nightcore_271: { canonicalTitle: 'Come Back To Me', canonicalArtist: 'Utada Hikaru', studioDurationSec: 238 },
+  in_the_end_female_version_272: { canonicalTitle: 'In the End', canonicalArtist: 'Linkin Park', studioDurationSec: 216 },
+};
+
+function stripServerDiacritics(str: string): string {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/gi, 'd');
+}
+
+function cleanServerSongTitle(rawTitle: string): string {
+  return rawTitle
+    .replace(/\s*\((?:with|feat\.?|ft\.?)[^)]+\)/gi, '')
+    .replace(/\s*\[(?:with|feat\.?|ft\.?)[^\]]+\]/gi, '')
+    .replace(
+      /\s*[-–]\s*(?:sped\s*up|speed\s*up|speed|slowed|nightcore|remix|tiktok.*|female\s*version|frisk\s*version|from\s+.*|but\s+it\s+hits\s+different|hey\s+there.*|just\s+call\s+my\s+name.*|it's\s+obvious.*|drill\s+slowed.*).*$/i,
+      ''
+    )
+    .replace(
+      /\s*\((?:sped\s*up|speed\s*up|speed|slowed|nightcore|remix|tik\s*tok.*|female\s*version|frisk\s*version|switching\s*vocals|best\s*part|bass\s*boosted)[^)]*\)/gi,
+      ''
+    )
+    .replace(/\s*\[(?:bass\s*boosted|sped\s*up|nightcore|slowed)[^\]]*\]/gi, '')
+    .replace(/\s+drill\s+slowed\s*\+?\s*reverb.*$/i, '')
+    .trim();
+}
+
+export function extractMeaningfulArtists(
+  targetTitle: string,
+  targetArtist: string,
+  trackId?: string
+): string[] {
+  const override = trackId ? CANONICAL_SERVER_TRACK_OVERRIDES[trackId] : undefined;
   const rawList: string[] = [];
+
+  if (override?.canonicalArtist) {
+    rawList.push(...override.canonicalArtist.split(/[,&/•×]/));
+  }
 
   const featMatches = [
     ...targetTitle.matchAll(/\((?:with|feat\.?|ft\.?)\s+([^)]+)\)/gi),
@@ -172,7 +319,7 @@ export function extractMeaningfulArtists(targetTitle: string, targetArtist: stri
   for (const item of rawList) {
     const norm = item
       .replace(/\$/g, 's')
-      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/[^\p{L}\p{N}\s.!-]/gu, ' ')
       .replace(/\s+/g, ' ')
       .trim();
     if (norm.length >= 2 && !cleaned.some((x) => x.toLowerCase() === norm.toLowerCase())) {
@@ -251,7 +398,8 @@ export function scoreTrackCandidate(
   cand: SoundCloudTrackCandidate,
   targetTitle: string,
   targetArtist: string,
-  officialDurationSec?: number
+  officialDurationSec?: number,
+  versionMode?: VersionRetryMode
 ): number {
   const cTitle = (cand.title || '').toLowerCase();
   const cUser = (cand.user?.username || '').toLowerCase();
@@ -329,9 +477,14 @@ export function scoreTrackCandidate(
   }
 
   // 3. Strict Version & Modifier Enforcement (Sped Up / Nightcore / Slowed / Unsolicited Remixes & Freestyles)
-  const wantsSlowed = /slowed/i.test(tTitle);
+  const wantsSlowed =
+    versionMode === 'slowed' ||
+    (versionMode !== 'original_studio' && versionMode !== 'sped_up' && /slowed/i.test(tTitle));
   const wantsSpedUp =
-    /sped\s*up|speed\s*up|nightcore/i.test(tTitle) || /nightcore/i.test(targetArtist);
+    versionMode === 'sped_up' ||
+    (versionMode !== 'original_studio' &&
+      versionMode !== 'slowed' &&
+      (/sped\s*up|speed\s*up|nightcore/i.test(tTitle) || /nightcore/i.test(targetArtist)));
   const wantsRemix = /\b(remix|flip|bootleg|mashup|edit|vip)\b/i.test(tTitle);
   const wantsCoverOrInst = /\b(cover|instrumental|karaoke|8d|live|acoustic)\b/i.test(tTitle);
 
@@ -347,15 +500,15 @@ export function scoreTrackCandidate(
     );
 
   if (wantsSlowed) {
-    score += isCandSlowed ? 60 : -60;
+    score += isCandSlowed ? 75 : -55;
   } else if (isCandSlowed) {
-    score -= 110;
+    score -= 115;
   }
 
   if (wantsSpedUp) {
-    score += isCandSpedUp ? 65 : -50;
+    score += isCandSpedUp ? 75 : -45;
   } else if (isCandSpedUp) {
-    score -= 110;
+    score -= 115;
   }
 
   if (!wantsRemix && isCandRemix) {
@@ -379,15 +532,27 @@ export function scoreTrackCandidate(
   ) {
     const diff = Math.abs(candDurSec - officialDurationSec);
     if (diff <= 4) {
-      score += 80;
+      score += versionMode === 'original_studio' ? 105 : 80;
     } else if (diff <= 10) {
-      score += 50;
+      score += versionMode === 'original_studio' ? 65 : 50;
     } else if (diff <= 18) {
       score += 15;
     } else if (diff > 30) {
       score -= 95;
     } else {
       score -= 40;
+    }
+  } else if (wantsSpedUp && officialDurationSec && officialDurationSec >= 90 && candDurSec >= 65) {
+    // Sped up versions are typically ~72%-88% of original studio duration
+    const ratio = candDurSec / officialDurationSec;
+    if (ratio >= 0.68 && ratio <= 0.91) {
+      score += 55;
+    }
+  } else if (wantsSlowed && officialDurationSec && officialDurationSec >= 90 && candDurSec >= 80) {
+    // Slowed versions are typically ~110%-138% of original studio duration
+    const ratio = candDurSec / officialDurationSec;
+    if (ratio >= 1.08 && ratio <= 1.42) {
+      score += 55;
     }
   }
 
@@ -487,6 +652,10 @@ async function downloadAndCacheSoundCloudTrack(
     mimeType,
     byteLength: fullBuffer.length,
     durationSec: Math.round((cand.duration || 180_000) / 1000),
+    sourceCandidateId: cand.id ? `sc:${cand.id}` : `sc:${cand.title || safeId}`,
+    matchedTitle: cand.title || undefined,
+    matchedArtist: cand.user?.username || undefined,
+    versionAttempt: trackVersionAttempt.get(safeId) || 1,
   };
   memoryMetaCache.set(safeId, entry);
   return entry;
@@ -495,7 +664,8 @@ async function downloadAndCacheSoundCloudTrack(
 async function downloadAndCacheDirectUrl(
   url: string,
   durationSec: number,
-  safeId: string
+  safeId: string,
+  meta?: { matchedTitle?: string; matchedArtist?: string }
 ): Promise<CachedAudioEntry | null> {
   const res = await fetch(url, { signal: AbortSignal.timeout(18000) });
   if (!res.ok) return null;
@@ -510,6 +680,10 @@ async function downloadAndCacheDirectUrl(
     mimeType: 'audio/mpeg',
     byteLength: fullBuffer.length,
     durationSec,
+    sourceCandidateId: `url:${url}`,
+    matchedTitle: meta?.matchedTitle,
+    matchedArtist: meta?.matchedArtist,
+    versionAttempt: trackVersionAttempt.get(safeId) || 1,
   };
   memoryMetaCache.set(safeId, entry);
   return entry;
@@ -518,7 +692,7 @@ async function downloadAndCacheDirectUrl(
 function parseLengthSec(lenStr?: string): number | null {
   if (!lenStr) return null;
   if (/^\d+(\.\d+)?$/.test(lenStr)) {
-    return Math.round( parseFloat(lenStr) );
+    return Math.round(parseFloat(lenStr));
   }
   const parts = lenStr.split(':').map(Number);
   if (parts.length === 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
@@ -535,7 +709,8 @@ async function resolveFromArchiveOrgStudioMaster(
   baseTitle: string,
   primaryArtist: string,
   officialDurationSec: number | undefined,
-  safeId: string
+  safeId: string,
+  rejectedSet?: Set<string>
 ): Promise<CachedAudioEntry | null> {
   try {
     const q = `(${baseTitle}) AND (${primaryArtist}) AND mediatype:(audio)`;
@@ -556,7 +731,7 @@ async function resolveFromArchiveOrgStudioMaster(
 
     const normTitle = baseTitle.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 
-    for (const doc of docs.slice(0, 5)) {
+    for (const doc of docs.slice(0, 6)) {
       if (!doc.identifier) continue;
       const metaRes = await fetch(`https://archive.org/metadata/${doc.identifier}`, {
         signal: AbortSignal.timeout(4500),
@@ -590,10 +765,17 @@ async function resolveFromArchiveOrgStudioMaster(
         const directUrl = `https://archive.org/download/${
           doc.identifier
         }/${encodeURIComponent(f.name).replace(/%2F/g, '/')}`;
+        if (rejectedSet && rejectedSet.has(`url:${directUrl}`)) {
+          continue;
+        }
         const downloaded = await downloadAndCacheDirectUrl(
           directUrl,
           fileDur || officialDurationSec || 210,
-          safeId
+          safeId,
+          {
+            matchedTitle: f.title || f.name,
+            matchedArtist: primaryArtist,
+          }
         );
         if (downloaded) return downloaded;
       }
@@ -607,33 +789,46 @@ async function resolveFromArchiveOrgStudioMaster(
 async function resolveAndCacheFullTrack(
   trackId: string,
   title: string,
-  artist: string
+  artist: string,
+  options?: { versionMode?: VersionRetryMode; forceFresh?: boolean }
 ): Promise<CachedAudioEntry | null> {
   const safeId = trackId.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const existing = memoryMetaCache.get(safeId);
-  if (existing && fs.existsSync(existing.filePath)) {
-    return existing;
+  if (!options?.forceFresh) {
+    const existing = memoryMetaCache.get(safeId);
+    if (existing && fs.existsSync(existing.filePath)) {
+      return existing;
+    }
+
+    const inflight = inFlightResolutions.get(safeId);
+    if (inflight) {
+      return inflight;
+    }
   }
 
-  const inflight = inFlightResolutions.get(safeId);
-  if (inflight) {
-    return inflight;
-  }
+  const versionMode = options?.versionMode;
+  const rejectedSet = rejectedCandidatesByTrack.get(safeId) || new Set<string>();
+  const attemptNum = trackVersionAttempt.get(safeId) || 1;
 
   const task = (async (): Promise<CachedAudioEntry | null> => {
     try {
-      // 1. Check pre-verified 320kbps / FLAC studio master table first (e.g. Eminem catalog)
+      // 1. Check pre-verified 320kbps / FLAC studio master table first (unless user rejected it or wants sped_up/slowed)
       const verifiedMaster = VERIFIED_STUDIO_MASTER_URLS[trackId];
-      if (verifiedMaster) {
-        if (verifiedMaster.url) {
+      if (
+        verifiedMaster &&
+        attemptNum === 1 &&
+        versionMode !== 'sped_up' &&
+        versionMode !== 'slowed'
+      ) {
+        if (verifiedMaster.url && !rejectedSet.has(`url:${verifiedMaster.url}`)) {
           const directEntry = await downloadAndCacheDirectUrl(
             verifiedMaster.url,
             verifiedMaster.durationSec,
-            safeId
+            safeId,
+            { matchedTitle: `${title} (Studio Master)`, matchedArtist: artist }
           );
           if (directEntry) return directEntry;
         }
-        if (verifiedMaster.soundcloudId) {
+        if (verifiedMaster.soundcloudId && !rejectedSet.has(`sc:${verifiedMaster.soundcloudId}`)) {
           const clientId = await getSoundCloudClientId(false);
           const scRes = await fetch(
             `https://api-v2.soundcloud.com/tracks/${verifiedMaster.soundcloudId}?client_id=${clientId}`,
@@ -647,22 +842,15 @@ async function resolveAndCacheFullTrack(
         }
       }
 
+      const canonicalOverride = CANONICAL_SERVER_TRACK_OVERRIDES[trackId];
       const cleanTitle = title
         .replace(/\s*\((with|feat\.)[^)]+\)/gi, '')
         .replace(/\s*-\s*From.*$/i, '')
         .trim();
-      const baseSongTitle = cleanTitle
-        .replace(
-          /\s*[-–]\s*(sped up|speed up|slowed|nightcore|remix|tiktok.*|female version|frisk version).*$/i,
-          ''
-        )
-        .replace(
-          /\s*\((sped up|speed up|slowed|nightcore|remix|tiktok.*|female version|frisk version)[^)]*\)/gi,
-          ''
-        )
-        .trim();
+      const baseSongTitle =
+        canonicalOverride?.canonicalTitle || cleanServerSongTitle(cleanTitle);
 
-      const meaningfulArtists = extractMeaningfulArtists(title, artist);
+      const meaningfulArtists = extractMeaningfulArtists(title, artist, trackId);
       const realArtists = meaningfulArtists.filter(
         (a) => !NON_ORIGINAL_UPLOADER_NAMES.has(a.toLowerCase())
       );
@@ -670,23 +858,37 @@ async function resolveAndCacheFullTrack(
         .slice(0, 2)
         .join(' ');
       const primaryArtist =
-        realArtists[0] || meaningfulArtists[0] || artist.split(',')[0].trim();
+        canonicalOverride?.canonicalArtist.split(',')[0].trim() ||
+        realArtists[0] ||
+        meaningfulArtists[0] ||
+        artist.split(',')[0].trim();
 
       const wantsSpedUp =
-        /sped\s*up|speed\s*up|nightcore/i.test(title) || /nightcore/i.test(artist);
-      const wantsSlowed = /slowed/i.test(title);
-      const modifierSuffix = wantsSpedUp ? 'sped up' : wantsSlowed ? 'slowed' : '';
+        versionMode === 'sped_up' ||
+        (versionMode !== 'original_studio' &&
+          versionMode !== 'slowed' &&
+          (/sped\s*up|speed\s*up|\bspeed\b|nightcore/i.test(title) || /nightcore/i.test(artist)));
+      const wantsSlowed =
+        versionMode === 'slowed' ||
+        (versionMode !== 'original_studio' && versionMode !== 'sped_up' && /slowed/i.test(title));
+      const modifierSuffix = wantsSpedUp
+        ? 'sped up'
+        : wantsSlowed
+        ? 'slowed'
+        : versionMode === 'original_studio'
+        ? 'official audio'
+        : '';
 
       const queries = Array.from(
         new Set(
           [
-            topTwoArtists ? `${cleanTitle} ${topTwoArtists}`.trim() : '',
-            primaryArtist ? `${cleanTitle} ${primaryArtist}`.trim() : '',
             modifierSuffix && primaryArtist
               ? `${baseSongTitle} ${primaryArtist} ${modifierSuffix}`.trim()
               : '',
-            cleanTitle,
             primaryArtist ? `${baseSongTitle} ${primaryArtist}`.trim() : '',
+            topTwoArtists ? `${cleanTitle} ${topTwoArtists}`.trim() : '',
+            primaryArtist ? `${cleanTitle} ${primaryArtist}`.trim() : '',
+            cleanTitle,
           ].filter(Boolean)
         )
       );
@@ -694,15 +896,19 @@ async function resolveAndCacheFullTrack(
       // Fetch client_id and authoritative Apple Music / iTunes studio duration in parallel
       const [initialClientId, itunesDurationSec] = await Promise.all([
         getSoundCloudClientId(false),
-        !wantsSpedUp && !wantsSlowed
-          ? fetchOfficialStudioDurationSec(baseSongTitle, primaryArtist)
-          : Promise.resolve(undefined),
+        canonicalOverride?.studioDurationSec
+          ? Promise.resolve(canonicalOverride.studioDurationSec)
+          : fetchOfficialStudioDurationSec(baseSongTitle, primaryArtist),
       ]);
       let clientId = initialClientId;
       let officialDurationSec = itunesDurationSec;
 
-      let bestCandidate: SoundCloudTrackCandidate | null = null;
-      let bestScore = -999;
+      const rankedCandidates: Array<{ item: SoundCloudTrackCandidate; score: number }> = [];
+      const seenCandidateIds = new Set<string>();
+
+      const effectiveTargetArtist = canonicalOverride?.canonicalArtist
+        ? `${canonicalOverride.canonicalArtist}, ${artist}`
+        : artist;
 
       for (const q of queries) {
         if (!q) continue;
@@ -737,6 +943,10 @@ async function resolveAndCacheFullTrack(
         }
 
         for (const item of collection) {
+          const candKey = item.id ? `sc:${item.id}` : `sc:${item.title || ''}`;
+          if (rejectedSet.has(candKey) || seenCandidateIds.has(candKey)) {
+            continue;
+          }
           const dur = item.duration || 0;
           const fullDur = item.full_duration || dur;
           if (dur < 65_000 || dur > 540_000) continue;
@@ -750,20 +960,28 @@ async function resolveAndCacheFullTrack(
           );
           if (!hasPlayableStream) continue;
 
-          const sc = scoreTrackCandidate(item, title, artist, officialDurationSec);
-          if (sc > bestScore) {
-            bestScore = sc;
-            bestCandidate = item;
-          }
+          const sc = scoreTrackCandidate(
+            item,
+            canonicalOverride ? `${baseSongTitle} (${title})` : title,
+            effectiveTargetArtist,
+            officialDurationSec,
+            versionMode
+          );
+          seenCandidateIds.add(candKey);
+          rankedCandidates.push({ item, score: sc });
         }
 
-        if (bestScore >= 135 && bestCandidate) break;
+        const topNow = rankedCandidates.reduce((max, r) => (r.score > max ? r.score : max), -999);
+        if (topNow >= 135 && attemptNum === 1 && !versionMode) break;
       }
 
-      // If SoundCloud has a strong studio match, download and cache it
-      if (bestCandidate && bestScore >= 75) {
+      rankedCandidates.sort((a, b) => b.score - a.score);
+
+      // Try top SoundCloud candidates in order
+      for (const candEntry of rankedCandidates.slice(0, 4)) {
+        if (candEntry.score < 55 && rankedCandidates[0].score >= 55) break;
         const scEntry = await downloadAndCacheSoundCloudTrack(
-          bestCandidate,
+          candEntry.item,
           clientId,
           safeId
         );
@@ -776,14 +994,16 @@ async function resolveAndCacheFullTrack(
           baseSongTitle,
           primaryArtist,
           officialDurationSec,
-          safeId
+          safeId,
+          rejectedSet
         );
         if (archiveEntry) return archiveEntry;
       }
 
-      // Final fallback to best available playable SoundCloud candidate
-      if (bestCandidate) {
-        return await downloadAndCacheSoundCloudTrack(bestCandidate, clientId, safeId);
+      // Final fallback to any remaining playable SoundCloud candidate
+      for (const candEntry of rankedCandidates) {
+        const scEntry = await downloadAndCacheSoundCloudTrack(candEntry.item, clientId, safeId);
+        if (scEntry) return scEntry;
       }
 
       return null;
@@ -838,64 +1058,130 @@ interface LrcLibSearchItem {
   plainLyrics?: string;
 }
 
+interface ServerLyricsResolutionResult {
+  lines: Array<{ timeSec: number; text: string }>;
+  matchedTrackName: string;
+  matchedArtistName: string;
+  confidencePct: number;
+  timeScale: number;
+}
+
+const serverLyricsMetaCache = new Map<string, Omit<ServerLyricsResolutionResult, 'lines'>>();
+
+function normalizeServerTokenString(str: string): string {
+  return stripServerDiacritics(str)
+    .toLowerCase()
+    .replace(/\$/g, 's')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function resolveAccurateLyrics(
   trackId: string,
   title: string,
   artist: string,
-  actualAudioDurationSec?: number
-): Promise<Array<{ timeSec: number; text: string }> | null> {
-  const isSpeedModified = /sped\s*up|speed\s*up|nightcore|slowed/i.test(`${title} ${artist}`);
-  const cacheKey = isSpeedModified
-    ? `${trackId}:${Math.round(actualAudioDurationSec || 0)}`
-    : `${trackId}:studio`;
-  const cached = lyricsCache.get(cacheKey);
-  if (cached && cached.length > 0) {
-    return cached;
+  actualAudioDurationSec?: number,
+  variantIndex = 0
+): Promise<ServerLyricsResolutionResult | null> {
+  const safeId = trackId.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const cachedAudio = memoryMetaCache.get(safeId);
+  const effectiveAudioDurSec =
+    actualAudioDurationSec && actualAudioDurationSec >= 45
+      ? actualAudioDurationSec
+      : cachedAudio?.durationSec;
+
+  const cacheKey = `${trackId}:${Math.round(effectiveAudioDurSec || 0)}:v${variantIndex}`;
+  const cachedLines = lyricsCache.get(cacheKey);
+  const cachedMeta = serverLyricsMetaCache.get(cacheKey);
+  if (cachedLines && cachedLines.length > 0 && cachedMeta) {
+    return {
+      lines: cachedLines,
+      ...cachedMeta,
+    };
   }
 
-  const baseTitle = title
-    .replace(/\s*\((with|feat\.?|ft\.?)[^)]+\)/gi, '')
-    .replace(
-      /\s*[-–]\s*(sped up|speed up|slowed|nightcore|remix|tiktok.*|female version|frisk version|from .*).*$/i,
-      ''
-    )
-    .replace(
-      /\s*\((sped up|speed up|slowed|nightcore|remix|tiktok.*|female version|frisk version)[^)]*\)/gi,
-      ''
-    )
-    .trim();
+  const override = CANONICAL_SERVER_TRACK_OVERRIDES[trackId];
+  const baseTitle = override?.canonicalTitle || cleanServerSongTitle(title);
+  const asciiTitle = stripServerDiacritics(baseTitle);
 
-  const allArtists = extractMeaningfulArtists(title, artist);
+  const allArtists = extractMeaningfulArtists(title, artist, trackId);
   const realArtists = allArtists.filter(
     (a) => !NON_ORIGINAL_UPLOADER_NAMES.has(a.toLowerCase())
   );
-  const primaryArtist = realArtists[0] || allArtists[0] || '';
+  const primaryArtist =
+    override?.canonicalArtist.split(',')[0].trim() ||
+    realArtists[0] ||
+    allArtists[0] ||
+    '';
+
+  const altTitles: string[] = [...(override?.altTitles || [])];
+  if (asciiTitle.toLowerCase() !== baseTitle.toLowerCase()) {
+    altTitles.push(asciiTitle);
+  }
+  if (/\s+x\s+/i.test(baseTitle)) {
+    const firstMashupSong = baseTitle.split(/\s+x\s+/i)[0]?.trim();
+    if (firstMashupSong && firstMashupSong.length >= 2 && !altTitles.includes(firstMashupSong)) {
+      altTitles.unshift(firstMashupSong);
+    }
+  }
+
+  const combinedMeta = `${title} ${artist}`.toLowerCase();
+  const isSpeedModified: 'sped_up' | 'slowed' | 'standard' =
+    /\b(sped\s*up|speed\s*up|speed|nightcore)\b/i.test(combinedMeta)
+      ? 'sped_up'
+      : /\b(slowed|slow)\b/i.test(combinedMeta)
+      ? 'slowed'
+      : 'standard';
 
   const verifiedDuration =
+    override?.studioDurationSec ||
     VERIFIED_STUDIO_MASTER_URLS[trackId]?.durationSec ||
-    actualAudioDurationSec ||
     (await fetchOfficialStudioDurationSec(baseTitle, primaryArtist));
 
-  const searchUrls = [
-    primaryArtist
-      ? `https://lrclib.net/api/search?track_name=${encodeURIComponent(
-          baseTitle
-        )}&artist_name=${encodeURIComponent(primaryArtist)}`
-      : '',
-    primaryArtist
-      ? `https://lrclib.net/api/search?q=${encodeURIComponent(`${baseTitle} ${primaryArtist}`)}`
-      : '',
-    `https://lrclib.net/api/search?track_name=${encodeURIComponent(baseTitle)}`,
-  ].filter(Boolean);
+  const searchUrls = Array.from(
+    new Set(
+      [
+        primaryArtist
+          ? `https://lrclib.net/api/search?track_name=${encodeURIComponent(
+              baseTitle
+            )}&artist_name=${encodeURIComponent(primaryArtist)}`
+          : '',
+        primaryArtist
+          ? `https://lrclib.net/api/search?q=${encodeURIComponent(
+              `${baseTitle} ${primaryArtist}`
+            )}`
+          : '',
+        asciiTitle !== baseTitle && primaryArtist
+          ? `https://lrclib.net/api/search?q=${encodeURIComponent(
+              `${asciiTitle} ${primaryArtist}`
+            )}`
+          : '',
+        ...altTitles.map((alt) =>
+          primaryArtist
+            ? `https://lrclib.net/api/search?q=${encodeURIComponent(
+                `${alt} ${primaryArtist}`
+              )}`
+            : `https://lrclib.net/api/search?track_name=${encodeURIComponent(alt)}`
+        ),
+        `https://lrclib.net/api/search?track_name=${encodeURIComponent(baseTitle)}`,
+      ].filter(Boolean)
+    )
+  );
 
-  const baseTitleNorm = baseTitle
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const targetTitlesNorm = [baseTitle, ...altTitles].map((t) =>
+    normalizeServerTokenString(t)
+  );
+  const knownArtistsNorm = (realArtists.length > 0 ? realArtists : allArtists)
+    .map((a) => normalizeServerTokenString(a))
+    .filter((a) => a.length >= 2);
 
-  let bestItem: LrcLibSearchItem | null = null;
-  let bestScore = -999;
+  const scoredItems: Array<{
+    item: LrcLibSearchItem;
+    score: number;
+    recommendedScale: number;
+  }> = [];
+  const seenSignatures = new Set<string>();
 
   for (const url of searchUrls) {
     try {
@@ -906,78 +1192,199 @@ async function resolveAccurateLyrics(
 
       for (const item of items) {
         if (!item.syncedLyrics && !item.plainLyrics) continue;
-        const itTitle = (item.trackName || '')
-          .toLowerCase()
-          .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        const itArtist = (item.artistName || '')
-          .toLowerCase()
-          .replace(/\$/g, 's')
-          .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
+        const sig = `${(item.syncedLyrics || item.plainLyrics || '').slice(0, 120)}:${
+          item.duration || 0
+        }`;
+        if (seenSignatures.has(sig)) continue;
+        seenSignatures.add(sig);
+
+        const cTitleClean = normalizeServerTokenString(
+          cleanServerSongTitle(item.trackName || '')
+        );
+        const cTitleFull = normalizeServerTokenString(item.trackName || '');
+        const cArtistNorm = normalizeServerTokenString(item.artistName || '');
 
         let sc = 0;
-        if (item.syncedLyrics && item.syncedLyrics.includes('[')) sc += 75;
-        if (itTitle === baseTitleNorm) sc += 55;
-        else if (itTitle.includes(baseTitleNorm) || baseTitleNorm.includes(itTitle)) sc += 30;
-        else sc -= 40;
 
-        for (const a of realArtists) {
-          const aNorm = a.toLowerCase();
-          if (itArtist.includes(aNorm) || aNorm.includes(itArtist)) {
-            sc += 50;
+        // 1. LRC structural density & vocal span check
+        if (item.syncedLyrics && item.syncedLyrics.includes('[')) {
+          const parsedCheck = parseLrcToLines(item.syncedLyrics, 1.0, 9999);
+          if (parsedCheck.length >= 22) sc += 105;
+          else if (parsedCheck.length >= 12) sc += 80;
+          else if (parsedCheck.length >= 5) sc += 40;
+          else sc -= 60;
+
+          if (parsedCheck.length >= 6) {
+            const vocalSpan =
+              parsedCheck[parsedCheck.length - 1].timeSec - parsedCheck[0].timeSec;
+            const cDur = item.duration || 180;
+            if (vocalSpan >= Math.min(45, cDur * 0.35)) sc += 25;
+            else if (vocalSpan < 15) sc -= 45;
+          }
+        } else {
+          sc += 15;
+        }
+
+        // 2. Title exact & token Jaccard similarity
+        let bestTitleScore = -75;
+        for (const tNorm of targetTitlesNorm) {
+          if (!tNorm) continue;
+          if (cTitleClean === tNorm || cTitleFull === tNorm) {
+            bestTitleScore = Math.max(bestTitleScore, 110);
+          } else if (cTitleClean.startsWith(tNorm) || tNorm.startsWith(cTitleClean)) {
+            bestTitleScore = Math.max(bestTitleScore, 80);
+          } else if (cTitleFull.includes(tNorm) || tNorm.includes(cTitleClean)) {
+            bestTitleScore = Math.max(bestTitleScore, 55);
+          }
+
+          const tTokens = tNorm.split(/\s+/).filter((w) => w.length >= 2);
+          const cTokens = cTitleClean.split(/\s+/).filter((w) => w.length >= 2);
+          if (tTokens.length > 0 && cTokens.length > 0) {
+            const tSet = new Set(tTokens);
+            const cSet = new Set(cTokens);
+            let inter = 0;
+            for (const tok of tSet) {
+              if (cSet.has(tok)) inter++;
+            }
+            const union = new Set([...tSet, ...cSet]).size;
+            const jaccard = union > 0 ? inter / union : 0;
+            if (jaccard >= 0.85) bestTitleScore = Math.max(bestTitleScore, 95);
+            else if (jaccard >= 0.6) bestTitleScore = Math.max(bestTitleScore, 60);
+            else if (inter === 0) bestTitleScore = Math.min(bestTitleScore, -80);
+          }
+        }
+        sc += bestTitleScore;
+
+        // Penalize unwanted instrumental/karaoke/parody transcripts
+        if (
+          /\b(instrumental|karaoke|parody|tribute|8-bit|lullaby|piano cover)\b/i.test(
+            `${item.trackName || ''} ${item.artistName || ''}`
+          ) &&
+          !/instrumental/i.test(baseTitle)
+        ) {
+          sc -= 120;
+        }
+
+        // 3. Canonical Artist Verification
+        if (knownArtistsNorm.length > 0) {
+          let artistMatched = false;
+          for (const aNorm of knownArtistsNorm) {
+            if (cArtistNorm === aNorm) {
+              sc += 110;
+              artistMatched = true;
+              break;
+            } else if (cArtistNorm.includes(aNorm) || aNorm.includes(cArtistNorm)) {
+              sc += 90;
+              artistMatched = true;
+              break;
+            } else {
+              const aTokens = aNorm.split(/\s+/).filter((t) => t.length >= 3);
+              if (aTokens.length > 0 && aTokens.every((t) => cArtistNorm.includes(t))) {
+                sc += 75;
+                artistMatched = true;
+                break;
+              }
+            }
+          }
+          if (!artistMatched) {
+            sc -= 85;
           }
         }
 
-        if (verifiedDuration && verifiedDuration > 60 && item.duration && item.duration > 60) {
-          const diff = Math.abs(item.duration - verifiedDuration);
-          if (diff <= 3) sc += 60;
-          else if (diff <= 8) sc += 35;
+        // 4. Dual-Mode Duration & Tempo Ratio Alignment
+        const candDur = item.duration || 0;
+        let recommendedScale = 1.0;
+
+        if (effectiveAudioDurSec && effectiveAudioDurSec > 45 && candDur > 45) {
+          const diff = Math.abs(candDur - effectiveAudioDurSec);
+          const tempoRatio = effectiveAudioDurSec / candDur;
+
+          if (diff <= 2) {
+            sc += 130;
+            recommendedScale = 1.0;
+          } else if (diff <= 5) {
+            sc += 95;
+            recommendedScale = 1.0;
+          } else if (diff <= 10) {
+            sc += 55;
+            recommendedScale = tempoRatio;
+          } else if (
+            isSpeedModified === 'sped_up' &&
+            tempoRatio >= 0.66 &&
+            tempoRatio <= 0.92
+          ) {
+            sc += 90;
+            recommendedScale = tempoRatio;
+          } else if (
+            isSpeedModified === 'slowed' &&
+            tempoRatio >= 1.07 &&
+            tempoRatio <= 1.45
+          ) {
+            sc += 90;
+            recommendedScale = tempoRatio;
+          } else if (
+            tempoRatio >= 0.65 &&
+            tempoRatio <= 1.45 &&
+            Math.abs(1 - tempoRatio) > 0.035
+          ) {
+            if (verifiedDuration && Math.abs(candDur - verifiedDuration) <= 8) {
+              sc += 75;
+            } else {
+              sc += 20;
+            }
+            recommendedScale = tempoRatio;
+          } else if (diff > 45) {
+            sc -= 45;
+          }
+        } else if (verifiedDuration && verifiedDuration > 60 && candDur > 60) {
+          const diff = Math.abs(candDur - verifiedDuration);
+          if (diff <= 3) sc += 75;
+          else if (diff <= 8) sc += 40;
           else if (diff <= 20) sc += 10;
-          else if (!isSpeedModified && diff > 35) sc -= 40;
         }
 
-        if (sc > bestScore) {
-          bestScore = sc;
-          bestItem = item;
+        if (sc > -200) {
+          scoredItems.push({ item, score: sc, recommendedScale });
         }
       }
 
-      if (bestItem && bestScore >= 140) break;
+      const bestSoFar = scoredItems.reduce((m, s) => (s.score > m ? s.score : m), -999);
+      if (bestSoFar >= 265 && variantIndex === 0) break;
     } catch {
       // Continue to next fallback search URL
     }
   }
 
-  if (!bestItem) return null;
+  if (scoredItems.length === 0) return null;
+  scoredItems.sort((a, b) => b.score - a.score);
+
+  const chosenEntry = scoredItems[Math.max(0, variantIndex) % scoredItems.length];
+  const bestItem = chosenEntry.item;
+  const scale = chosenEntry.recommendedScale;
+  const confidencePct = Math.min(
+    99,
+    Math.max(72, Math.round(70 + chosenEntry.score / 10))
+  );
 
   if (bestItem.syncedLyrics && bestItem.syncedLyrics.includes('[')) {
-    const lrcDur = bestItem.duration || verifiedDuration || 210;
-    // CRITICAL: For normal-speed studio songs, NEVER distort LRC timestamps (scale = 1.0 exact studio sync).
-    // Only scale when the track is explicitly Sped Up / Nightcore / Slowed and we have the actual audio duration.
-    let scale = 1.0;
-    if (
-      isSpeedModified &&
-      actualAudioDurationSec &&
-      actualAudioDurationSec >= 65 &&
-      lrcDur >= 65
-    ) {
-      const ratio = actualAudioDurationSec / lrcDur;
-      if (Math.abs(1 - ratio) > 0.05 && ratio >= 0.55 && ratio <= 1.65) {
-        scale = ratio;
-      }
-    }
-
     const parsed = parseLrcToLines(
       bestItem.syncedLyrics,
       scale,
-      (actualAudioDurationSec || verifiedDuration || 600) + 15
+      (effectiveAudioDurSec || verifiedDuration || 600) + 15
     );
     if (parsed.length >= 4) {
+      const meta = {
+        matchedTrackName: bestItem.trackName || baseTitle,
+        matchedArtistName: bestItem.artistName || primaryArtist,
+        confidencePct,
+        timeScale: Math.round(scale * 1000) / 1000,
+      };
       lyricsCache.set(cacheKey, parsed);
-      return parsed;
+      serverLyricsMetaCache.set(cacheKey, meta);
+      return {
+        lines: parsed,
+        ...meta,
+      };
     }
   }
 
@@ -987,14 +1394,27 @@ async function resolveAccurateLyrics(
       .map((l) => l.trim())
       .filter(Boolean);
     if (rawLines.length >= 4) {
-      const dur = Math.max(90, verifiedDuration || bestItem.duration || 180);
+      const dur = Math.max(
+        90,
+        effectiveAudioDurSec || verifiedDuration || bestItem.duration || 180
+      );
       const interval = Math.max(2.5, (dur - 10) / rawLines.length);
       const timed = rawLines.map((text, idx) => ({
         timeSec: Math.round((4 + idx * interval) * 10) / 10,
         text,
       }));
+      const meta = {
+        matchedTrackName: bestItem.trackName || baseTitle,
+        matchedArtistName: bestItem.artistName || primaryArtist,
+        confidencePct: Math.min(88, confidencePct),
+        timeScale: 1.0,
+      };
       lyricsCache.set(cacheKey, timed);
-      return timed;
+      serverLyricsMetaCache.set(cacheKey, meta);
+      return {
+        lines: timed,
+        ...meta,
+      };
     }
   }
 
@@ -1011,7 +1431,10 @@ function serveAudioFileWithRanges(
   res.setHeader('Content-Type', entry.mimeType);
   res.setHeader('X-Audio-Verified', 'complete');
   res.setHeader('X-Audio-Duration-Sec', String(entry.durationSec));
-  res.setHeader('Cache-Control', 'public, max-age=86400');
+  if (entry.matchedTitle) {
+    res.setHeader('X-Audio-Matched-Title', encodeURIComponent(entry.matchedTitle));
+  }
+  res.setHeader('Cache-Control', 'no-cache');
 
   if (req.method === 'HEAD') {
     res.setHeader('Content-Length', String(total));
@@ -1043,16 +1466,20 @@ function serveAudioFileWithRanges(
 
 async function startServer() {
   const app = express();
+  app.use(express.json());
 
   // Dynamic full-length song resolver & byte-range streaming endpoint
   app.all('/api/audio/stream/:trackId', async (req: Request, res: Response) => {
     const trackId = String(req.params.trackId || 'track');
     const title = String(req.query.title || '');
     const artist = String(req.query.artist || '');
+    const versionMode = req.query.versionMode as VersionRetryMode | undefined;
     const fallbackLocal = String(req.query.fallback || '/audio/duvet-x-linger.mp3');
 
     if (title) {
-      const resolved = await resolveAndCacheFullTrack(trackId, title, artist);
+      const resolved = await resolveAndCacheFullTrack(trackId, title, artist, {
+        versionMode,
+      });
       if (resolved && fs.existsSync(resolved.filePath)) {
         serveAudioFileWithRanges(req, res, resolved);
         return;
@@ -1076,25 +1503,120 @@ async function startServer() {
     res.status(404).json({ error: 'Audio track not found' });
   });
 
+  // Mark current song version as wrong & automatically resolve an alternative version
+  app.post('/api/audio/retry-version', async (req: Request, res: Response) => {
+    try {
+      const trackId = String(req.body?.trackId || '');
+      const title = String(req.body?.title || '');
+      const artist = String(req.body?.artist || '');
+      const versionMode = (req.body?.versionMode || 'next_best') as VersionRetryMode;
+      const resetHistory = Boolean(req.body?.resetHistory);
+
+      if (!trackId || !title) {
+        res.status(400).json({ ok: false, error: 'Missing trackId or title' });
+        return;
+      }
+
+      const safeId = trackId.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+      if (resetHistory) {
+        rejectedCandidatesByTrack.delete(safeId);
+        trackVersionAttempt.set(safeId, 1);
+      } else {
+        const currentEntry = memoryMetaCache.get(safeId);
+        let rejectedSet = rejectedCandidatesByTrack.get(safeId);
+        if (!rejectedSet) {
+          rejectedSet = new Set<string>();
+          rejectedCandidatesByTrack.set(safeId, rejectedSet);
+        }
+        if (currentEntry?.sourceCandidateId) {
+          rejectedSet.add(currentEntry.sourceCandidateId);
+        }
+        const nextAttempt = (trackVersionAttempt.get(safeId) || 1) + 1;
+        trackVersionAttempt.set(safeId, nextAttempt);
+      }
+
+      // Evict cached audio file & memory cache for this track
+      const prevEntry = memoryMetaCache.get(safeId);
+      if (prevEntry && fs.existsSync(prevEntry.filePath)) {
+        try {
+          fs.unlinkSync(prevEntry.filePath);
+        } catch {
+          // Ignore file unlink error
+        }
+      }
+      memoryMetaCache.delete(safeId);
+      inFlightResolutions.delete(safeId);
+
+      // Clear any cached lyrics for this trackId so fresh duration-locked lyrics are resolved
+      for (const k of Array.from(lyricsCache.keys())) {
+        if (k.startsWith(`${trackId}:`)) {
+          lyricsCache.delete(k);
+          serverLyricsMetaCache.delete(k);
+        }
+      }
+
+      const resolved = await resolveAndCacheFullTrack(trackId, title, artist, {
+        versionMode: resetHistory ? undefined : versionMode,
+        forceFresh: true,
+      });
+
+      const attempt = trackVersionAttempt.get(safeId) || 1;
+
+      if (resolved) {
+        res.json({
+          ok: true,
+          attempt,
+          versionMode,
+          durationSec: resolved.durationSec,
+          matchedTitle: resolved.matchedTitle || title,
+          matchedArtist: resolved.matchedArtist || artist,
+          streamUrl: `/api/audio/stream/${encodeURIComponent(
+            trackId
+          )}?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(
+            artist
+          )}&versionMode=${encodeURIComponent(versionMode)}&attempt=${attempt}&t=${Date.now()}`,
+        });
+      } else {
+        res.json({
+          ok: false,
+          attempt,
+          versionMode,
+          error: 'No alternative playable source found; keeping best available version.',
+        });
+      }
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
   // Accurate time-synced lyrics resolver & time-scaler endpoint
   app.get('/api/audio/lyrics', async (req: Request, res: Response) => {
     const trackId = String(req.query.trackId || 'track');
     const title = String(req.query.title || '');
     const artist = String(req.query.artist || '');
     const actualDurationSec = Number(req.query.duration) || undefined;
+    const variantIndex = Number(req.query.variant) || 0;
 
     if (!title) {
       res.status(400).json({ lines: [] });
       return;
     }
 
-    const lines = await resolveAccurateLyrics(
+    const result = await resolveAccurateLyrics(
       trackId,
       title,
       artist,
-      actualDurationSec
+      actualDurationSec,
+      variantIndex
     );
-    res.json({ lines: lines || [] });
+    res.json({
+      lines: result?.lines || [],
+      matchedTrackName: result?.matchedTrackName,
+      matchedArtistName: result?.matchedArtistName,
+      confidencePct: result?.confidencePct,
+      timeScale: result?.timeScale,
+    });
   });
 
   // Live filesystem codebase metrics endpoint so the Code tab updates automatically after every update

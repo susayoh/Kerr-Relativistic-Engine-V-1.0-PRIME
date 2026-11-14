@@ -1943,6 +1943,10 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
   } = profileSummary;
 
   const [expandedDomainCardId, setExpandedDomainCardId] = useState<GardnerIntelligenceId | null>('logical_mathematical');
+  const [domainLayoutMode, setDomainLayoutMode] = useState<'grid' | 'detailed'>('grid');
+  const [showTopStatsCards, setShowTopStatsCards] = useState<boolean>(false);
+  const [autoAdvanceOnSelect, setAutoAdvanceOnSelect] = useState<boolean>(true);
+  const [questionNavFilter, setQuestionNavFilter] = useState<'all' | 'unanswered' | 'flagged'>('all');
 
   const telemetryReport = useMemo(
     () =>
@@ -2003,6 +2007,7 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
     setCurrentQuestionIdx(0);
     setElapsedSeconds(0);
     setShowExplanationInReview(false);
+    setQuestionNavFilter('all');
     setActiveSubView('assessment');
   };
 
@@ -2029,11 +2034,82 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
     } else {
       onHapticLight?.();
     }
-    setSelectedAnswers((prev) => ({
-      ...prev,
-      [currentQuestion.id]: optionIdx,
-    }));
+    setSelectedAnswers((prev) => {
+      const next = {
+        ...prev,
+        [currentQuestion.id]: optionIdx,
+      };
+      if (autoAdvanceOnSelect && safeQuestionIdx < activePool.length - 1) {
+        window.setTimeout(() => {
+          setCurrentQuestionIdx((currIdx) =>
+            Math.min(activePool.length - 1, currIdx + 1)
+          );
+        }, 220);
+      }
+      return next;
+    });
   };
+
+  const handleJumpToNextUnanswered = () => {
+    onHapticLight?.();
+    for (let offset = 1; offset <= activePool.length; offset++) {
+      const candidateIdx = (safeQuestionIdx + offset) % activePool.length;
+      const q = activePool[candidateIdx];
+      if (q && typeof selectedAnswers[q.id] !== 'number') {
+        setCurrentQuestionIdx(candidateIdx);
+        return;
+      }
+    }
+  };
+
+  // Keyboard navigation for active assessment (Left/Right arrows, 1-6 or A-F option keys)
+  useEffect(() => {
+    if (!isActiveTab || !isTestStarted || isCompleted || activeSubView !== 'assessment') {
+      return;
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setCurrentQuestionIdx((i) => Math.max(0, i - 1));
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setCurrentQuestionIdx((i) => Math.min(activePool.length - 1, i + 1));
+      } else if (/^[1-6]$/.test(e.key)) {
+        const optIdx = parseInt(e.key, 10) - 1;
+        if (optIdx >= 0 && optIdx < currentQuestion.options.length) {
+          e.preventDefault();
+          handleSelectOption(optIdx);
+        }
+      } else if (/^[a-fA-F]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const optIdx = e.key.toUpperCase().charCodeAt(0) - 65;
+        if (optIdx >= 0 && optIdx < currentQuestion.options.length) {
+          e.preventDefault();
+          handleSelectOption(optIdx);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    isActiveTab,
+    isTestStarted,
+    isCompleted,
+    activeSubView,
+    activePool.length,
+    currentQuestion,
+    autoAdvanceOnSelect,
+    safeQuestionIdx,
+  ]);
 
   const handleToggleFlag = (questionId: string) => {
     onHapticLight?.();
@@ -2185,39 +2261,60 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
       ? latestGrowthSnap.compositeIq - baselineGrowthSnap.compositeIq
       : 0;
 
+  const unansweredCount = activePool.filter(
+    (q) => typeof selectedAnswers[q.id] !== 'number'
+  ).length;
+  const flaggedCount = activePool.filter((q) => Boolean(flaggedQuestions[q.id])).length;
+  const shouldCompactStats =
+    isTestStarted && activeSubView === 'assessment' && !showTopStatsCards;
+
   return (
     <div
       data-testid="settings-tab-panel-iq-test"
-      className="flex-1 min-h-0 flex flex-col p-4 sm:p-6 overflow-y-auto space-y-5 text-sm text-zinc-200"
+      className="flex-1 min-h-0 p-3 sm:p-5 overflow-y-auto space-y-3.5 text-sm text-zinc-200"
     >
-      {/* Hero Overview Header — Matches DiagnosticSuiteView & CodebaseDetailsView 1:1 */}
-      <div className="p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800 shadow-lg space-y-2">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+      {/* Top Navigation & Action Bar — Instant Sub-View & Session Control */}
+      <div className="p-3 rounded-2xl bg-zinc-950/90 border border-zinc-800 shadow-lg space-y-2.5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
           <div className="flex items-center gap-2 flex-wrap min-w-0">
-            <h3 className="text-base sm:text-lg font-bold text-white tracking-wide font-display flex items-center gap-2">
-              <Brain className="w-5 h-5 text-emerald-400 shrink-0" />
+            <h3 className="text-sm sm:text-base font-bold text-white tracking-wide font-display flex items-center gap-2">
+              <Brain className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>Psychometric Intelligence Suite</span>
             </h3>
             <span
               data-testid="iq-test-score-readout"
-              className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-mono text-[11px] font-bold flex items-center gap-1 whitespace-nowrap"
+              className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-mono text-[10.5px] font-bold flex items-center gap-1 whitespace-nowrap"
             >
-              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              <CheckCircle2 className="w-3 h-3 shrink-0" />
               <span>
                 {isCompleted
                   ? `FSIQ ${telemetryReport.confidenceIntervalLabel} · ${telemetryReport.percentileRank}TH %ILE`
                   : `SET #${testDrawNumber} · Q1–Q${activePool.length}`}
               </span>
             </span>
+
+            {isTestStarted && activeSubView === 'assessment' && (
+              <button
+                type="button"
+                data-testid="iq-toggle-stats-cards-btn"
+                onClick={() => {
+                  onHapticLight?.();
+                  setShowTopStatsCards((prev) => !prev);
+                }}
+                className="px-2 py-0.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 font-mono text-[10px] cursor-pointer transition-colors"
+              >
+                {showTopStatsCards ? 'Compact Stats' : 'Expand 4 Stats Cards'}
+              </button>
+            )}
           </div>
 
-          {/* Action Toolbar — Matches DiagnosticSuiteView & CodebaseDetailsView */}
+          {/* Action Toolbar */}
           <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
             <button
               type="button"
               data-testid="iq-test-start-btn"
               onClick={handleStartTest}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/60 text-emerald-200 transition-colors text-xs font-semibold cursor-pointer shadow-sm whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/60 text-emerald-200 transition-colors text-xs font-semibold cursor-pointer shadow-sm whitespace-nowrap"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
               <span>{isTestStarted ? 'Restart Suite' : 'Begin Suite'}</span>
@@ -2231,7 +2328,7 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                 drawFreshQuestionSet(batteryMode, isTestStarted);
               }}
               title="Draw a brand-new non-repeating set of questions from the 85-question database"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white transition-colors text-xs font-medium cursor-pointer whitespace-nowrap"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white transition-colors text-xs font-medium cursor-pointer whitespace-nowrap"
             >
               <Shuffle className="w-3.5 h-3.5 text-cyan-400" />
               <span>New Set</span>
@@ -2242,10 +2339,10 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                 type="button"
                 data-testid="iq-test-reset-btn"
                 onClick={handleResetTest}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition-colors text-xs font-medium cursor-pointer whitespace-nowrap"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition-colors text-xs font-medium cursor-pointer whitespace-nowrap"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Reset</span>
+                <span>Batteries</span>
               </button>
             )}
 
@@ -2253,7 +2350,7 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
               type="button"
               data-testid="iq-header-copy-summary-btn"
               onClick={handleCopyTelemetrySummary}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white transition-colors text-xs font-medium cursor-pointer whitespace-nowrap"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white transition-colors text-xs font-medium cursor-pointer whitespace-nowrap"
             >
               {hasCopiedSummary ? (
                 <>
@@ -2272,159 +2369,175 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
               type="button"
               data-testid="iq-header-export-json-btn"
               onClick={handleExportTelemetryJson}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white transition-colors text-xs font-medium cursor-pointer whitespace-nowrap"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white transition-colors text-xs font-medium cursor-pointer whitespace-nowrap"
             >
               <Download className="w-3.5 h-3.5 text-sky-400" />
               <span>Export JSON</span>
             </button>
           </div>
         </div>
-        <p className="text-xs text-zinc-400 leading-relaxed">
-          Evaluates cognitive and fluid reasoning across Howard Gardner’s 9 Primary Intelligences and Raven’s/Mensa 3×3 Progressive Matrices with D3.js Growth Analytics and Post-Test Telemetry Diagnostics ({MASTER_IQ_QUESTION_DATABASE.length}-item calibrated bank).
-        </p>
-      </div>
 
-      {/* 4 Clean Big Stats Cards — Matches CodebaseDetailsView & DiagnosticSuiteView */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-zinc-800/90">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
-            <span>Full-Scale IQ (95% CI)</span>
-            <Award className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="mt-1 text-2xl font-bold font-mono text-white tracking-tight tabular-nums">
-            {displayedTelemetryReport.confidenceIntervalLabel}
-          </div>
-          <div className="text-xs text-zinc-500 mt-0.5 font-mono truncate">
-            {displayedTelemetryReport.percentileRank}th %ile · σ = 15 ({displayedTelemetryReport.zScore})
-          </div>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-zinc-800/90">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
-            <span>Items Verified</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="mt-1 text-2xl font-bold font-mono text-emerald-300 tracking-tight tabular-nums">
-            {answeredCount > 0 ? `${correctCount} / ${activePool.length}` : `0 / ${activePool.length}`}
-          </div>
-          <div className="text-xs text-zinc-500 mt-0.5 truncate">
-            {answeredCount} answered · {MASTER_IQ_QUESTION_DATABASE.length}-item master bank
-          </div>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-zinc-800/90">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
-            <span>Response Latency</span>
-            <Clock className="w-4 h-4 text-sky-400" />
-          </div>
-          <div className="mt-1 text-2xl font-bold font-mono text-white tracking-tight tabular-nums">
-            {(displayedTelemetryReport.avgLatencyMs / 1000).toFixed(1)}s{' '}
-            <span className="text-xs font-normal text-zinc-400">/ item</span>
-          </div>
-          <div className="text-xs text-zinc-500 mt-0.5 font-mono truncate">
-            Elapsed {formattedTime} · {displayedTelemetryReport.avgLatencyMs.toLocaleString()} ms avg
-          </div>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-zinc-800/90">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
-            <span>9-Domain Growth</span>
-            <TrendingUp className="w-4 h-4 text-purple-400" />
-          </div>
-          <div className="mt-1 text-2xl font-bold font-mono text-amber-300 tracking-tight tabular-nums">
-            {growthIqDelta >= 0 ? `+${growthIqDelta}` : growthIqDelta} IQ
-          </div>
-          <div className="text-xs text-zinc-500 mt-0.5 truncate">
-            {growthHistory.length} Sessions · Top: {topGardnerStrengths[0]?.meta.shortCode || 'LOG'}
-          </div>
-        </div>
-      </div>
-
-      {/* Execution Progress & Sub-View Navigation Bar (Matches DiagnosticSuiteView Execution Progress Bar) */}
-      <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            type="button"
-            data-testid="iq-subview-assessment"
-            onClick={() => {
-              onHapticLight?.();
-              setActiveSubView('assessment');
-            }}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all cursor-pointer border whitespace-nowrap ${
-              activeSubView === 'assessment'
-                ? 'bg-zinc-800 border-zinc-400 text-white shadow-sm'
-                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5 text-cyan-400" />
-            <span>
-              1. Assessment ({isTestStarted ? `Q${safeQuestionIdx + 1}/Q${activePool.length}` : `Q1–Q${activePool.length}`})
-            </span>
-          </button>
-
-          <button
-            type="button"
-            data-testid="iq-subview-growth-analytics"
-            onClick={() => {
-              onHapticLight?.();
-              setActiveSubView('growth_analytics');
-            }}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all cursor-pointer border whitespace-nowrap ${
-              activeSubView === 'growth_analytics'
-                ? 'bg-zinc-800 border-zinc-400 text-white shadow-sm'
-                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
-            }`}
-          >
-            <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-            <span>2. Growth Analytics (D3.js)</span>
-          </button>
-
-          <button
-            type="button"
-            data-testid="iq-subview-telemetry-report"
-            onClick={() => {
-              onHapticLight?.();
-              setActiveSubView('telemetry_report');
-            }}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-xs font-semibold transition-all cursor-pointer border whitespace-nowrap ${
-              activeSubView === 'telemetry_report'
-                ? 'bg-zinc-800 border-zinc-400 text-white shadow-sm'
-                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
-            }`}
-          >
-            <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
-            <span>3. Post-Test Telemetry</span>
-          </button>
-        </div>
-
-        <div className="w-full md:w-36 shrink-0 space-y-1">
-          <div className="flex items-center justify-between text-[11px] whitespace-nowrap">
-            <span className="font-semibold text-zinc-300">Progress</span>
-            <span className="font-mono text-zinc-400 tabular-nums">
-              {answeredCount}/{activePool.length} (
-              {Math.round((answeredCount / Math.max(1, activePool.length)) * 100)}%)
-            </span>
-          </div>
-          <div className="h-2 w-full rounded-full bg-zinc-900 overflow-hidden border border-zinc-800">
-            <div
-              className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-amber-400 transition-all duration-300"
-              style={{
-                width: `${Math.max(
-                  4,
-                  Math.round((answeredCount / Math.max(1, activePool.length)) * 100)
-                )}%`,
+        {/* Sub-View Navigation Tabs + Progress Bar Integrated in Top Sticky Header */}
+        <div className="pt-2 border-t border-zinc-800/80 flex flex-col md:flex-row md:items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              data-testid="iq-subview-assessment"
+              onClick={() => {
+                onHapticLight?.();
+                setActiveSubView('assessment');
               }}
-            />
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-xs font-semibold transition-all cursor-pointer border whitespace-nowrap ${
+                activeSubView === 'assessment'
+                  ? 'bg-cyan-500/20 border-cyan-400 text-white shadow-sm'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-cyan-400" />
+              <span>
+                1. Assessment (
+                {isTestStarted
+                  ? `Q${safeQuestionIdx + 1}/Q${activePool.length}`
+                  : `Q1–Q${activePool.length}`}
+                )
+              </span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="iq-subview-growth-analytics"
+              onClick={() => {
+                onHapticLight?.();
+                setActiveSubView('growth_analytics');
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-xs font-semibold transition-all cursor-pointer border whitespace-nowrap ${
+                activeSubView === 'growth_analytics'
+                  ? 'bg-emerald-500/20 border-emerald-400 text-white shadow-sm'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+              <span>2. Growth Analytics (D3.js)</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="iq-subview-telemetry-report"
+              onClick={() => {
+                onHapticLight?.();
+                setActiveSubView('telemetry_report');
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-xs font-semibold transition-all cursor-pointer border whitespace-nowrap ${
+                activeSubView === 'telemetry_report'
+                  ? 'bg-amber-500/20 border-amber-400 text-white shadow-sm'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
+              <span>3. Post-Test Telemetry</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            {shouldCompactStats && (
+              <div className="hidden xl:flex items-center gap-2 font-mono text-[11px] text-zinc-400">
+                <span>
+                  IQ: <strong className="text-white">{displayedTelemetryReport.confidenceIntervalLabel}</strong>
+                </span>
+                <span>·</span>
+                <span>
+                  Time: <strong className="text-cyan-300">{formattedTime}</strong>
+                </span>
+              </div>
+            )}
+            <div className="w-full md:w-40 shrink-0 space-y-0.5">
+              <div className="flex items-center justify-between text-[10.5px] whitespace-nowrap">
+                <span className="font-semibold text-zinc-300">Progress</span>
+                <span className="font-mono text-zinc-400 tabular-nums">
+                  {answeredCount}/{activePool.length} (
+                  {Math.round((answeredCount / Math.max(1, activePool.length)) * 100)}%)
+                </span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-zinc-900 overflow-hidden border border-zinc-800">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-amber-400 transition-all duration-300"
+                  style={{
+                    width: `${Math.max(
+                      4,
+                      Math.round((answeredCount / Math.max(1, activePool.length)) * 100)
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* 4 Stats Cards (Automatically compacted during active question view unless expanded) */}
+      {!shouldCompactStats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90">
+            <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
+              <span>Full-Scale IQ (95% CI)</span>
+              <Award className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="mt-0.5 text-xl font-bold font-mono text-white tracking-tight tabular-nums">
+              {displayedTelemetryReport.confidenceIntervalLabel}
+            </div>
+            <div className="text-[11px] text-zinc-500 mt-0.5 font-mono truncate">
+              {displayedTelemetryReport.percentileRank}th %ile · σ = 15 ({displayedTelemetryReport.zScore})
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90">
+            <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
+              <span>Items Verified</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="mt-0.5 text-xl font-bold font-mono text-emerald-300 tracking-tight tabular-nums">
+              {answeredCount > 0 ? `${correctCount} / ${activePool.length}` : `0 / ${activePool.length}`}
+            </div>
+            <div className="text-[11px] text-zinc-500 mt-0.5 truncate">
+              {answeredCount} answered · {MASTER_IQ_QUESTION_DATABASE.length}-item master bank
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90">
+            <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
+              <span>Response Latency</span>
+              <Clock className="w-4 h-4 text-sky-400" />
+            </div>
+            <div className="mt-0.5 text-xl font-bold font-mono text-white tracking-tight tabular-nums">
+              {(displayedTelemetryReport.avgLatencyMs / 1000).toFixed(1)}s{' '}
+              <span className="text-xs font-normal text-zinc-400">/ item</span>
+            </div>
+            <div className="text-[11px] text-zinc-500 mt-0.5 font-mono truncate">
+              Elapsed {formattedTime} · {displayedTelemetryReport.avgLatencyMs.toLocaleString()} ms avg
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/90">
+            <div className="flex items-center justify-between text-zinc-400 text-xs font-medium">
+              <span>9-Domain Growth</span>
+              <TrendingUp className="w-4 h-4 text-purple-400" />
+            </div>
+            <div className="mt-0.5 text-xl font-bold font-mono text-amber-300 tracking-tight tabular-nums">
+              {growthIqDelta >= 0 ? `+${growthIqDelta}` : growthIqDelta} IQ
+            </div>
+            <div className="text-[11px] text-zinc-500 mt-0.5 truncate">
+              {growthHistory.length} Sessions · Top: {topGardnerStrengths[0]?.meta.shortCode || 'LOG'}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Region */}
       <div
         data-testid="iq-test-logic-modules-container"
         role="region"
         aria-label="Howard Gardner Multiple Intelligences, Growth Analytics, and Post-Test Telemetry Container"
-        className="space-y-4"
+        className="space-y-3.5"
       >
         {activeSubView === 'growth_analytics' ? (
           <GrowthAnalyticsDashboard
@@ -2457,24 +2570,35 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
             hasCopied={hasCopiedSummary}
           />
         ) : !isTestStarted ? (
-          /* Clean Diagnostic/Code-Styled Pre-Test Overview */
+          /* Streamlined Scannable Pre-Test Overview */
           <div
             data-testid="iq-pretest-briefing"
-            className="space-y-4"
+            className="space-y-3.5"
           >
-            {/* Battery Mode Distribution & Selector Card (Matches CodebaseDetailsView Subsystem Share Card) */}
-            <div className="p-4 rounded-xl bg-zinc-950/90 border border-zinc-800 space-y-3">
-              <div className="flex items-center justify-between text-xs">
+            {/* Battery Mode Distribution & Selector Card with Immediate Launch Button */}
+            <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-zinc-800 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="font-semibold text-zinc-200 flex items-center gap-2">
                   <Grid className="w-4 h-4 text-cyan-400" />
-                  <span>Composite Assessment Batteries (Stratified Non-Repeating Sampler)</span>
+                  <span>Step 1: Choose Assessment Battery (or click any Domain below)</span>
                 </span>
-                <span className="text-zinc-400 font-mono">
-                  Active: Q1–Q{activePool.length} · Click any battery to configure
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-400 font-mono">
+                    Active: Q1–Q{activePool.length}
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="iq-battery-card-start-btn"
+                    onClick={handleStartTest}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-mono text-xs font-bold transition-colors cursor-pointer shadow-sm"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>Launch Q1–Q{activePool.length} Now</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
                 {IQ_BATTERY_MODES.map((modeMeta) => {
                   const isSelectedMode = batteryMode === modeMeta.id;
                   return (
@@ -2483,7 +2607,7 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                       type="button"
                       data-testid={`iq-battery-mode-${modeMeta.id}`}
                       onClick={() => handleChangeBatteryMode(modeMeta.id)}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
                         isSelectedMode
                           ? 'bg-zinc-900 border-emerald-500/60 text-white shadow-md shadow-emerald-950/20'
                           : 'bg-zinc-900/50 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900'
@@ -2491,7 +2615,7 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                     >
                       <div className="space-y-1">
                         <div className="flex items-center justify-between gap-1.5">
-                          <span className="px-2 py-0.5 rounded bg-zinc-950 border border-zinc-800 font-mono text-[10px] font-bold text-cyan-300">
+                          <span className="px-1.5 py-0.5 rounded bg-zinc-950 border border-zinc-800 font-mono text-[10px] font-bold text-cyan-300">
                             {modeMeta.questionCount} ITEMS
                           </span>
                           <span
@@ -2499,13 +2623,13 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
                               isSelectedMode ? 'text-emerald-400' : 'text-zinc-500'
                             }`}
                           >
-                            {isSelectedMode ? 'SELECTED' : 'SELECT'}
+                            {isSelectedMode ? 'ACTIVE' : 'SELECT'}
                           </span>
                         </div>
                         <div className="font-bold text-white text-xs pt-0.5 leading-snug">
                           {modeMeta.title}
                         </div>
-                        <p className="text-[11px] text-zinc-400 leading-snug">
+                        <p className="text-[11px] text-zinc-400 leading-snug line-clamp-2">
                           {modeMeta.description}
                         </p>
                       </div>
@@ -2515,156 +2639,261 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
               </div>
             </div>
 
-            {/* 9 Intelligence Domains — Styled Identically to DiagnosticSuiteView Scenario Cards */}
+            {/* 9 Intelligence Domains — With 3x3 Compact Grid vs Detailed List Switcher */}
             <div
               data-testid="gardner-9-intelligences-framework"
               className="space-y-2.5"
             >
-              <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400 px-1">
                 <span className="font-semibold text-zinc-200">
-                  Nine Intelligence Domains &amp; Psychometric Sub-Batteries (Howard Gardner Framework)
+                  Nine Intelligence Domains (Howard Gardner Framework)
                 </span>
-                <span>Click any domain row to inspect criteria or launch a dedicated 7-item test</span>
-              </div>
-
-              {GARDNER_INTELLIGENCES.map((intel) => {
-                const domainQuestions = MASTER_IQ_QUESTION_DATABASE.filter(
-                  (q) => q.gardnerDomain === intel.id
-                );
-                const totalInBank = domainQuestions.length;
-                const domainModeId: IQBatteryModeId = `domain_${intel.id}`;
-                const isDomainSelected = batteryMode === domainModeId;
-                const isExpanded = expandedDomainCardId === intel.id;
-                const latestScore = latestGrowthSnap?.domainScores[intel.id] ?? 80;
-                const baselineScore = baselineGrowthSnap?.domainScores[intel.id] ?? 62;
-                const delta = latestScore - baselineScore;
-
-                return (
-                  <div
-                    key={intel.id}
-                    data-testid={`gardner-domain-card-${intel.id}`}
-                    className={`rounded-xl border transition-all ${
-                      isExpanded || isDomainSelected
-                        ? 'bg-zinc-950 border-emerald-500/60 shadow-lg shadow-emerald-950/20'
-                        : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700'
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    data-testid="iq-domain-layout-grid-btn"
+                    onClick={() => {
+                      onHapticLight?.();
+                      setDomainLayoutMode('grid');
+                    }}
+                    className={`px-2.5 py-1 rounded-lg border font-mono text-[10.5px] cursor-pointer transition-colors ${
+                      domainLayoutMode === 'grid'
+                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
                     }`}
                   >
-                    <div
-                      className="p-3.5 cursor-pointer select-none"
-                      onClick={() => {
-                        onHapticLight?.();
-                        setExpandedDomainCardId(isExpanded ? null : intel.id);
-                      }}
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                        <div className="flex items-center gap-2.5 flex-wrap min-w-0">
-                          <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-750 font-mono text-xs font-bold text-cyan-300">
-                            MOD-{intel.indexNumber} · {intel.shortCode}
-                          </span>
-                          <h4 className="font-bold text-white text-sm hover:text-amber-300 transition-colors">
-                            {intel.name}
-                          </h4>
-                          <span
-                            className={`px-2 py-0.5 rounded-md border font-mono text-xs ${intel.badgeClass}`}
-                          >
-                            {intel.smartTitle}
-                          </span>
+                    Compact 3×3 Grid
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="iq-domain-layout-detailed-btn"
+                    onClick={() => {
+                      onHapticLight?.();
+                      setDomainLayoutMode('detailed');
+                    }}
+                    className={`px-2.5 py-1 rounded-lg border font-mono text-[10.5px] cursor-pointer transition-colors ${
+                      domainLayoutMode === 'detailed'
+                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    Detailed List
+                  </button>
+                </div>
+              </div>
+
+              <div
+                className={
+                  domainLayoutMode === 'grid'
+                    ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5'
+                    : 'space-y-2.5'
+                }
+              >
+                {GARDNER_INTELLIGENCES.map((intel) => {
+                  const domainQuestions = MASTER_IQ_QUESTION_DATABASE.filter(
+                    (q) => q.gardnerDomain === intel.id
+                  );
+                  const totalInBank = domainQuestions.length;
+                  const domainModeId: IQBatteryModeId = `domain_${intel.id}`;
+                  const isDomainSelected = batteryMode === domainModeId;
+                  const isExpanded = expandedDomainCardId === intel.id;
+                  const latestScore = latestGrowthSnap?.domainScores[intel.id] ?? 80;
+                  const baselineScore = baselineGrowthSnap?.domainScores[intel.id] ?? 62;
+                  const delta = latestScore - baselineScore;
+
+                  if (domainLayoutMode === 'grid') {
+                    return (
+                      <div
+                        key={intel.id}
+                        data-testid={`gardner-domain-card-${intel.id}`}
+                        className={`p-3 rounded-xl border transition-all flex flex-col justify-between gap-2.5 ${
+                          isDomainSelected
+                            ? 'bg-zinc-950 border-emerald-500/60 shadow-lg shadow-emerald-950/20'
+                            : 'bg-zinc-950/85 border-zinc-800 hover:border-zinc-700'
+                        }`}
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-750 font-mono text-[10px] font-bold text-cyan-300">
+                              MOD-{intel.indexNumber} · {intel.shortCode}
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 font-mono text-[10px] font-bold text-emerald-300 tabular-nums">
+                              {latestScore}% ({delta >= 0 ? `+${delta}%` : `${delta}%`})
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                            <h4 className="font-bold text-white text-xs">{intel.name}</h4>
+                            <span
+                              className={`px-1.5 py-0.5 rounded border font-mono text-[9.5px] ${intel.badgeClass}`}
+                            >
+                              {intel.smartTitle}
+                            </span>
+                          </div>
+
+                          <p className="text-[11px] text-zinc-400 line-clamp-2 leading-snug">
+                            {intel.description}
+                          </p>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-zinc-800/70">
                           <button
                             type="button"
                             data-testid={`select-domain-mode-${intel.id}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleChangeBatteryMode(domainModeId);
-                            }}
-                            className={`px-2.5 py-1 rounded-lg border text-xs font-mono transition-all cursor-pointer ${
+                            onClick={() => handleChangeBatteryMode(domainModeId)}
+                            className={`px-2 py-1 rounded-lg border text-[10.5px] font-mono transition-all cursor-pointer ${
                               isDomainSelected
                                 ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200 font-bold'
                                 : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-300'
                             }`}
                           >
-                            {isDomainSelected ? 'Queued (7 Qs)' : 'Queue Mode'}
+                            {isDomainSelected ? 'Queued (7 Qs)' : 'Queue 7 Qs'}
                           </button>
 
                           <button
                             type="button"
                             data-testid={`launch-domain-test-${intel.id}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            onClick={() => {
                               onHapticMedium?.();
                               drawFreshQuestionSet(domainModeId, true);
                             }}
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 hover:text-white text-xs font-mono font-semibold transition-all cursor-pointer"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 hover:text-white text-[10.5px] font-mono font-semibold transition-all cursor-pointer"
                           >
-                            <Play className="w-3 h-3 fill-current" />
+                            <Play className="w-2.5 h-2.5 fill-current" />
                             <span>Start {intel.shortCode}</span>
                           </button>
+                        </div>
+                      </div>
+                    );
+                  }
 
-                          <span className="px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 font-mono text-xs font-bold text-emerald-300 tabular-nums">
-                            {latestScore}% ({delta >= 0 ? `+${delta}%` : `${delta}%`})
-                          </span>
+                  return (
+                    <div
+                      key={intel.id}
+                      data-testid={`gardner-domain-card-${intel.id}`}
+                      className={`rounded-xl border transition-all ${
+                        isExpanded || isDomainSelected
+                          ? 'bg-zinc-950 border-emerald-500/60 shadow-lg shadow-emerald-950/20'
+                          : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div
+                        className="p-3.5 cursor-pointer select-none"
+                        onClick={() => {
+                          onHapticLight?.();
+                          setExpandedDomainCardId(isExpanded ? null : intel.id);
+                        }}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2.5 flex-wrap min-w-0">
+                            <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-750 font-mono text-xs font-bold text-cyan-300">
+                              MOD-{intel.indexNumber} · {intel.shortCode}
+                            </span>
+                            <h4 className="font-bold text-white text-sm hover:text-amber-300 transition-colors">
+                              {intel.name}
+                            </h4>
+                            <span
+                              className={`px-2 py-0.5 rounded-md border font-mono text-xs ${intel.badgeClass}`}
+                            >
+                              {intel.smartTitle}
+                            </span>
+                          </div>
 
-                          {isExpanded ? (
-                            <ChevronUp className="w-4 h-4 text-amber-400" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-zinc-400" />
-                          )}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              data-testid={`select-domain-mode-${intel.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleChangeBatteryMode(domainModeId);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg border text-xs font-mono transition-all cursor-pointer ${
+                                isDomainSelected
+                                  ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200 font-bold'
+                                  : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-300'
+                              }`}
+                            >
+                              {isDomainSelected ? 'Queued (7 Qs)' : 'Queue Mode'}
+                            </button>
+
+                            <button
+                              type="button"
+                              data-testid={`launch-domain-test-${intel.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onHapticMedium?.();
+                                drawFreshQuestionSet(domainModeId, true);
+                              }}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 hover:text-white text-xs font-mono font-semibold transition-all cursor-pointer"
+                            >
+                              <Play className="w-3 h-3 fill-current" />
+                              <span>Start {intel.shortCode}</span>
+                            </button>
+
+                            <span className="px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 font-mono text-xs font-bold text-emerald-300 tabular-nums">
+                              {latestScore}% ({delta >= 0 ? `+${delta}%` : `${delta}%`})
+                            </span>
+
+                            {isExpanded ? (
+                              <ChevronUp className="w-4 h-4 text-amber-400" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4 text-zinc-400" />
+                            )}
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                          {intel.description}
+                        </p>
+
+                        <div className="mt-2 text-xs font-mono text-zinc-400 flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span className="text-zinc-500 font-semibold uppercase text-[11px]">
+                              Psychometric Battery:
+                            </span>
+                            <span className="text-zinc-300 bg-zinc-900/80 px-2 py-0.5 rounded border border-zinc-800">
+                              {intel.psychometricTestTitle}
+                            </span>
+                          </div>
+                          <span className="text-zinc-400">{totalInBank} calibrated items in bank</span>
                         </div>
                       </div>
 
-                      <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-                        {intel.description}
-                      </p>
-
-                      <div className="mt-2 text-xs font-mono text-zinc-400 flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <span className="text-zinc-500 font-semibold uppercase text-[11px]">
-                            Psychometric Battery:
-                          </span>
-                          <span className="text-zinc-300 bg-zinc-900/80 px-2 py-0.5 rounded border border-zinc-800">
-                            {intel.psychometricTestTitle}
-                          </span>
+                      {isExpanded && (
+                        <div className="px-4 pb-3.5 pt-2 border-t border-zinc-800/80 bg-zinc-900/30 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-mono">
+                          <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
+                            <span className="text-[10px] text-zinc-400 block uppercase">
+                              Domain Pool Capacity
+                            </span>
+                            <span className="text-white font-bold">
+                              {totalInBank} Verified Questions
+                            </span>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
+                            <span className="text-[10px] text-zinc-400 block uppercase">
+                              Longitudinal Mastery
+                            </span>
+                            <span className="text-emerald-300 font-bold">
+                              Baseline {baselineScore}% → Current {latestScore}%
+                            </span>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
+                            <span className="text-[10px] text-zinc-400 block uppercase">
+                              Sample Analytical Focus
+                            </span>
+                            <span className="text-cyan-300 truncate block">
+                              {domainQuestions[0]?.domain || intel.psychometricTestTitle}
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-zinc-400">{totalInBank} calibrated items in bank</span>
-                      </div>
+                      )}
                     </div>
-
-                    {isExpanded && (
-                      <div className="px-4 pb-3.5 pt-2 border-t border-zinc-800/80 bg-zinc-900/30 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-mono">
-                        <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
-                          <span className="text-[10px] text-zinc-400 block uppercase">
-                            Domain Pool Capacity
-                          </span>
-                          <span className="text-white font-bold">
-                            {totalInBank} Verified Questions
-                          </span>
-                        </div>
-                        <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
-                          <span className="text-[10px] text-zinc-400 block uppercase">
-                            Longitudinal Mastery
-                          </span>
-                          <span className="text-emerald-300 font-bold">
-                            Baseline {baselineScore}% → Current {latestScore}%
-                          </span>
-                        </div>
-                        <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800">
-                          <span className="text-[10px] text-zinc-400 block uppercase">
-                            Sample Analytical Focus
-                          </span>
-                          <span className="text-cyan-300 truncate block">
-                            {domainQuestions[0]?.domain || intel.psychometricTestTitle}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Engineering & Psychometric Specifications Footer (Matches DiagnosticSuiteView & CodebaseDetailsView Footer) */}
+            {/* Engineering & Psychometric Specifications Footer */}
             <div className="p-4 rounded-xl bg-zinc-950/90 border border-zinc-800 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="w-full md:w-80 p-2 rounded-xl bg-zinc-900/60 border border-zinc-800/80">
                 <NormativeBellCurveSvg userIq={displayedTelemetryReport.estimatedIq} />
@@ -2690,13 +2919,169 @@ export const IQTestModule: React.FC<IQTestModuleProps> = ({
             </div>
           </div>
         ) : (
-          /* Active Question View — Clean Diagnostic/Code Card Layout */
+          /* Active Question View — With Top Quick-Jump Navigator, Filter Pills & Auto-Advance */
           <div
             data-testid="iq-test-active-question-card"
-            className="p-4 rounded-2xl bg-zinc-950/90 border border-zinc-800/90 space-y-4"
+            className="p-3.5 sm:p-4 rounded-2xl bg-zinc-950/90 border border-zinc-800/90 space-y-3.5"
           >
+            {/* Top Question Navigator Strip — Jump to Any Question Without Scrolling */}
+            <div
+              data-testid="iq-top-question-navigator"
+              className="p-2.5 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-2"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    disabled={safeQuestionIdx === 0}
+                    onClick={() => {
+                      onHapticLight?.();
+                      setCurrentQuestionIdx((i) => Math.max(0, i - 1));
+                    }}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border font-mono text-[11px] transition-colors ${
+                      safeQuestionIdx === 0
+                        ? 'bg-zinc-950 border-zinc-900 text-zinc-600 cursor-not-allowed'
+                        : 'bg-zinc-950 hover:bg-zinc-800 border-zinc-700 text-zinc-200 cursor-pointer'
+                    }`}
+                  >
+                    <ChevronLeft className="w-3 h-3" />
+                    <span>Prev</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onHapticLight?.();
+                      if (safeQuestionIdx < activePool.length - 1) {
+                        setCurrentQuestionIdx((i) => Math.min(activePool.length - 1, i + 1));
+                      } else {
+                        handleCompleteAssessment();
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/60 text-cyan-100 font-mono text-[11px] font-bold cursor-pointer transition-colors"
+                  >
+                    <span>
+                      {safeQuestionIdx < activePool.length - 1 ? 'Next' : 'Finish'}
+                    </span>
+                    <ChevronRight className="w-3 h-3" />
+                  </button>
+
+                  {unansweredCount > 0 && (
+                    <button
+                      type="button"
+                      data-testid="iq-jump-next-unanswered-btn"
+                      onClick={handleJumpToNextUnanswered}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 text-amber-200 font-mono text-[10.5px] cursor-pointer transition-colors"
+                      title="Jump directly to the next unanswered question"
+                    >
+                      Next Unanswered ({unansweredCount})
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Pills: All / Unanswered / Flagged + Auto-Advance Toggle */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {(
+                    [
+                      { id: 'all', label: `All (${activePool.length})` },
+                      { id: 'unanswered', label: `Unanswered (${unansweredCount})` },
+                      { id: 'flagged', label: `Flagged (${flaggedCount})` },
+                    ] as const
+                  ).map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      data-testid={`iq-nav-filter-${f.id}`}
+                      onClick={() => {
+                        onHapticLight?.();
+                        setQuestionNavFilter(f.id);
+                      }}
+                      className={`px-2 py-0.5 rounded-md border font-mono text-[10px] cursor-pointer transition-colors ${
+                        questionNavFilter === f.id
+                          ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200 font-bold'
+                          : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    data-testid="iq-auto-advance-toggle-btn"
+                    aria-pressed={autoAdvanceOnSelect}
+                    onClick={() => {
+                      onHapticLight?.();
+                      setAutoAdvanceOnSelect((prev) => !prev);
+                    }}
+                    className={`px-2 py-0.5 rounded-md border font-mono text-[10px] font-semibold cursor-pointer transition-colors ${
+                      autoAdvanceOnSelect
+                        ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
+                    }`}
+                    title="Automatically advance to the next question when you select an answer"
+                  >
+                    Auto-Next: {autoAdvanceOnSelect ? 'ON' : 'OFF'}
+                  </button>
+
+                  {answeredCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleCompleteAssessment}
+                      className="px-2.5 py-0.5 rounded-md bg-emerald-500/25 hover:bg-emerald-500/35 border border-emerald-400/70 text-emerald-200 font-mono text-[10px] font-bold cursor-pointer transition-colors"
+                    >
+                      Submit ({answeredCount}/{activePool.length})
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Direct Question Number Strip (Filtered) */}
+              <div className="flex items-center gap-1 flex-wrap pt-1 border-t border-zinc-800/80">
+                {activePool.map((q, idx) => {
+                  const isAnswered = typeof selectedAnswers[q.id] === 'number';
+                  const isCurrent = idx === safeQuestionIdx;
+                  const isFlagged = Boolean(flaggedQuestions[q.id]);
+
+                  if (questionNavFilter === 'unanswered' && isAnswered && !isCurrent) {
+                    return null;
+                  }
+                  if (questionNavFilter === 'flagged' && !isFlagged && !isCurrent) {
+                    return null;
+                  }
+
+                  return (
+                    <button
+                      key={`top-nav-${q.id}`}
+                      type="button"
+                      onClick={() => {
+                        onHapticLight?.();
+                        setCurrentQuestionIdx(idx);
+                      }}
+                      title={`Jump to Question ${idx + 1}: ${q.moduleTitle}`}
+                      className={`relative w-6 h-6 rounded-md font-mono text-[10px] font-bold border transition-all cursor-pointer ${
+                        isCurrent
+                          ? 'bg-cyan-500/35 border-cyan-300 text-white ring-1 ring-cyan-400/50'
+                          : isAnswered
+                          ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-200'
+                          : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600'
+                      }`}
+                    >
+                      {idx + 1}
+                      {isFlagged && (
+                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      )}
+                    </button>
+                  );
+                })}
+                <span className="ml-auto font-mono text-[10px] text-zinc-500 hidden sm:inline">
+                  Keys: ←/→ Nav · A–F Select
+                </span>
+              </div>
+            </div>
+
             {/* Question Header Bar with Howard Gardner Domain Badge & Per-Question Latency */}
-            <div className="flex items-center justify-between gap-2 flex-wrap font-mono text-xs pb-3 border-b border-zinc-800/80">
+            <div className="flex items-center justify-between gap-2 flex-wrap font-mono text-xs pb-2.5 border-b border-zinc-800/80">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2.5 py-1 rounded-lg bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 font-bold">
                   Item {safeQuestionIdx + 1} of {activePool.length}

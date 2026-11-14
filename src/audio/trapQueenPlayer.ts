@@ -1530,6 +1530,174 @@ class SongPlayerController {
   public seekRelative(deltaSeconds: number): void {
     this.seek(this.state.currentTime + deltaSeconds);
   }
+
+  private versionInfoByTrack = new Map<
+    string,
+    {
+      attempt: number;
+      versionMode: 'next_best' | 'original_studio' | 'sped_up' | 'slowed';
+      matchedTitle?: string;
+      originalSources?: string[];
+    }
+  >();
+
+  public getTrackVersionInfo(trackId: string): {
+    attempt: number;
+    versionMode: 'next_best' | 'original_studio' | 'sped_up' | 'slowed';
+    matchedTitle?: string;
+  } {
+    return (
+      this.versionInfoByTrack.get(trackId) || {
+        attempt: 1,
+        versionMode: 'next_best',
+      }
+    );
+  }
+
+  /**
+   * Marks a song as not the right version the user wants and asks the server to exclude
+   * the current audio candidate and resolve a new version (or resets back to default).
+   */
+  public async retryTrackVersion(
+    trackId: SongTrackId,
+    versionMode: 'next_best' | 'original_studio' | 'sped_up' | 'slowed' = 'next_best',
+    resetHistory = false
+  ): Promise<{
+    ok: boolean;
+    attempt: number;
+    durationSec?: number;
+    matchedTitle?: string;
+    error?: string;
+  }> {
+    const targetDef =
+      this.catalog.find((t) => t.id === trackId) ||
+      SONG_TRACKS.find((t) => t.id === trackId);
+    if (!targetDef) {
+      return { ok: false, attempt: 1, error: 'Track not found in catalog.' };
+    }
+
+    const existingInfo = this.versionInfoByTrack.get(trackId);
+    const originalSources = existingInfo?.originalSources
+      ? [...existingInfo.originalSources]
+      : [...targetDef.sources];
+
+    if (resetHistory && originalSources.length > 0) {
+      targetDef.sources = [...originalSources];
+      this.versionInfoByTrack.delete(trackId);
+      try {
+        await fetch('/api/audio/retry-version', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trackId: targetDef.id,
+            title: targetDef.title,
+            artist: targetDef.artistName,
+            versionMode: 'next_best',
+            resetHistory: true,
+          }),
+        });
+      } catch {
+        // Ignore network error on reset
+      }
+      if (this.state.trackId === trackId && this.audio) {
+        this.sourceIndex = 0;
+        this.audio.src = targetDef.sources[0];
+        this.audio.currentTime = 0;
+        this.audio.load();
+        this.applyRateToAudio(this.audio);
+        void this.play();
+      } else {
+        this.selectTrack(trackId, true);
+      }
+      return {
+        ok: true,
+        attempt: 1,
+        durationSec: targetDef.durationSec,
+        matchedTitle: targetDef.title,
+      };
+    }
+
+    try {
+      const res = await fetch('/api/audio/retry-version', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trackId: targetDef.id,
+          title: targetDef.title,
+          artist: targetDef.artistName,
+          versionMode,
+          resetHistory: false,
+        }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        attempt?: number;
+        durationSec?: number;
+        matchedTitle?: string;
+        streamUrl?: string;
+        error?: string;
+      };
+
+      const nextAttempt = data.attempt || (existingInfo?.attempt || 1) + 1;
+      const fallbackLocal =
+        originalSources.find((s) => s.startsWith('/audio/')) || '/audio/duvet-x-linger.mp3';
+      const newStreamUrl =
+        data.streamUrl ||
+        `/api/audio/stream/${encodeURIComponent(
+          targetDef.id
+        )}?title=${encodeURIComponent(targetDef.title)}&artist=${encodeURIComponent(
+          targetDef.artistName
+        )}&versionMode=${encodeURIComponent(
+          versionMode
+        )}&attempt=${nextAttempt}&fallback=${encodeURIComponent(
+          fallbackLocal
+        )}&t=${Date.now()}`;
+
+      targetDef.sources = [newStreamUrl, ...originalSources.filter((s) => s !== newStreamUrl)];
+      if (data.durationSec && data.durationSec >= MIN_FULL_SONG_DURATION_SEC) {
+        targetDef.durationSec = data.durationSec;
+        targetDef.durationLabel = formatDurationLabel(data.durationSec);
+      }
+
+      this.versionInfoByTrack.set(trackId, {
+        attempt: nextAttempt,
+        versionMode,
+        matchedTitle: data.matchedTitle || targetDef.title,
+        originalSources,
+      });
+
+      this.sourceIndex = 0;
+      if (this.state.trackId !== trackId) {
+        this.selectTrack(trackId, true);
+      } else if (this.audio) {
+        this.audio.pause();
+        this.audio.src = newStreamUrl;
+        this.audio.currentTime = 0;
+        this.audio.load();
+        this.applyRateToAudio(this.audio);
+        this.updateState({
+          currentTime: 0,
+          duration: targetDef.durationSec,
+          error: null,
+        });
+        await this.play();
+      }
+
+      return {
+        ok: Boolean(data.ok),
+        attempt: nextAttempt,
+        durationSec: data.durationSec || targetDef.durationSec,
+        matchedTitle: data.matchedTitle || targetDef.title,
+        error: data.error,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        attempt: existingInfo?.attempt || 1,
+        error: String(err),
+      };
+    }
+  }
 }
 
 export const trapQueenPlayer = new SongPlayerController();
